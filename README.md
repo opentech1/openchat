@@ -1,12 +1,10 @@
-# gl1-chat-v2
+# openchat
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Hono, ORPC, and more.
 
 ## Features
 
 - **TypeScript** - For type safety and improved developer experience
-- **React Native** - Build mobile apps using React
-- **Expo** - Tools for React Native development
 - **TailwindCSS** - Utility-first CSS for rapid UI development
 - **shadcn/ui** - Reusable UI components
 - **Hono** - Lightweight, performant server framework
@@ -45,7 +43,6 @@ Then, run the development server:
 bun dev
 ```
 
-Use the Expo Go app to run the mobile application.
 The API is running at [http://localhost:3000](http://localhost:3000).
 
 
@@ -53,9 +50,9 @@ The API is running at [http://localhost:3000](http://localhost:3000).
 ## Project Structure
 
 ```
-gl1-chat-v2/
+openchat/
 ├── apps/
-│   ├── native/      # Mobile application (React Native, Expo)
+│   ├── web/         # Frontend web application (Next.js)
 │   └── server/      # Backend API (Hono, ORPC)
 ```
 
@@ -66,7 +63,6 @@ gl1-chat-v2/
 - `bun dev:web`: Start only the web application
 - `bun dev:server`: Start only the server
 - `bun check-types`: Check TypeScript types across all apps
-- `bun dev:native`: Start the React Native/Expo development server
 - `bun db:push`: Push schema changes to database
 - `bun db:studio`: Open database studio UI
 - `cd apps/server && bun db:local`: Start the local SQLite database

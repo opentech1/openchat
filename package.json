@@ -1,5 +1,5 @@
 {
-  "name": "gl1-chat-v2",
+  "name": "openchat",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -10,7 +10,6 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "check-types": "turbo check-types",
-    "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F server db:push",

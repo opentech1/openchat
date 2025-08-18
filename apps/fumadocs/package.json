@@ -1,10 +1,10 @@
 {
-  "name": "fumadocs",
+  "name": "openchat-docs",
   "version": "0.0.0",
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbo --port=4000",
+    "dev": "next dev --turbo --port=5000",
     "start": "next start",
     "postinstall": "fumadocs-mdx"
   },
