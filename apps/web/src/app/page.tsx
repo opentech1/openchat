@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Onboarding } from "@/components/onboarding/onboarding"
-import { getOnboardingStatus } from "@/lib/cookies"
+import { getOnboardingStatus, getOnboardingData } from "@/lib/cookies"
 import { Button } from "@/components/ui/button"
 
 export default function Home() {
@@ -12,20 +12,35 @@ export default function Home() {
   useEffect(() => {
     setMounted(true)
     const hasCompletedOnboarding = getOnboardingStatus()
-    if (!hasCompletedOnboarding) {
-      setTimeout(() => setShowOnboarding(true), 500)
-    }
+    const onboardingData = getOnboardingData()
+    
+    // Show onboarding if not completed OR if we have no saved data
+    const shouldShowOnboarding = !hasCompletedOnboarding || 
+      (!onboardingData.userName && !onboardingData.workspaceLayout)
+    
+    setShowOnboarding(shouldShowOnboarding)
   }, [])
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false)
   }
 
-  if (!mounted) return null
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex items-center justify-center">
+        <div className="animate-pulse">
+          <div className="h-8 w-8 rounded-full bg-primary/20" />
+        </div>
+      </div>
+    )
+  }
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={handleOnboardingComplete} />
+  }
 
   return (
     <div className="min-h-screen bg-background">
-      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
       
       <nav className="border-b border-border/40 bg-card/30 backdrop-blur-sm">
         <div className="container mx-auto flex h-16 items-center justify-between px-6">

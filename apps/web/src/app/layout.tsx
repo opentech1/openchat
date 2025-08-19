@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import "../index.css";
+import { ThemeProvider } from "@/components/theme-provider-simple";
 
 export const metadata: Metadata = {
-  title: "Simple App",
-  description: "Simple Hello World App",
+  title: {
+    template: 'OpenChat - %s',
+    default: 'OpenChat',
+  },
+  description: "AI-powered chat application",
 };
 
 export default function RootLayout({
@@ -12,9 +16,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

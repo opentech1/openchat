@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Onboarding</title>
+</head>
+<body>
+    <h1>Onboarding Test</h1>
+    <button onclick="clearOnboarding()">Clear Onboarding</button>
+    <button onclick="checkStatus()">Check Status</button>
+    <div id="status"></div>
+    
+    <script>
+        function clearOnboarding() {
+            localStorage.removeItem('onboarding_completed');
+            localStorage.removeItem('onboarding_data');
+            document.getElementById('status').innerHTML = 'Onboarding cleared!';
+        }
+        
+        function checkStatus() {
+            const completed = localStorage.getItem('onboarding_completed');
+            const data = localStorage.getItem('onboarding_data');
+            document.getElementById('status').innerHTML = 
+                'Completed: ' + completed + '<br>' +
+                'Data: ' + (data || 'none');
+        }
+    </script>
+</body>
+</html>

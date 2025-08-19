@@ -1,3 +1,9 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: 'AI Chat',
+};
+
 export default function AIPage() {
   return (
     <div>
