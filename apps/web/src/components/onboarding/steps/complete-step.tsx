@@ -60,27 +60,15 @@ export function CompleteStep({ data }: CompleteStepProps) {
           <h3 className="mb-4 font-semibold text-foreground">Your Configuration</h3>
           <div className="space-y-3 text-left">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Workspace</span>
-              <span className="text-sm font-medium text-foreground capitalize">
-                {data.workspaceLayout || "Default"} Layout
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Theme</span>
               <span className="text-sm font-medium text-foreground capitalize">
                 {data.theme || "Default"}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Team Size</span>
+              <span className="text-sm text-muted-foreground">Workspace</span>
               <span className="text-sm font-medium text-foreground capitalize">
-                {data.teamSize || "Solo"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Features</span>
-              <span className="text-sm font-medium text-foreground">
-                {data.features.length} enabled
+                {data.workspaceLayout || "Default"} Layout
               </span>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { setOnboardingStatus } from "@/lib/cookies"
@@ -9,8 +9,6 @@ import { WelcomeStep } from "./steps/welcome-step"
 import { ProfileStep } from "./steps/profile-step"
 import { ThemeStep } from "./steps/theme-step"
 import { WorkspaceStep } from "./steps/workspace-step"
-import { FeaturesStep } from "./steps/features-step"
-import { TeamStep } from "./steps/team-step"
 import { CompleteStep } from "./steps/complete-step"
 
 interface OnboardingProps {
@@ -19,15 +17,8 @@ interface OnboardingProps {
 
 export interface OnboardingData {
   userName: string
-  companyName: string
-  role: string
-  teamSize: string
   theme: string
   workspaceLayout: string
-  features: string[]
-  aiModel: string
-  language: string
-  timezone: string
 }
 
 export function Onboarding({ onComplete }: OnboardingProps) {
@@ -35,15 +26,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
   const [direction, setDirection] = useState(0)
   const [data, setData] = useState<OnboardingData>({
     userName: "",
-    companyName: "",
-    role: "",
-    teamSize: "",
     theme: "",
-    workspaceLayout: "",
-    features: [],
-    aiModel: "gpt-4",
-    language: "en",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    workspaceLayout: ""
   })
 
   const steps = [
@@ -54,32 +38,22 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     },
     {
       id: "profile", 
-      title: "Create Your Profile",
+      title: "Let's Get Personal",
       component: ProfileStep
     },
     {
       id: "theme",
-      title: "Personalize Your Experience",
+      title: "Choose Your Style",
       component: ThemeStep
     },
     {
       id: "workspace",
-      title: "Setup Your Workspace", 
+      title: "Configure Workspace", 
       component: WorkspaceStep
     },
     {
-      id: "features",
-      title: "Choose Your Tools",
-      component: FeaturesStep
-    },
-    {
-      id: "team",
-      title: "Team Configuration",
-      component: TeamStep
-    },
-    {
       id: "complete",
-      title: "All Set!",
+      title: "Ready to Go!",
       component: CompleteStep
     }
   ]
@@ -116,19 +90,30 @@ export function Onboarding({ onComplete }: OnboardingProps) {
       case "welcome":
         return true
       case "profile":
-        return data.userName.trim().length > 0 && data.role !== ""
+        return data.userName.trim().length > 0
       case "theme":
         return data.theme !== ""
       case "workspace":
         return data.workspaceLayout !== ""
-      case "features":
-        return data.features.length > 0
-      case "team":
-        return data.teamSize !== ""
       default:
         return true
     }
   }
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && canProceed() && !e.defaultPrevented) {
+        handleNext()
+      } else if (e.key === 'Escape') {
+        if (currentStep > 0) {
+          handleBack()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [currentStep, canProceed])
 
   const slideVariants = {
     enter: (direction: number) => ({
@@ -240,6 +225,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                   )}
                 >
                   Back
+                  {currentStep > 0 && <span className="ml-2 text-xs opacity-70">Esc</span>}
                 </Button>
                 
                 <div className="flex items-center gap-3">
@@ -260,6 +246,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                     className="min-w-[160px] bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     {currentStep === steps.length - 1 ? "Complete Setup" : "Continue"}
+                    <span className="ml-2 text-xs opacity-70">↵</span>
                   </Button>
                 </div>
               </div>
