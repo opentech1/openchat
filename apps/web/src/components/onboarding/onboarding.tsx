@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { setOnboardingStatus, setOnboardingData, getOnboardingData, OnboardingData as CookieOnboardingData } from "@/lib/cookies"
+import { setOnboardingStatus, setOnboardingData, getOnboardingData, type OnboardingData as CookieOnboardingData } from "@/lib/cookies"
 import { useTheme } from "@/components/theme-provider-simple"
 import { cn } from "@/lib/utils"
 import { X, AlertCircle } from "lucide-react"

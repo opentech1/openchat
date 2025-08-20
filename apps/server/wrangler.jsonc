@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "openchat-db",
-      "database_id": "0887102d-0e75-403d-ac8c-5fc9bad0ae30",
+      "database_id": "0dc49088-ad6d-458c-8628-ad47eec36af7",
       "preview_database_id": "local-test-db",
       "migrations_dir": "./src/db/migrations"
     }
