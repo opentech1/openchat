@@ -1,4 +1,4 @@
-import { Calendar, Home, MessageSquare, Settings, User } from "lucide-react"
+import { MessageSquare, User } from "lucide-react"
 import Link from "next/link"
 
 import {
@@ -7,6 +7,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -14,26 +15,11 @@ import {
 } from "@/components/ui/sidebar"
 import Logo from "@/components/logo"
 
-const items = [
+const chatItems = [
   {
-    title: "Home",
-    url: "/",
-    icon: Home,
-  },
-  {
-    title: "Dashboard", 
-    url: "/dashboard",
-    icon: Calendar,
-  },
-  {
-    title: "AI Chat",
-    url: "/ai",
+    title: "New Chat",
+    url: "/chat",
     icon: MessageSquare,
-  },
-  {
-    title: "Settings",
-    url: "#",
-    icon: Settings,
   },
 ]
 
@@ -43,14 +29,15 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
           <Logo width={32} height={32} />
-          <span className="text-xl font-semibold">OpenChat</span>
+          <span className="text-xl font-semibold text-white">OpenChat</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
+          <SidebarGroupLabel>Chats</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
+              {chatItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <a href={item.url}>
