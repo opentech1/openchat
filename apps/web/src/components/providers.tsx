@@ -1,17 +1,16 @@
 "use client";
 
-import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { queryClient } from "@/utils/orpc";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
+import { DatabaseProvider } from "./database-provider";
 
+interface ProvidersProps {
+  children: React.ReactNode;
+  userId?: string;
+}
 
-export default function Providers({
-  children
-}: {
-  children: React.ReactNode
-}) {
+export default function Providers({ children, userId }: ProvidersProps) {
   return (
     <ThemeProvider
       attribute="class"
@@ -19,10 +18,10 @@ export default function Providers({
       enableSystem
       disableTransitionOnChange
     >
-      <QueryClientProvider client={queryClient}>
+      <DatabaseProvider userId={userId}>
         {children}
         <ReactQueryDevtools />
-      </QueryClientProvider>
+      </DatabaseProvider>
       <Toaster richColors />
     </ThemeProvider>
   );

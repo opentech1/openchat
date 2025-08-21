@@ -1,4 +1,5 @@
 import { protectedProcedure, publicProcedure } from "../lib/orpc";
+import { chatRouter } from "./chat";
 import type { RouterClient } from "@orpc/server";
 
 export const appRouter = {
@@ -11,6 +12,7 @@ export const appRouter = {
       user: context.session?.user,
     };
   }),
+  chat: chatRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

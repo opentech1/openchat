@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { RPCHandler } from "@orpc/server/fetch";
 import { createContext } from "./lib/context";
 import { appRouter } from "./routers/index";
-import { auth } from "./lib/auth";
+import { createAuth } from "./lib/auth";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -22,7 +22,10 @@ app.use(
   })
 );
 
-app.on(["POST", "GET"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/**", (c) => {
+  const auth = createAuth();
+  return auth.handler(c.req.raw);
+});
 
 const handler = new RPCHandler(appRouter);
 app.use("/rpc/*", async (c, next) => {
