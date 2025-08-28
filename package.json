@@ -1,0 +1,24 @@
+{
+	"name": "openchat",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"check": "oxlint",
+		"dev": "turbo dev",
+		"build": "turbo build",
+		"check-types": "turbo check-types",
+		"dev:native": "turbo -F native dev",
+		"dev:web": "turbo -F web dev",
+		"dev:server": "turbo -F @openchat/backend dev",
+		"dev:setup": "turbo -F @openchat/backend dev:setup"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"turbo": "^2.5.4",
+		"oxlint": "^1.12.0"
+	},
+	"packageManager": "bun@1.2.17"
+}

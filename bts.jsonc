@@ -1,0 +1,21 @@
+// Better-T-Stack configuration file
+// safe to delete
+
+{
+	"$schema": "https://r2.better-t-stack.dev/schema.json",
+	"version": "2.38.0",
+	"createdAt": "2025-08-28T20:37:12.746Z",
+	"database": "none",
+	"orm": "none",
+	"backend": "convex",
+	"runtime": "none",
+	"frontend": ["next"],
+	"addons": ["oxlint", "turborepo"],
+	"examples": ["todo"],
+	"auth": "better-auth",
+	"packageManager": "bun",
+	"dbSetup": "none",
+	"api": "none",
+	"webDeploy": "none",
+	"serverDeploy": "none"
+}
