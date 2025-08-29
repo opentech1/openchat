@@ -1,23 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Nunito } from "next/font/google";
 import "../index.css";
 import Providers from "@/components/providers";
-import Header from "@/components/header";
+import { AppLayout } from "@/components/app-layout";
 
-const geistSans = Geist({
-	variable: "--font-geist-sans",
-	subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-	variable: "--font-geist-mono",
-	subsets: ["latin"],
+const nunito = Nunito({ 
+  subsets: ["latin"],
+  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-	title: "openchat",
-	description: "openchat",
+	title: "OpenChat",
+	description: "AI-powered chat application",
 };
+
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({
 	children,
@@ -26,14 +24,9 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-			>
+			<body className={`${nunito.className} min-h-screen bg-background antialiased`}>
 				<Providers>
-					<div className="grid grid-rows-[auto_1fr] h-svh">
-						<Header />
-						{children}
-					</div>
+					<AppLayout>{children}</AppLayout>
 				</Providers>
 			</body>
 		</html>

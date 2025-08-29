@@ -12,10 +12,12 @@
 		"check-types": "turbo check-types",
 		"dev:native": "turbo -F native dev",
 		"dev:web": "turbo -F web dev",
-		"dev:server": "turbo -F @openchat/backend dev",
-		"dev:setup": "turbo -F @openchat/backend dev:setup"
+		"dev:server": "turbo -F server dev",
+		"dev:setup": "turbo -F server dev:setup"
 	},
-	"dependencies": {},
+	"dependencies": {
+		"better-auth": "^1.3.7"
+	},
 	"devDependencies": {
 		"turbo": "^2.5.4",
 		"oxlint": "^1.12.0"
