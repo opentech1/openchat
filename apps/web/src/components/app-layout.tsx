@@ -614,7 +614,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="h-[calc(100vh-4rem)]">{children}</main>
+        <main className="flex flex-col h-[calc(100vh-4rem)]">{children}</main>
       </div>
     </div>
   );

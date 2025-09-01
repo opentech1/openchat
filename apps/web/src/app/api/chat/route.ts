@@ -27,10 +27,11 @@ export async function POST(req: NextRequest) {
   try {
     const { 
       messages, 
-      model = 'openai/gpt-4o-mini', 
+      model, 
       token, 
       streamId,
-      resume = false
+      resume = false,
+      partialContent
     } = await req.json();
     
     if (!messages || !Array.isArray(messages)) {
@@ -45,10 +46,16 @@ export async function POST(req: NextRequest) {
     
     // If resuming, get previous partial response
     let previousContent = '';
-    if (resume && streamId) {
-      const stored = streamStorage.get(streamId);
-      if (stored) {
-        previousContent = stored.partialResponse || '';
+    if (resume) {
+      // Use passed partial content if available (from client DB)
+      if (partialContent) {
+        previousContent = partialContent;
+      } else if (streamId) {
+        // Fallback to server storage
+        const stored = streamStorage.get(streamId);
+        if (stored) {
+          previousContent = stored.partialResponse || '';
+        }
       }
     }
 
@@ -72,9 +79,20 @@ export async function POST(req: NextRequest) {
           role: 'assistant',
           content: previousContent
         });
+        // Be more explicit about continuation to avoid repetition
+        // Check if previous content ends mid-word or mid-sentence
+        const endsWithSpace = previousContent.endsWith(' ');
+        const endsWithPunctuation = /[.!?]$/.test(previousContent.trim());
+        
+        let continuationPrompt = 'Continue from exactly where you stopped. Do not add ellipsis. ';
+        if (!endsWithSpace && !endsWithPunctuation) {
+          continuationPrompt += 'Complete the current word/sentence first. ';
+        }
+        continuationPrompt += 'Do not repeat any content.';
+        
         requestMessages.push({
           role: 'user',
-          content: 'Continue from where you left off.'
+          content: continuationPrompt
         });
       }
 
@@ -89,17 +107,27 @@ export async function POST(req: NextRequest) {
         max_tokens: 2000,
       };
 
-      const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_OPENROUTER_APP_URL || 'http://localhost:3001',
-          'X-Title': 'OpenChat',
-        },
-        body: JSON.stringify(openRouterRequest),
-        signal: req.signal, // Forward abort signal from request
-      });
+      let openRouterResponse;
+      try {
+        openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': process.env.NEXT_PUBLIC_OPENROUTER_APP_URL || 'http://localhost:3001',
+            'X-Title': 'OpenChat',
+          },
+          body: JSON.stringify(openRouterRequest),
+          signal: req.signal, // Forward abort signal from request
+        });
+      } catch (error: any) {
+        if (error.name === 'AbortError' || error.code === 'ECONNRESET') {
+          // Client aborted the request, return a clean response
+          console.log('OpenRouter request aborted by client');
+          return new Response(null, { status: 499 }); // Client Closed Request
+        }
+        throw error;
+      }
 
       if (!openRouterResponse.ok) {
         const errorText = await openRouterResponse.text();
@@ -220,9 +248,9 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
-          } catch (error) {
-            // Check if it's an abort error
-            if (error instanceof Error && error.name === 'AbortError') {
+          } catch (error: any) {
+            // Check if it's an abort or connection reset error
+            if (error?.name === 'AbortError' || error?.code === 'ECONNRESET') {
               // Store partial response when aborted
               if (fullResponse) {
                 streamStorage.set(id, {
@@ -234,19 +262,31 @@ export async function POST(req: NextRequest) {
                 });
               }
               if (!isClosed) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                  type: 'abort',
-                  streamId: id 
-                })}\n\n`));
-                controller.close();
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                    type: 'abort',
+                    streamId: id
+                  })}\n\n`));
+                } catch (e) {
+                  // Controller might be closed, ignore
+                }
+                try {
+                  controller.close();
+                } catch (e) {
+                  // Already closed, ignore
+                }
                 isClosed = true;
               }
             } else if (!isClosed) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                type: 'error', 
-                error: error instanceof Error ? error.message : 'Stream error' 
-              })}\n\n`));
-              controller.close();
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'error',
+                  error: error?.message || 'Stream error'
+                })}\n\n`));
+                controller.close();
+              } catch (e) {
+                // Controller might be closed, ignore
+              }
               isClosed = true;
             }
           } finally {
@@ -260,7 +300,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-          'X-Stream-Id': id,
+          'X-Accel-Buffering': 'no', // Disable buffering for nginx
         },
       });
     }
@@ -325,7 +365,9 @@ export async function POST(req: NextRequest) {
             });
           }
 
-          const result = await streamText({
+        let result;
+        try {
+          result = await streamText({
             model: selectedModel,
             messages: requestMessages,
             temperature: 0.7,
@@ -344,8 +386,15 @@ export async function POST(req: NextRequest) {
               console.log(`Stream aborted after generating ${fullText.length} characters`);
             },
           });
+        } catch (error: any) {
+          if (error.name === 'AbortError' || error.code === 'ECONNRESET') {
+            console.log('AI SDK request aborted by client');
+            return new Response(null, { status: 499 });
+          }
+          throw error;
+        }
 
-          for await (const chunk of result.textStream) {
+        for await (const chunk of result.textStream) {
             if (isClosed) break; // Stop if controller is closed
             
             fullText += chunk;
@@ -373,37 +422,49 @@ export async function POST(req: NextRequest) {
             controller.close();
             isClosed = true;
           }
-        } catch (error) {
-          // Check if it's an abort error
-          if (error instanceof Error && error.name === 'AbortError') {
-            // Store partial response when aborted
-            if (fullText) {
-              streamStorage.set(id, {
-                messages,
-                model,
-                partialResponse: fullText,
-                timestamp: Date.now()
-              });
-            }
-            if (!isClosed) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                type: 'abort',
-                streamId: id 
-              })}\n\n`));
-              controller.close();
+          } catch (error: any) {
+            // Check if it's an abort or connection reset error
+            if (error?.name === 'AbortError' || error?.code === 'ECONNRESET') {
+              // Store partial response when aborted
+              if (fullText) {
+                streamStorage.set(id, {
+                  messages,
+                  model,
+                  partialResponse: fullText,
+                  timestamp: Date.now()
+                });
+              }
+              if (!isClosed) {
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                    type: 'abort',
+                    streamId: id
+                  })}\n\n`));
+                } catch (e) {
+                  // Controller might be closed, ignore
+                }
+                try {
+                  controller.close();
+                } catch (e) {
+                  // Already closed, ignore
+                }
+                isClosed = true;
+              }
+            } else if (!isClosed) {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'error',
+                  error: error?.message || 'Stream error'
+                })}\n\n`));
+                controller.close();
+              } catch (e) {
+                // Controller might be closed, ignore
+              }
               isClosed = true;
             }
-          } else if (!isClosed) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-              type: 'error', 
-              error: error instanceof Error ? error.message : 'Stream error' 
-            })}\n\n`));
-            controller.close();
-            isClosed = true;
+          } finally {
+            req.signal.removeEventListener('abort', abortHandler);
           }
-        } finally {
-          req.signal.removeEventListener('abort', abortHandler);
-        }
       },
     });
 

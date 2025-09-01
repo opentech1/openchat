@@ -56,6 +56,10 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
   const isAbortingRef = useRef<boolean>(false); // Track user-initiated aborts
   const lastScrollTop = useRef(0);
   const scrollCheckTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs to track accumulated content in real-time (always current, unlike state)
+  const accumulatedContentRef = useRef<string>("");
+  const continuationContentRef = useRef<string>("");
 
   const { isConnected, token } = useOpenRouterAuth();
   const chat = useQuery(api.chats.getChat, { chatId: chatId as Id<"chats"> });
@@ -143,18 +147,77 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
       console.log('[STOP] Abort signal sent');
       
       // Handle stopping during continuation differently
-      if (continuingMessageId && streamingContent) {
+      if (continuingMessageId && continuationContentRef.current) {
         console.log('[STOP] Stopping continuation for message:', continuingMessageId);
-        // We're continuing an existing message - just update the UI state
-        // The continuation handler will take care of updating the DB
-        setIsLoading(false);
-        // Don't clear streamingContent here - let the continuation handler do it
+        
+        // Update the message in the database with the new partial content
+        const messageId = continuingMessageId;
+        const streamData = stoppedStreams.get(messageId);
+        if (streamData) {
+          // Get the current message from the database
+          const currentMessage = messages?.find(m => m._id === messageId);
+          const currentContent = currentMessage?.content || streamData.partialContent || '';
+          // Use ref value which is always current
+          const fullContent = currentContent + continuationContentRef.current;
+          
+          console.log('[STOP] Content calculation:', {
+            currentContentLength: currentContent.length,
+            continuationRefLength: continuationContentRef.current.length,
+            fullContentLength: fullContent.length,
+            lastCharsOfCurrent: currentContent.slice(-20),
+            firstCharsOfContinuation: continuationContentRef.current.slice(0, 20)
+          });
+          
+          // Update the message in the database
+          updateMessage({
+            messageId: messageId as Id<"messages">,
+            content: fullContent,
+          }).then(() => {
+            console.log('[STOP] Updated message in DB with new content, length:', fullContent.length);
+            
+            // Update the stream data to allow resuming again
+            const updatedStreamData: StreamData = {
+              ...streamData,
+              partialContent: fullContent,
+              stopPosition: fullContent.length,
+              canResume: true,
+              savedToDb: true
+            };
+            
+            setStoppedStreams(prev => {
+              const newMap = new Map(prev);
+              newMap.set(messageId, updatedStreamData);
+              console.log('[STOP] Updated stoppedStreams Map with canResume=true for message:', messageId);
+              return newMap;
+            });
+            
+            // Clear UI state AFTER updating the stoppedStreams Map
+            setIsLoading(false);
+            setContinuingMessageId(null);
+            setStreamingContent('');
+            continuationContentRef.current = ''; // Clear continuation ref
+          }).catch(error => {
+            console.error('[STOP] Failed to update message:', error);
+            // Still clear UI state on error
+            setIsLoading(false);
+            setContinuingMessageId(null);
+            setStreamingContent('');
+          });
+        } else {
+          // No stream data found, just clear UI state
+          setIsLoading(false);
+          setContinuingMessageId(null);
+          setStreamingContent('');
+        }
+        
+        // Don't clear state here - let the async operation complete first
         return;
       }
       
+      // For new messages (not continuation), handle differently
       // Don't save here - let handleSubmit be the single source of truth for saving
       // Just update the UI state
-      console.log('[STOP] Setting loading to false, NOT clearing streamingContent');
+      console.log('[STOP] Setting loading to false for new message stop');
       setIsLoading(false);
       // Don't clear streamingContent yet - handleSubmit needs it for saving
     }
@@ -165,8 +228,9 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
     
     // Get the stream data for this message
     const streamData = stoppedStreams.get(messageId);
+    console.log('[CONTINUE] Attempting to continue message:', messageId, streamData);
     if (!streamData || !streamData.canResume) {
-      console.error('Cannot resume stream for message:', messageId);
+      console.error('Cannot resume stream for message:', messageId, 'streamData:', streamData);
       return;
     }
     
@@ -182,7 +246,11 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
     abortControllerRef.current = controller;
     
     try {
-      // Send continuation request with resume flag
+      // Get the current content from the message in the database
+      const currentMessage = messages?.find(m => m._id === messageId);
+      const currentContent = currentMessage?.content || streamData.partialContent;
+      
+      // Send continuation request with resume flag and current content
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -193,6 +261,7 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
           token,
           streamId: streamData.streamId,
           resume: true,
+          partialContent: currentContent, // Send the current partial content
         }),
       });
       
@@ -202,15 +271,20 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
       
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
-      let continuedContent = '';
+      continuationContentRef.current = ''; // Reset ref for tracking
+      let continuedContent = ''; // For state updates
+      let buffer = '';
+      let wasStoppedEarly = false;
       
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
+          const chunk = decoder.decode(value, { stream: false });
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -220,11 +294,17 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
                   const parsed = JSON.parse(data);
                   
                   if (parsed.type === 'resume') {
-                    // Skip - we already have the previous content in the DB
+                    // Skip the previous content echo
                     continue;
                   } else if (parsed.type === 'delta') {
-                    // New content being generated
-                    continuedContent += parsed.content;
+                    // Handle first chunk - remove ellipsis but preserve spacing
+                    let chunk = parsed.content;
+                    if (continuedContent.length === 0) {
+                      // Only remove ellipsis at the very start, preserve everything else
+                      chunk = chunk.replace(/^\.{3,}/, ''); // Remove ONLY dots, not spaces
+                    }
+                    continuedContent += chunk;
+                    continuationContentRef.current = continuedContent; // Keep ref in sync
                     setStreamingContent(continuedContent);
                   } else if (parsed.type === 'done') {
                     // Stream completed
@@ -247,14 +327,15 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
       } catch (streamError: any) {
         if (streamError?.name === 'AbortError') {
           console.log('Continuation stopped by user');
-          // The update will be handled below in the finally block
+          // Mark that the stream was stopped for proper handling
+          wasStoppedEarly = true;
         } else {
           throw streamError;
         }
       }
       
       // Update the message with continued content
-      if (continuedContent.trim() || abortControllerRef.current?.signal.aborted) {
+      if (continuedContent.trim() || wasStoppedEarly) {
         const fullContent = streamData.partialContent + continuedContent;
         
         // Update message in database with the complete content
@@ -264,8 +345,9 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
         });
         
         // Update or remove from stopped streams based on completion
-        if (!abortControllerRef.current?.signal.aborted) {
+        if (!wasStoppedEarly) {
           // Completed successfully - remove from stopped streams
+          console.log('[CONTINUE] Stream completed, removing from stoppedStreams');
           setStoppedStreams(prev => {
             const newMap = new Map(prev);
             newMap.delete(messageId);
@@ -280,6 +362,11 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
             canResume: true,
             savedToDb: true
           };
+          console.log('[CONTINUE] Stream stopped again, updating stream data:', {
+            messageId,
+            canResume: updatedStreamData.canResume,
+            contentLength: fullContent.length
+          });
           setStoppedStreams(prev => {
             const newMap = new Map(prev);
             newMap.set(messageId, updatedStreamData);
@@ -369,6 +456,7 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
 
       const reader = response.body!.getReader();
       const decoder = new TextDecoder();
+      accumulatedContentRef.current = ""; // Reset ref
       let accumulatedContent = "";
       let wasStoppedEarly = false;
 
@@ -389,6 +477,7 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
                   
                   if (parsed.type === 'delta') {
                     accumulatedContent += parsed.content;
+                    accumulatedContentRef.current = accumulatedContent; // Keep ref in sync
                     setStreamingContent(accumulatedContent);
                     // Log every 10th chunk to avoid spam
                     if (accumulatedContent.length % 100 < parsed.content.length) {
@@ -403,6 +492,7 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
                 } catch (e) {
                   // Handle plain text response for OpenRouter
                   accumulatedContent += data;
+                  accumulatedContentRef.current = accumulatedContent; // Keep ref in sync
                   setStreamingContent(accumulatedContent);
                 }
               }
@@ -431,11 +521,13 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
       console.log('[SUBMIT] wasStoppedEarly:', wasStoppedEarly);
 
       // Save assistant message if not already saved
-      if (accumulatedContent.trim() && !isStreamSavedRef.current) {
-        console.log('[SUBMIT] Saving message with content length:', accumulatedContent.length);
+      // Use ref value which is always current (in case state is stale)
+      const contentToSave = accumulatedContentRef.current || accumulatedContent;
+      if (contentToSave.trim() && !isStreamSavedRef.current) {
+        console.log('[SUBMIT] Saving message with content length:', contentToSave.length);
         const assistantMessageId = await sendMessage({
           chatId: chatId as Id<"chats">,
-          content: accumulatedContent,
+          content: contentToSave,
           role: "assistant",
         });
         
@@ -451,8 +543,8 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
         if (wasStoppedEarly) {
           const streamData: StreamData = {
             streamId,
-            partialContent: accumulatedContent,
-            stopPosition: accumulatedContent.length,
+            partialContent: contentToSave, // Use the same content that was saved
+            stopPosition: contentToSave.length,
             model: selectedModel,
             messages: allMessages,
             canResume: true,
@@ -483,6 +575,7 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
       currentMessageIdRef.current = null;
       isStreamSavedRef.current = false;
       isAbortingRef.current = false; // Reset abort flag
+      accumulatedContentRef.current = ""; // Clear accumulated content ref
       console.log('[SUBMIT] Cleanup complete');
     }
   };
@@ -508,12 +601,12 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
   const canSendMessage = !needsOpenRouter || isConnected;
 
   return (
-    <div className="flex flex-col h-screen lg:h-[calc(100vh-4rem)]">
-      {/* Messages area with proper padding for fixed input */}
+    <div className="flex flex-col h-full">
+      {/* Messages area */}
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 pb-48"
+        className="flex-1 overflow-y-auto p-4 space-y-4"
       >
         {messages?.map((message) => (
           <motion.div
@@ -590,8 +683,6 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
         )}
         
         <div ref={messagesEndRef} />
-        {/* Add extra space at the bottom for better UX */}
-        <div className="h-24" />
       </div>
 
       {/* Scroll to bottom button */}
@@ -601,15 +692,15 @@ export default function ChatPageClient({ chatId }: ChatPageClientProps) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.8 }}
           onClick={scrollToBottom}
-          className="fixed bottom-24 right-4 lg:right-8 z-20 bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:shadow-xl transition-shadow"
+          className="absolute bottom-28 right-4 z-20 bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:shadow-xl transition-shadow"
           aria-label="Scroll to bottom"
         >
           <ArrowDown className="h-5 w-5" />
         </motion.button>
       )}
 
-      {/* Input area - fixed to bottom of viewport */}
-      <div className="fixed bottom-0 left-0 right-0 lg:left-64 bg-background border-t p-4 space-y-2 z-10">
+      {/* Input area - flex-shrink-0 to prevent compression */}
+      <div className="flex-shrink-0 bg-background border-t p-4 space-y-2">
         {needsOpenRouter && !isConnected && (
           <div className="mb-2">
             <OpenRouterConnect />
