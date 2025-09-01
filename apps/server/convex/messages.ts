@@ -17,32 +17,27 @@ export const sendMessage = mutation({
   args: {
     chatId: v.id("chats"),
     content: v.string(),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    model: v.optional(v.string()),
   },
-  handler: async (ctx, { chatId, content }) => {
+  handler: async (ctx, { chatId, content, role, model }) => {
     const chat = await ctx.db.get(chatId);
     if (!chat) throw new Error("Chat not found");
     
-    // Add user message
-    const userMessageId = await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       chatId,
-      userId: "mock-user",
+      userId: role === "user" ? "mock-user" : "assistant",
       content,
-      role: "user",
+      role,
+      model,
       createdAt: Date.now(),
     });
     
-    // Update chat's updatedAt
     await ctx.db.patch(chatId, {
       updatedAt: Date.now(),
     });
     
-    // Schedule AI response
-    await ctx.scheduler.runAfter(500, api.messages.addAIResponse, {
-      chatId,
-      userMessage: content,
-    });
-    
-    return userMessageId;
+    return messageId;
   },
 });
 
@@ -82,5 +77,30 @@ export const addAssistantMessage = mutation({
       role: "assistant",
       createdAt: Date.now(),
     });
+  },
+});
+
+export const updateMessage = mutation({
+  args: {
+    messageId: v.id("messages"),
+    content: v.string(),
+  },
+  handler: async (ctx, { messageId, content }) => {
+    const message = await ctx.db.get(messageId);
+    if (!message) throw new Error("Message not found");
+    
+    // Update the message content
+    await ctx.db.patch(messageId, {
+      content,
+    });
+    
+    // Also update the chat's updatedAt timestamp
+    if (message.chatId) {
+      await ctx.db.patch(message.chatId, {
+        updatedAt: Date.now(),
+      });
+    }
+    
+    return messageId;
   },
 });

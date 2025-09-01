@@ -1,0 +1,412 @@
+"use client";
+
+import { useQuery, useMutation } from "convex/react";
+import { api } from "server/convex/_generated/api";
+import { useState, useRef, useEffect } from "react";
+import { Send, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ModelSwitcher } from "@/components/model-switcher";
+import { OpenRouterConnect } from "@/components/auth/openrouter-connect";
+import { useOpenRouterAuth } from "@/contexts/openrouter-auth";
+import { cn } from "@/lib/utils";
+import type { Id } from "server/convex/_generated/dataModel";
+
+interface ChatPageClientProps {
+  chatId: string;
+}
+
+export default function ChatPageClient({ chatId }: ChatPageClientProps) {
+  // Load saved model from localStorage or use default
+  const [selectedModel, setSelectedModel] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedModel = localStorage.getItem('selectedModel');
+      return savedModel || "openai/gpt-4o";
+    }
+    return "openai/gpt-4o";
+  });
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamingContent, setStreamingContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { isConnected, token } = useOpenRouterAuth();
+  
+  // Save model selection to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('selectedModel', selectedModel);
+    }
+  }, [selectedModel]);
+  const chat = useQuery(api.chats.getChat, { chatId: chatId as Id<"chats"> });
+  const messages = useQuery(api.messages.getMessages, { chatId: chatId as Id<"chats"> });
+  const sendMessage = useMutation(api.messages.sendMessage);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamingContent]);
+
+  useEffect(() => {
+    if (chat?.title) {
+      document.title = `${chat.title} - OpenChat`;
+    } else {
+      document.title = "Chat - OpenChat";
+    }
+  }, [chat?.title]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    // Check if OpenRouter is connected
+    if (!isConnected || !token) {
+      setError("Please connect your OpenRouter account to use AI features");
+      return;
+    }
+
+    const message = input.trim();
+    setInput("");
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Send user message to Convex
+      await sendMessage({
+        chatId: chatId as Id<"chats">,
+        content: message,
+        role: "user",
+      });
+
+      // Send to direct OpenRouter API
+      console.log('🚀 Sending to direct OpenRouter API:', { 
+        model: selectedModel, 
+        messagesCount: messages?.length || 0,
+        userMessage: message.substring(0, 50) + '...'
+      });
+      
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            ...(messages || []).map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: 'user', content: message }
+          ],
+          model: selectedModel,
+          token: token,
+        }),
+      });
+
+      console.log('📡 API response status:', response.status, response.ok);
+      console.log('📋 Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        let errorDetails = 'Unknown error';
+        try {
+          const errorData = await response.json();
+          errorDetails = errorData.details || errorData.error || 'API request failed';
+          console.error('❌ API error data:', errorData);
+        } catch {
+          errorDetails = await response.text();
+          console.error('❌ API error text:', errorDetails);
+        }
+        throw new Error(`OpenRouter API failed (${response.status}): ${errorDetails}`);
+      }
+
+      if (!response.body) {
+        throw new Error('No response body from OpenRouter API');
+      }
+
+      const reader = response.body.getReader();
+      let aiContent = '';
+      let chunkCount = 0;
+      setStreamingContent('');
+      
+      console.log('🔄 Starting to read direct text stream...');
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          
+          if (done) {
+            console.log('✅ Stream completed:', {
+              chunks: chunkCount,
+              totalLength: aiContent.length,
+              preview: aiContent.substring(0, 100) + (aiContent.length > 100 ? '...' : '')
+            });
+            break;
+          }
+          
+          chunkCount++;
+          const chunk = new TextDecoder().decode(value);
+          
+          console.log(`📦 Chunk ${chunkCount}:`, {
+            length: chunk.length,
+            content: chunk.length > 50 ? chunk.substring(0, 50) + '...' : chunk
+          });
+          
+          aiContent += chunk;
+          setStreamingContent(aiContent);
+          
+          // Small delay to make streaming visible and smooth
+          await new Promise(resolve => setTimeout(resolve, 15));
+        }
+      } catch (streamError) {
+        console.error('❌ Stream reading error:', streamError);
+        throw new Error(`Failed to read AI response stream: ${streamError}`);
+      }
+
+      // Validate and save response
+      const trimmedContent = aiContent.trim();
+      if (trimmedContent) {
+        console.log('💾 Saving AI response to Convex:', {
+          length: trimmedContent.length,
+          model: selectedModel,
+          preview: trimmedContent.substring(0, 100) + (trimmedContent.length > 100 ? '...' : '')
+        });
+        
+        await sendMessage({
+          chatId: chatId as Id<"chats">,
+          content: trimmedContent,
+          role: "assistant",
+          model: selectedModel,
+        });
+      } else {
+        console.warn('⚠️ Empty response received from AI model');
+        throw new Error('AI model returned empty response. Please try again or select a different model.');
+      }
+
+      setStreamingContent('');
+
+    } catch (error) {
+      console.error("💥 Failed to send message:", error);
+      
+      // Categorize error types for better user feedback
+      let errorMessage = 'Unknown error occurred';
+      let canRetry = true;
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Check for specific error types
+        if (error.message.includes('401') || error.message.includes('unauthorized')) {
+          errorMessage = 'OpenRouter authentication failed. Please reconnect your account.';
+          canRetry = false;
+        } else if (error.message.includes('402') || error.message.includes('insufficient')) {
+          errorMessage = 'Insufficient OpenRouter credits. Please add credits to your account.';
+          canRetry = false;
+        } else if (error.message.includes('429') || error.message.includes('rate limit')) {
+          errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+          canRetry = true;
+        } else if (error.message.includes('500') || error.message.includes('502') || error.message.includes('503')) {
+          errorMessage = 'OpenRouter server error. Please try again in a moment.';
+          canRetry = true;
+        } else if (error.message.includes('Empty response') || error.message.includes('empty response')) {
+          errorMessage = `No response from ${selectedModel}. Try a different model or check if it's available.`;
+          canRetry = true;
+        } else if (error.message.includes('stream')) {
+          errorMessage = 'Streaming connection failed. Please check your internet connection and try again.';
+          canRetry = true;
+        }
+      }
+      
+      console.log('🔍 Error categorization:', {
+        originalError: error,
+        categorizedMessage: errorMessage,
+        canRetry,
+        selectedModel
+      });
+      
+      setError(errorMessage);
+      setInput(message); // Restore input for retry
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!chat) {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <p className="text-muted-foreground">Chat not found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold">{chat.title}</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          {!isConnected && <OpenRouterConnect variant="outline" size="sm" />}
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages?.length === 0 && !isConnected && (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
+            <h2 className="text-2xl font-semibold mb-2">Connect OpenRouter to Start Chatting</h2>
+            <p className="text-muted-foreground max-w-md">
+              Connect your OpenRouter account to access AI models and start having conversations.
+            </p>
+            <OpenRouterConnect />
+          </div>
+        )}
+
+        {messages?.length === 0 && isConnected && (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <h2 className="text-2xl font-semibold mb-2">Start a conversation</h2>
+            <p className="text-muted-foreground">
+              Choose an AI model above and type your message below
+            </p>
+          </div>
+        )}
+        
+        {messages?.map((message, index) => (
+          <div
+            key={message._id}
+            className={cn(
+              "flex animate-in fade-in-0 slide-in-from-bottom-2",
+              message.role === "user" ? "justify-end" : "justify-start"
+            )}
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
+            <div
+              className={cn(
+                "max-w-[80%] rounded-2xl px-4 py-2.5 transition-all",
+                message.role === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted border border-border"
+              )}
+            >
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-xs opacity-60">
+                  {new Date(message.createdAt).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </p>
+                {message.role === "assistant" && message.model && (
+                  <p className="text-xs opacity-50 ml-2">{message.model}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Streaming AI response */}
+        {streamingContent && (
+          <div className="flex justify-start animate-in fade-in-0">
+            <div className="bg-muted border border-border rounded-2xl px-4 py-2.5 max-w-[80%]">
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                {streamingContent}
+              </p>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-xs opacity-60">streaming...</p>
+                <p className="text-xs opacity-50 ml-2">{selectedModel}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading indicator */}
+        {isLoading && !streamingContent && (
+          <div className="flex justify-start animate-in fade-in-0">
+            <div className="bg-muted border border-border rounded-2xl px-4 py-2.5">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <p className="text-sm text-muted-foreground">AI is thinking...</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input form with integrated model picker */}
+      <div className="border-t border-border p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        {error && (
+          <div className="mb-3 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-destructive flex-1">{error}</p>
+              {input && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setError(null);
+                    handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+                  }}
+                  className="text-xs h-7 px-2 border-destructive/30 hover:border-destructive/50 text-destructive hover:text-destructive"
+                >
+                  Retry
+                </Button>
+              )}
+            </div>
+            {error.includes('different model') && isConnected && (
+              <div className="mt-2 pt-2 border-t border-destructive/20">
+                <p className="text-xs text-muted-foreground mb-2">Try switching to a different model:</p>
+                <ModelSwitcher 
+                  selectedModel={selectedModel} 
+                  onModelChange={setSelectedModel} 
+                  compact={true}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <div className="flex-1 flex items-center rounded-full border border-input bg-background focus-within:ring-2 focus-within:ring-ring transition-all">
+            {/* Model picker integrated into input */}
+            {isConnected && (
+              <>
+                <ModelSwitcher 
+                  selectedModel={selectedModel} 
+                  onModelChange={setSelectedModel} 
+                  compact={true}
+                />
+                <div className="h-6 w-px bg-border mx-2" />
+              </>
+            )}
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                isConnected 
+                  ? `Message ${selectedModel.split('/').pop() || selectedModel}...` 
+                  : "Connect OpenRouter to start chatting..."
+              }
+              className="flex-1 bg-transparent px-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none"
+              disabled={isLoading || !isConnected}
+            />
+          </div>
+          <Button
+            type="submit"
+            size="icon"
+            className="rounded-full h-10 w-10 transition-all hover:scale-110 active:scale-95"
+            disabled={!input.trim() || isLoading || !isConnected}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}

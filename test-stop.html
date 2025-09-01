@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Stream Abort</title>
+</head>
+<body>
+    <h1>Stream Abort Test</h1>
+    <button id="start">Start Stream</button>
+    <button id="stop" disabled>Stop Stream</button>
+    <div id="output"></div>
+    <div id="logs" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: auto;"></div>
+
+    <script>
+        let controller = null;
+        const output = document.getElementById('output');
+        const logs = document.getElementById('logs');
+        const startBtn = document.getElementById('start');
+        const stopBtn = document.getElementById('stop');
+
+        function log(message) {
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toISOString()}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+            console.log(message);
+        }
+
+        startBtn.addEventListener('click', async () => {
+            log('Starting stream...');
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            output.textContent = '';
+
+            controller = new AbortController();
+
+            try {
+                const response = await fetch('http://localhost:3001/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: [
+                            { role: 'user', content: 'Write a very long story about space exploration. Make it at least 1000 words.' }
+                        ],
+                        model: 'deepseek-chat-v3.1',
+                        streamId: 'test-' + Date.now()
+                    }),
+                    signal: controller.signal
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulated = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        log('Stream completed');
+                        break;
+                    }
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data.trim() && data !== '[DONE]') {
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    if (parsed.type === 'delta') {
+                                        accumulated += parsed.content;
+                                        output.textContent = accumulated;
+                                    } else if (parsed.type === 'done') {
+                                        log('Stream done event received');
+                                    } else if (parsed.type === 'abort') {
+                                        log('Stream abort event received');
+                                    }
+                                } catch (e) {
+                                    // Plain text
+                                    accumulated += data;
+                                    output.textContent = accumulated;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    log('Stream aborted by user');
+                } else {
+                    log('Error: ' + error.message);
+                }
+            } finally {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                controller = null;
+            }
+        });
+
+        stopBtn.addEventListener('click', () => {
+            if (controller) {
+                log('Stopping stream...');
+                controller.abort();
+                controller = null;
+            }
+        });
+    </script>
+</body>
+</html>

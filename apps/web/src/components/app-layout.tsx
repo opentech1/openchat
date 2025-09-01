@@ -97,7 +97,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
     
     // Fire delete in background
-    deleteChat({ chatId }).catch(error => {
+    deleteChat({ chatId: chatId as any }).catch(error => {
       console.error("Failed to delete chat:", error);
       // Remove from deleted set if failed
       setDeletedChats(prev => {
@@ -614,7 +614,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1">{children}</main>
+        <main className="h-[calc(100vh-4rem)]">{children}</main>
       </div>
     </div>
   );

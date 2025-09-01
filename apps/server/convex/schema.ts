@@ -8,6 +8,7 @@ export default defineSchema({
 	chats: defineTable({
 		userId: v.string(),
 		title: v.string(),
+		model: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -19,6 +20,8 @@ export default defineSchema({
 		userId: v.string(),
 		content: v.string(),
 		role: v.union(v.literal("user"), v.literal("assistant")),
+		model: v.optional(v.string()),
+		isStreaming: v.optional(v.boolean()),
 		createdAt: v.number(),
 	})
 		.index("by_chat", ["chatId"])

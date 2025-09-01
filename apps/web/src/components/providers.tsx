@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "./theme-provider";
 import { ConvexClientProvider } from "./convex-client-provider";
+import { OpenRouterAuthProvider } from "@/contexts/openrouter-auth";
 import type { ReactNode } from "react";
 
 export default function Providers({ children }: { children: ReactNode }) {
@@ -13,7 +14,9 @@ export default function Providers({ children }: { children: ReactNode }) {
 				enableSystem
 				disableTransitionOnChange
 			>
-				{children}
+				<OpenRouterAuthProvider>
+					{children}
+				</OpenRouterAuthProvider>
 			</ThemeProvider>
 		</ConvexClientProvider>
 	);
