@@ -16,15 +16,19 @@ export const getChat = query({
 });
 
 export const createChat = mutation({
-  args: { title: v.optional(v.string()) },
-  handler: async (ctx, { title }) => {
+  args: { 
+    title: v.optional(v.string()),
+    viewMode: v.optional(v.union(v.literal("chat"), v.literal("mindmap"))),
+  },
+  handler: async (ctx, { title, viewMode }) => {
     const now = Date.now();
     
     return await ctx.db.insert("chats", {
       userId: "mock-user", // Mock user for now
-      title: title || "New Chat",
+      title: title || (viewMode === "mindmap" ? "New Mind Map" : "New Chat"),
       createdAt: now,
       updatedAt: now,
+      viewMode: viewMode || "chat",
     });
   },
 });
@@ -69,5 +73,19 @@ export const deleteChat = mutation({
     
     // Delete the chat
     await ctx.db.delete(chatId);
+  },
+});
+
+export const updateViewport = mutation({
+  args: {
+    chatId: v.id("chats"),
+    viewport: v.object({
+      x: v.number(),
+      y: v.number(),
+      zoom: v.number(),
+    }),
+  },
+  handler: async (ctx, { chatId, viewport }) => {
+    await ctx.db.patch(chatId, { viewport });
   },
 });

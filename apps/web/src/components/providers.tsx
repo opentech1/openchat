@@ -3,6 +3,7 @@
 import { ThemeProvider } from "./theme-provider";
 import { ConvexClientProvider } from "./convex-client-provider";
 import { OpenRouterAuthProvider } from "@/contexts/openrouter-auth";
+import { ClientToaster } from "./client-toaster";
 import type { ReactNode } from "react";
 
 export default function Providers({ children }: { children: ReactNode }) {
@@ -16,6 +17,7 @@ export default function Providers({ children }: { children: ReactNode }) {
 			>
 				<OpenRouterAuthProvider>
 					{children}
+					<ClientToaster />
 				</OpenRouterAuthProvider>
 			</ThemeProvider>
 		</ConvexClientProvider>

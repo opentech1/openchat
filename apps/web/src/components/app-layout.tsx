@@ -5,10 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Menu, Plus, X, LogOut, Pencil, Check, AlertTriangle, Info } from "lucide-react";
+import { Menu, X, LogOut, Pencil, Check, AlertTriangle, Info, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../server/convex/_generated/api";
+import { NewChatMenu } from "@/components/new-chat-menu";
 import {
   Dialog,
   DialogContent,
@@ -51,7 +52,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   }, [pathname]);
   
   const chats = useQuery(api.chats.getChats, isAuthenticated ? {} : "skip");
-  const createChat = useMutation(api.chats.createChat);
   const deleteChat = useMutation(api.chats.deleteChat);
   const updateChat = useMutation(api.chats.updateChat);
 
@@ -72,15 +72,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     }
   }, [chats]);
 
-  const handleNewChat = async () => {
-    try {
-      const id = await createChat({});
-      router.push(`/chat/${id}`);
-      setSidebarOpen(false);
-    } catch (error) {
-      console.error("Failed to create chat:", error);
-    }
-  };
+
 
   const performDelete = () => {
     if (!chatToDelete) return;
@@ -241,7 +233,12 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
         style={{ animationDelay: shouldAnimate ? `${index * 40}ms` : '0ms' }}
       >
-        <span className="truncate font-medium flex-1 min-w-0 text-left">{chat.title}</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {chat.viewMode === "mindmap" && (
+            <Sparkles className="h-3 w-3 text-purple-500 flex-shrink-0" />
+          )}
+          <span className="truncate font-medium">{chat.title}</span>
+        </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <Button
             variant="ghost"
@@ -441,14 +438,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* New Chat Button */}
           {isAuthenticated && (
             <div className="p-4">
-              <Button
-                onClick={handleNewChat}
-                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95"
-                variant="outline"
-              >
-                <Plus className="h-4 w-4" />
-                New Chat
-              </Button>
+              <NewChatMenu 
+                onChatCreated={() => setSidebarOpen(false)}
+              />
             </div>
           )}
 
@@ -528,14 +520,9 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* New Chat Button */}
           {isAuthenticated && (
             <div className="p-4">
-              <Button
-                onClick={handleNewChat}
-                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95"
-                variant="outline"
-              >
-                <Plus className="h-4 w-4" />
-                New Chat
-              </Button>
+              <NewChatMenu 
+                onChatCreated={() => setSidebarOpen(false)}
+              />
             </div>
           )}
 

@@ -19,8 +19,12 @@ export const sendMessage = mutation({
     content: v.string(),
     role: v.union(v.literal("user"), v.literal("assistant")),
     model: v.optional(v.string()),
+    position: v.optional(v.object({ x: v.number(), y: v.number() })),
+    parentMessageId: v.optional(v.id("messages")),
+    highlightedText: v.optional(v.string()),
+    nodeStyle: v.optional(v.string()),
   },
-  handler: async (ctx, { chatId, content, role, model }) => {
+  handler: async (ctx, { chatId, content, role, model, position, parentMessageId, highlightedText, nodeStyle }) => {
     const chat = await ctx.db.get(chatId);
     if (!chat) throw new Error("Chat not found");
     
@@ -31,6 +35,10 @@ export const sendMessage = mutation({
       role,
       model,
       createdAt: Date.now(),
+      position,
+      parentMessageId,
+      highlightedText,
+      nodeStyle,
     });
     
     await ctx.db.patch(chatId, {
@@ -102,5 +110,15 @@ export const updateMessage = mutation({
     }
     
     return messageId;
+  },
+});
+
+export const updateNodePosition = mutation({
+  args: {
+    messageId: v.id("messages"),
+    position: v.object({ x: v.number(), y: v.number() }),
+  },
+  handler: async (ctx, { messageId, position }) => {
+    await ctx.db.patch(messageId, { position });
   },
 });
