@@ -407,11 +407,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       </Dialog>
 
       {/* Mobile Sidebar */}
-      <div
+      <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-out lg:hidden",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        role="navigation"
+        aria-label="Mobile chat navigation"
       >
         <div className="flex h-full flex-col">
           {/* Sidebar Header */}
@@ -421,8 +423,10 @@ export function AppLayout({ children }: AppLayoutProps) {
               size="icon"
               onClick={() => setSidebarOpen(false)}
               className="lg:hidden hover:bg-white/10 absolute left-4"
+              aria-label="Close sidebar"
             >
               <X className="h-5 w-5" />
+              <span className="sr-only">Close navigation sidebar</span>
             </Button>
             <Link href="/" onClick={() => setSidebarOpen(false)} className="flex items-center gap-2 mx-auto">
               <span className="text-xl font-bold text-white tracking-tight">
@@ -496,7 +500,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -507,7 +511,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
+      <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border" role="navigation" aria-label="Desktop chat navigation">
         <div className="flex h-full flex-col">
           {/* Sidebar Header */}
           <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
@@ -583,7 +587,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main Content */}
       <div className="lg:pl-64">
@@ -593,8 +597,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
           >
             <Menu className="h-5 w-5" />
+            <span className="sr-only">Open navigation sidebar</span>
           </Button>
           <div className="flex-1" />
           <ModeToggle />
