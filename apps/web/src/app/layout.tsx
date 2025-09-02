@@ -13,6 +13,21 @@ const nunito = Nunito({
 export const metadata: Metadata = {
 	title: "OpenChat",
 	description: "AI-powered chat application",
+	manifest: "/manifest.json",
+	themeColor: "#6231ce",
+	viewport: {
+		width: "device-width",
+		initialScale: 1,
+		maximumScale: 1,
+	},
+	appleWebApp: {
+		capable: true,
+		statusBarStyle: "default",
+		title: "OpenChat",
+	},
+	icons: {
+		icon: "/favicon.ico",
+	},
 };
 
 export const dynamic = "force-dynamic";
@@ -24,6 +39,19 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en" suppressHydrationWarning>
+			<head>
+				<script
+					dangerouslySetInnerHTML={{
+						__html: `
+							if ('serviceWorker' in navigator) {
+								window.addEventListener('load', function() {
+									navigator.serviceWorker.register('/sw.js');
+								});
+							}
+						`,
+					}}
+				/>
+			</head>
 			<body className={`${nunito.className} min-h-screen bg-background antialiased`}>
 				<Providers>
 					<AppLayout>{children}</AppLayout>
