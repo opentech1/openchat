@@ -407,9 +407,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       </Dialog>
 
       {/* Mobile Sidebar */}
-      <div
+      <aside
+        id="mobile-sidebar"
+        role="navigation"
+        aria-label="Main navigation"
+        aria-hidden={!sidebarOpen}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-out lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-sidebar border-r border-sidebar-border transform transition-transform duration-200 ease-out lg:hidden touch-pan-y",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -420,9 +424,11 @@ export function AppLayout({ children }: AppLayoutProps) {
               variant="ghost"
               size="icon"
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden hover:bg-white/10 absolute left-4"
+              className="lg:hidden hover:bg-white/10 absolute left-4 touch-manipulation"
+              aria-label="Close navigation menu"
             >
               <X className="h-5 w-5" />
+              <span className="sr-only">Close menu</span>
             </Button>
             <Link href="/" onClick={() => setSidebarOpen(false)} className="flex items-center gap-2 mx-auto">
               <span className="text-xl font-bold text-white tracking-tight">
@@ -439,8 +445,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="p-4">
               <Button
                 onClick={handleNewChat}
-                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95"
+                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95 touch-manipulation min-h-[44px]"
                 variant="outline"
+                aria-label="Start a new chat conversation"
               >
                 <Plus className="h-4 w-4" />
                 New Chat
@@ -454,7 +461,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <h3 className="mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
                 Recent Chats
               </h3>
-              <div className="space-y-1">
+              <nav role="navigation" aria-label="Chat conversations" className="space-y-1">
                 {isAuthLoading ? (
                   // Loading state
                   <>
@@ -473,12 +480,12 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <div className="text-center py-8">
                     <p className="text-xs text-sidebar-foreground/40 mb-2">No conversations yet</p>
                     <p className="text-xs text-sidebar-foreground/30">Click "New Chat" to start</p>
-                  </div>
+                  </nav>
                 ) : (
                   // Chat list
                   chats.filter(chat => !deletedChats.has(chat._id)).map((chat, index) => renderChatItem(chat, index))
                 )}
-              </div>
+              </nav>
             </div>
           )}
 
@@ -496,7 +503,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Mobile Overlay */}
       {sidebarOpen && (
@@ -507,7 +514,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       )}
 
       {/* Desktop Sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border">
+      <aside
+        role="navigation"
+        aria-label="Main navigation"
+        className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:block lg:w-64 lg:bg-sidebar lg:border-r lg:border-sidebar-border"
+      >
         <div className="flex h-full flex-col">
           {/* Sidebar Header */}
           <div className="flex h-16 items-center px-6 border-b border-sidebar-border">
@@ -526,8 +537,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="p-4">
               <Button
                 onClick={handleNewChat}
-                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95"
+                className="w-full justify-center gap-2 transition-all duration-150 hover:scale-105 active:scale-95 touch-manipulation min-h-[44px]"
                 variant="outline"
+                aria-label="Start a new chat conversation"
               >
                 <Plus className="h-4 w-4" />
                 New Chat
@@ -541,7 +553,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <h3 className="mb-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
                 Recent Chats
               </h3>
-              <div className="space-y-1">
+              <nav role="navigation" aria-label="Chat conversations" className="space-y-1">
                 {isAuthLoading ? (
                   // Loading state
                   <>
@@ -560,12 +572,12 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <div className="text-center py-8">
                     <p className="text-xs text-sidebar-foreground/40 mb-2">No conversations yet</p>
                     <p className="text-xs text-sidebar-foreground/30">Click "New Chat" to start</p>
-                  </div>
+                  </nav>
                 ) : (
                   // Chat list
                   chats.filter(chat => !deletedChats.has(chat._id)).map((chat, index) => renderChatItem(chat, index))
                 )}
-              </div>
+              </nav>
             </div>
           )}
 
@@ -583,7 +595,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
           )}
         </div>
-      </div>
+      </aside>
 
       {/* Main Content */}
       <div className="lg:pl-64">
@@ -593,8 +605,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(true)}
+            className="touch-manipulation min-h-[44px] min-w-[44px]"
+            aria-label="Open navigation menu"
+            aria-expanded={sidebarOpen}
+            aria-controls="mobile-sidebar"
           >
             <Menu className="h-5 w-5" />
+            <span className="sr-only">Menu</span>
           </Button>
           <div className="flex-1" />
           <ModeToggle />

@@ -41,11 +41,13 @@ export function ChatInterface() {
 
   return (
     <div className="relative flex flex-col h-screen bg-background">
-      <div className="flex-1 overflow-hidden pb-32">
+      <div className="flex-1 overflow-hidden pb-32 sm:pb-24">
         <MessageList messages={messages} isLoading={isLoading} />
       </div>
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4">
-        <ChatInput onSendMessage={handleSendMessage} />
+      <div className="fixed bottom-0 left-0 right-0 px-4 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-2xl bg-background/80 backdrop-blur-sm border-t sm:border-0 sm:bg-transparent sm:backdrop-blur-none">
+        <div className="py-4 sm:py-0">
+          <ChatInput onSendMessage={handleSendMessage} />
+        </div>
       </div>
     </div>
   )
