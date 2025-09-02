@@ -8,10 +8,17 @@
   "theme_color": "#6231ce",
   "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "/favicon.ico",
-      "sizes": "32x32",
       "type": "image/x-icon"
+    },
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
     }
   ],
   "categories": ["productivity", "utilities"],
