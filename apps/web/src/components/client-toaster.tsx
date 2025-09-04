@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Toaster } from "sonner";
+import { useTheme } from "next-themes";
 
 export function ClientToaster() {
   const [mounted, setMounted] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     setMounted(true);
@@ -15,20 +17,11 @@ export function ClientToaster() {
   }
 
   return (
-    <Toaster 
-      position="top-center"
+    <Toaster
+      theme={theme as "light" | "dark" | "system"}
+      position="bottom-right"
       richColors
-      expand={false}
       closeButton
-      toastOptions={{
-        style: {
-          background: 'hsl(var(--card))',
-          color: 'hsl(var(--card-foreground))',
-          border: '1px solid hsl(var(--border))',
-        },
-        className: 'group toast',
-        duration: 4000,
-      }}
     />
   );
 }

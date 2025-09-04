@@ -7,19 +7,29 @@ import { useMutation } from "convex/react"
 import { api } from "../../../server/convex/_generated/api"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface NewChatMenuProps {
   onChatCreated?: () => void
   className?: string
+  isAuthenticated?: boolean
 }
 
-export function NewChatMenu({ onChatCreated, className }: NewChatMenuProps) {
+export function NewChatMenu({ onChatCreated, className, isAuthenticated = true }: NewChatMenuProps) {
   const [showOptions, setShowOptions] = useState(false)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const createChat = useMutation(api.chats.createChat)
   const router = useRouter()
 
   const handleCreateChat = async (viewMode: "chat" | "mindmap") => {
+    if (!isAuthenticated) {
+      toast.info("Please sign in to start chatting", {
+        description: "You need to create an account to use OpenChat"
+      })
+      router.push("/sign-in")
+      return
+    }
+    
     try {
       const id = await createChat({ viewMode })
       router.push(`/chat/${id}`)
