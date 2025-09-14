@@ -1,0 +1,31 @@
+{
+  "name": "openchat",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "check": "oxlint",
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "test": "turbo test",
+    "test:web": "turbo -F web test",
+    "test:server": "turbo -F server test",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F server db:push",
+    "db:studio": "turbo -F server db:studio",
+    "db:generate": "turbo -F server db:generate",
+    "db:migrate": "turbo -F server db:migrate"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "turbo": "^2.5.4",
+    "oxlint": "^1.12.0"
+  },
+  "packageManager": "bun@1.2.21"
+}
