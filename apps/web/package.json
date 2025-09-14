@@ -6,6 +6,7 @@
     "dev": "sh -c 'rm -rf .next && next dev -p 3001'",
     "build": "next build",
     "start": "next start",
+    "lint": "oxlint",
     "test": "bun test",
     "test:watch": "bun test --watch"
   },
