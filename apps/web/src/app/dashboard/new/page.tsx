@@ -1,19 +1,25 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import { serverClient } from "@/utils/orpc-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewChatPage() {
   const { userId } = await auth();
   if (!userId) redirect("/auth/sign-in");
-  return (
-    <div className="mx-auto max-w-4xl p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">New Chat</h1>
-      <p className="text-muted-foreground mt-2">Start a new conversation.</p>
-      <div className="mt-6 rounded-2xl border p-6">
-        <p className="text-sm">This is a placeholder. Hook up your chat flow here.</p>
-      </div>
-    </div>
-  );
-}
 
+  // Prefer server-created UUID; fallback to client-generated on failure
+  try {
+    const { id } = await serverClient.chats.create({ title: "New Chat" });
+    redirect(`/dashboard/chat/${id}`);
+  } catch {
+    const id = (() => {
+      try {
+        return crypto.randomUUID();
+      } catch {
+        return Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+    })();
+    redirect(`/dashboard/chat/${id}`);
+  }
+}

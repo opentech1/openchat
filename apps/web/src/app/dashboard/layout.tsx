@@ -5,16 +5,20 @@ import AppSidebar from "@/components/app-sidebar";
 import ThemeToggle from "@/components/theme-toggle";
 import Link from "next/link";
 import { Settings } from "lucide-react";
+import { serverClient } from "@/utils/orpc-server";
+export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const { userId } = await auth();
   if (!userId) redirect("/auth/sign-in");
 
+  const chats = await serverClient.chats.list().catch(() => []);
+
   return (
     <div className="relative flex min-h-svh overflow-hidden">
       <div className="hidden md:block">
         <div className="fixed inset-y-0 left-0">
-          <AppSidebar />
+          <AppSidebar initialChats={chats} />
         </div>
       </div>
       <main className="relative flex-1 md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
