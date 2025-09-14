@@ -75,14 +75,14 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<ClerkProvider>
-			<html lang="en" suppressHydrationWarning className={lato.variable}>
-				<body className="font-sans">
+		<html lang="en" suppressHydrationWarning className={lato.variable}>
+			<body className="font-sans">
+				<ClerkProvider>
 					<Providers>
 						{children}
 					</Providers>
-				</body>
-			</html>
-		</ClerkProvider>
+				</ClerkProvider>
+			</body>
+		</html>
 	);
 }

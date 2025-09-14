@@ -36,14 +36,14 @@ bun db:push
 ```
 
 
-Then, run the development server:
+Then, run the development servers (web + server only):
 
 ```bash
 bun dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3001](http://localhost:3001) for the web app.
+The API runs at [http://localhost:3000](http://localhost:3000).
 
 
 
@@ -60,10 +60,11 @@ openchat/
 
 ## Available Scripts
 
-- `bun dev`: Start all applications in development mode
+- `bun dev`: Start web and server in development mode
 - `bun build`: Build all applications
 - `bun dev:web`: Start only the web application
 - `bun dev:server`: Start only the server
+- `bun dev:extension`: Start only the browser extension (not started by default)
 - `bun check-types`: Check TypeScript types across all apps
 - `bun db:push`: Push schema changes to database
 - `bun db:studio`: Open database studio UI

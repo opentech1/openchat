@@ -6,13 +6,13 @@
     "apps/*",
     "packages/*"
   ],
-  "scripts": {
-    "check": "turbo lint",
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "check-types": "turbo check-types",
-    "test": "turbo test",
-    "test:web": "turbo -F web test",
+	"scripts": {
+		"check": "turbo lint",
+		"dev": "turbo -F web -F server dev",
+		"build": "turbo build",
+		"check-types": "turbo check-types",
+		"test": "turbo test",
+		"test:web": "turbo -F web test",
     "test:server": "turbo -F server test",
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
