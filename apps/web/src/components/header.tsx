@@ -22,7 +22,7 @@ export const HeroHeader = () => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 50)
         }
-        window.addEventListener('scroll', handleScroll)
+        window.addEventListener('scroll', handleScroll, { passive: true })
         return () => window.removeEventListener('scroll', handleScroll)
     }, [])
     return (
@@ -51,13 +51,13 @@ export const HeroHeader = () => {
 
                         <div className="absolute inset-0 m-auto hidden size-fit lg:block">
                             <ul className="flex gap-8 text-sm">
-                                {menuItems.map((item, index) => (
-                                    <li key={index}>
-                                        <Link
-                                            href={item.href as any}
+                                {menuItems.map((item) => (
+                                    <li key={item.name}>
+                                        <a
+                                            href={item.href}
                                             className="text-muted-foreground hover:text-accent-foreground block duration-150">
                                             <span>{item.name}</span>
-                                        </Link>
+                                        </a>
                                     </li>
                                 ))}
                             </ul>
@@ -66,13 +66,13 @@ export const HeroHeader = () => {
                         <div className="bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent">
                             <div className="lg:hidden">
                                 <ul className="space-y-6 text-base">
-                                    {menuItems.map((item, index) => (
-                                        <li key={index}>
-                                            <Link
-                                                href={item.href as any}
+                                    {menuItems.map((item) => (
+                                        <li key={item.name}>
+                                            <a
+                                                href={item.href}
                                                 className="text-muted-foreground hover:text-accent-foreground block duration-150">
                                                 <span>{item.name}</span>
-                                            </Link>
+                                            </a>
                                         </li>
                                     ))}
                                 </ul>
@@ -80,13 +80,13 @@ export const HeroHeader = () => {
                             <div className="flex w-full items-center justify-end gap-3 md:w-fit">
                                 <SignedOut>
                                     <Button variant="outline" size="sm" className={cn(isScrolled && 'lg:hidden')} asChild>
-                                        <Link href={"/auth/sign-in" as any}>Login</Link>
+                                        <Link href="/auth/sign-in">Login</Link>
                                     </Button>
                                     <Button size="sm" className={cn(isScrolled && 'lg:hidden')} asChild>
-                                        <Link href={"/auth/sign-up" as any}>Sign Up</Link>
+                                        <Link href="/auth/sign-up">Sign Up</Link>
                                     </Button>
                                     <Button size="sm" className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')} asChild>
-                                        <Link href={"/auth/sign-in" as any}>Get Started</Link>
+                                        <Link href="/auth/sign-in">Get Started</Link>
                                     </Button>
                                 </SignedOut>
                                 <SignedIn>

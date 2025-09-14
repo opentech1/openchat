@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback, useTransition, useMemo } from 'react';
+import { useEffect, useRef, useCallback, useTransition } from 'react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Paperclip, SendIcon, XIcon, LoaderIcon } from 'lucide-react';
@@ -116,8 +116,7 @@ function ChatPreview({ className }: { className?: string }) {
   const prefersReducedMotion = useReducedMotion();
   const fast = prefersReducedMotion ? 0 : 0.3;
   const slower = prefersReducedMotion ? 0 : 0.5;
-  const [isPending, startTransition] = useTransition();
-  const [recentCommand, setRecentCommand] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
   // removed pointer-following gradient for performance
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: 60,
@@ -314,37 +313,7 @@ function ChatPreview({ className }: { className?: string }) {
 
 export default React.memo(ChatPreview);
 
-function TypingDots() {
-  return (
-    <div className="ml-1 flex items-center">
-      {[1, 2, 3].map((dot) => (
-        <motion.div
-          key={dot}
-          className="bg-primary mx-0.5 h-1.5 w-1.5 rounded-full"
-          initial={{ opacity: 0.3 }}
-          animate={{
-            opacity: [0.3, 0.9, 0.3],
-            scale: [0.85, 1.1, 0.85],
-          }}
-          transition={{
-            duration: 1.2,
-            repeat: Infinity,
-            delay: dot * 0.15,
-            ease: 'easeInOut',
-          }}
-          style={{
-            boxShadow: '0 0 4px rgba(255, 255, 255, 0.3)',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-interface ActionButtonProps {
-  icon: React.ReactNode;
-  label: string;
-}
+// removed unused TypingDots and ActionButtonProps
 
 const rippleKeyframes = `
 @keyframes ripple {

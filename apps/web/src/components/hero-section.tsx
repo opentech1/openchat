@@ -2,12 +2,12 @@ import React from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import Image from 'next/image'
 import { TextEffect } from '@/components/ui/text-effect'
 import { AnimatedGroup } from '@/components/ui/animated-group'
 import { HeroHeader } from './header'
+import type { Variants } from 'motion/react'
 
-const transitionVariants: any = {
+const transitionVariants: Variants & { item: Variants } = {
     item: {
         hidden: {
             opacity: 0,
