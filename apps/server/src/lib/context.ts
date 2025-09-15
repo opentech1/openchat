@@ -13,7 +13,13 @@ export async function createContext({ context }: CreateContextOptions) {
 	if (secret) {
 		try {
 			const authz = context.request.headers.get("authorization") || context.request.headers.get("Authorization");
-			const token = authz?.startsWith("Bearer ") ? authz.slice(7) : null;
+			let token = authz?.startsWith("Bearer ") ? authz.slice(7) : null;
+			// WebSocket fallback: allow token via query param when headers aren't available
+			if (!token) {
+				const url = new URL(context.request.url);
+				const t = url.searchParams.get("token");
+				if (t) token = t;
+			}
 			if (token) {
 				const claims = await (verifyToken as any)(token, { secretKey: secret });
 				const uid = (claims?.sub ?? claims?.payload?.sub) as string | undefined;
@@ -26,7 +32,14 @@ export async function createContext({ context }: CreateContextOptions) {
 
 	// Dev fallback: trust x-user-id header locally when Clerk secret is absent or verification failed
 	if (!session) {
-		const uid = context.request.headers.get("x-user-id") || null;
+		let uid = context.request.headers.get("x-user-id") || null;
+		if (!uid) {
+			// WebSocket fallback: allow dev user via query param
+			try {
+				const url = new URL(context.request.url);
+				uid = url.searchParams.get("x-user-id");
+			} catch {}
+		}
 		session = uid ? ({ user: { id: uid } } as any) : null;
 	}
 

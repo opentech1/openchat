@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { chat, message } from "../db/schema/chat";
 import { and, desc, eq, asc } from "drizzle-orm";
+import { publish } from "../lib/sync-hub";
 
 function cuid() {
   try {
@@ -66,10 +67,21 @@ export const appRouter = {
             updatedAt: now,
             lastMessageAt: now,
           });
+          // emit sidebar add
+          publish(
+            `chats:index:${context.session!.user.id}`,
+            "chats.index.add",
+            { chatId: id, title: input?.title ?? "New Chat", updatedAt: now, lastMessageAt: now },
+          );
         } catch {
           const list = memChatsByUser.get(context.session!.user.id) ?? [];
           list.push({ id, userId: context.session!.user.id, title: input?.title ?? "New Chat", createdAt: now, updatedAt: now, lastMessageAt: now });
           memChatsByUser.set(context.session!.user.id, list);
+          publish(
+            `chats:index:${context.session!.user.id}`,
+            "chats.index.add",
+            { chatId: id, title: input?.title ?? "New Chat", updatedAt: now, lastMessageAt: now },
+          );
         }
         return { id };
       }),
@@ -141,6 +153,11 @@ export const appRouter = {
             createdAt: now,
             updatedAt: now,
           });
+          publish(
+            `chat:${input.chatId}`,
+            "chat.new",
+            { chatId: input.chatId, messageId: userMsgId, role: "user", content: input.content, createdAt: now },
+          );
 
           const asstMsgId = cuid();
           const asstNow = new Date(now.getTime() + 1);
@@ -152,8 +169,18 @@ export const appRouter = {
             createdAt: asstNow,
             updatedAt: asstNow,
           });
+          publish(
+            `chat:${input.chatId}`,
+            "chat.new",
+            { chatId: input.chatId, messageId: asstMsgId, role: "assistant", content: "test", createdAt: asstNow },
+          );
 
           await db.update(chat).set({ updatedAt: asstNow, lastMessageAt: asstNow }).where(eq(chat.id, input.chatId));
+          publish(
+            `chats:index:${context.session!.user.id}`,
+            "chats.index.update",
+            { chatId: input.chatId, updatedAt: asstNow, lastMessageAt: asstNow },
+          );
           return { ok: true as const, userMessageId: userMsgId, assistantMessageId: asstMsgId };
         } catch {
           // Memory fallback
@@ -162,6 +189,11 @@ export const appRouter = {
           const msgs = memMsgsByChat.get(input.chatId) ?? [];
           const userMsgId = cuid();
           msgs.push({ id: userMsgId, chatId: input.chatId, role: "user", content: input.content, createdAt: now, updatedAt: now });
+          publish(
+            `chat:${input.chatId}`,
+            "chat.new",
+            { chatId: input.chatId, messageId: userMsgId, role: "user", content: input.content, createdAt: now },
+          );
           const asstMsgId = cuid();
           const asstNow = new Date(now.getTime() + 1);
           msgs.push({ id: asstMsgId, chatId: input.chatId, role: "assistant", content: "test", createdAt: asstNow, updatedAt: asstNow });
@@ -169,6 +201,16 @@ export const appRouter = {
           const c = userChats.find((c) => c.id === input.chatId)!;
           c.updatedAt = asstNow;
           c.lastMessageAt = asstNow;
+          publish(
+            `chat:${input.chatId}`,
+            "chat.new",
+            { chatId: input.chatId, messageId: asstMsgId, role: "assistant", content: "test", createdAt: asstNow },
+          );
+          publish(
+            `chats:index:${context.session!.user.id}`,
+            "chats.index.update",
+            { chatId: input.chatId, updatedAt: asstNow, lastMessageAt: asstNow },
+          );
           return { ok: true as const, userMessageId: userMsgId, assistantMessageId: asstMsgId };
         }
       }),

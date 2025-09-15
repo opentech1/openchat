@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Message } from "@/components/ai-elements/message";
 import ChatComposer from "@/components/chat-composer";
+import { connect, subscribe, unsubscribe, type Envelope } from "@/lib/sync";
 
 type Role = "user" | "assistant";
 type Msg = { id: string; role: string; content: string; createdAt: Date };
@@ -35,6 +36,24 @@ export default function ChatRoom({ chatId, initialMessages }: { chatId: string; 
     // On mount, scroll to bottom
     setTimeout(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }), 0);
   }, []);
+
+  useEffect(() => {
+    void connect();
+    const topic = `chat:${chatId}`;
+    const handler = (evt: Envelope) => {
+      if (evt.type !== "chat.new") return;
+      const d = evt.data as any;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === d.messageId)) return prev;
+        const next = prev.concat([{ id: d.messageId, role: d.role, content: d.content, createdAt: new Date(d.createdAt) }]);
+        return next;
+      });
+    };
+    const off = subscribe(topic, handler);
+    return () => {
+      off();
+    };
+  }, [chatId]);
 
   return (
     <div className="flex h-[calc(100svh-6rem)] flex-col gap-3">

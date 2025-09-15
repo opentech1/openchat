@@ -8,6 +8,10 @@ import { RPCHandler } from "@orpc/server/fetch";
 import { onError } from "@orpc/server";
 import { appRouter } from "./routers";
 import { createContext } from "./lib/context";
+import { hub, makeEnvelope } from "./lib/sync-hub";
+import { db } from "./db";
+import { chat } from "./db/schema/chat";
+import { and, eq } from "drizzle-orm";
 
 const rpcHandler = new RPCHandler(appRouter, {
 	interceptors: [
@@ -82,6 +86,62 @@ new Elysia()
             credentials: true,
         }),
     )
+    .ws("/sync", {
+        // Authenticate and greet
+        open: async (ws) => {
+            const ctx = await createContext({ context: ws.data as any });
+            const userId = ctx.session?.user?.id;
+            if (!userId) {
+                try { ws.send("unauthorized"); } catch {}
+                return ws.close(1008, "unauthorized");
+            }
+            // attach user & tab info
+            (ws as any).data.userId = userId;
+            try {
+                const url = new URL((ws as any).data.request.url);
+                const tabId = url.searchParams.get("tabId") || crypto.randomUUID?.() || String(Date.now());
+                (ws as any).data.tabId = tabId;
+            } catch {
+                (ws as any).data.tabId = crypto.randomUUID?.() || String(Date.now());
+            }
+            // hello event with envelope shape; use user's index topic for topic field
+            try {
+                const topic = `chats:index:${userId}`;
+                const hello = makeEnvelope(topic, "system.hello", { serverTime: Date.now() });
+                ws.send(JSON.stringify(hello));
+            } catch {}
+        },
+        // Handle client commands
+        message: async (ws, msg) => {
+            const userId: string | undefined = (ws as any).data?.userId;
+            if (!userId) return ws.close(1008, "unauthorized");
+
+            // message framing: accept string ops or JSON
+            try {
+                if (typeof msg === "string") {
+                    if (msg === "ping") return void ws.send("pong");
+                    // try parse json string
+                    try { msg = JSON.parse(msg); } catch { /* ignore */ }
+                }
+                // array form: [op, payload]
+                if (Array.isArray(msg) && msg.length > 0) {
+                    const [op, payload] = msg as any[];
+                    return handleOp(ws, userId, op, payload);
+                }
+                // object form: { op, topic }
+                if (msg && typeof msg === "object" && "op" in (msg as any)) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const { op, ...rest } = msg as any;
+                    return handleOp(ws, userId, op, rest);
+                }
+            } catch {
+                // ignore malformed messages
+            }
+        },
+        close: (ws) => {
+            try { hub.unsubscribeAll(ws as any); } catch {}
+        },
+    })
     .all("/rpc*", async (context) => {
         // basic structured request log
         console.log(JSON.stringify({ ts: Date.now(), lvl: "info", msg: "rpc", m: context.request.method, u: new URL(context.request.url).pathname }));
@@ -111,3 +171,39 @@ new Elysia()
 	.listen(3000, () => {
 		console.log("Server is running on http://localhost:3000");
 	});
+
+async function handleOp(ws: any, userId: string, op: string, payload?: any) {
+    if (op === "ping") return void ws.send("pong");
+    if (op === "sub") {
+        const topic: string | undefined = payload?.topic;
+        if (!topic) return;
+        // authorize topic
+        if (topic === `chats:index:${userId}`) {
+            const res = hub.subscribe(ws, topic);
+            if (!res.ok) ws.send(JSON.stringify({ op: "error", error: res.reason || "subscribe_failed" }));
+            return;
+        }
+        if (topic.startsWith("chat:")) {
+            const chatId = topic.slice("chat:".length);
+            if (!chatId) return;
+            try {
+                const rows = await db.select({ id: chat.id }).from(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+                if (rows.length === 0) return; // unauthorized
+            } catch {
+                // On db error, deny to be safe
+                return;
+            }
+            const res = hub.subscribe(ws, topic);
+            if (!res.ok) ws.send(JSON.stringify({ op: "error", error: res.reason || "subscribe_failed" }));
+            return;
+        }
+        // Unknown topic family -> ignore
+        return;
+    }
+    if (op === "unsub") {
+        const topic: string | undefined = payload?.topic;
+        if (!topic) return;
+        try { hub.unsubscribe(ws, topic); } catch {}
+        return;
+    }
+}
