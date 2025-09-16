@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
-import Providers from "@/components/providers";
-import OptionalClerkProvider from "@/lib/optional-clerk";
 import { Lato } from "next/font/google";
 
 const lato = Lato({ subsets: ["latin"], weight: ["400", "700", "900"], variable: "--font-sans" });
@@ -77,11 +75,7 @@ export default function RootLayout({
 	return (
 		<html lang="en" suppressHydrationWarning className={lato.variable}>
 			<body className="font-sans">
-				<OptionalClerkProvider>
-					<Providers>
-						{children}
-					</Providers>
-				</OptionalClerkProvider>
+				{children}
 			</body>
 		</html>
 	);
