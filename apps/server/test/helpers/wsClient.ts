@@ -2,8 +2,8 @@ import WebSocket from "ws";
 
 export type WSClient = {
 	ws: WebSocket;
-	sub: (topic: string, handler: (e: any) => void) => void;
-	waitFor: (predicate: (e: any) => boolean, timeoutMs?: number) => Promise<any>;
+	sub: (topic: string, handler: (event: any) => void) => void;
+	waitFor: (predicate: (event: any) => boolean, timeoutMs?: number) => Promise<any>;
 	close: () => Promise<void>;
 };
 
@@ -13,21 +13,23 @@ export async function open(url: string, userId?: string, tabId?: string): Promis
 	if (tabId) u.searchParams.set("tabId", tabId);
 	const ws = new WebSocket(u.toString());
 
-	const handlers = new Map<string, Set<(e: any) => void>>();
+	const handlers = new Map<string, Set<(event: any) => void>>();
 
-	ws.on("message", (raw) => {
+	ws.on("message", (raw: WebSocket.RawData) => {
 		try {
 			const str = typeof raw === "string" ? raw : raw.toString();
 			if (str === "pong" || str === "unauthorized") return;
 			const msg = JSON.parse(str);
 			const set = handlers.get(msg.topic);
 			if (set) for (const fn of set) fn(msg);
-		} catch {}
+		} catch {
+			// ignore malformed payloads
+		}
 	});
 
 	await new Promise<void>((resolve, reject) => {
 		ws.once("open", () => resolve());
-		ws.once("error", (e) => reject(e));
+		ws.once("error", (error: Error) => reject(error));
 		ws.once("close", () => reject(new Error("closed")));
 	});
 
@@ -42,32 +44,36 @@ export async function open(url: string, userId?: string, tabId?: string): Promis
 			}
 			set.add(handler);
 		},
-		waitFor: (predicate, timeoutMs = 5000) => {
-			return new Promise((resolve, reject) => {
+		waitFor: (predicate, timeoutMs = 5000) =>
+			new Promise((resolve, reject) => {
 				const timer = setTimeout(() => {
 					cleanup();
 					reject(new Error("timeout"));
 				}, timeoutMs);
-				function onMsg(raw: WebSocket.RawData) {
+				function onMsg(rawMessage: WebSocket.RawData) {
 					try {
-						const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
+						const msg = JSON.parse(typeof rawMessage === "string" ? rawMessage : rawMessage.toString());
 						if (predicate(msg)) {
 							cleanup();
 							return resolve(msg);
 						}
-					} catch {}
+					} catch {
+						// ignore json parse errors
+					}
 				}
 				function cleanup() {
 					clearTimeout(timer);
 					ws.off("message", onMsg);
 				}
 				ws.on("message", onMsg);
-			});
-		},
+			}),
 		close: async () => {
-			try { ws.close(); } catch {}
-			await new Promise((r) => setTimeout(r, 50));
+			try {
+				ws.close();
+			} catch {
+				// ignore
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
 		},
 	};
 }
-

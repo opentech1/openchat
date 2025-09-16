@@ -38,7 +38,7 @@ describe("/sync auth + topic auth", () => {
 	it("rejects websocket without token", async () => {
 		const ws = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync`);
 		const closed = await new Promise<{ code: number; reason: string }>((resolve) => {
-			ws.on("close", (code, reason) => resolve({ code, reason: String(reason) }));
+			ws.on("close", (code: number, reason: Buffer) => resolve({ code, reason: reason.toString() }));
 		});
 		expect(closed.code).toBe(1008);
 	});
@@ -48,7 +48,7 @@ describe("/sync auth + topic auth", () => {
 		const ws = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${userA}`);
 		await new Promise<void>((r, j) => {
 			ws.once("open", () => r());
-			ws.once("error", (e) => j(e));
+			ws.once("error", (error: Error) => j(error));
 		});
 		// subscribe to own index should succeed (no explicit ack, so assume alive)
 		ws.send(JSON.stringify({ op: "sub", topic: `chats:index:${userA}` }));
@@ -56,7 +56,7 @@ describe("/sync auth + topic auth", () => {
 		ws.send(JSON.stringify({ op: "sub", topic: `chats:index:someone-else` }));
 
 		let gotOther = false;
-		ws.on("message", (raw) => {
+		ws.on("message", (raw: WebSocket.RawData) => {
 			try {
 				const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
 				if (msg.topic === `chats:index:someone-else`) gotOther = true;
@@ -71,10 +71,10 @@ describe("/sync auth + topic auth", () => {
   it("receives chats.index.add on create for own user", async () => {
 		const userA = "user-A";
 		const ws = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${userA}`);
-		await new Promise<void>((r, j) => { ws.once("open", () => r()); ws.once("error", (e) => j(e)); });
+		await new Promise<void>((r, j) => { ws.once("open", () => r()); ws.once("error", (error: Error) => j(error)); });
 		ws.send(JSON.stringify({ op: "sub", topic: `chats:index:${userA}` }));
 		const waitForAdd = new Promise<any>((resolve) => {
-			ws.on("message", (raw) => {
+			ws.on("message", (raw: WebSocket.RawData) => {
 				try {
 					const msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
 					if (msg.type === "chats.index.add") resolve(msg);

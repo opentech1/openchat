@@ -62,8 +62,8 @@ describe("message fan-out + sidebar bump", () => {
 		const ws1 = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${user}`);
 		const ws2 = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${user}`);
 		await Promise.all([
-			new Promise<void>((r, j) => { ws1.once("open", () => r()); ws1.once("error", (e) => j(e)); }),
-			new Promise<void>((r, j) => { ws2.once("open", () => r()); ws2.once("error", (e) => j(e)); }),
+			new Promise<void>((r, j) => { ws1.once("open", () => r()); ws1.once("error", (error: Error) => j(error)); }),
+			new Promise<void>((r, j) => { ws2.once("open", () => r()); ws2.once("error", (error: Error) => j(error)); }),
 		]);
 		const evts1: any[] = [];
 		const evts2: any[] = [];

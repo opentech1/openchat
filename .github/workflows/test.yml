@@ -34,15 +34,26 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.21
+          cache: true
+          cache-dependency-path: bun.lock
 
       - name: Install deps
         run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run check
+
+      - name: Typecheck
+        run: bun run check-types
+
+      - name: Build
+        run: bun run build
 
       - name: Run DB migrations (drizzle push)
         run: bun run db:push
 
       - name: Run unit/integration tests (Vitest)
-        run: bun -w test
+        run: bun run test
 
       - name: Upload Vitest coverage on failure
         if: failure()

@@ -20,7 +20,7 @@ type AppSidebarProps = { initialChats?: ChatListItem[] } & React.ComponentProps<
 export default function AppSidebar({ initialChats = [] }: AppSidebarProps) {
   const auth = useAuth();
   const userId = auth.userId || (typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined) || null;
-  const [chats, setChats] = React.useState(() => (initialChats || []).map((c) => ({
+  const [chats, setChats] = React.useState<ChatListItem[]>(() => (initialChats || []).map((c) => ({
     ...c,
     updatedAt: c.updatedAt ? new Date(c.updatedAt) : undefined,
     lastMessageAt: c.lastMessageAt ? new Date(c.lastMessageAt as any) : null,

@@ -60,7 +60,7 @@ describe("duplicate guard on reconnect", () => {
 		expect(chatId).toBeTruthy();
 
 		const ws1 = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${user}`);
-		await new Promise<void>((r, j) => { ws1.once("open", () => r()); ws1.once("error", (e) => j(e)); });
+		await new Promise<void>((r, j) => { ws1.once("open", () => r()); ws1.once("error", (error: Error) => j(error)); });
 		ws1.send(JSON.stringify({ op: "sub", topic: `chat:${chatId}` }));
 
 		let gotIds = new Set<string>();
@@ -83,7 +83,7 @@ describe("duplicate guard on reconnect", () => {
 		ws1.close();
 		await new Promise((r) => setTimeout(r, 100));
 		const ws2 = new WebSocket(`${server.baseURL.replace(/^http/, "ws")}/sync?x-user-id=${user}`);
-		await new Promise<void>((r, j) => { ws2.once("open", () => r()); ws2.once("error", (e) => j(e)); });
+		await new Promise<void>((r, j) => { ws2.once("open", () => r()); ws2.once("error", (error: Error) => j(error)); });
 		ws2.send(JSON.stringify({ op: "sub", topic: `chat:${chatId}` }));
 
 		let dup = false;

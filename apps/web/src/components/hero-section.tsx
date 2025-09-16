@@ -7,7 +7,7 @@ import { AnimatedGroup } from '@/components/ui/animated-group'
 import { HeroHeader } from './header'
 import type { Variants } from 'motion/react'
 
-const transitionVariants: Variants & { item: Variants } = {
+const transitionVariants = {
     item: {
         hidden: {
             opacity: 0,
@@ -25,7 +25,7 @@ const transitionVariants: Variants & { item: Variants } = {
             },
         },
     },
-}
+} satisfies { item: Variants }
 
 export default function HeroSection() {
     return (
