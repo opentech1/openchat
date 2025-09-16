@@ -11,40 +11,49 @@ type SidebarContextValue = {
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
 
 export function Sidebar({ className, children, defaultCollapsed = false, ...props }: React.ComponentProps<"aside"> & { defaultCollapsed?: boolean }) {
-  const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && (e.key === "b" || e.key === "B")) {
-        e.preventDefault();
-        setCollapsed((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+	const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
+	const [mounted, setMounted] = React.useState(false);
+	const hasPersistedRef = React.useRef(false);
+	React.useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if (e.ctrlKey && (e.key === "b" || e.key === "B")) {
+				e.preventDefault();
+				setCollapsed((v) => !v);
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, []);
 
-  // Load persisted state
-  React.useEffect(() => {
-    try {
-      const v = localStorage.getItem("oc:sb:collapsed");
-      if (v === "1") setCollapsed(true);
-      if (v === "0") setCollapsed(false);
-    } catch {}
-    // avoid animating on first paint
-    const t = setTimeout(() => setMounted(true), 0);
-    return () => clearTimeout(t);
-  }, []);
+	// Load persisted state
+	React.useEffect(() => {
+		try {
+			const v = localStorage.getItem("oc:sb:collapsed");
+			if (v === "1") setCollapsed(true);
+			if (v === "0") setCollapsed(false);
+		} catch {}
+		// avoid animating on first paint
+		const t = setTimeout(() => setMounted(true), 0);
+		return () => clearTimeout(t);
+	}, []);
 
-  React.useEffect(() => {
-    const width = collapsed ? "0px" : "16rem"; // expanded width
-    if (typeof document !== "undefined") {
-      document.documentElement.style.setProperty("--sb-width", width);
-    }
-    try {
-      localStorage.setItem("oc:sb:collapsed", collapsed ? "1" : "0");
-    } catch {}
-  }, [collapsed]);
+	React.useEffect(() => {
+		const width = collapsed ? "0px" : "16rem"; // expanded width
+		if (typeof document !== "undefined") {
+			document.documentElement.style.setProperty("--sb-width", width);
+		}
+	}, [collapsed]);
+
+	React.useEffect(() => {
+		if (!hasPersistedRef.current) {
+			hasPersistedRef.current = true;
+			return;
+		}
+		// Persist user preference after hydration without clobbering the stored value on first render.
+		try {
+			localStorage.setItem("oc:sb:collapsed", collapsed ? "1" : "0");
+		} catch {}
+	}, [collapsed]);
 
   return (
     <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
