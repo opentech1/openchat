@@ -185,3 +185,36 @@ html, body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .hero-fade {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: hero-fade-up 0.75s ease forwards;
+  }
+
+  .hero-delay-1 { animation-delay: 0.05s; }
+  .hero-delay-2 { animation-delay: 0.15s; }
+  .hero-delay-3 { animation-delay: 0.25s; }
+  .hero-delay-4 { animation-delay: 0.35s; }
+  .hero-delay-5 { animation-delay: 0.45s; }
+}
+
+@keyframes hero-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
