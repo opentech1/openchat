@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
+import ThemeSelector from "@/components/settings/theme-selector";
 import { Button } from "@/components/ui/button";
 
 export default function SettingsPageClient() {
@@ -23,8 +24,9 @@ export default function SettingsPageClient() {
         </section>
 
         <section className="rounded-xl border p-4">
-          <h2 className="text-sm font-medium">Preferences</h2>
-          <p className="text-muted-foreground mt-1 text-sm">Theme, notifications, and more. (Coming soon)</p>
+          <h2 className="text-sm font-medium">Appearance</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Choose the accent color used across the dashboard.</p>
+          <ThemeSelector className="mt-4" />
         </section>
       </div>
 
@@ -32,4 +34,3 @@ export default function SettingsPageClient() {
     </div>
   );
 }
-
