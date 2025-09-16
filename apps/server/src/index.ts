@@ -77,6 +77,8 @@ function withSecurityHeaders(resp: Response, request?: Request) {
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
 }
 
+const PORT = Number(process.env.PORT || 3000);
+
 new Elysia()
     .use(
         cors({
@@ -168,8 +170,9 @@ new Elysia()
         return withSecurityHeaders(res, context.request);
     })
     .get("/", () => "OK")
-	.listen(3000, () => {
-		console.log("Server is running on http://localhost:3000");
+    .get("/health", () => ({ ok: true }))
+	.listen(PORT, () => {
+		console.log(`Server is running on http://localhost:${PORT}`);
 	});
 
 async function handleOp(ws: any, userId: string, op: string, payload?: any) {

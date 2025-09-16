@@ -1,3 +1,9 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typedRoutes: true,
@@ -56,6 +62,19 @@ const nextConfig = {
     // and speeds up HMR for our setup.
     if (dev) {
       config.cache = { type: "memory" };
+    }
+    // In test, stub Clerk modules to avoid requiring real keys
+		const useClerkStubs =
+			process.env.NODE_ENV === "test" || process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1";
+		if (useClerkStubs) {
+			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client.tsx");
+			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server.ts");
+			config.resolve = config.resolve || {};
+			config.resolve.alias = {
+				...(config.resolve.alias || {}),
+        "@clerk/nextjs": STUB_CLIENT,
+        "@clerk/nextjs/server": STUB_SERVER,
+      };
     }
     return config;
   },

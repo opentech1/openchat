@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
-import { ClerkProvider } from "@clerk/nextjs";
+import OptionalClerkProvider from "@/lib/optional-clerk";
 import { Lato } from "next/font/google";
 
 const lato = Lato({ subsets: ["latin"], weight: ["400", "700", "900"], variable: "--font-sans" });
@@ -77,11 +77,11 @@ export default function RootLayout({
 	return (
 		<html lang="en" suppressHydrationWarning className={lato.variable}>
 			<body className="font-sans">
-				<ClerkProvider>
+				<OptionalClerkProvider>
 					<Providers>
 						{children}
 					</Providers>
-				</ClerkProvider>
+				</OptionalClerkProvider>
 			</body>
 		</html>
 	);

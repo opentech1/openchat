@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { getUserId } from "@/lib/auth-server";
 import { serverClient } from "@/utils/orpc-server";
 import ChatRoom from "@/components/chat-room";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) redirect("/auth/sign-in");
   const { id: chatId } = await params;
   // Preload initial messages on the server for faster first paint

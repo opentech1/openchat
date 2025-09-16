@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { getUserId } from "@/lib/auth-server";
 import ChatPreview from "@/components/chat-preview";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-    const { userId } = await auth();
+    const userId = await getUserId();
     if (!userId) redirect("/auth/sign-in");
 
     return (

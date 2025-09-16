@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { getUserId } from "@/lib/auth-server";
 import AppSidebar from "@/components/app-sidebar";
 import ThemeToggle from "@/components/theme-toggle";
 import Link from "next/link";
@@ -9,7 +9,7 @@ import { serverClient } from "@/utils/orpc-server";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) redirect("/auth/sign-in");
 
   const chats = await serverClient.chats.list().catch(() => []);

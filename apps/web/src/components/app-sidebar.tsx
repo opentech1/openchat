@@ -18,7 +18,8 @@ type ChatListItem = { id: string; title: string | null; updatedAt?: string | Dat
 type AppSidebarProps = { initialChats?: ChatListItem[] } & React.ComponentProps<typeof Sidebar>;
 
 export default function AppSidebar({ initialChats = [] }: AppSidebarProps) {
-  const { userId } = useAuth();
+  const auth = useAuth();
+  const userId = auth.userId || (typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined) || null;
   const [chats, setChats] = React.useState(() => (initialChats || []).map((c) => ({
     ...c,
     updatedAt: c.updatedAt ? new Date(c.updatedAt) : undefined,
@@ -76,7 +77,7 @@ export default function AppSidebar({ initialChats = [] }: AppSidebarProps) {
       <div className="mt-auto w-full px-2 pb-3 pt-2">
         <div className="flex items-center justify-between rounded-md px-2 py-1.5">
           <span className="text-xs text-muted-foreground">Account</span>
-          <UserButton afterSignOutUrl="/" userProfileMode="modal" />
+          {process.env.NODE_ENV === "test" ? null : <UserButton afterSignOutUrl="/" userProfileMode="modal" />}
         </div>
       </div>
       <SidebarRail />

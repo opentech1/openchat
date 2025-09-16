@@ -2,3 +2,7 @@ node_modules
 .turbo
 .alchemy
 .env
+.env.local
+coverage/
+test-results/
+tmp/

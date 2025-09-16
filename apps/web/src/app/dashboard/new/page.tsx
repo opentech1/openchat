@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { getUserId } from "@/lib/auth-server";
 import { serverClient } from "@/utils/orpc-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewChatPage() {
-  const { userId } = await auth();
+  const userId = await getUserId();
   if (!userId) redirect("/auth/sign-in");
 
   // Prefer server-created UUID; fallback to client-generated on failure
