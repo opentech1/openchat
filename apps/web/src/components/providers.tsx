@@ -3,6 +3,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/utils/orpc";
 import { ThemeProvider } from "./theme-provider";
+import { BrandThemeProvider } from "./brand-theme-provider";
 import { Toaster } from "sonner";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -13,10 +14,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 			enableSystem
 			disableTransitionOnChange
 		>
-			<QueryClientProvider client={queryClient}>
-				{children}
-				<Toaster richColors position="top-center" />
-			</QueryClientProvider>
+			<BrandThemeProvider>
+				<QueryClientProvider client={queryClient}>
+					{children}
+					<Toaster richColors position="top-center" />
+				</QueryClientProvider>
+			</BrandThemeProvider>
 		</ThemeProvider>
 	);
 }

@@ -75,7 +75,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning className={lato.variable}>
+		<html lang="en" suppressHydrationWarning className={lato.variable} data-brand-theme="blue">
 			<body className="font-sans">
 				<OptionalClerkProvider>
 					<Providers>
