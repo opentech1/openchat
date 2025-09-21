@@ -151,7 +151,7 @@ const baseMessages = useMemo(() => {
 
   return (
     <div className="flex min-h-[calc(100svh-6rem)] flex-1 flex-col gap-3">
-      <div ref={listRef} className="flex-1 overflow-y-auto rounded-xl p-4">
+      <div ref={listRef} className="flex-1 overflow-y-auto rounded-xl p-4 pb-32">
         {displayMessages.length === 0 ? (
           <p className="text-muted-foreground text-sm">No messages yet. Say hi!</p>
         ) : (
@@ -169,7 +169,11 @@ const baseMessages = useMemo(() => {
         )}
       </div>
 
-      <ChatComposer placeholder="Ask OpenChat a question..." disabled={busy} onSend={handleSend} />
+      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-10 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
+        <div className="pointer-events-auto w-full max-w-3xl">
+          <ChatComposer placeholder="Ask OpenChat a question..." disabled={busy} onSend={handleSend} />
+        </div>
+      </div>
     </div>
   );
 }
