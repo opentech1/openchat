@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hub, makeEnvelope } from "../src/lib/sync-hub";
+import { hub } from "../src/lib/sync-hub";
 
 function makeWS() {
 	const sent: string[] = [];
@@ -63,4 +63,3 @@ describe("sync-hub", () => {
 		expect(ws.sent.length).toBe(0);
 	});
 });
-

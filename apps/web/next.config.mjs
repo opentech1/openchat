@@ -78,7 +78,7 @@ const nextConfig = {
 			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server");
 			config.resolve = config.resolve || {};
 			config.resolve.alias = {
-				...(config.resolve.alias || {}),
+				...config.resolve.alias,
 				"@clerk/nextjs$": STUB_CLIENT,
 				"@clerk/nextjs/server$": STUB_SERVER,
 			};
