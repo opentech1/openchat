@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ModelSelector } from "@/components/model-selector";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
@@ -101,6 +103,7 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<string>("openchat-turbo");
   const prefersReducedMotion = useReducedMotion();
   const fast = prefersReducedMotion ? 0 : 0.3;
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
@@ -195,23 +198,23 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
       </AnimatePresence>
 
       <div className="border-border flex items-center justify-between gap-4 border-t p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <motion.button
             type="button"
             onClick={() => {
               const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
               setAttachments((prev) => [...prev, mockFileName]);
             }}
-            whileTap={{ scale: 0.94 }}
-            className="group text-muted-foreground hover:text-foreground relative rounded-lg p-2 transition-colors"
+            whileTap={{ scale: 0.95 }}
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              'flex h-9 w-9 items-center justify-center rounded-xl p-0 px-0 text-muted-foreground',
+            )}
             aria-label="Attach file"
           >
             <Paperclip className="h-4 w-4" />
-            <motion.span
-              className="bg-primary/10 absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
-              layoutId="button-highlight"
-            />
           </motion.button>
+          <ModelSelector value={selectedModel} onChange={setSelectedModel} disabled={disabled || isSending} />
         </div>
 
         <div className="flex flex-col items-end gap-1">
@@ -229,10 +232,9 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
             whileTap={{ scale: 0.98 }}
             disabled={disabled || isSending || !value.trim()}
             className={cn(
-              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-              'flex items-center gap-2',
+              'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
               value.trim()
-                ? 'bg-primary text-primary-foreground shadow-primary/10 shadow-lg'
+                ? 'bg-primary text-primary-foreground shadow-primary/10 hover:bg-primary/90'
                 : 'bg-muted/50 text-muted-foreground',
             )}
           >
