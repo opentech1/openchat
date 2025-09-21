@@ -75,7 +75,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       setMessages((prev) =>
         prev.map((item) =>
           item.id === message.id
-            ? { ...item, metadata: { ...(item.metadata ?? {}), createdAt: assistantCreatedAt } }
+            ? { ...item, metadata: { ...item.metadata, createdAt: assistantCreatedAt } }
             : item,
         ),
       );

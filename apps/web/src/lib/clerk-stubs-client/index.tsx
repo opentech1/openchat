@@ -4,7 +4,7 @@ import * as React from "react";
 export function SignedIn({ children }: { children: React.ReactNode }) {
 	return <>{children}</>;
 }
-export function SignedOut({ children }: { children: React.ReactNode }) {
+export function SignedOut({ children: _children }: { children: React.ReactNode }) {
 	return null;
 }
 export function SignIn() {
