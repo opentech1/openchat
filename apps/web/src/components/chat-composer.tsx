@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useTransition, useState } from "react";
 import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -99,33 +99,25 @@ export type ChatComposerProps = {
 export default function ChatComposer({ onSend, disabled, placeholder = "Ask OpenChat a question..." }: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
-  const [isSending, setIsSending] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const prefersReducedMotion = useReducedMotion();
   const fast = prefersReducedMotion ? 0 : 0.3;
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
 
-  const send = useCallback(async () => {
-    const trimmed = value.trim();
-    if (!trimmed || disabled || isSending) return;
-    setErrorMessage(null);
-    setIsSending(true);
-    try {
-      await onSend(trimmed);
+  const send = () => {
+    const v = value.trim();
+    if (!v || disabled) return;
+    startTransition(async () => {
+      await onSend(v);
       setValue('');
       adjustHeight(true);
-    } catch (error) {
-      console.error('Failed to send message', error);
-      setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
-    } finally {
-      setIsSending(false);
-    }
-  }, [adjustHeight, disabled, isSending, onSend, value]);
+    });
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      void send();
+      send();
     }
   };
 
@@ -142,7 +134,6 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
           value={value}
           onChange={(e) => {
             setValue(e.target.value);
-            if (errorMessage) setErrorMessage(null);
             adjustHeight();
           }}
           onKeyDown={onKeyDown}
@@ -214,36 +205,27 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
           </motion.button>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
-          {errorMessage && (
-            <span className="text-destructive text-xs font-medium" role="alert">
-              {errorMessage}
-            </span>
+        <motion.button
+          type="button"
+          onClick={send}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          disabled={disabled || isPending || !value.trim()}
+          className={cn(
+            'rounded-lg px-4 py-2 text-sm font-medium transition-all',
+            'flex items-center gap-2',
+            value.trim()
+              ? 'bg-primary text-primary-foreground shadow-primary/10 shadow-lg'
+              : 'bg-muted/50 text-muted-foreground',
           )}
-          <motion.button
-            type="button"
-            onClick={() => {
-              void send();
-            }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            disabled={disabled || isSending || !value.trim()}
-            className={cn(
-              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-              'flex items-center gap-2',
-              value.trim()
-                ? 'bg-primary text-primary-foreground shadow-primary/10 shadow-lg'
-                : 'bg-muted/50 text-muted-foreground',
-            )}
-          >
-            {isSending ? (
-              <LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
-            ) : (
-              <SendIcon className="h-4 w-4" />
-            )}
-            <span>Send</span>
-          </motion.button>
-        </div>
+        >
+          {isPending ? (
+            <LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
+          ) : (
+            <SendIcon className="h-4 w-4" />
+          )}
+          <span>Send</span>
+        </motion.button>
       </div>
     </motion.div>
   );
