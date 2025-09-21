@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getUserId } from "@/lib/auth-server";
 import { serverClient } from "@/utils/orpc-server";
-import ChatRoom from "@/components/chat-room";
+import ChatRoomClient from "@/components/chat-room-wrapper";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="mx-auto max-w-3xl p-4 md:p-6">
-      <ChatRoom chatId={chatId} initialMessages={initialMessages} />
+      <ChatRoomClient chatId={chatId} initialMessages={initialMessages} />
     </div>
   );
 }

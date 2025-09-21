@@ -1,6 +1,7 @@
 "use client";
 
-import * as React from "react";
+import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import type { ComponentProps } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -12,66 +13,244 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { UserButton } from "@clerk/nextjs";
-import { useAuth } from "@clerk/nextjs";
-import { connect, subscribe, unsubscribe, type Envelope } from "@/lib/sync";
-type ChatListItem = { id: string; title: string | null; updatedAt?: string | Date; lastMessageAt?: string | Date | null };
-type AppSidebarProps = { initialChats?: ChatListItem[] } & React.ComponentProps<typeof Sidebar>;
+import { X } from "lucide-react";
+import { useWorkspaceChats } from "@/lib/electric/workspace-db";
+import { usePathname, useRouter } from "next/navigation";
+import { client } from "@/utils/orpc";
+import { connect, subscribe, type Envelope } from "@/lib/sync";
 
-export default function AppSidebar({ initialChats = [] }: AppSidebarProps) {
-  const auth = useAuth();
-  const userId = auth.userId || (typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined) || null;
-  const [chats, setChats] = React.useState<ChatListItem[]>(() => (initialChats || []).map((c) => ({
-    ...c,
-    updatedAt: c.updatedAt ? new Date(c.updatedAt) : undefined,
-    lastMessageAt: c.lastMessageAt ? new Date(c.lastMessageAt as any) : null,
-  })));
+export type ChatListItem = {
+  id: string;
+  title: string | null;
+  updatedAt?: string | Date;
+  lastMessageAt?: string | Date | null;
+};
 
-  React.useEffect(() => {
-    // ensure socket up
+export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
+
+function normalizeChat(chat: ChatListItem): ChatListItem {
+  return {
+    ...chat,
+    updatedAt: chat.updatedAt ? new Date(chat.updatedAt) : undefined,
+    lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
+  };
+}
+
+function dedupeChats(list: ChatListItem[]) {
+	const map = new Map<string, ChatListItem>();
+	for (const chat of list) {
+		map.set(chat.id, chat);
+	}
+	return sortChats(Array.from(map.values()));
+}
+
+type ElectricChat = {
+  id: string;
+  title: string | null;
+  updated_at?: string | null;
+  last_message_at?: string | null;
+  user_id: string;
+};
+
+function mapLiveChat(row: ElectricChat): ChatListItem {
+  return {
+    id: row.id,
+    title: row.title,
+    updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
+    lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+  };
+}
+
+export default function AppSidebar({ initialChats = [], currentUserId, ...sidebarProps }: AppSidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [optimisticChats, setOptimisticChats] = useState<ChatListItem[]>([]);
+  const [, startTransition] = useTransition();
+  const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
+
+  useEffect(() => {
+    if (!devBypassEnabled) return;
+    if (typeof window === "undefined") return;
+    if (!currentUserId) return;
+    (window as any).__DEV_USER_ID__ = currentUserId;
+  }, [currentUserId, devBypassEnabled]);
+
+  const normalizedInitial = useMemo(() => initialChats.map(normalizeChat), [initialChats]);
+  const [fallbackChats, setFallbackChats] = useState<ChatListItem[]>(normalizedInitial);
+  useEffect(() => {
+    setFallbackChats(dedupeChats(normalizedInitial));
+  }, [normalizedInitial]);
+  const serializedFallback = useMemo(
+    () =>
+      normalizedInitial.map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        updatedAt: chat.updatedAt?.toISOString(),
+        lastMessageAt: chat.lastMessageAt?.toISOString() ?? undefined,
+      })),
+    [normalizedInitial],
+  );
+
+  const chatQuery = useWorkspaceChats(currentUserId, serializedFallback);
+  const electricChats = useMemo(() => {
+    if (!currentUserId) return null;
+    if (!chatQuery.enabled) return null;
+    const rows = chatQuery.data?.map(mapLiveChat);
+    if (!rows) return null;
+    return sortChats(rows);
+  }, [chatQuery.data, chatQuery.enabled, currentUserId]);
+
+  useEffect(() => {
+    if (electricChats) setFallbackChats(dedupeChats(electricChats));
+  }, [electricChats]);
+
+  const baseChats = fallbackChats;
+  const isLoading = chatQuery.enabled && !chatQuery.isReady && fallbackChats.length === 0;
+
+  const chats = useMemo(() => {
+    if (optimisticChats.length === 0) return baseChats;
+    const baseIds = new Set(baseChats.map((chat) => chat.id));
+    const supplemental = optimisticChats.filter((chat) => !baseIds.has(chat.id));
+    return sortChats(baseChats.concat(supplemental));
+  }, [baseChats, optimisticChats]);
+
+  const handleCreateChat = useCallback(() => {
+    if (!currentUserId || isCreating) {
+      if (!currentUserId) router.push("/auth/sign-in");
+      return;
+    }
+    setIsCreating(true);
+    startTransition(async () => {
+      try {
+        const now = new Date();
+        const { id } = await client.chats.create({ title: "New Chat" });
+        setOptimisticChats((prev) =>
+          sortChats(
+            prev.concat([
+              {
+                id,
+                title: "New Chat",
+                updatedAt: now,
+                lastMessageAt: now,
+              },
+            ]),
+          ),
+        );
+        setFallbackChats((prev) => dedupeChats(prev.concat([{ id, title: "New Chat", updatedAt: now, lastMessageAt: now }])));
+        router.push(`/dashboard/chat/${id}`);
+      } catch (error) {
+        console.error("Failed to create chat", error);
+      } finally {
+        setIsCreating(false);
+      }
+    });
+  }, [currentUserId, electricChats, isCreating, router, startTransition]);
+
+  const handleDelete = useCallback(
+    (chatId: string) => {
+      if (!currentUserId || !chatId) {
+        if (!currentUserId) router.push("/auth/sign-in");
+        return;
+      }
+      setDeletingChatId(chatId);
+      setOptimisticChats((prev) => prev.filter((chat) => chat.id !== chatId));
+      startTransition(async () => {
+        try {
+          await client.chats.delete({ chatId });
+          if (pathname?.startsWith(`/dashboard/chat/${chatId}`)) router.replace("/dashboard");
+          setFallbackChats((prev) => prev.filter((chat) => chat.id !== chatId));
+        } catch (error) {
+          console.error("Failed to delete chat", error);
+        } finally {
+          setDeletingChatId((current) => (current === chatId ? null : current));
+        }
+      });
+    },
+    [currentUserId, electricChats, pathname, router, startTransition],
+  );
+
+  useEffect(() => {
+    if (!currentUserId) return;
     void connect();
-  }, []);
-
-  React.useEffect(() => {
-    if (!userId) return;
-    const topic = `chats:index:${userId}`;
+    const topic = `chats:index:${currentUserId}`;
     const handler = (evt: Envelope) => {
       if (evt.type === "chats.index.add") {
-        const d = evt.data as any;
-        setChats((prev) => {
-          if (prev.some((c) => c.id === d.chatId)) return prev;
-          const next = prev.concat([{ id: d.chatId, title: d.title ?? "New Chat", updatedAt: new Date(d.updatedAt), lastMessageAt: d.lastMessageAt ? new Date(d.lastMessageAt) : null }]);
-          return sortChats(next);
+        const d = evt.data as { chatId: string; title?: string; updatedAt?: string | Date; lastMessageAt?: string | Date };
+        setFallbackChats((prev) => {
+          if (prev.some((chat) => chat.id === d.chatId)) return prev;
+          const next = prev.concat([
+            {
+              id: d.chatId,
+              title: d.title ?? "New Chat",
+              updatedAt: d.updatedAt ? new Date(d.updatedAt) : undefined,
+              lastMessageAt: d.lastMessageAt ? new Date(d.lastMessageAt) : null,
+            },
+          ]);
+          return dedupeChats(next);
         });
       } else if (evt.type === "chats.index.update") {
-        const d = evt.data as any;
-        setChats((prev) => {
-          const next = prev.map((c) => c.id === d.chatId ? ({ ...c, updatedAt: new Date(d.updatedAt), lastMessageAt: d.lastMessageAt ? new Date(d.lastMessageAt) : null, title: d.title ?? c.title }) : c);
-          return sortChats(next);
+        const d = evt.data as { chatId: string; title?: string | null; updatedAt?: string | Date | null; lastMessageAt?: string | Date | null };
+        setFallbackChats((prev) => {
+          const next = prev.map((chat) =>
+            chat.id === d.chatId
+              ? {
+                  ...chat,
+                  title: d.title ?? chat.title,
+                  updatedAt: d.updatedAt != null ? new Date(d.updatedAt) : chat.updatedAt,
+                  lastMessageAt: d.lastMessageAt != null ? new Date(d.lastMessageAt) : chat.lastMessageAt,
+                }
+              : chat,
+          );
+          return dedupeChats(next);
         });
+      } else if (evt.type === "chats.index.remove") {
+        const d = evt.data as { chatId: string };
+        setFallbackChats((prev) => prev.filter((chat) => chat.id !== d.chatId));
       }
     };
-    const off = subscribe(topic, handler);
+    const unsubscribe = subscribe(topic, handler);
     return () => {
-      off();
+      unsubscribe();
     };
-  }, [userId]);
+    }, [currentUserId, electricChats]);
 
   return (
-    <Sidebar defaultCollapsed>
+    <Sidebar defaultCollapsed {...sidebarProps}>
       <SidebarHeader className="px-2 py-3">
         <div className="flex items-center justify-center">
-          <Link href="/dashboard" className={cn("select-none text-lg font-semibold tracking-tight md:text-xl leading-none")}>OpenChat</Link>
+          <Link
+            href="/dashboard"
+            className={cn("select-none text-lg font-semibold tracking-tight md:text-xl leading-none")}
+          >
+            OpenChat
+          </Link>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <Button asChild variant="outline" className="w-full justify-center">
-            <Link href="/dashboard/new">New Chat</Link>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-center"
+            onClick={handleCreateChat}
+            disabled={!currentUserId || isCreating}
+          >
+            {isCreating ? "Creating…" : "New Chat"}
           </Button>
         </SidebarGroup>
-        <SidebarGroup>
-          <h3 className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Chats</h3>
-          <ChatList chats={chats} />
+      <SidebarGroup>
+        <div className="flex items-center justify-between px-2 py-1.5">
+          <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chats</h3>
+        </div>
+          <ChatList
+            chats={chats}
+            isLoading={isLoading}
+            activePath={pathname}
+            onDelete={handleDelete}
+            deletingId={deletingChatId}
+          />
         </SidebarGroup>
       </SidebarContent>
       <div className="mt-auto w-full px-2 pb-3 pt-2">
@@ -85,21 +264,67 @@ export default function AppSidebar({ initialChats = [] }: AppSidebarProps) {
   );
 }
 
-function ChatList({ chats }: { chats: ChatListItem[] }) {
-  const items = chats ?? [];
-  if (items.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
+function ChatList({
+  chats,
+  isLoading,
+  activePath,
+  onDelete,
+  deletingId,
+}: {
+  chats: ChatListItem[];
+  isLoading?: boolean;
+  activePath?: string | null;
+  onDelete: (chatId: string) => void;
+  deletingId: string | null;
+}) {
+  if (isLoading && chats.length === 0) {
+    return <p className="px-2 text-xs text-muted-foreground">Syncing chats…</p>;
+  }
+  if (chats.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
   return (
-    <ul className="px-1">
-      {items.map((c) => (
-        <li key={c.id}>
-          <Link
-            href={`/dashboard/chat/${c.id}`}
-            className="hover:bg-accent hover:text-accent-foreground block truncate rounded-md px-2 py-1.5 text-sm"
-          >
-            {c.title || "Untitled"}
-          </Link>
-        </li>
-      ))}
+    <ul className="px-1 space-y-1">
+      {chats.map((c) => {
+        const href = `/dashboard/chat/${c.id}`;
+        const isActive = activePath === href;
+        return (
+          <li key={c.id} className="group relative">
+            <Link
+              href={href}
+              className={cn(
+                "block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
+                isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
+              )}
+              aria-current={isActive ? "page" : undefined}
+            >
+              {c.title || "Untitled"}
+            </Link>
+					<button
+						type="button"
+						onClick={(event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							onDelete(c.id);
+						}}
+						className={cn(
+							"absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
+							"transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
+							"bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
+							"hover:text-destructive-foreground focus-visible:text-destructive-foreground",
+							"disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
+							deletingId === c.id ? "opacity-100" : "opacity-0",
+						)}
+						aria-label="Delete chat"
+						disabled={deletingId === c.id}
+					>
+						{deletingId === c.id ? (
+							<span className="animate-pulse text-base">…</span>
+						) : (
+							<X className="h-4 w-4" />
+						)}
+					</button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -107,8 +332,8 @@ function ChatList({ chats }: { chats: ChatListItem[] }) {
 function sortChats(list: ChatListItem[]) {
   const copy = list.slice();
   copy.sort((a, b) => {
-    const aLast = (a.lastMessageAt ? new Date(a.lastMessageAt) : (a.updatedAt ? new Date(a.updatedAt) : new Date(0))).getTime();
-    const bLast = (b.lastMessageAt ? new Date(b.lastMessageAt) : (b.updatedAt ? new Date(b.updatedAt) : new Date(0))).getTime();
+    const aLast = (a.lastMessageAt ? new Date(a.lastMessageAt) : a.updatedAt ? new Date(a.updatedAt) : new Date(0)).getTime();
+    const bLast = (b.lastMessageAt ? new Date(b.lastMessageAt) : b.updatedAt ? new Date(b.updatedAt) : new Date(0)).getTime();
     if (bLast !== aLast) return bLast - aLast;
     const aUp = (a.updatedAt ? new Date(a.updatedAt) : new Date(0)).getTime();
     const bUp = (b.updatedAt ? new Date(b.updatedAt) : new Date(0)).getTime();

@@ -77,7 +77,11 @@ describe("message fan-out + sidebar bump", () => {
 		ws2.send(JSON.stringify({ op: "sub", topic: `chats:index:${user}` }));
 
 		// Send message via RPC client
-		const mRes = await client.messages.send({ chatId, content: "hello" });
+		const mRes = await client.messages.send({
+		chatId,
+		userMessage: { content: "hello" },
+		assistantMessage: { content: "assistant-response" },
+	});
 		expect(mRes.ok).toBe(true);
 		// Wait a bit for events to arrive
 		await new Promise((r) => setTimeout(r, 400));

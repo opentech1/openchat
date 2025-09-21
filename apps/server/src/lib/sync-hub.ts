@@ -22,7 +22,7 @@ const topics = new Map<string, Set<WS>>();
 const wsToTopics = new WeakMap<WS, Set<string>>();
 
 const MAX_SUBS_PER_SOCKET = 50;
-const MAX_EVENT_BYTES = 8 * 1024; // 8 KiB
+const MAX_EVENT_BYTES = 128 * 1024; // 128 KiB
 
 function cuid() {
 	try {
@@ -83,8 +83,8 @@ export function publishEnvelope<T = unknown>(event: Envelope<T>) {
 	} catch {
 		return;
 	}
-	// Enforce max event size per socket
-	if (payload.length > MAX_EVENT_BYTES) return;
+	// Enforce max event size per socket (measure in bytes, not UTF-16 length)
+	if (Buffer.byteLength(payload, "utf8") > MAX_EVENT_BYTES) return;
 	for (const ws of sockets) {
 		try {
 			ws.send(payload);
@@ -106,4 +106,3 @@ export const hub = {
 	publishEnvelope,
 	makeEnvelope,
 };
-

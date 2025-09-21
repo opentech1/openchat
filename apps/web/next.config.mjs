@@ -64,17 +64,24 @@ const nextConfig = {
       config.cache = { type: "memory" };
     }
     // In test, stub Clerk modules to avoid requiring real keys
+		const hasClerkKeys = Boolean(
+			process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+			process.env.CLERK_PUBLISHABLE_KEY ||
+			process.env.CLERK_SECRET_KEY,
+		);
 		const useClerkStubs =
-			process.env.NODE_ENV === "test" || process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1";
+			!hasClerkKeys ||
+			process.env.NODE_ENV === "test" ||
+			process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1";
 		if (useClerkStubs) {
-			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client.tsx");
-			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server.ts");
+			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client");
+			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server");
 			config.resolve = config.resolve || {};
 			config.resolve.alias = {
 				...(config.resolve.alias || {}),
-        "@clerk/nextjs": STUB_CLIENT,
-        "@clerk/nextjs/server": STUB_SERVER,
-      };
+				"@clerk/nextjs$": STUB_CLIENT,
+				"@clerk/nextjs/server$": STUB_SERVER,
+			};
     }
     return config;
   },

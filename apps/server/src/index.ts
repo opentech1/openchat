@@ -6,12 +6,22 @@ import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { RPCHandler } from "@orpc/server/fetch";
 import { onError } from "@orpc/server";
-import { appRouter } from "./routers";
+import { appRouter, inMemoryChatOwned } from "./routers";
 import { createContext } from "./lib/context";
 import { hub, makeEnvelope } from "./lib/sync-hub";
 import { db } from "./db";
 import { chat } from "./db/schema/chat";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import {
+	DEFAULT_GATEKEEPER_TABLES,
+	DEFAULT_GATEKEEPER_TTL,
+	GATEKEEPER_SCHEMA,
+	makeGatekeeperToken,
+} from "./lib/gatekeeper";
+
+const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
+const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
 
 const rpcHandler = new RPCHandler(appRouter, {
 	interceptors: [
@@ -38,18 +48,30 @@ const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
 // Basic in-memory rate limiter (per-IP, 60 req/min)
 const rateMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_MIN || 60);
+const RATE_CLEANUP_INTERVAL = 60_000;
+let lastRateCleanup = 0;
+
+const GATEKEEPER_ALLOWED_TABLES = new Set(DEFAULT_GATEKEEPER_TABLES.map((t) => t.toLowerCase()));
 function isRateLimited(request: Request) {
-  const now = Date.now();
-  const xf = request.headers.get("x-forwarded-for") || "";
-  const ip = (xf.split(",")[0] || "127.0.0.1").trim();
-  const bucket = rateMap.get(ip);
-  if (!bucket || now > bucket.resetAt) {
-    rateMap.set(ip, { count: 1, resetAt: now + 60_000 });
-    return false;
-  }
-  bucket.count += 1;
-  if (bucket.count > RATE_LIMIT) return true;
-  return false;
+	const now = Date.now();
+	const xf = request.headers.get("x-forwarded-for") || "";
+	const ip = (xf.split(",")[0] || "127.0.0.1").trim();
+	const bucket = rateMap.get(ip);
+	if (!bucket || now > bucket.resetAt) {
+		rateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+		return false;
+	}
+	bucket.count += 1;
+	if (bucket.count > RATE_LIMIT) return true;
+	if (now - lastRateCleanup > RATE_CLEANUP_INTERVAL) {
+		lastRateCleanup = now;
+		for (const [key, value] of rateMap.entries()) {
+			if (now > value.resetAt) {
+				rateMap.delete(key);
+			}
+		}
+	}
+	return false;
 }
 
 function withSecurityHeaders(resp: Response, request?: Request) {
@@ -144,9 +166,58 @@ new Elysia()
             try { hub.unsubscribeAll(ws as any); } catch {}
         },
     })
+    .post("/api/electric/gatekeeper", async (context) => {
+        if (isRateLimited(context.request)) {
+            return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+        }
+	const ctx = await createContext({ context });
+	const userId = ctx.session?.user?.id;
+	if (!userId) {
+		return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+	}
+	let parsed: z.infer<typeof GATEKEEPER_SCHEMA>;
+        try {
+            const body = await context.request.json();
+            parsed = GATEKEEPER_SCHEMA.parse(body ?? {});
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                const resp = new Response(JSON.stringify({ ok: false, issues: error.issues }), {
+                    status: 422,
+                    headers: { "content-type": "application/json" },
+                });
+                return withSecurityHeaders(resp, context.request);
+            }
+            return withSecurityHeaders(new Response("Invalid JSON payload", { status: 400 }), context.request);
+        }
+	const requestedTables = (parsed.tables && parsed.tables.length > 0 ? parsed.tables : DEFAULT_GATEKEEPER_TABLES)
+		.map((t) => t.toLowerCase())
+		.filter((table) => GATEKEEPER_ALLOWED_TABLES.has(table));
+	if (requestedTables.length === 0) {
+		return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+	}
+	const ttlSeconds = parsed.ttlSeconds ?? DEFAULT_GATEKEEPER_TTL;
+	let tokenInfo;
+	try {
+		tokenInfo = makeGatekeeperToken({
+			userId,
+			workspaceId: parsed.workspaceId ?? userId,
+			tables: requestedTables,
+			ttlSeconds,
+		});
+	} catch (error) {
+		console.error("/api/electric/gatekeeper", error);
+            return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
+        }
+        const response = new Response(
+            JSON.stringify({
+                token: tokenInfo.token,
+                expiresAt: new Date(tokenInfo.expiresAtSeconds * 1000).toISOString(),
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+        );
+        return withSecurityHeaders(response, context.request);
+    })
     .all("/rpc*", async (context) => {
-        // basic structured request log
-        console.log(JSON.stringify({ ts: Date.now(), lvl: "info", msg: "rpc", m: context.request.method, u: new URL(context.request.url).pathname }));
         if (isRateLimited(context.request)) {
             return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
         }
@@ -155,7 +226,7 @@ new Elysia()
             context: await createContext({ context }),
         });
         const res = response ?? new Response("Not Found", { status: 404 });
-        return withSecurityHeaders(res, context.request);
+	return withSecurityHeaders(res, context.request);
     })
     .all("/api*", async (context) => {
         console.log(JSON.stringify({ ts: Date.now(), lvl: "info", msg: "api", m: context.request.method, u: new URL(context.request.url).pathname }));
@@ -168,6 +239,115 @@ new Elysia()
         });
         const res = response ?? new Response("Not Found", { status: 404 });
         return withSecurityHeaders(res, context.request);
+    })
+    .get("/api/electric/shapes/:scope", async (context) => {
+        if (!HAS_ELECTRIC) {
+            return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
+        }
+        const { scope } = context.params as { scope?: string };
+        if (!scope) {
+            return withSecurityHeaders(new Response("Missing shape scope", { status: 400 }), context.request);
+        }
+        const ctx = await createContext({ context });
+        const userId = ctx.session?.user?.id;
+        if (!userId) {
+            return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+        }
+
+        const url = new URL(context.request.url);
+        const passthroughParams = new URLSearchParams();
+        const allowed = ["offset", "handle", "cursor", "live", "replica", "columns"];
+        for (const key of allowed) {
+            const value = url.searchParams.get(key);
+            if (value !== null) passthroughParams.set(key, value);
+        }
+
+        const target = new URL(`${ELECTRIC_BASE_URL}/v1/shape`);
+        passthroughParams.forEach((value, key) => {
+            target.searchParams.set(key, value);
+        });
+
+        let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
+        switch (scope) {
+            case "chats": {
+                target.searchParams.set("table", "chat");
+                target.searchParams.set("where", `"user_id" = $1`);
+                target.searchParams.set("params[1]", userId);
+                target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
+                allowTables = ["chat"];
+                break;
+            }
+            case "messages": {
+                const chatId = url.searchParams.get("chatId");
+                if (!chatId) {
+                    return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), context.request);
+                }
+                try {
+                    const owned = await db
+                        .select({ id: chat.id })
+                        .from(chat)
+                        .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+                    if (owned.length === 0) {
+                        if (!inMemoryChatOwned(userId, chatId)) {
+                            return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
+                        }
+                    }
+                } catch (error) {
+                    if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
+                    if (!inMemoryChatOwned(userId, chatId)) {
+                        return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
+                    }
+                }
+                target.searchParams.set("table", "message");
+                target.searchParams.set("where", `"chat_id" = $1`);
+                target.searchParams.set("params[1]", chatId);
+                target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
+                allowTables = ["message"];
+                break;
+            }
+            default:
+                return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
+        }
+
+        let token: string;
+        try {
+            const tokenInfo = makeGatekeeperToken({
+                userId,
+                workspaceId: userId,
+                tables: allowTables,
+            });
+            token = tokenInfo.token;
+        } catch (error) {
+            console.error("gatekeeper.token", error);
+            return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
+        }
+
+        const upstreamHeaders = new Headers();
+        upstreamHeaders.set("authorization", `Bearer ${token}`);
+        const ifNoneMatch = context.request.headers.get("if-none-match");
+        if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
+
+        let upstreamResponse: Response;
+        try {
+            upstreamResponse = await fetch(target, {
+                method: "GET",
+                headers: upstreamHeaders,
+            });
+        } catch (error) {
+            console.error("electric.fetch", error);
+            return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
+        }
+
+        const headers = new Headers(upstreamResponse.headers);
+        headers.delete("content-encoding");
+        headers.delete("content-length");
+
+        const proxied = new Response(upstreamResponse.body, {
+            status: upstreamResponse.status,
+            statusText: upstreamResponse.statusText,
+            headers,
+        });
+        return withSecurityHeaders(proxied, context.request);
     })
     .get("/", () => "OK")
     .get("/health", () => ({ ok: true }))
@@ -191,10 +371,11 @@ async function handleOp(ws: any, userId: string, op: string, payload?: any) {
             if (!chatId) return;
             try {
                 const rows = await db.select({ id: chat.id }).from(chat).where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
-                if (rows.length === 0) return; // unauthorized
-            } catch {
-                // On db error, deny to be safe
-                return;
+                if (rows.length === 0 && !inMemoryChatOwned(userId, chatId)) return; // unauthorized
+            } catch (error) {
+                if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
+                // On db error, deny to be safe unless memory cache knows the chat
+                if (!inMemoryChatOwned(userId, chatId)) return;
             }
             const res = hub.subscribe(ws, topic);
             if (!res.ok) ws.send(JSON.stringify({ op: "error", error: res.reason || "subscribe_failed" }));

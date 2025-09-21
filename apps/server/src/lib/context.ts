@@ -7,6 +7,9 @@ export type CreateContextOptions = {
 
 export async function createContext({ context }: CreateContextOptions) {
 	let session: { user: { id: string } } | null = null;
+	const devBypassEnabled =
+		process.env.NODE_ENV !== "production" &&
+		(process.env.DEV_ALLOW_HEADER_BYPASS ?? process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH ?? "1") !== "0";
 
 	// Prefer real Clerk verification via Bearer token when secret is configured
 	const secret = process.env.CLERK_SECRET_KEY;
@@ -30,8 +33,8 @@ export async function createContext({ context }: CreateContextOptions) {
 		}
 	}
 
-	// Dev fallback: trust x-user-id header locally when Clerk secret is absent or verification failed
-	if (!session) {
+	// Dev fallback: trust x-user-id header locally when explicitly allowed
+	if (!session && devBypassEnabled) {
 		let uid = context.request.headers.get("x-user-id") || null;
 		if (!uid) {
 			// WebSocket fallback: allow dev user via query param
@@ -40,7 +43,9 @@ export async function createContext({ context }: CreateContextOptions) {
 				uid = url.searchParams.get("x-user-id");
 			} catch {}
 		}
-		session = uid ? ({ user: { id: uid } } as any) : null;
+		if (uid) {
+			session = { user: { id: uid } } as const;
+		}
 	}
 
 	return { session };

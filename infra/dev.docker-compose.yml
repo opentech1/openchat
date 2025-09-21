@@ -2,16 +2,34 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16
-    container_name: openchat_pg
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "39029:5432"
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_wal_senders=20"
+      - "-c"
+      - "max_replication_slots=20"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: openchat
     volumes:
       - pg_data:/var/lib/postgresql/data
+
+  electric:
+    image: electricsql/electric:1.1.11
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/openchat?sslmode=disable
+      ELECTRIC_INSECURE: "true"
+    ports:
+      - "3010:3000"
+
 volumes:
   pg_data:
-

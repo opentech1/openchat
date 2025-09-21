@@ -113,10 +113,17 @@ function ChatPreview({ className }: { className?: string }) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<number | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const fast = prefersReducedMotion ? 0 : 0.3;
   const slower = prefersReducedMotion ? 0 : 0.5;
   const [, startTransition] = useTransition();
+  useEffect(() => () => {
+    if (typingTimeoutRef.current !== null) {
+      window.clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  }, []);
   // removed pointer-following gradient for performance
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: 60,
@@ -140,10 +147,14 @@ function ChatPreview({ className }: { className?: string }) {
     if (value.trim()) {
       startTransition(() => {
         setIsTyping(true);
-        setTimeout(() => {
+        if (typingTimeoutRef.current !== null) {
+          window.clearTimeout(typingTimeoutRef.current);
+        }
+        typingTimeoutRef.current = window.setTimeout(() => {
           setIsTyping(false);
           setValue('');
           adjustHeight(true);
+          typingTimeoutRef.current = null;
         }, 3000);
       });
     }
@@ -323,7 +334,11 @@ const rippleKeyframes = `
 `;
 
 if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
-  style.innerHTML = rippleKeyframes;
-  document.head.appendChild(style);
+  const STYLE_ID = 'chat-preview-ripple-style';
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.innerHTML = rippleKeyframes;
+    document.head.appendChild(style);
+  }
 }
