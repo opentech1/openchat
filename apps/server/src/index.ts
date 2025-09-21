@@ -13,6 +13,7 @@ import { db } from "./db";
 import { chat } from "./db/schema/chat";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { isIP } from "node:net";
 import {
 	DEFAULT_GATEKEEPER_TABLES,
 	DEFAULT_GATEKEEPER_TTL,
@@ -46,31 +47,66 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
 
 // Basic in-memory rate limiter (per-IP, 60 req/min)
+const RATE_WINDOW_MS = 60_000;
 const rateMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = Number(process.env.RATE_LIMIT_PER_MIN || 60);
-const RATE_CLEANUP_INTERVAL = 60_000;
-let lastRateCleanup = 0;
+const RATE_CLEANUP_INTERVAL = RATE_WINDOW_MS;
+let lastRateCleanup = Date.now();
+const TRUST_PROXY_FORWARDED = (() => {
+	const value = String(process.env.TRUST_PROXY_FORWARDED || "").toLowerCase();
+	return value === "true" || value === "1" || value === "yes";
+})();
 
-const GATEKEEPER_ALLOWED_TABLES = new Set(DEFAULT_GATEKEEPER_TABLES.map((t) => t.toLowerCase()));
-function isRateLimited(request: Request) {
-	const now = Date.now();
-	const xf = request.headers.get("x-forwarded-for") || "";
-	const ip = (xf.split(",")[0] || "127.0.0.1").trim();
-	const bucket = rateMap.get(ip);
-	if (!bucket || now > bucket.resetAt) {
-		rateMap.set(ip, { count: 1, resetAt: now + 60_000 });
-		return false;
+type ServerLike = {
+	requestIP?: (request: Request) => { address?: string | null } | null;
+} | null | undefined;
+
+function parseForwardedHeader(value: string | null) {
+	if (!value) return null;
+	for (const part of value.split(",")) {
+		const candidate = part.trim();
+		if (candidate && isIP(candidate)) return candidate;
 	}
-	bucket.count += 1;
-	if (bucket.count > RATE_LIMIT) return true;
-	if (now - lastRateCleanup > RATE_CLEANUP_INTERVAL) {
-		lastRateCleanup = now;
-		for (const [key, value] of rateMap.entries()) {
-			if (now > value.resetAt) {
-				rateMap.delete(key);
-			}
+	return null;
+}
+
+function getClientIp(request: Request, server?: ServerLike) {
+	const socketAddress = server?.requestIP?.(request);
+	const directIp = socketAddress?.address;
+	if (directIp && isIP(directIp)) return directIp;
+	if (TRUST_PROXY_FORWARDED) {
+		const forwardedIp = parseForwardedHeader(request.headers.get("x-forwarded-for"));
+		if (forwardedIp) return forwardedIp;
+		const realIp = request.headers.get("x-real-ip");
+		if (realIp) {
+			const sanitized = realIp.trim();
+			if (sanitized && isIP(sanitized)) return sanitized;
 		}
 	}
+	return "0.0.0.0";
+}
+
+function pruneExpiredBuckets(now: number) {
+	if (now - lastRateCleanup < RATE_CLEANUP_INTERVAL) return;
+	lastRateCleanup = now;
+	for (const [key, bucket] of rateMap.entries()) {
+		if (now > bucket.resetAt) rateMap.delete(key);
+	}
+}
+
+const GATEKEEPER_ALLOWED_TABLES = new Set(DEFAULT_GATEKEEPER_TABLES.map((t) => t.toLowerCase()));
+function isRateLimited(request: Request, server?: ServerLike) {
+	const now = Date.now();
+	pruneExpiredBuckets(now);
+	const ip = getClientIp(request, server);
+	const bucket = rateMap.get(ip);
+	if (!bucket || now > bucket.resetAt) {
+		rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+		return false;
+	}
+	const nextCount = bucket.count + 1;
+	bucket.count = nextCount;
+	if (nextCount > RATE_LIMIT) return true;
 	return false;
 }
 
@@ -167,7 +203,7 @@ new Elysia()
         },
     })
     .post("/api/electric/gatekeeper", async (context) => {
-        if (isRateLimited(context.request)) {
+	if (isRateLimited(context.request, context.server)) {
             return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
         }
 	const ctx = await createContext({ context });
@@ -218,7 +254,7 @@ new Elysia()
         return withSecurityHeaders(response, context.request);
     })
     .all("/rpc*", async (context) => {
-        if (isRateLimited(context.request)) {
+		if (isRateLimited(context.request, context.server)) {
             return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
         }
         const { response } = await rpcHandler.handle(context.request, {
@@ -230,7 +266,7 @@ new Elysia()
     })
     .all("/api*", async (context) => {
         console.log(JSON.stringify({ ts: Date.now(), lvl: "info", msg: "api", m: context.request.method, u: new URL(context.request.url).pathname }));
-        if (isRateLimited(context.request)) {
+		if (isRateLimited(context.request, context.server)) {
             return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
         }
         const { response } = await apiHandler.handle(context.request, {
