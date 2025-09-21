@@ -68,6 +68,54 @@ openchat/
 - `bun check-types`: Check TypeScript types across all apps
 - `bun db:push`: Push schema changes to database
 - `bun db:studio`: Open database studio UI
+
+## Environment Variables
+
+| Variable | Scope | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_ELECTRIC_URL` | Web | Base URL for the ElectricSQL service used for live TanStack DB collections. |
+| `ELECTRIC_SERVICE_URL` | Server | Base URL for the ElectricSQL HTTP API consumed by the backend proxy. |
+| `ELECTRIC_GATEKEEPER_SECRET` | Server | HMAC secret for issuing ElectricSQL Gatekeeper tokens. |
+| `DEV_ALLOW_HEADER_BYPASS` | Server | Set to `1` in local dev to trust `x-user-id` headers; leave unset in production. |
+| `SERVER_INTERNAL_URL` | Server | Optional override for internal ORPC calls when the public URL differs. Defaults to `NEXT_PUBLIC_SERVER_URL`. |
+| `NEXT_DISABLE_REMOTE_FONT_DOWNLOADS` | Web (dev) | Set to `1` to skip Google Fonts downloads when running in a sandbox. |
+| `NEXT_PUBLIC_DEV_BYPASS_AUTH` / `NEXT_PUBLIC_DEV_USER_ID` | Web (dev) | Enables the local mock Clerk user for development flows. |
+| `OPENROUTER_STREAM_FLUSH_INTERVAL_MS` | Web API | Optional override for how frequently streaming responses persist partial assistant text (defaults to 50ms). |
+
+## Streaming & Sync
+
+### ElectricSQL (local dev)
+
+1. Copy the environment examples: `cp apps/web/.env.example apps/web/.env.local` and `cp apps/server/.env.example apps/server/.env` (adjust values as needed).
+2. Start Postgres and Electric:
+
+   ```bash
+   docker compose -f infra/dev.docker-compose.yml up postgres electric -d
+   ```
+
+   Electric exposes its HTTP API at `http://localhost:3010/v1/shape`.
+3. Ensure the following variables are set before running `bun dev`:
+
+   ```bash
+   # apps/web/.env.local
+   NEXT_PUBLIC_SERVER_URL=http://localhost:3000
+   NEXT_PUBLIC_ELECTRIC_URL=http://localhost:3010
+   NEXT_PUBLIC_DEV_BYPASS_AUTH=1
+   NEXT_PUBLIC_DEV_USER_ID=dev-user
+
+   # apps/server/.env
+   ELECTRIC_SERVICE_URL=http://localhost:3010
+   ELECTRIC_GATEKEEPER_SECRET=dev-gatekeeper-secret
+   DEV_ALLOW_HEADER_BYPASS=1
+   SERVER_INTERNAL_URL=http://localhost:3000
+   ```
+
+   Restart `bun dev` after exporting the variables so the proxy can issue Gatekeeper tokens and the web app can subscribe to Electric shapes.
+
+- `/api/chat` now persists the latest user message before the model call and streams assistant tokens by calling `messages.streamUpsert`, so other tabs receive ElectricSQL updates while the active tab consumes the SSE stream.
+- Electric-backed TanStack DB collections hydrate the sidebar and chat views when `NEXT_PUBLIC_ELECTRIC_URL`/Gatekeeper are configured. Requests now proxy through the server at `/api/electric/shapes/*`, so the Electric service itself never receives user-identifying cookies directly. The legacy WebSocket fallback remains for non-Electric setups.
+- The new `messages.streamUpsert` ORPC procedure accepts `streaming` and `completed` states so fan-out consumers (Electric or WebSocket) can keep partial content in sync.
+
 ## Auth (Clerk)
 
 Set Clerk environment variables in `apps/web/.env` (do not commit real keys):

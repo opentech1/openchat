@@ -73,7 +73,11 @@ describe("duplicate guard on reconnect", () => {
 		ws1.on("message", onMsg);
 
 		// Send once
-		await client.messages.send({ chatId, content: "hello" });
+		await client.messages.send({
+			chatId,
+			userMessage: { content: "hello" },
+			assistantMessage: { content: "assistant-response" },
+		});
 		await new Promise((r) => setTimeout(r, 300));
 		const firstCount = gotIds.size;
 		expect(firstCount).toBeGreaterThanOrEqual(2); // user + assistant
