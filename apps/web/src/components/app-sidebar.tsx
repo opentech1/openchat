@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -67,7 +67,6 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [optimisticChats, setOptimisticChats] = useState<ChatListItem[]>([]);
-  const [, startTransition] = useTransition();
   const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
   useEffect(() => {
@@ -116,59 +115,85 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
     return sortChats(baseChats.concat(supplemental));
   }, [baseChats, optimisticChats]);
 
-  const handleCreateChat = useCallback(() => {
+  const handleCreateChat = useCallback(async () => {
     if (!currentUserId || isCreating) {
       if (!currentUserId) router.push("/auth/sign-in");
       return;
     }
     setIsCreating(true);
-    startTransition(async () => {
-      try {
-        const now = new Date();
-        const { id } = await client.chats.create({ title: "New Chat" });
-        setOptimisticChats((prev) =>
-          sortChats(
-            prev.concat([
-              {
-                id,
-                title: "New Chat",
-                updatedAt: now,
-                lastMessageAt: now,
-              },
-            ]),
-          ),
-        );
-        setFallbackChats((prev) => dedupeChats(prev.concat([{ id, title: "New Chat", updatedAt: now, lastMessageAt: now }])));
-        router.push(`/dashboard/chat/${id}`);
-      } catch (error) {
-        console.error("Failed to create chat", error);
-      } finally {
-        setIsCreating(false);
-      }
-    });
-  }, [currentUserId, electricChats, isCreating, router, startTransition]);
+    try {
+      const now = new Date();
+      const { id } = await client.chats.create({ title: "New Chat" });
+      const optimisticChat: ChatListItem = { id, title: "New Chat", updatedAt: now, lastMessageAt: now };
+      setOptimisticChats((prev) => sortChats(prev.concat([optimisticChat])));
+      setFallbackChats((prev) => dedupeChats(prev.concat([optimisticChat])));
+      router.push(`/dashboard/chat/${id}`);
+    } catch (error) {
+      console.error("Failed to create chat", error);
+    } finally {
+      setIsCreating(false);
+    }
+  }, [currentUserId, isCreating, router]);
 
   const handleDelete = useCallback(
-    (chatId: string) => {
+    async (chatId: string) => {
       if (!currentUserId || !chatId) {
         if (!currentUserId) router.push("/auth/sign-in");
         return;
       }
       setDeletingChatId(chatId);
-      setOptimisticChats((prev) => prev.filter((chat) => chat.id !== chatId));
-      startTransition(async () => {
-        try {
-          await client.chats.delete({ chatId });
-          if (pathname?.startsWith(`/dashboard/chat/${chatId}`)) router.replace("/dashboard");
-          setFallbackChats((prev) => prev.filter((chat) => chat.id !== chatId));
-        } catch (error) {
-          console.error("Failed to delete chat", error);
-        } finally {
-          setDeletingChatId((current) => (current === chatId ? null : current));
+
+      let removedFromFallback: ChatListItem | undefined;
+      let removedFromOptimistic: ChatListItem | undefined;
+
+      setFallbackChats((prev) => {
+        const next: ChatListItem[] = [];
+        for (const chat of prev) {
+          if (chat.id === chatId && !removedFromFallback) {
+            removedFromFallback = chat;
+            continue;
+          }
+          next.push(chat);
         }
+        return next;
       });
+
+      setOptimisticChats((prev) => {
+        const next: ChatListItem[] = [];
+        for (const chat of prev) {
+          if (chat.id === chatId && !removedFromOptimistic) {
+            removedFromOptimistic = chat;
+            continue;
+          }
+          next.push(chat);
+        }
+        return next;
+      });
+
+      try {
+        await client.chats.delete({ chatId });
+        if (pathname?.startsWith(`/dashboard/chat/${chatId}`)) router.replace("/dashboard");
+      } catch (error) {
+        console.error("Failed to delete chat", error);
+        if (removedFromFallback) {
+          const restore = removedFromFallback;
+          setFallbackChats((prev) => {
+            if (prev.some((chat) => chat.id === restore.id)) return prev;
+            return dedupeChats(prev.concat([restore]));
+          });
+        }
+        if (removedFromOptimistic) {
+          const restore = removedFromOptimistic;
+          setOptimisticChats((prev) => {
+            if (prev.some((chat) => chat.id === restore.id)) return prev;
+            return sortChats(prev.concat([restore]));
+          });
+        }
+      } finally {
+        setDeletingChatId((current) => (current === chatId ? null : current));
+      }
     },
-    [currentUserId, electricChats, pathname, router, startTransition],
+    [currentUserId, pathname, router],
   );
 
   useEffect(() => {
@@ -234,7 +259,9 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
             type="button"
             variant="outline"
             className="w-full justify-center"
-            onClick={handleCreateChat}
+            onClick={() => {
+              void handleCreateChat();
+            }}
             disabled={!currentUserId || isCreating}
           >
             {isCreating ? "Creating…" : "New Chat"}
@@ -274,7 +301,7 @@ function ChatList({
   chats: ChatListItem[];
   isLoading?: boolean;
   activePath?: string | null;
-  onDelete: (chatId: string) => void;
+  onDelete: (chatId: string) => void | Promise<void>;
   deletingId: string | null;
 }) {
   if (isLoading && chats.length === 0) {
@@ -303,7 +330,7 @@ function ChatList({
 						onClick={(event) => {
 							event.preventDefault();
 							event.stopPropagation();
-							onDelete(c.id);
+							void onDelete(c.id);
 						}}
 						className={cn(
 							"absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
