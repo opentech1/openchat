@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 
 type SidebarContextValue = {
@@ -94,18 +95,19 @@ export function SidebarMenuItem({ className, ...props }: React.ComponentProps<"l
   return <li className={cn("list-none", className)} {...props} />;
 }
 
-export function SidebarMenuButton({ className, asChild, size = "md", ...props }: React.ComponentProps<"button"> & { asChild?: boolean; size?: "md" | "lg" }) {
-  const Comp: any = asChild ? "span" : "button";
-  return (
-    <Comp
-      className={cn(
-        "text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
-        size === "lg" && "px-2 py-2.5 text-base",
-        className,
-      )}
-      {...props}
-    />
-  );
+export function SidebarMenuButton({ className, asChild, size = "md", type = "button", ...props }: React.ComponentProps<"button"> & { asChild?: boolean; size?: "md" | "lg" }) {
+	const Comp: React.ElementType = asChild ? Slot : "button";
+	return (
+		<Comp
+			className={cn(
+				"text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
+				size === "lg" && "px-2 py-2.5 text-base",
+				className,
+			)}
+			{...(asChild ? {} : { type })}
+			{...props}
+		/>
+	);
 }
 
 export function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
@@ -116,36 +118,38 @@ export function SidebarMenuSubItem({ className, ...props }: React.ComponentProps
   return <li className={cn("list-none", className)} {...props} />;
 }
 
-export function SidebarMenuSubButton({ className, isActive, asChild, ...props }: React.ComponentProps<"button"> & { isActive?: boolean; asChild?: boolean }) {
-  const Comp: any = asChild ? "span" : "button";
-  return (
-    <Comp
-      className={cn(
-        "hover:bg-accent/70 inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors",
-        isActive && "bg-accent text-accent-foreground",
-        className,
-      )}
-      {...props}
-    />
-  );
+export function SidebarMenuSubButton({ className, isActive, asChild, type = "button", ...props }: React.ComponentProps<"button"> & { isActive?: boolean; asChild?: boolean }) {
+	const Comp: React.ElementType = asChild ? Slot : "button";
+	return (
+		<Comp
+			className={cn(
+				"hover:bg-accent/70 inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors",
+				isActive && "bg-accent text-accent-foreground",
+				className,
+			)}
+			{...(asChild ? {} : { type })}
+			{...props}
+		/>
+	);
 }
 
-export function SidebarRail({ className, ...props }: React.ComponentProps<"div">) {
-  const ctx = React.useContext(SidebarContext);
-  const collapsed = !!ctx?.collapsed;
-  return (
-    <div
-      role="button"
-      aria-label="Toggle sidebar"
-      onClick={() => ctx?.setCollapsed(!collapsed)}
-      className={cn(
-        collapsed
-          ? "hover:bg-accent/40 fixed left-0 top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full"
-          : "hover:bg-accent/40 absolute right-0 top-1/2 z-10 -mr-2 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full",
-        "hidden md:block",
-        className,
-      )}
-      {...props}
-    />
-  );
+export function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
+	const ctx = React.useContext(SidebarContext);
+	const collapsed = !!ctx?.collapsed;
+	return (
+		<button
+			type="button"
+			aria-label="Toggle sidebar"
+			aria-expanded={!collapsed}
+			onClick={() => ctx?.setCollapsed(!collapsed)}
+			className={cn(
+				collapsed
+					? "hover:bg-accent/40 fixed left-0 top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full"
+					: "hover:bg-accent/40 absolute right-0 top-1/2 z-10 -mr-2 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full",
+				"hidden md:block",
+				className,
+			)}
+			{...props}
+		/>
+	);
 }
