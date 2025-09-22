@@ -239,7 +239,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
     return () => {
       unsubscribe();
     };
-    }, [currentUserId, electricChats]);
+	}, [currentUserId]);
 
   return (
     <Sidebar defaultCollapsed {...sidebarProps}>
