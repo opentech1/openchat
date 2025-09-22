@@ -1,0 +1,18 @@
+.git
+node_modules
+apps/*/node_modules
+.turbo
+.next
+coverage
+infra/dev.docker-compose.yml
+infra/postgres-init
+bun.lockb
+*.log
+.tmp
+.DS_Store
+.idea
+.vscode
+.env*
+# keep dist artifacts from local builds out of image context
+apps/server/dist
+apps/web/.next
