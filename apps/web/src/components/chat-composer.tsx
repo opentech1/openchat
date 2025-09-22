@@ -92,8 +92,10 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
 });
 Textarea.displayName = "Textarea";
 
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5MB safeguard until backend storage lands
+
 export type ChatComposerProps = {
-	onSend: (payload: { text: string; modelId: string; apiKey: string }) => void | Promise<void>;
+	onSend: (payload: { text: string; modelId: string; apiKey: string; attachments: File[] }) => void | Promise<void>;
 	disabled?: boolean;
 	placeholder?: string;
 	modelOptions?: ModelSelectorOption[];
@@ -117,14 +119,15 @@ export default function ChatComposer({
 	isStreaming = false,
 	onStop,
 }: ChatComposerProps) {
-  const [value, setValue] = useState('');
-  const [attachments, setAttachments] = useState<string[]>([]);
-  const [isSending, setIsSending] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [fallbackModelId, setFallbackModelId] = useState<string>('');
-  const prefersReducedMotion = useReducedMotion();
-  const fast = prefersReducedMotion ? 0 : 0.3;
-  const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
+	const [value, setValue] = useState('');
+	const [attachments, setAttachments] = useState<File[]>([]);
+	const [isSending, setIsSending] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [fallbackModelId, setFallbackModelId] = useState<string>('');
+	const prefersReducedMotion = useReducedMotion();
+	const fast = prefersReducedMotion ? 0 : 0.3;
+	const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
+	const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (modelValue) {
@@ -149,16 +152,18 @@ export default function ChatComposer({
 		setErrorMessage(null);
 		setIsSending(true);
 		try {
-      await onSend({ text: trimmed, modelId: activeModelId, apiKey });
-      setValue('');
-      adjustHeight(true);
-    } catch (error) {
-      console.error('Failed to send message', error);
-      setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
-    } finally {
-      setIsSending(false);
-    }
-  }, [activeModelId, adjustHeight, apiKey, disabled, isSending, onSend, value]);
+			await onSend({ text: trimmed, modelId: activeModelId, apiKey, attachments });
+			setValue('');
+			adjustHeight(true);
+			setAttachments([]);
+			if (fileInputRef.current) fileInputRef.current.value = '';
+		} catch (error) {
+			console.error('Failed to send message', error);
+			setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
+		} finally {
+			setIsSending(false);
+		}
+	}, [activeModelId, adjustHeight, apiKey, attachments, disabled, isSending, onSend, value]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -168,6 +173,34 @@ export default function ChatComposer({
   };
 
 	const isBusy = isSending || isStreaming;
+
+	const handleFileSelection = (files: FileList | null) => {
+		if (!files) return;
+		const nextFiles: File[] = [];
+		let rejectedName: string | null = null;
+		for (const file of Array.from(files)) {
+			if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+				rejectedName = file.name;
+				continue;
+			}
+			nextFiles.push(file);
+		}
+		if (rejectedName) {
+			setErrorMessage(`Attachment ${rejectedName} exceeds the 5MB limit.`);
+		}
+		if (nextFiles.length === 0) return;
+		setAttachments((prev) => {
+			const seen = new Set(prev.map((file) => `${file.name}:${file.size}`));
+			const combined = [...prev];
+			for (const file of nextFiles) {
+				const key = `${file.name}:${file.size}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				combined.push(file);
+			}
+			return combined;
+		});
+	};
 
 	return (
     <motion.div
@@ -205,42 +238,45 @@ export default function ChatComposer({
       </div>
 
       <AnimatePresence>
-        {attachments.length > 0 && (
-          <motion.div
-            className="flex flex-wrap gap-2 px-4 pb-3"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-          >
-            {attachments.map((file, index) => (
-              <motion.div
-                key={index}
-                className="bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-              >
-                <span>{file}</span>
-                <button
-                  onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Remove attachment"
-                >
-                  <XIcon className="h-3 w-3" />
-                </button>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+		{attachments.length > 0 && (
+			<motion.div
+				className="flex flex-wrap gap-2 px-4 pb-3"
+				initial={{ opacity: 0, height: 0 }}
+				animate={{ opacity: 1, height: 'auto' }}
+				exit={{ opacity: 0, height: 0 }}
+			>
+				{attachments.map((file, index) => (
+					<motion.div
+						key={index}
+						className="bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
+						initial={{ opacity: 0, scale: 0.9 }}
+						animate={{ opacity: 1, scale: 1 }}
+						exit={{ opacity: 0, scale: 0.9 }}
+					>
+						<span>
+							{file.name}
+							{file.size ? ` (${Math.round(file.size / 1024)} KB)` : ''}
+						</span>
+						<button
+							onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
+							className="text-muted-foreground hover:text-foreground transition-colors"
+							aria-label="Remove attachment"
+						>
+							<XIcon className="h-3 w-3" />
+						</button>
+					</motion.div>
+				))}
+			</motion.div>
+		)}
+	</AnimatePresence>
 
-      <div className="border-border flex items-center justify-between gap-4 border-t p-4">
-        <div className="flex items-center gap-2">
+	<div className="border-border flex items-center justify-between gap-4 border-t p-4">
+		<div className="flex items-center gap-2">
 			<motion.button
 				type="button"
 				onClick={() => {
-					const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
-					setAttachments((prev) => [...prev, mockFileName]);
+					if (disabled || isBusy || !activeModelId) return;
+					fileInputRef.current?.click();
 				}}
 				whileTap={{ scale: 0.95 }}
 				className={cn(
@@ -250,8 +286,18 @@ export default function ChatComposer({
 				disabled={disabled || isBusy || !activeModelId}
 				aria-label="Attach file"
 			>
-            <Paperclip className="h-4 w-4" />
-          </motion.button>
+	            <Paperclip className="h-4 w-4" />
+	          </motion.button>
+			<input
+				type="file"
+				ref={fileInputRef}
+				multiple
+				onChange={(event) => {
+					handleFileSelection(event.target.files);
+					event.target.value = '';
+				}}
+				className="hidden"
+			/>
 			<ModelSelector
 				options={modelOptions}
 				value={modelValue ?? (modelOptions.length === 0 ? null : fallbackModelId)}
