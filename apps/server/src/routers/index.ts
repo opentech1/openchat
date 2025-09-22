@@ -38,6 +38,20 @@ const FALLBACK_CHAT_LIMIT = 50;
 const FALLBACK_CHAT_TTL_MS = 15 * 60_000;
 const FALLBACK_MESSAGE_LIMIT = 500;
 const FALLBACK_MESSAGE_TTL_MS = 15 * 60_000;
+// Guardrails to keep message payloads bounded and limit database pressure.
+const DEFAULT_MESSAGE_CONTENT_MAX = 8_000;
+const MESSAGE_CONTENT_MAX_LENGTH = (() => {
+	const raw = Number(process.env.MESSAGE_MAX_LENGTH ?? DEFAULT_MESSAGE_CONTENT_MAX);
+	if (!Number.isFinite(raw) || raw < 1) return DEFAULT_MESSAGE_CONTENT_MAX;
+	return Math.min(raw, 32_000);
+})();
+const baseMessageContentSchema = z
+	.string()
+	.max(MESSAGE_CONTENT_MAX_LENGTH, `Message content exceeds ${MESSAGE_CONTENT_MAX_LENGTH} characters`)
+	.refine(
+		(value) => Buffer.byteLength(value, "utf8") <= MESSAGE_CONTENT_MAX_LENGTH,
+		{ message: `Message content exceeds ${MESSAGE_CONTENT_MAX_LENGTH} bytes` },
+	);
 
 function pruneChatList(list: ChatRow[], now = Date.now()) {
 	const filtered = list
@@ -241,13 +255,13 @@ export const appRouter = {
           chatId: z.string().min(1),
           userMessage: z.object({
             id: z.string().min(1).optional(),
-            content: z.string().min(1),
+            content: baseMessageContentSchema.min(1),
             createdAt: z.union([z.string(), z.date()]).optional(),
           }),
           assistantMessage: z
             .object({
               id: z.string().min(1).optional(),
-              content: z.string().min(1),
+              content: baseMessageContentSchema.min(1),
               createdAt: z.union([z.string(), z.date()]).optional(),
             })
             .optional(),
@@ -367,7 +381,7 @@ export const appRouter = {
           chatId: z.string().min(1),
           messageId: z.string().min(1),
           role: z.enum(['user', 'assistant']),
-          content: z.string().default(''),
+          content: baseMessageContentSchema.default(''),
           createdAt: z.union([z.string(), z.date()]).optional(),
           status: z.enum(['streaming', 'completed']).optional(),
         }),
@@ -398,10 +412,20 @@ export const appRouter = {
             });
             inserted = true;
           } catch {
-            await db
+            const updated = await db
               .update(message)
               .set({ content, updatedAt: now })
-              .where(eq(message.id, input.messageId));
+              .where(
+                and(
+                  eq(message.id, input.messageId),
+                  eq(message.chatId, input.chatId),
+                  eq(message.role, role),
+                ),
+              )
+              .returning({ id: message.id });
+            if (updated.length === 0) {
+              return { ok: false as const };
+            }
           }
 
           const sidebarPayload: Record<string, unknown> = {

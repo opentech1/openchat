@@ -44,7 +44,33 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 	],
 });
 
-const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
+const DEFAULT_WEB_ORIGIN = "http://localhost:3001";
+
+function normalizeOrigin(origin: string) {
+	try {
+		return new URL(origin).origin;
+	} catch {
+		return origin.trim().replace(/\/$/, "");
+	}
+}
+
+function parseOrigins(value?: string | null) {
+	if (!value) return [] as string[];
+	return value
+		.split(/[,\s]+/)
+		.map((part) => part.trim())
+		.filter(Boolean)
+		.map(normalizeOrigin);
+}
+
+const configuredOrigins = parseOrigins(process.env.CORS_ORIGIN);
+if (configuredOrigins.length === 0) configuredOrigins.push(DEFAULT_WEB_ORIGIN);
+const ALLOWED_ORIGIN_SET = new Set(configuredOrigins.map(normalizeOrigin));
+
+function isAllowedOriginHeader(origin: string | null) {
+	if (!origin) return true;
+	return ALLOWED_ORIGIN_SET.has(normalizeOrigin(origin));
+}
 
 // Basic in-memory rate limiter (per-IP, 60 req/min)
 const RATE_WINDOW_MS = 60_000;
@@ -117,6 +143,7 @@ function withSecurityHeaders(resp: Response, request?: Request) {
   headers.set("X-Frame-Options", "SAMEORIGIN");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   headers.append("Vary", "Accept-Encoding");
+  headers.append("Vary", "Origin");
   // Opportunistic gzip without external deps; preserves streaming
   try {
     const accept = request?.headers.get("accept-encoding") || "";
@@ -138,22 +165,28 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 const PORT = Number(process.env.PORT || 3000);
 
 new Elysia()
-    .use(
-        cors({
-            origin: WEB_ORIGIN,
-            methods: ["GET", "POST", "OPTIONS"],
-            allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
-            credentials: true,
-        }),
-    )
-    .ws("/sync", {
-        // Authenticate and greet
-        open: async (ws) => {
-            const ctx = await createContext({ context: ws.data as any });
-            const userId = ctx.session?.user?.id;
-            if (!userId) {
-                try { ws.send("unauthorized"); } catch {}
-                return ws.close(1008, "unauthorized");
+	.use(
+		cors({
+			origin: Array.from(ALLOWED_ORIGIN_SET),
+			methods: ["GET", "POST", "OPTIONS"],
+			allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
+			credentials: true,
+		}),
+	)
+	.ws("/sync", {
+		// Authenticate and greet
+		open: async (ws) => {
+			const request = (ws as any).data?.request as Request | undefined;
+			const originHeader = request?.headers.get("origin") || request?.headers.get("sec-websocket-origin");
+			if (!isAllowedOriginHeader(originHeader ?? null)) {
+				try { ws.send("origin_not_allowed"); } catch {}
+				return ws.close(1008, "origin_not_allowed");
+			}
+			const ctx = await createContext({ context: ws.data as any });
+			const userId = ctx.session?.user?.id;
+			if (!userId) {
+				try { ws.send("unauthorized"); } catch {}
+				return ws.close(1008, "unauthorized");
             }
             // attach user & tab info
             (ws as any).data.userId = userId;
