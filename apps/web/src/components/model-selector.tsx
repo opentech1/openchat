@@ -15,72 +15,106 @@ import {
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
-const models = [
-	{ value: "openchat-turbo", label: "OpenChat Turbo" },
-	{ value: "openchat-reasoner", label: "Reasoning Pro" },
-	{ value: "openchat-creative", label: "Creative Studio" },
-	{ value: "openchat-fast", label: "Flash 2.1" },
-]
-
-type ModelSelectorProps = {
-	value?: string
-	onChange?: (value: string) => void
-	disabled?: boolean
+export type ModelSelectorOption = {
+	value: string
+	label: string
+	pricing?: {
+		prompt: number | null
+		completion: number | null
+	}
 }
 
-export function ModelSelector({ value, onChange, disabled }: ModelSelectorProps) {
+type ModelSelectorProps = {
+	options: ModelSelectorOption[]
+	value?: string | null
+	onChange?: (value: string) => void
+	disabled?: boolean
+	loading?: boolean
+}
+
+function formatPricing(pricing: NonNullable<ModelSelectorOption['pricing']>) {
+	const format = (cost: number | null) => {
+		if (cost == null) return "–"
+		return `$${cost.toFixed(3)}`
+	}
+	return `${format(pricing.prompt)} / ${format(pricing.completion)} per 1M tokens`
+}
+
+export function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
 	const [open, setOpen] = React.useState(false)
-	const [internalValue, setInternalValue] = React.useState(value ?? models[0]?.value ?? "")
+	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
 
 	React.useEffect(() => {
 		if (value !== undefined) {
-			setInternalValue(value)
+			setInternalValue(value ?? "")
 		}
 	}, [value])
 
+	React.useEffect(() => {
+		if (value !== undefined) return
+		if (options.length === 0) {
+			if (internalValue) setInternalValue("")
+			return
+		}
+		const exists = internalValue && options.some((option) => option.value === internalValue)
+		if (!internalValue || !exists) {
+			setInternalValue(options[0]!.value)
+		}
+	}, [options, value, internalValue])
+
 	const selectedValue = value ?? internalValue
-	const selectedLabel = React.useMemo(() => {
-		return models.find((model) => model.value === selectedValue)?.label
-	}, [selectedValue])
+	const selectedOption = React.useMemo(() => {
+		return options.find((option) => option.value === selectedValue) ?? null
+	}, [options, selectedValue])
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="outline"
-					disabled={disabled}
+					disabled={disabled || loading || options.length === 0}
 					role="combobox"
 					aria-expanded={open}
-					className="h-9 min-w-[180px] justify-between rounded-xl bg-background/90 px-3"
+					className="h-9 min-w-[180px] justify-between rounded-xl bg-background/90 px-3 text-foreground hover:text-foreground"
 				>
 					<span className="text-sm font-medium truncate">
-						{selectedLabel ?? "Select model"}
+						{selectedOption?.label ?? (loading ? "Loading models..." : "Select model")}
 					</span>
 					<ChevronsUpDown className="size-4 opacity-60" />
 				</Button>
 			</PopoverTrigger>
-				<PopoverContent className="w-[200px] rounded-xl border border-border/60 bg-popover p-0 shadow-lg">
-				<Command>
-					<CommandInput placeholder="Search models" className="h-9" />
-					<CommandList>
-						<CommandEmpty>No model found.</CommandEmpty>
-						<CommandGroup>
-							{models.map((model) => {
-								const isSelected = model.value === selectedValue
-								return (
+		<PopoverContent className="w-[220px] rounded-xl border border-border/60 bg-popover p-0 shadow-lg">
+			<Command>
+				<CommandInput placeholder="Search models" className="h-9" />
+				<CommandList>
+					<CommandEmpty>{loading ? "Loading models..." : "No model found."}</CommandEmpty>
+					<CommandGroup
+						className="max-h-64 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					>
+						{options.map((option) => {
+							const isSelected = option.value === selectedValue
+							return (
 									<CommandItem
-										key={model.value}
-										value={model.value}
+										key={option.value}
+										value={option.value}
 										onSelect={(currentValue) => {
-											const next = currentValue === selectedValue ? "" : currentValue
+											const next = currentValue
 											if (value === undefined) {
 												setInternalValue(next)
 											}
 											onChange?.(next)
 											setOpen(false)
 										}}
+										className="data-[selected=true]:text-foreground"
 									>
-										{model.label}
+										<div className="flex w-full flex-col gap-0.5">
+											<span className="text-sm font-medium leading-tight">{option.label}</span>
+											{option.pricing ? (
+												<span className="text-muted-foreground text-[11px]">
+													{formatPricing(option.pricing)}
+												</span>
+											) : null}
+										</div>
 										<Check className={cn("ml-auto size-4", isSelected ? "opacity-100" : "opacity-0")} />
 									</CommandItem>
 								)

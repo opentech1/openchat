@@ -81,6 +81,7 @@ openchat/
 | `NEXT_DISABLE_REMOTE_FONT_DOWNLOADS` | Web (dev) | Set to `1` to skip Google Fonts downloads when running in a sandbox. |
 | `NEXT_PUBLIC_DEV_BYPASS_AUTH` / `NEXT_PUBLIC_DEV_USER_ID` | Web (dev) | Enables the local mock Clerk user for development flows. |
 | `OPENROUTER_STREAM_FLUSH_INTERVAL_MS` | Web API | Optional override for how frequently streaming responses persist partial assistant text (defaults to 50ms). |
+| `OPENROUTER_API_KEY_SECRET` | Server | Secret used to encrypt/decrypt each browser’s locally stored OpenRouter API key (must be ≥16 chars). |
 
 ## Streaming & Sync
 
@@ -108,9 +109,16 @@ openchat/
    ELECTRIC_GATEKEEPER_SECRET=dev-gatekeeper-secret
    DEV_ALLOW_HEADER_BYPASS=1
    SERVER_INTERNAL_URL=http://localhost:3000
+   OPENROUTER_API_KEY_SECRET=dev-openrouter-secret
    ```
 
    Restart `bun dev` after exporting the variables so the proxy can issue Gatekeeper tokens and the web app can subscribe to Electric shapes.
+
+### OpenRouter API keys stay on-device
+
+- Each browser session encrypts the OpenRouter API key with a randomly generated AES key (via the Web Crypto API) and stores the ciphertext in `localStorage`. The raw key never leaves the device or touches the server/database.
+- When you paste a key into the modal, OpenChat immediately fetches your model list through the `/api/openrouter/models` helper using that key; the server only sees it for the duration of that request and does not persist it anywhere.
+- Clearing your browser storage (or clicking **Remove key** in the upcoming settings page) wipes the encrypted blob, effectively unlinking your OpenRouter account locally.
 
 - `/api/chat` now persists the latest user message before the model call and streams assistant tokens by calling `messages.streamUpsert`, so other tabs receive ElectricSQL updates while the active tab consumes the SSE stream.
 - Electric-backed TanStack DB collections hydrate the sidebar and chat views when `NEXT_PUBLIC_ELECTRIC_URL`/Gatekeeper are configured. Requests now proxy through the server at `/api/electric/shapes/*`, so the Electric service itself never receives user-identifying cookies directly. The legacy WebSocket fallback remains for non-Electric setups.
