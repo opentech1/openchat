@@ -11,9 +11,11 @@ import {
 	useState,
 } from "react";
 
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
+
 import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
 
@@ -33,8 +35,7 @@ type ChatMessagesPanelProps = {
 const SCROLL_LOCK_THRESHOLD_PX = 48;
 
 function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true }: ChatMessagesPanelProps) {
-	const findViewportRef = useRef<HTMLDivElement | null>(null);
-	const containerRef = useRef<HTMLDivElement | null>(null);
+	const viewportRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const [isAtBottom, setIsAtBottom] = useState(true);
 	const initialSyncDoneRef = useRef(false);
@@ -54,7 +55,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 
 	const scrollToBottom = useCallback(
 		(behavior: ScrollBehavior = "auto") => {
-			const node = findViewportRef.current;
+			const node = viewportRef.current;
 			if (!node) return;
 			node.scrollTo({ top: node.scrollHeight, behavior });
 		},
@@ -72,12 +73,8 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 	);
 
 	useLayoutEffect(() => {
-		// Ensure we have a handle to the Radix viewport before trying to scroll
-		if (!findViewportRef.current) {
-			findViewportRef.current = containerRef.current?.querySelector(
-				'[data-slot="scroll-area-viewport"]',
-			) as HTMLDivElement | null;
-		}
+		const node = viewportRef.current;
+		if (!node) return;
 		if (!hasMessages) return;
 		if (initialSyncDoneRef.current) return;
 		requestAnimationFrame(() => {
@@ -90,12 +87,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 	}, [hasMessages, scrollToBottom, tailSignature]);
 
 	useEffect(() => {
-		// locate Radix viewport inside the local container after mount
-		const vp = containerRef.current?.querySelector(
-			'[data-slot="scroll-area-viewport"]',
-		) as HTMLDivElement | null;
-		findViewportRef.current = vp;
-		const node = findViewportRef.current;
+		const node = viewportRef.current;
 		if (!node) return;
 		const handleScroll = () => {
 			const atBottom = computeIsAtBottom(node);
@@ -135,13 +127,19 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 	}, [autoStick, scrollToBottom]);
 
 	return (
-		<div ref={containerRef} className={cn("relative flex-1 min-h-0", className)}>
-			<ScrollArea className="h-full">
-				<div
-					ref={contentRef}
-					className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
-					style={{ paddingBottom }}
+		<div className={cn("relative flex flex-1 min-h-0 flex-col", className)}>
+			<ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
+				<ScrollAreaPrimitive.Viewport
+					ref={(node) => {
+						viewportRef.current = node;
+					}}
+					className="size-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 				>
+					<div
+						ref={contentRef}
+						className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
+						style={{ paddingBottom }}
+					>
 						{hasMessages ? (
 							messages.map((msg) => (
 								<Message key={msg.id} from={msg.role} className={msg.role === "assistant" ? "justify-start flex-row" : undefined}>
@@ -158,7 +156,10 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 							<p className="text-muted-foreground text-sm">No messages yet. Say hi!</p>
 						)}
 					</div>
-			</ScrollArea>
+				</ScrollAreaPrimitive.Viewport>
+				<ScrollBar orientation="vertical" className="hidden" />
+				<ScrollAreaPrimitive.Corner className="hidden" />
+			</ScrollAreaPrimitive.Root>
 			{autoStick && !isAtBottom ? (
 				<Button
 					type="button"
