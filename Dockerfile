@@ -2,7 +2,6 @@
 
 FROM oven/bun:1.2.21 AS base
 WORKDIR /app
-ENV NODE_ENV=production
 ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
 
 COPY bun.lock bunfig.toml package.json turbo.json ./
