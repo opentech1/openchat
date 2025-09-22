@@ -89,6 +89,10 @@ export type ChatHandlerOptions = {
 	now?: () => number;
 	corsOrigin?: string;
 	persistMessage?: (input: StreamPersistRequest) => Promise<{ ok: boolean }>;
+	resolveModel?: (input: {
+		request: Request;
+		payload: any;
+	}) => Promise<{ provider: ReturnType<typeof createOpenRouter>; modelId: string }>;
 };
 
 export function createChatHandler(options: ChatHandlerOptions = {}) {
@@ -99,27 +103,6 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
 
 	const persistMessageImpl = options.persistMessage ?? ((input: StreamPersistRequest) => serverClient.messages.streamUpsert(input));
-
-	let provider = options.provider;
-	let modelId = options.model;
-
-	const ensureConfig = () => {
-		if (!provider) {
-			const apiKey = process.env.OPENROUTER_API_KEY;
-			if (!apiKey) throw new Error("Missing required env: OPENROUTER_API_KEY");
-			provider = createOpenRouter({
-				apiKey,
-				baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
-				compatibility: "strict",
-			});
-		}
-		if (!modelId) {
-			const envModel = process.env.OPENROUTER_MODEL;
-			if (!envModel) throw new Error("Missing required env: OPENROUTER_MODEL");
-			modelId = envModel;
-		}
-		return { provider: provider!, modelId: modelId! };
-	};
 
 	const buckets = new Map<string, RateBucket>();
 
@@ -148,21 +131,55 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
-		let config: { provider: ReturnType<typeof createOpenRouter>; modelId: string };
-		try {
-			config = ensureConfig();
-		} catch (error) {
-			console.error("/api/chat configuration", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
-			return new Response("Server configuration error", { status: 500, headers });
-		}
-
 		let payload: any;
 		try {
 			payload = await request.json();
 		} catch {
 			const headers = buildCorsHeaders(request, corsOrigin);
 			return new Response("Invalid JSON payload", { status: 400, headers });
+		}
+
+		const modelIdFromPayload = typeof payload?.modelId === "string" && payload.modelId.trim().length > 0
+			? payload.modelId.trim()
+			: null;
+		const apiKeyFromPayload = typeof payload?.apiKey === "string" && payload.apiKey.trim().length > 0
+			? payload.apiKey.trim()
+			: null;
+
+		let config: { provider: ReturnType<typeof createOpenRouter>; modelId: string };
+		try {
+			if (typeof options.resolveModel === "function") {
+				config = await options.resolveModel({ request, payload });
+			} else if (options.provider && options.model) {
+				config = { provider: options.provider, modelId: options.model };
+			} else {
+				if (!apiKeyFromPayload) {
+					throw new Error("Missing apiKey in request payload");
+				}
+				if (!modelIdFromPayload) {
+					throw new Error("Missing modelId in request payload");
+				}
+				const provider = createOpenRouter({
+					apiKey: apiKeyFromPayload,
+					baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
+					compatibility: "strict",
+				});
+				config = { provider, modelId: modelIdFromPayload };
+			}
+		} catch (error) {
+			console.error("/api/chat resolve model", error);
+			const headers = buildCorsHeaders(request, corsOrigin);
+			const messageText = error instanceof Error ? error.message : String(error ?? "");
+			let status = 500;
+			let responseMessage = "Server configuration error";
+			if (messageText.includes("Missing apiKey")) {
+				status = 400;
+				responseMessage = "Missing apiKey";
+			} else if (messageText.includes("Missing modelId")) {
+				status = 400;
+				responseMessage = "Missing modelId";
+			}
+			return new Response(responseMessage, { status, headers });
 		}
 
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;

@@ -12,7 +12,7 @@ describe("makeGatekeeperToken", () => {
 		const { token, issuedAt, expiresAtSeconds } = makeGatekeeperToken({
 			userId: "user-123",
 			workspaceId: "workspace-xyz",
-			tables: ["chat", "settings"],
+			tables: ["chat", "message"],
 			ttlSeconds: 120,
 			now: () => 1_700_000_000,
 			secret: "super-secret",
@@ -25,7 +25,7 @@ describe("makeGatekeeperToken", () => {
 		const payload = decodePayload(token);
 		expect(payload.sub).toBe("user-123");
 		expect(payload.workspaceId).toBe("workspace-xyz");
-		expect(payload.tables).toEqual(["chat", "settings"]);
+		expect(payload.tables).toEqual(["chat", "message"]);
 		expect(payload.iat).toBe(1_700_000_000);
 		expect(payload.exp).toBe(1_700_000_120);
 	});

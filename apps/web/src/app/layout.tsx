@@ -2,9 +2,6 @@ import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
 import OptionalClerkProvider from "@/lib/optional-clerk";
-import { Lato } from "next/font/google";
-
-const lato = Lato({ subsets: ["latin"], weight: ["400", "700", "900"], variable: "--font-sans" });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 
@@ -75,7 +72,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning className={lato.variable} data-brand-theme="blue">
+		<html lang="en" suppressHydrationWarning data-brand-theme="blue">
 			<body className="font-sans">
 				<OptionalClerkProvider>
 					<Providers>

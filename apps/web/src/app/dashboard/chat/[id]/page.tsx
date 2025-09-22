@@ -13,7 +13,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const initialMessages = await serverClient.messages.list({ chatId }).catch(() => []);
 
   return (
-    <div className="mx-auto max-w-3xl p-4 md:p-6">
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-1 flex-col gap-0 overflow-hidden min-h-0 p-4 md:p-6">
       <ChatRoomClient chatId={chatId} initialMessages={initialMessages} />
     </div>
   );

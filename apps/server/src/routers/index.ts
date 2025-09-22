@@ -100,7 +100,7 @@ export const appRouter = {
 			user: context.session?.user,
 		};
 	}),
-  chats: {
+	chats: {
     // Create a new chat and return its id
     create: protectedProcedure
       .input(

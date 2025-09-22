@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../node_modules/streamdown/dist/index.js";
 
 /* Use class-based dark mode to match next-themes */
 @variant dark (&:where(.dark, .dark *));
@@ -41,7 +42,7 @@
   --sidebar-accent-foreground: oklch(0.2435 0 0);
   --sidebar-border: oklch(0.9037 0 0);
   --sidebar-ring: oklch(0.72 0.21 254.624);
-  --font-sans: Lato, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: monospace;
   --radius: 0.5rem;
@@ -91,7 +92,7 @@
   --sidebar-accent-foreground: oklch(0.9851 0 0);
   --sidebar-border: oklch(0.2809 0 0);
   --sidebar-ring: oklch(0.7 0.2 254.624);
-  --font-sans: Lato, sans-serif;
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono: monospace;
   --radius: 0.5rem;

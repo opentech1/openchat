@@ -17,13 +17,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
   return (
-    <div className="relative flex min-h-svh overflow-hidden">
+    <div className="relative flex h-svh overflow-hidden">
       <div className="hidden md:block">
         <div className="fixed inset-y-0 left-0">
           <AppSidebar initialChats={chats} currentUserId={userId} />
         </div>
       </div>
-      <main className="relative flex-1 md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
         {devBypassEnabled ? (
           <Script id="oc-dev-user" strategy="afterInteractive">
             {`window.__DEV_USER_ID__ = ${JSON.stringify(userId)};`}
@@ -39,7 +39,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </Link>
           <ThemeToggle />
         </div>
-        <div className="h-full w-full">
+        <div className="flex h-full w-full flex-1 flex-col overflow-hidden min-h-0">
           {children}
         </div>
       </main>
