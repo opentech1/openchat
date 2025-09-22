@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronDown, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -18,10 +18,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 export type ModelSelectorOption = {
 	value: string
 	label: string
+	description?: string
 	pricing?: {
 		prompt: number | null
 		completion: number | null
 	}
+	icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }
 
 type ModelSelectorProps = {
@@ -32,12 +34,24 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
-function formatPricing(pricing: NonNullable<ModelSelectorOption['pricing']>) {
-	const format = (cost: number | null) => {
-		if (cost == null) return "–"
-		return `$${cost.toFixed(3)}`
+const getInitial = (label: string) => {
+	const trimmed = label.trim()
+	return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : "?"
+}
+
+function OptionGlyph({ option }: { option: ModelSelectorOption | null }) {
+	if (!option) {
+		return <Sparkles className="size-4" />
 	}
-	return `${format(pricing.prompt)} / ${format(pricing.completion)} per 1M tokens`
+	const Icon = option.icon
+	if (Icon) {
+		return <Icon className="size-4" />
+	}
+	return (
+		<span className="text-foreground/80 text-[11px] font-semibold uppercase leading-none">
+			{getInitial(option.label)}
+		</span>
+	)
 }
 
 export function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
@@ -67,58 +81,72 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 		return options.find((option) => option.value === selectedValue) ?? null
 	}, [options, selectedValue])
 
+	const triggerLabel = React.useMemo(() => {
+		if (selectedOption) return selectedOption.label
+		if (loading) return "Loading models..."
+		return "Select model"
+	}, [loading, selectedOption])
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="outline"
+					size="sm"
 					disabled={disabled || loading || options.length === 0}
 					role="combobox"
 					aria-expanded={open}
-					className="h-9 min-w-[180px] justify-between rounded-xl bg-background/90 px-3 text-foreground hover:text-foreground"
+					className="flex h-9 min-w-[150px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-foreground"
 				>
-					<span className="text-sm font-medium truncate">
-						{selectedOption?.label ?? (loading ? "Loading models..." : "Select model")}
+					<span className="flex min-w-0 items-center gap-2">
+						<span className="bg-muted text-muted-foreground/90 flex size-7 items-center justify-center rounded-lg">
+							<OptionGlyph option={selectedOption} />
+						</span>
+						<span className="truncate text-sm font-medium leading-none">{triggerLabel}</span>
 					</span>
-					<ChevronsUpDown className="size-4 opacity-60" />
+					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
 				</Button>
 			</PopoverTrigger>
-		<PopoverContent className="w-[220px] rounded-xl border border-border/60 bg-popover p-0 shadow-lg">
-			<Command>
-				<CommandInput placeholder="Search models" className="h-9" />
-				<CommandList>
-					<CommandEmpty>{loading ? "Loading models..." : "No model found."}</CommandEmpty>
-					<CommandGroup
-						className="max-h-64 overflow-y-auto pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-					>
-						{options.map((option) => {
-							const isSelected = option.value === selectedValue
-							return (
+			<PopoverContent align="end" className="w-[220px] border-none bg-popover/95 p-0 shadow-xl">
+				<Command className="border-none bg-transparent shadow-none">
+					<CommandInput placeholder="Search models" className="h-9 px-3 text-sm" />
+					<CommandList className="max-h-60 overflow-y-auto">
+						<CommandEmpty className="py-6 text-sm text-muted-foreground">
+							{loading ? "Loading models..." : "No models found."}
+						</CommandEmpty>
+						<CommandGroup className="flex flex-col gap-1 p-2">
+							{options.map((option) => {
+								const isSelected = option.value === selectedValue
+								return (
 									<CommandItem
 										key={option.value}
 										value={option.value}
 										onSelect={(currentValue) => {
-											const next = currentValue
 											if (value === undefined) {
-												setInternalValue(next)
+												setInternalValue(currentValue)
 											}
-											onChange?.(next)
+											onChange?.(currentValue)
 											setOpen(false)
 										}}
-										className="data-[selected=true]:text-foreground"
+										className={cn(
+											"flex items-center justify-between gap-2 rounded-lg px-3 py-2",
+											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
+										)}
 									>
-										<div className="flex w-full flex-col gap-0.5">
-											<span className="text-sm font-medium leading-tight">{option.label}</span>
-											{option.pricing ? (
-												<span className="text-muted-foreground text-[11px]">
-													{formatPricing(option.pricing)}
-												</span>
-											) : null}
-										</div>
-										<Check className={cn("ml-auto size-4", isSelected ? "opacity-100" : "opacity-0")} />
+										<span className="flex min-w-0 items-center gap-2">
+											<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
+												<OptionGlyph option={option} />
+											</span>
+											<span className="truncate text-sm font-medium leading-tight">
+												{option.label}
+											</span>
+										</span>
+										<Check className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
+											aria-hidden={!isSelected}
+										/>
 									</CommandItem>
 								)
-							})}
+								})}
 						</CommandGroup>
 					</CommandList>
 				</Command>
