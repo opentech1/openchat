@@ -21,6 +21,14 @@ export const serverLink = new RPCLink({
 		const { headers } = await import("next/headers");
 		const base = Object.fromEntries(await headers());
 		const nextHeaders: Record<string, string> = { ...base } as Record<string, string>;
+
+		// strip hop-by-hop and body-specific headers before forwarding
+		delete nextHeaders["content-length"];
+		delete nextHeaders["transfer-encoding"];
+		delete nextHeaders["connection"];
+		delete nextHeaders["keep-alive"];
+		delete nextHeaders["proxy-connection"];
+		delete nextHeaders["upgrade"];
 		let resolvedUserId: string | undefined = typeof nextHeaders["x-user-id"] === "string" ? nextHeaders["x-user-id"] : undefined;
 
 		try {
