@@ -14,6 +14,8 @@ const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? 3
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
 const STREAM_FLUSH_INTERVAL_MS = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 50);
+const FALLBACK_WEB_ORIGIN = "http://localhost:3001";
+const ALLOWED_REQUEST_HEADERS = "Content-Type, Authorization, x-user-id";
 
 type StreamPersistRequest = {
 	chatId: string;
@@ -70,13 +72,59 @@ function pickClientIp(request: Request): string {
 	}
 }
 
-function buildCorsHeaders(request: Request, overrideOrigin?: string) {
-	const origin = overrideOrigin ?? request.headers.get("origin") ?? "*";
+function normalizeOrigin(origin: string) {
+	try {
+		return new URL(origin).origin;
+	} catch {
+		return origin.trim().replace(/\/$/, "");
+	}
+}
+
+function parseOrigins(value?: string | string[] | null) {
+	if (!value) return [] as string[];
+	const source = Array.isArray(value) ? value : String(value).split(/[,\s]+/);
+	return source
+		.map((part) => (part ?? "").trim())
+		.filter((part) => part && part !== "*" && part.toLowerCase() !== "null")
+		.map(normalizeOrigin);
+}
+
+type CorsConfig = {
+	allowedOrigins: string[];
+	originSet: Set<string>;
+	primaryOrigin: string;
+};
+
+function createCorsConfig(source?: string | string[] | null): CorsConfig {
+	const parsed = parseOrigins(source);
+	if (parsed.length === 0) parsed.push(normalizeOrigin(FALLBACK_WEB_ORIGIN));
+	const deduped = Array.from(new Set(parsed));
+	return {
+		allowedOrigins: deduped,
+		originSet: new Set(deduped),
+		primaryOrigin: deduped[0]!,
+	};
+}
+
+function evaluateRequestOrigin(request: Request, cors: CorsConfig) {
+	const headerOrigin = request.headers.get("origin");
+	if (!headerOrigin) {
+		return { origin: cors.primaryOrigin, allowed: true } as const;
+	}
+	const normalized = normalizeOrigin(headerOrigin);
+	if (cors.originSet.has(normalized)) {
+		return { origin: normalized, allowed: true } as const;
+	}
+	return { origin: cors.primaryOrigin, allowed: false } as const;
+}
+
+function buildCorsHeaders(origin: string) {
 	const headers = new Headers();
-	headers.set("Access-Control-Allow-Origin", origin === "null" ? "*" : origin);
-	headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+	headers.set("Access-Control-Allow-Origin", origin);
+	headers.set("Access-Control-Allow-Credentials", "true");
+	headers.set("Access-Control-Allow-Headers", ALLOWED_REQUEST_HEADERS);
 	headers.set("Access-Control-Allow-Methods", "POST,OPTIONS");
-	headers.set("Vary", "Origin");
+	headers.append("Vary", "Origin");
 	return headers;
 }
 
@@ -87,7 +135,7 @@ export type ChatHandlerOptions = {
 	model?: string;
 	rateLimit?: { limit: number; windowMs: number };
 	now?: () => number;
-	corsOrigin?: string;
+	corsOrigin?: string | string[] | null;
 	persistMessage?: (input: StreamPersistRequest) => Promise<{ ok: boolean }>;
 };
 
@@ -96,7 +144,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const convertToCoreMessagesImpl = options.convertToCoreMessagesImpl ?? convertToCoreMessages;
 	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS };
 	const now = options.now ?? (() => Date.now());
-	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
+	const envCorsSources = [process.env.NEXT_PUBLIC_APP_URL, process.env.CORS_ORIGIN].filter((value): value is string => Boolean(value));
+	const corsSource = options.corsOrigin ?? (envCorsSources.length > 0 ? envCorsSources : undefined);
+	const corsConfig = createCorsConfig(corsSource);
 
 	const persistMessageImpl = options.persistMessage ?? ((input: StreamPersistRequest) => serverClient.messages.streamUpsert(input));
 
@@ -122,12 +172,22 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	};
 
 	const buckets = new Map<string, RateBucket>();
+	let lastBucketCleanup = now();
+
+	function pruneBuckets(ts: number) {
+		if (ts - lastBucketCleanup < rateLimit.windowMs) return;
+		lastBucketCleanup = ts;
+		for (const [key, bucket] of buckets) {
+			if (ts > bucket.resetAt) buckets.delete(key);
+		}
+	}
 
 	function isRateLimited(request: Request): boolean {
 		if (rateLimit.limit <= 0) return false;
 		const ip = pickClientIp(request);
-		const bucket = buckets.get(ip);
 		const ts = now();
+		pruneBuckets(ts);
+		const bucket = buckets.get(ip);
 		if (!bucket || ts > bucket.resetAt) {
 			buckets.set(ip, { count: 1, resetAt: ts + rateLimit.windowMs });
 			return false;
@@ -142,8 +202,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Method Not Allowed", { status: 405 });
 		}
 
+		const originEvaluation = evaluateRequestOrigin(request, corsConfig);
+		const corsHeadersForResponse = () => buildCorsHeaders(originEvaluation.origin);
+
+		if (!originEvaluation.allowed && request.headers.has("origin")) {
+			return new Response("Origin not allowed", { status: 403, headers: corsHeadersForResponse() });
+		}
+
 		if (isRateLimited(request)) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			headers.set("Retry-After", Math.ceil(rateLimit.windowMs / 1000).toString());
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
@@ -153,7 +220,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			config = ensureConfig();
 		} catch (error) {
 			console.error("/api/chat configuration", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Server configuration error", { status: 500, headers });
 		}
 
@@ -161,26 +228,26 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		try {
 			payload = await request.json();
 		} catch {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Invalid JSON payload", { status: 400, headers });
 		}
 
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
 		if (!chatId) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Missing chatId", { status: 400, headers });
 		}
 
 		const rawMessages: AnyUIMessage[] = Array.isArray(payload?.messages) ? (payload.messages as AnyUIMessage[]) : [];
 		if (rawMessages.length === 0) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Missing chat messages", { status: 400, headers });
 		}
 
 		const safeMessages = rawMessages.map(clampUserText);
 		const userMessageIndex = [...rawMessages].reverse().findIndex((msg) => msg.role === "user");
 		if (userMessageIndex === -1) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Missing user message", { status: 400, headers });
 		}
 		const normalizedIndex = rawMessages.length - 1 - userMessageIndex;
@@ -214,7 +281,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		} catch (error) {
 			console.error("Failed to persist user message", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Failed to persist message", { status: 502, headers });
 		}
 
@@ -232,7 +299,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		} catch (error) {
 			console.error("Failed to bootstrap assistant message", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Failed to persist assistant", { status: 502, headers });
 		}
 
@@ -337,7 +404,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			headers.set("X-Accel-Buffering", "no");
 			headers.set("Connection", "keep-alive");
 
-			const corsHeaders = buildCorsHeaders(request, corsOrigin);
+			const corsHeaders = corsHeadersForResponse();
 			corsHeaders.forEach((value, key) => {
 				headers.set(key, value);
 			});
@@ -349,17 +416,23 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		} catch (error) {
 			console.error("/api/chat", error);
 			await finalize();
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = corsHeadersForResponse();
 			return new Response("Upstream error", { status: 502, headers });
 		}
 	};
 }
 
-export function createOptionsHandler(options: { corsOrigin?: string } = {}) {
-	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
+export function createOptionsHandler(options: { corsOrigin?: string | string[] | null } = {}) {
+	const envCorsSources = [process.env.NEXT_PUBLIC_APP_URL, process.env.CORS_ORIGIN].filter((value): value is string => Boolean(value));
+	const corsSource = options.corsOrigin ?? (envCorsSources.length > 0 ? envCorsSources : undefined);
+	const corsConfig = createCorsConfig(corsSource);
 	return async function handler(request: Request) {
-		const headers = buildCorsHeaders(request, corsOrigin);
+		const originEvaluation = evaluateRequestOrigin(request, corsConfig);
+		const headers = buildCorsHeaders(originEvaluation.origin);
 		headers.set("Access-Control-Max-Age", "86400");
+		if (!originEvaluation.allowed && request.headers.has("origin")) {
+			return new Response("Origin not allowed", { status: 403, headers });
+		}
 		return new Response(null, { status: 204, headers });
 	};
 }

@@ -17,11 +17,15 @@ export async function getUserId(): Promise<string | null> {
 	const h = await headers();
 	const uid = h.get("x-user-id");
 	if (uid) {
-		if (process.env.NODE_ENV === "test" || DEV_BYPASS_ENABLED) return uid;
+		const sanitized = uid.trim();
+		if (sanitized && sanitized.length <= 128) {
+			if (process.env.NODE_ENV === "test" || DEV_BYPASS_ENABLED) return sanitized;
+		}
 	}
 
 	if (DEV_BYPASS_ENABLED) {
-		return process.env.NEXT_PUBLIC_DEV_USER_ID || process.env.DEV_DEFAULT_USER_ID || "dev-user";
+		const fallback = process.env.NEXT_PUBLIC_DEV_USER_ID || process.env.DEV_DEFAULT_USER_ID || "dev-user";
+		return fallback.trim().slice(0, 128) || "dev-user";
 	}
 
 	return null;

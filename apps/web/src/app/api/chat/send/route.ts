@@ -4,9 +4,24 @@ import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_MESSAGE_CONTENT_MAX = 8_000;
+const MESSAGE_CONTENT_MAX_LENGTH = (() => {
+	const raw = Number(process.env.MESSAGE_MAX_LENGTH ?? DEFAULT_MESSAGE_CONTENT_MAX);
+	if (!Number.isFinite(raw) || raw < 1) return DEFAULT_MESSAGE_CONTENT_MAX;
+	return Math.min(raw, 32_000);
+})();
+
+const messageContentSchema = z
+	.string()
+	.min(1)
+	.max(MESSAGE_CONTENT_MAX_LENGTH, `Message content exceeds ${MESSAGE_CONTENT_MAX_LENGTH} characters`)
+	.refine((value) => Buffer.byteLength(value, "utf8") <= MESSAGE_CONTENT_MAX_LENGTH, {
+		message: `Message content exceeds ${MESSAGE_CONTENT_MAX_LENGTH} bytes`,
+	});
+
 const messageSchema = z.object({
 	id: z.string().min(1).optional(),
-	content: z.string().min(1),
+	content: messageContentSchema,
 	createdAt: z.union([z.string(), z.date()]).optional(),
 });
 
