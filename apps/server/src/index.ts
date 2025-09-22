@@ -231,12 +231,19 @@ new Elysia()
 	if (requestedTables.length === 0) {
 		return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
 	}
+	let workspaceId = parsed.workspaceId != null ? parsed.workspaceId.trim() : userId;
+	if (!workspaceId) {
+		return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+	}
+	if (workspaceId !== userId) {
+		return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+	}
 	const ttlSeconds = parsed.ttlSeconds ?? DEFAULT_GATEKEEPER_TTL;
 	let tokenInfo;
 	try {
 		tokenInfo = makeGatekeeperToken({
 			userId,
-			workspaceId: parsed.workspaceId ?? userId,
+			workspaceId,
 			tables: requestedTables,
 			ttlSeconds,
 		});
