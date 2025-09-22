@@ -44,10 +44,10 @@ describe("sync-hub", () => {
 		expect(r.reason).toBe("too_many_subscriptions");
 	});
 
-	it("enforces ~8KB payload cap", () => {
+	it("enforces ~128KB payload cap", () => {
 		const ws = makeWS();
 		hub.subscribe(ws, "t");
-		const big = "x".repeat(9 * 1024);
+		const big = "x".repeat(140 * 1024);
 		hub.publish("t", "big", big);
 		expect(ws.sent.length).toBe(0);
 	});

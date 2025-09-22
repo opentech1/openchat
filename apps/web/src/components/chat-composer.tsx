@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
+import { Paperclip, SendIcon, XIcon, LoaderIcon, SquareIcon } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
@@ -91,27 +93,63 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
 Textarea.displayName = "Textarea";
 
 export type ChatComposerProps = {
-  onSend: (text: string) => void | Promise<void>;
-  disabled?: boolean;
-  placeholder?: string;
+	onSend: (payload: { text: string; modelId: string; apiKey: string }) => void | Promise<void>;
+	disabled?: boolean;
+	placeholder?: string;
+	modelOptions?: ModelSelectorOption[];
+	modelValue?: string | null;
+	onModelChange?: (value: string) => void;
+	modelsLoading?: boolean;
+	apiKey?: string | null;
+	isStreaming?: boolean;
+	onStop?: () => void;
 };
 
-export default function ChatComposer({ onSend, disabled, placeholder = "Ask OpenChat a question..." }: ChatComposerProps) {
+export default function ChatComposer({
+	onSend,
+	disabled,
+	placeholder = "Ask OpenChat a question...",
+	modelOptions = [],
+	modelValue,
+	onModelChange,
+	modelsLoading,
+	apiKey,
+	isStreaming = false,
+	onStop,
+}: ChatComposerProps) {
   const [value, setValue] = useState('');
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fallbackModelId, setFallbackModelId] = useState<string>('');
   const prefersReducedMotion = useReducedMotion();
   const fast = prefersReducedMotion ? 0 : 0.3;
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
 
-  const send = useCallback(async () => {
-    const trimmed = value.trim();
-    if (!trimmed || disabled || isSending) return;
-    setErrorMessage(null);
-    setIsSending(true);
-    try {
-      await onSend(trimmed);
+  useEffect(() => {
+    if (modelValue) {
+      setFallbackModelId(modelValue);
+      return;
+    }
+    if (modelOptions.length === 0) {
+      setFallbackModelId('');
+      return;
+    }
+    const hasCurrent = fallbackModelId && modelOptions.some((option) => option.value === fallbackModelId);
+    if (!hasCurrent) {
+      setFallbackModelId(modelOptions[0]!.value);
+    }
+  }, [modelValue, modelOptions, fallbackModelId]);
+
+  const activeModelId = modelValue ?? fallbackModelId;
+
+	const send = useCallback(async () => {
+		const trimmed = value.trim();
+		if (!trimmed || disabled || isSending || !activeModelId || !apiKey) return;
+		setErrorMessage(null);
+		setIsSending(true);
+		try {
+      await onSend({ text: trimmed, modelId: activeModelId, apiKey });
       setValue('');
       adjustHeight(true);
     } catch (error) {
@@ -120,7 +158,7 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
     } finally {
       setIsSending(false);
     }
-  }, [adjustHeight, disabled, isSending, onSend, value]);
+  }, [activeModelId, adjustHeight, apiKey, disabled, isSending, onSend, value]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -129,7 +167,9 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
     }
   };
 
-  return (
+	const isBusy = isSending || isStreaming;
+
+	return (
     <motion.div
       className="border-border bg-card/80 relative rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl"
       initial={{ scale: 0.985 }}
@@ -195,56 +235,76 @@ export default function ChatComposer({ onSend, disabled, placeholder = "Ask Open
       </AnimatePresence>
 
       <div className="border-border flex items-center justify-between gap-4 border-t p-4">
-        <div className="flex items-center gap-3">
-          <motion.button
-            type="button"
-            onClick={() => {
-              const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
-              setAttachments((prev) => [...prev, mockFileName]);
-            }}
-            whileTap={{ scale: 0.94 }}
-            className="group text-muted-foreground hover:text-foreground relative rounded-lg p-2 transition-colors"
-            aria-label="Attach file"
-          >
+        <div className="flex items-center gap-2">
+			<motion.button
+				type="button"
+				onClick={() => {
+					const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
+					setAttachments((prev) => [...prev, mockFileName]);
+				}}
+				whileTap={{ scale: 0.95 }}
+				className={cn(
+					buttonVariants({ variant: "outline", size: "sm" }),
+					'flex h-9 w-9 items-center justify-center rounded-xl p-0 px-0 text-muted-foreground',
+				)}
+				disabled={disabled || isBusy || !activeModelId}
+				aria-label="Attach file"
+			>
             <Paperclip className="h-4 w-4" />
-            <motion.span
-              className="bg-primary/10 absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
-              layoutId="button-highlight"
-            />
           </motion.button>
-        </div>
+			<ModelSelector
+				options={modelOptions}
+				value={modelValue ?? (modelOptions.length === 0 ? null : fallbackModelId)}
+				onChange={(next) => {
+					if (onModelChange) {
+						onModelChange(next);
+					} else {
+						setFallbackModelId(next);
+					}
+				}}
+				disabled={disabled || isBusy || modelOptions.length === 0}
+				loading={modelsLoading}
+			/>
+		</div>
 
-        <div className="flex flex-col items-end gap-1">
-          {errorMessage && (
-            <span className="text-destructive text-xs font-medium" role="alert">
-              {errorMessage}
-            </span>
-          )}
-          <motion.button
-            type="button"
-            onClick={() => {
-              void send();
-            }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            disabled={disabled || isSending || !value.trim()}
-            className={cn(
-              'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-              'flex items-center gap-2',
-              value.trim()
-                ? 'bg-primary text-primary-foreground shadow-primary/10 shadow-lg'
-                : 'bg-muted/50 text-muted-foreground',
-            )}
-          >
-            {isSending ? (
-              <LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
-            ) : (
-              <SendIcon className="h-4 w-4" />
-            )}
-            <span>Send</span>
-          </motion.button>
-        </div>
-      </div>
-    </motion.div>
-  );
+		<div className="flex flex-col items-end gap-1">
+			{errorMessage && (
+				<span className="text-destructive text-xs font-medium" role="alert">
+					{errorMessage}
+				</span>
+			)}
+			<motion.button
+				type="button"
+				onClick={() => {
+					if (isStreaming) {
+						onStop?.();
+					} else {
+						void send();
+					}
+				}}
+				whileHover={{ scale: 1.01 }}
+				whileTap={{ scale: 0.98 }}
+				disabled={isStreaming ? disabled : (disabled || isSending || !value.trim() || !activeModelId || !apiKey)}
+				className={cn(
+					'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
+					isStreaming
+						? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+						: value.trim()
+							? 'bg-primary text-primary-foreground shadow-primary/10 hover:bg-primary/90'
+							: 'bg-muted/50 text-muted-foreground',
+				)}
+			>
+				{isStreaming ? (
+					<SquareIcon className="h-4 w-4" />
+				) : isSending ? (
+					<LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
+				) : (
+					<SendIcon className="h-4 w-4" />
+				)}
+				<span>{isStreaming ? 'Stop' : 'Send'}</span>
+			</motion.button>
+		</div>
+	</div>
+	</motion.div>
+	);
 }

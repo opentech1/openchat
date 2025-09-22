@@ -48,7 +48,7 @@ export async function createContext({ context }: CreateContextOptions) {
 		}
 	}
 
-	return { session };
+	return { session, request: context.request };
 }
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
