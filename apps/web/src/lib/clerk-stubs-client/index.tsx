@@ -16,6 +16,9 @@ export function SignUp() {
 export function UserButton() {
 	return null as any;
 }
+export function UserProfile(_props: any) {
+	return null as any;
+}
 export function useAuth() {
 	const userId = (typeof window !== "undefined" && (window as any).__DEV_USER_ID__) || "e2e-user";
 	return { userId, isSignedIn: !!userId } as any;

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 
+type OpenRouterModelOption = {
+	value: string;
+	label: string;
+	pricing?: {
+		prompt: number | null;
+		completion: number | null;
+	};
+};
+
 export async function POST(request: Request) {
 	try {
 		const body = await request.json().catch(() => ({}) as any);
@@ -24,22 +33,28 @@ export async function POST(request: Request) {
 		const payload = await response.json().catch(() => ({})) as any;
 		const data = Array.isArray(payload?.data) ? payload.data : [];
 		const models = data
-			.map((entry: any) => {
-				const id = typeof entry?.id === "string" ? entry.id : typeof entry?.name === "string" ? entry.name : "";
+			.map<OpenRouterModelOption | null>((entry: unknown) => {
+				const candidate = entry as Record<string, unknown> | undefined | null;
+				const id = typeof candidate?.id === "string"
+					? candidate.id
+					: typeof candidate?.name === "string"
+						? candidate.name
+						: "";
 				if (!id) return null;
-				const pricing = entry?.pricing && typeof entry.pricing === "object"
+				const pricingCandidate = candidate?.pricing as Record<string, unknown> | undefined;
+				const pricing = pricingCandidate && typeof pricingCandidate === "object"
 					? {
-						prompt: typeof entry.pricing?.prompt === "number" ? entry.pricing.prompt : null,
-						completion: typeof entry.pricing?.completion === "number" ? entry.pricing.completion : null,
+						prompt: typeof pricingCandidate?.prompt === "number" ? pricingCandidate.prompt : null,
+						completion: typeof pricingCandidate?.completion === "number" ? pricingCandidate.completion : null,
 					}
 					: undefined;
 				return {
 					value: id,
-					label: typeof entry?.name === "string" ? entry.name : id,
+					label: typeof candidate?.name === "string" ? candidate.name : id,
 					pricing,
 				};
 			})
-			.filter((model): model is { value: string; label: string; pricing?: { prompt: number | null; completion: number | null } } => Boolean(model));
+			.filter((model): model is OpenRouterModelOption => Boolean(model));
 
 		return NextResponse.json({ ok: true, models });
 	} catch (error) {
