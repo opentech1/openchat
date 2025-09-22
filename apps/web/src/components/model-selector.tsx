@@ -34,6 +34,14 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
+function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
+	const format = (cost: number | null) => {
+		if (cost == null) return "–"
+		return `$${cost.toFixed(3)}`
+	}
+	return `${format(pricing.prompt)} / ${format(pricing.completion)} per 1M tokens`
+}
+
 const getInitial = (label: string) => {
 	const trimmed = label.trim()
 	return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : "?"
@@ -87,6 +95,13 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 		return "Select model"
 	}, [loading, selectedOption])
 
+	const triggerTitle = React.useMemo(() => {
+		if (!selectedOption) return undefined
+		if (selectedOption.description) return selectedOption.description
+		if (selectedOption.pricing) return formatPricing(selectedOption.pricing)
+		return undefined
+	}, [selectedOption])
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
@@ -96,6 +111,7 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					disabled={disabled || loading || options.length === 0}
 					role="combobox"
 					aria-expanded={open}
+					title={triggerTitle}
 					className="flex h-9 min-w-[150px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-foreground"
 				>
 					<span className="flex min-w-0 items-center gap-2">
@@ -133,18 +149,30 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
 										)}
 									>
-										<span className="flex min-w-0 items-center gap-2">
-											<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
-												<OptionGlyph option={option} />
+											<span className="flex min-w-0 items-start gap-2">
+												<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
+													<OptionGlyph option={option} />
+												</span>
+												<span className="flex min-w-0 flex-col gap-0.5 truncate">
+													<span className="truncate text-sm font-medium leading-tight">
+														{option.label}
+													</span>
+													{option.description ? (
+														<span className="text-muted-foreground text-[11px] leading-tight">
+															{option.description}
+														</span>
+													) : null}
+													{option.pricing ? (
+														<span className="text-muted-foreground text-[11px] leading-tight">
+															{formatPricing(option.pricing)}
+														</span>
+													) : null}
+												</span>
 											</span>
-											<span className="truncate text-sm font-medium leading-tight">
-												{option.label}
-											</span>
-										</span>
-										<Check className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
-											aria-hidden={!isSelected}
-										/>
-									</CommandItem>
+											<Check className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
+												aria-hidden={!isSelected}
+											/>
+										</CommandItem>
 								)
 								})}
 						</CommandGroup>

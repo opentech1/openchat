@@ -215,7 +215,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
   return (
-    <div className="flex min-h-[calc(100svh-6rem)] flex-1 flex-col gap-3 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <OpenRouterLinkModal
         open={!isLinked || Boolean(modelsError)}
         saving={savingApiKey || modelsLoading}
@@ -233,7 +233,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         initialMessages={normalizedInitial}
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
-        className="rounded-xl"
+        className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
