@@ -26,7 +26,12 @@ export async function createContext({ context }: CreateContextOptions) {
 			if (token) {
 				const claims = await (verifyToken as any)(token, { secretKey: secret });
 				const uid = (claims?.sub ?? claims?.payload?.sub) as string | undefined;
-				if (uid) session = { user: { id: uid } };
+				if (uid) {
+					const sanitized = uid.trim();
+					if (sanitized.length > 0 && sanitized.length <= 128) {
+						session = { user: { id: sanitized } };
+					}
+				}
 			}
 		} catch {
 			// ignore and fall back to dev header below
@@ -44,7 +49,10 @@ export async function createContext({ context }: CreateContextOptions) {
 			} catch {}
 		}
 		if (uid) {
-			session = { user: { id: uid } } as const;
+			const sanitized = uid.trim();
+			if (sanitized.length > 0 && sanitized.length <= 128) {
+				session = { user: { id: sanitized } } as const;
+			}
 		}
 	}
 

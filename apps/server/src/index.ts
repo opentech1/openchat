@@ -59,7 +59,7 @@ function parseOrigins(value?: string | null) {
 	return value
 		.split(/[,\s]+/)
 		.map((part) => part.trim())
-		.filter(Boolean)
+		.filter((part) => part && part !== "*" && part.toLowerCase() !== "null")
 		.map(normalizeOrigin);
 }
 
