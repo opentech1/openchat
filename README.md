@@ -114,10 +114,10 @@ openchat/
 
    Restart `bun dev` after exporting the variables so the proxy can issue Gatekeeper tokens and the web app can subscribe to Electric shapes.
 
-### OpenRouter API keys stay on-device
+### OpenRouter API key handling
 
-- Each browser session encrypts the OpenRouter API key with a randomly generated AES key (via the Web Crypto API) and stores the ciphertext in `localStorage`. The raw key never leaves the device or touches the server/database.
-- When you paste a key into the modal, OpenChat immediately fetches your model list through the `/api/openrouter/models` helper using that key; the server only sees it for the duration of that request and does not persist it anywhere.
+- Each browser session encrypts the OpenRouter API key with a randomly generated AES key (via the Web Crypto API) and stores the ciphertext in `localStorage`.
+- When you paste a key into the modal, OpenChat proxies requests through `/api/openrouter/models` and `/api/chat`, forwarding the key to OpenRouter over HTTPS for the lifetime of each request. The server never stores or logs the key outside of that transient call.
 - Clearing your browser storage (or clicking **Remove key** in the upcoming settings page) wipes the encrypted blob, effectively unlinking your OpenRouter account locally.
 
 - `/api/chat` now persists the latest user message before the model call and streams assistant tokens by calling `messages.streamUpsert`, so other tabs receive ElectricSQL updates while the active tab consumes the SSE stream.

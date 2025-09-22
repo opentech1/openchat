@@ -40,7 +40,7 @@ export function OpenRouterLinkModal({ open, saving, errorMessage, onSubmit, onTr
 					<div className="flex flex-col gap-2 text-center">
 						<h2 className="text-lg font-semibold">Add your OpenRouter API key</h2>
 						<p className="text-muted-foreground text-sm">
-							Paste a personal API key so OpenChat can stream responses using your OpenRouter account. Keys are encrypted at rest and never leave your server.
+							Paste a personal API key so OpenChat can stream responses using your OpenRouter account. Keys are encrypted locally and proxied through your server only for outbound OpenRouter requests.
 						</p>
 					</div>
 					<div className="flex flex-col gap-2 text-left">
@@ -91,7 +91,7 @@ export function OpenRouterLinkModal({ open, saving, errorMessage, onSubmit, onTr
 						) : null}
 					</div>
 					<p className="text-muted-foreground text-xs text-left">
-						Your key never leaves this browser. It is encrypted with an AES key generated via the Web Crypto API and stored locally. Clear browser storage to remove it, or click “Remove key” from settings (coming soon).
+						Your key is encrypted with an AES key generated via the Web Crypto API and stored locally. When you send a request, it is sent to your server over HTTPS to call OpenRouter and is not persisted there. Clear browser storage to remove it, or click “Remove key” from settings (coming soon).
 					</p>
 				</form>
 			</div>
