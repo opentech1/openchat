@@ -13,7 +13,7 @@ type OpenRouterModelOption = {
 
 export async function POST(request: Request) {
 	try {
-		const body = await request.json().catch(() => ({}) as any);
+		const body = (await request.json().catch(() => ({}))) as { apiKey?: unknown };
 		const apiKey = typeof body?.apiKey === "string" && body.apiKey.trim().length > 0 ? body.apiKey.trim() : null;
 		if (!apiKey) {
 			return NextResponse.json({ ok: false, error: "Missing apiKey" }, { status: 400 });
@@ -30,10 +30,10 @@ export async function POST(request: Request) {
 			return NextResponse.json({ ok: false, status: response.status, message }, { status: response.status });
 		}
 
-		const payload = await response.json().catch(() => ({})) as any;
+		const payload = (await response.json().catch(() => ({}))) as { data?: unknown };
 		const data = Array.isArray(payload?.data) ? payload.data : [];
-		const models = data
-			.map<OpenRouterModelOption | null>((entry: unknown) => {
+		const models = (data as unknown[])
+			.map((entry: unknown): OpenRouterModelOption | null => {
 				const candidate = entry as Record<string, unknown> | undefined | null;
 				const id = typeof candidate?.id === "string"
 					? candidate.id
