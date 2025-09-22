@@ -2,6 +2,7 @@ import { streamText, convertToCoreMessages, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
 import { serverClient } from "@/utils/orpc-server";
+import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 
 type AnyUIMessage = UIMessage<Record<string, unknown>>;
 
@@ -70,10 +71,11 @@ function pickClientIp(request: Request): string {
 	}
 }
 
-function buildCorsHeaders(request: Request, overrideOrigin?: string) {
-	const origin = overrideOrigin ?? request.headers.get("origin") ?? "*";
+function buildCorsHeaders(request: Request, allowedOrigin?: string | null) {
 	const headers = new Headers();
-	headers.set("Access-Control-Allow-Origin", origin === "null" ? "*" : origin);
+	if (allowedOrigin) {
+		headers.set("Access-Control-Allow-Origin", allowedOrigin);
+	}
 	headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 	headers.set("Access-Control-Allow-Methods", "POST,OPTIONS");
 	headers.set("Vary", "Origin");
@@ -101,6 +103,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS };
 	const now = options.now ?? (() => Date.now());
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
+	const allowedOrigins = resolveAllowedOrigins(corsOrigin);
 
 	const persistMessageImpl = options.persistMessage ?? ((input: StreamPersistRequest) => serverClient.messages.streamUpsert(input));
 
@@ -125,8 +128,14 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Method Not Allowed", { status: 405 });
 		}
 
+		const originResult = validateRequestOrigin(request, allowedOrigins);
+		if (!originResult.ok) {
+			return new Response("Invalid request origin", { status: 403 });
+		}
+		const allowOrigin = originResult.origin ?? corsOrigin ?? null;
+
 		if (isRateLimited(request)) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			headers.set("Retry-After", Math.ceil(rateLimit.windowMs / 1000).toString());
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
@@ -135,7 +144,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		try {
 			payload = await request.json();
 		} catch {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Invalid JSON payload", { status: 400, headers });
 		}
 
@@ -168,7 +177,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		} catch (error) {
 			console.error("/api/chat resolve model", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			const messageText = error instanceof Error ? error.message : String(error ?? "");
 			let status = 500;
 			let responseMessage = "Server configuration error";
@@ -184,20 +193,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
 		if (!chatId) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Missing chatId", { status: 400, headers });
 		}
 
 		const rawMessages: AnyUIMessage[] = Array.isArray(payload?.messages) ? (payload.messages as AnyUIMessage[]) : [];
 		if (rawMessages.length === 0) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Missing chat messages", { status: 400, headers });
 		}
 
 		const safeMessages = rawMessages.map(clampUserText);
 		const userMessageIndex = [...rawMessages].reverse().findIndex((msg) => msg.role === "user");
 		if (userMessageIndex === -1) {
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Missing user message", { status: 400, headers });
 		}
 		const normalizedIndex = rawMessages.length - 1 - userMessageIndex;
@@ -231,7 +240,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		} catch (error) {
 			console.error("Failed to persist user message", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist message", { status: 502, headers });
 		}
 
@@ -249,7 +258,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		} catch (error) {
 			console.error("Failed to bootstrap assistant message", error);
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist assistant", { status: 502, headers });
 		}
 
@@ -354,7 +363,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			headers.set("X-Accel-Buffering", "no");
 			headers.set("Connection", "keep-alive");
 
-			const corsHeaders = buildCorsHeaders(request, corsOrigin);
+			const corsHeaders = buildCorsHeaders(request, allowOrigin);
 			corsHeaders.forEach((value, key) => {
 				headers.set(key, value);
 			});
@@ -366,7 +375,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		} catch (error) {
 			console.error("/api/chat", error);
 			await finalize();
-			const headers = buildCorsHeaders(request, corsOrigin);
+			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Upstream error", { status: 502, headers });
 		}
 	};
@@ -374,8 +383,13 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 export function createOptionsHandler(options: { corsOrigin?: string } = {}) {
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
+	const allowedOrigins = resolveAllowedOrigins(corsOrigin);
 	return async function handler(request: Request) {
-		const headers = buildCorsHeaders(request, corsOrigin);
+		const originResult = validateRequestOrigin(request, allowedOrigins);
+		if (!originResult.ok) {
+			return new Response("Invalid request origin", { status: 403 });
+		}
+		const headers = buildCorsHeaders(request, originResult.origin ?? corsOrigin ?? null);
 		headers.set("Access-Control-Max-Age", "86400");
 		return new Response(null, { status: 204, headers });
 	};
