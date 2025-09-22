@@ -182,20 +182,48 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-  const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
-    const content = text.trim();
-    if (!content || !modelId || !requestApiKey) return;
-    const id = crypto.randomUUID?.() ?? `${Date.now()}`;
-    const createdAt = new Date().toISOString();
-    try {
-      await sendMessage(
-        {
-          id,
-          role: "user",
-          parts: [{ type: "text", text: content }],
-          metadata: { createdAt },
-        },
-        {
+	const fileToDataUrl = useCallback(
+		(file: File) =>
+			new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => {
+					const result = reader.result;
+					if (typeof result === "string") {
+						resolve(result);
+						return;
+					}
+					reject(new Error("Failed to read attachment"));
+				};
+				reader.onerror = () => {
+					reject(reader.error ?? new Error("Failed to read attachment"));
+				};
+				reader.readAsDataURL(file);
+			}),
+		[],
+	);
+
+	const handleSend = async ({ text, modelId, apiKey: requestApiKey, attachments }: { text: string; modelId: string; apiKey: string; attachments: File[] }) => {
+		const content = text.trim();
+		if (!content || !modelId || !requestApiKey) return;
+		const id = crypto.randomUUID?.() ?? `${Date.now()}`;
+		const createdAt = new Date().toISOString();
+		try {
+			const uploadedParts = await Promise.all(
+				attachments.map(async (file) => ({
+					type: "file" as const,
+					url: await fileToDataUrl(file),
+					mediaType: file.type || "application/octet-stream",
+					filename: file.name || undefined,
+				})),
+			);
+			await sendMessage(
+				{
+					id,
+					role: "user",
+					parts: [...uploadedParts, { type: "text", text: content }],
+					metadata: { createdAt },
+				},
+				{
           body: {
             chatId,
             modelId,

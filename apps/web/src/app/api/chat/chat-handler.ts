@@ -47,10 +47,22 @@ function clampUserText(message: AnyUIMessage): AnyUIMessage {
 }
 
 function extractMessageText(message: AnyUIMessage): string {
-	return message.parts
-		.filter((part): part is { type: "text"; text: string } => part?.type === "text")
-		.map((part) => part.text)
-		.join("");
+	const segments: string[] = [];
+	for (const part of message.parts ?? []) {
+		if (!part) continue;
+		if ((part as any).type === "text" && typeof (part as any).text === "string") {
+			segments.push((part as any).text);
+			continue;
+		}
+		if ((part as any).type === "file") {
+			const filePart = part as { filename?: string; mediaType?: string };
+			const name = filePart.filename && filePart.filename.length > 0 ? filePart.filename : "attachment";
+			const media = filePart.mediaType && filePart.mediaType.length > 0 ? ` (${filePart.mediaType})` : "";
+			segments.push(`[Attachment: ${name}${media}]`);
+			continue;
+		}
+	}
+	return segments.join("");
 }
 
 function coerceIsoDate(value: unknown): string {
