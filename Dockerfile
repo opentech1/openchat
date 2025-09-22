@@ -9,7 +9,7 @@ COPY bun.lock bunfig.toml package.json turbo.json ./
 COPY apps/server/package.json apps/server/package.json
 COPY apps/web/package.json apps/web/package.json
 
-RUN bun install --frozen-lockfile
+RUN bun install
 
 COPY . .
 
