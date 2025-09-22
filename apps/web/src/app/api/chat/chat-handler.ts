@@ -13,6 +13,10 @@ type RateBucket = {
 
 const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? 30);
 const RATE_LIMIT_WINDOW_MS = 60_000;
+const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? 1_000);
+const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) && RAW_MAX_TRACKED_RATE_BUCKETS > 0
+	? RAW_MAX_TRACKED_RATE_BUCKETS
+	: null;
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
 const STREAM_FLUSH_INTERVAL_MS = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 50);
 
@@ -101,6 +105,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const streamTextImpl = options.streamTextImpl ?? streamText;
 	const convertToCoreMessagesImpl = options.convertToCoreMessagesImpl ?? convertToCoreMessages;
 	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS };
+	const bucketWindowMs = rateLimit.windowMs > 0 ? rateLimit.windowMs : RATE_LIMIT_WINDOW_MS;
 	const now = options.now ?? (() => Date.now());
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
 	const allowedOrigins = resolveAllowedOrigins(corsOrigin);
@@ -108,14 +113,37 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const persistMessageImpl = options.persistMessage ?? ((input: StreamPersistRequest) => serverClient.messages.streamUpsert(input));
 
 	const buckets = new Map<string, RateBucket>();
+	let lastBucketCleanup = 0;
+
+	const cleanupBuckets = (ts: number) => {
+		if (buckets.size === 0) return;
+		const needsSweep = ts - lastBucketCleanup >= bucketWindowMs || (MAX_TRACKED_RATE_BUCKETS != null && buckets.size > MAX_TRACKED_RATE_BUCKETS);
+		if (!needsSweep) return;
+		lastBucketCleanup = ts;
+		for (const [key, bucket] of buckets) {
+			if (ts > bucket.resetAt) {
+				buckets.delete(key);
+			}
+		}
+		if (MAX_TRACKED_RATE_BUCKETS != null && buckets.size > MAX_TRACKED_RATE_BUCKETS) {
+			const overflow = buckets.size - MAX_TRACKED_RATE_BUCKETS;
+			let removed = 0;
+			for (const key of buckets.keys()) {
+				buckets.delete(key);
+				removed += 1;
+				if (removed >= overflow) break;
+			}
+		}
+	};
 
 	function isRateLimited(request: Request): boolean {
 		if (rateLimit.limit <= 0) return false;
 		const ip = pickClientIp(request);
-		const bucket = buckets.get(ip);
 		const ts = now();
+		cleanupBuckets(ts);
+		const bucket = buckets.get(ip);
 		if (!bucket || ts > bucket.resetAt) {
-			buckets.set(ip, { count: 1, resetAt: ts + rateLimit.windowMs });
+			buckets.set(ip, { count: 1, resetAt: ts + bucketWindowMs });
 			return false;
 		}
 		if (bucket.count >= rateLimit.limit) return true;
@@ -136,7 +164,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 		if (isRateLimited(request)) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			headers.set("Retry-After", Math.ceil(rateLimit.windowMs / 1000).toString());
+			headers.set("Retry-After", Math.ceil(bucketWindowMs / 1000).toString());
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
