@@ -16,7 +16,7 @@ ENV NEXT_PUBLIC_SERVER_URL=http://localhost:3000 \
     NEXT_PUBLIC_ELECTRIC_URL=http://localhost:3010 \
     ELECTRIC_SERVICE_URL=http://localhost:3010 \
     NEXT_TELEMETRY_DISABLED=1
-RUN bun run build
+RUN bunx turbo run build --filter=web --filter=server
 
 FROM oven/bun:1.2.21-slim AS runner
 WORKDIR /app
