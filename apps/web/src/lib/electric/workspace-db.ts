@@ -1,6 +1,7 @@
 import { createCollection, type Collection } from "@tanstack/db";
 import { electricCollectionOptions } from "@tanstack/electric-db-collection";
 import type { ElectricCollectionConfig } from "@tanstack/electric-db-collection";
+import type { Row } from "@electric-sql/client";
 import { useLiveQuery } from "@tanstack/react-db";
 import { z } from "zod";
 
@@ -64,13 +65,16 @@ type WorkspaceCollections = {
 
 const workspaceCollections = new Map<string, WorkspaceCollections>();
 
-function createElectricCollection<TSchema extends z.ZodTypeAny>(
+function createElectricCollection<
+	TRow extends Row<unknown>,
+	TSchema extends z.ZodType<TRow, z.ZodTypeDef, unknown>,
+>(
 	id: string,
-	config: ElectricCollectionConfig<z.infer<TSchema>, TSchema> & { schema: TSchema },
+	config: ElectricCollectionConfig<TRow, TSchema> & { schema: TSchema },
 ) {
 	const electricOptions = electricCollectionOptions(config);
 	const { schema, getKey, ...rest } = electricOptions;
-	return createCollection({
+	return createCollection<TRow>({
 		id,
 		schema,
 		getKey,
