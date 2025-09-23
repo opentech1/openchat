@@ -67,7 +67,7 @@ const workspaceCollections = new Map<string, WorkspaceCollections>();
 
 function createElectricCollection<
 	TRow extends Row<unknown>,
-	TSchema extends z.ZodType<TRow, z.ZodTypeDef, unknown>,
+	TSchema extends z.ZodType<TRow>,
 >(
 	id: string,
 	config: ElectricCollectionConfig<TRow, TSchema> & { schema: TSchema },
