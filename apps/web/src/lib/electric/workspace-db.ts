@@ -71,9 +71,9 @@ function buildShapeUrl(scope: "chats" | "messages") {
 function createChatsCollection(workspaceId: string, shapeUrl: string) {
 	return createCollection({
 		id: `chats-${workspaceId}`,
-		schema: chatSchema,
 		getKey: (row) => row.id,
 		...electricCollectionOptions({
+			schema: chatSchema,
 			shapeOptions: {
 				url: shapeUrl,
 				params: {
@@ -98,9 +98,9 @@ function createChatsCollection(workspaceId: string, shapeUrl: string) {
 function createMessagesCollection(workspaceId: string, chatId: string, shapeUrl: string) {
 	return createCollection({
 		id: `messages-${workspaceId}-${chatId}`,
-		schema: messageSchema,
 		getKey: (row) => row.id,
 		...electricCollectionOptions({
+			schema: messageSchema,
 			shapeOptions: {
 				url: shapeUrl,
 				params: {

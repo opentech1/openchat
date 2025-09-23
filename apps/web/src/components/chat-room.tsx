@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { useAuth } from "@clerk/nextjs";
 import { useChat } from "@ai-sdk/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { DefaultChatTransport } from "ai";
 
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
@@ -47,7 +48,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     if (params.has("openrouter")) {
       params.delete("openrouter");
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname);
+      type ReplaceArg = Parameters<typeof router.replace>[0];
+      const replaceTarget = query
+        ? ({ pathname, query: Object.fromEntries(params.entries()) } as unknown as ReplaceArg)
+        : (pathname as unknown as ReplaceArg);
+      router.replace(replaceTarget);
     }
   }, [pathname, router, searchParamsString]);
 
@@ -128,12 +133,40 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     selectedModelRef.current = selectedModel;
   }, [selectedModel]);
 
+  const chatTransport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        credentials: "include",
+        body: { chatId },
+        headers: workspaceId
+          ? async () => ({ "x-user-id": workspaceId })
+          : undefined,
+        prepareSendMessagesRequest: ({ body }) => {
+          const modelId = selectedModelRef.current;
+          const apiKeyValue = apiKey;
+          if (!modelId) {
+            throw new Error("OpenRouter model not selected");
+          }
+          if (!apiKeyValue) {
+            throw new Error("OpenRouter API key missing");
+          }
+          return {
+            body: {
+              ...body,
+              modelId,
+              apiKey: apiKeyValue,
+            },
+          };
+        },
+      }),
+    [apiKey, chatId, workspaceId],
+  );
+
   const { messages, setMessages, sendMessage, status, stop } = useChat({
     id: chatId,
-    body: { chatId },
-    credentials: "include",
-    headers: workspaceId ? { "x-user-id": workspaceId } : undefined,
     messages: normalizedInitial.map(toUiMessage),
+    transport: chatTransport,
     onFinish: async ({ message, isAbort, isError }) => {
       if (isAbort || isError) return;
       const assistantCreatedAt = new Date().toISOString();
@@ -147,23 +180,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     },
     onError: (error) => {
       console.error("Chat stream error", error);
-    },
-    prepareSendMessagesRequest: ({ body }) => {
-      const modelId = selectedModelRef.current;
-      const apiKeyValue = apiKey;
-      if (!modelId) {
-        throw new Error("OpenRouter model not selected");
-      }
-      if (!apiKeyValue) {
-        throw new Error("OpenRouter API key missing");
-      }
-      return {
-        body: {
-          ...body,
-          modelId,
-          apiKey: apiKeyValue,
-        },
-      };
     },
   });
 
@@ -182,48 +198,48 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-	const fileToDataUrl = useCallback(
-		(file: File) =>
-			new Promise<string>((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = () => {
-					const result = reader.result;
-					if (typeof result === "string") {
-						resolve(result);
-						return;
-					}
-					reject(new Error("Failed to read attachment"));
-				};
-				reader.onerror = () => {
-					reject(reader.error ?? new Error("Failed to read attachment"));
-				};
-				reader.readAsDataURL(file);
-			}),
-		[],
-	);
+  const fileToDataUrl = useCallback(
+    (file: File) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result === "string") {
+            resolve(result);
+            return;
+          }
+          reject(new Error("Failed to read attachment"));
+        };
+        reader.onerror = () => {
+          reject(reader.error ?? new Error("Failed to read attachment"));
+        };
+        reader.readAsDataURL(file);
+      }),
+    [],
+  );
 
-	const handleSend = async ({ text, modelId, apiKey: requestApiKey, attachments }: { text: string; modelId: string; apiKey: string; attachments: File[] }) => {
-		const content = text.trim();
-		if (!content || !modelId || !requestApiKey) return;
-		const id = crypto.randomUUID?.() ?? `${Date.now()}`;
-		const createdAt = new Date().toISOString();
-		try {
-			const uploadedParts = await Promise.all(
-				attachments.map(async (file) => ({
-					type: "file" as const,
-					url: await fileToDataUrl(file),
-					mediaType: file.type || "application/octet-stream",
-					filename: file.name || undefined,
-				})),
-			);
-			await sendMessage(
-				{
-					id,
-					role: "user",
-					parts: [...uploadedParts, { type: "text", text: content }],
-					metadata: { createdAt },
-				},
-				{
+  const handleSend = async ({ text, modelId, apiKey: requestApiKey, attachments }: { text: string; modelId: string; apiKey: string; attachments: File[] }) => {
+    const content = text.trim();
+    if (!content || !modelId || !requestApiKey) return;
+    const id = crypto.randomUUID?.() ?? `${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    try {
+      const uploadedParts = await Promise.all(
+        attachments.map(async (file) => ({
+          type: "file" as const,
+          url: await fileToDataUrl(file),
+          mediaType: file.type || "application/octet-stream",
+          filename: file.name || undefined,
+        })),
+      );
+      await sendMessage(
+        {
+          id,
+          role: "user",
+          parts: [...uploadedParts, { type: "text", text: content }],
+          metadata: { createdAt },
+        },
+        {
           body: {
             chatId,
             modelId,

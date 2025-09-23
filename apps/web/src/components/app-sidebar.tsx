@@ -20,35 +20,35 @@ import { client } from "@/utils/orpc";
 import { connect, subscribe, type Envelope } from "@/lib/sync";
 
 export type ChatListItem = {
-	id: string;
-	title: string | null;
-	updatedAt?: string | Date;
-	lastMessageAt?: string | Date | null;
+  id: string;
+  title: string | null;
+  updatedAt?: string | Date;
+  lastMessageAt?: string | Date | null;
 };
 
 export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
 
 function normalizeChat(chat: ChatListItem): ChatListItem {
-	return {
-		...chat,
-		updatedAt: chat.updatedAt ? new Date(chat.updatedAt) : undefined,
-		lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
-	};
+  return {
+    ...chat,
+    updatedAt: chat.updatedAt ? new Date(chat.updatedAt) : undefined,
+    lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
+  };
 }
 
 function dateToIso(value: string | Date | null | undefined) {
-	if (!value) return undefined;
-	const date = typeof value === "string" ? new Date(value) : value;
-	if (Number.isNaN(date.getTime())) return undefined;
-	return date.toISOString();
+  if (!value) return undefined;
+  const date = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
 }
 
 function dedupeChats(list: ChatListItem[]) {
-	const map = new Map<string, ChatListItem>();
-	for (const chat of list) {
-		map.set(chat.id, chat);
-	}
-	return sortChats(Array.from(map.values()));
+  const map = new Map<string, ChatListItem>();
+  for (const chat of list) {
+    map.set(chat.id, chat);
+  }
+  return sortChats(Array.from(map.values()));
 }
 
 function mapLiveChat(row: WorkspaceChatRow): ChatListItem {
@@ -80,17 +80,17 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
   useEffect(() => {
     setFallbackChats(dedupeChats(normalizedInitial));
   }, [normalizedInitial]);
-	const serializedFallback = useMemo<WorkspaceChatRow[]>(
-		() =>
-			normalizedInitial.map((chat) => ({
-				id: chat.id,
-				title: chat.title,
-				user_id: currentUserId,
-				updated_at: dateToIso(chat.updatedAt) ?? null,
-				last_message_at: dateToIso(chat.lastMessageAt) ?? null,
-			})),
-		[normalizedInitial, currentUserId],
-	);
+  const serializedFallback = useMemo<WorkspaceChatRow[]>(
+    () =>
+      normalizedInitial.map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        user_id: currentUserId,
+        updated_at: dateToIso(chat.updatedAt) ?? null,
+        last_message_at: dateToIso(chat.lastMessageAt) ?? null,
+      })),
+    [normalizedInitial, currentUserId],
+  );
 
   const chatQuery = useWorkspaceChats(currentUserId, serializedFallback);
   const electricChats = useMemo(() => {
@@ -239,7 +239,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
     return () => {
       unsubscribe();
     };
-	}, [currentUserId]);
+  }, [currentUserId]);
 
   return (
     <Sidebar defaultCollapsed {...sidebarProps}>
@@ -311,12 +311,14 @@ function ChatList({
   return (
     <ul className="px-1 space-y-1">
       {chats.map((c) => {
-        const href = `/dashboard/chat/${c.id}`;
-        const isActive = activePath === href;
+        const hrefPath = `/dashboard/chat/${c.id}`;
+        const href = { pathname: "/dashboard/chat/[id]", params: { id: c.id } } as const;
+        const isActive = activePath === hrefPath;
         return (
           <li key={c.id} className="group relative">
             <Link
               href={href}
+              prefetch
               className={cn(
                 "block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
                 isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
@@ -325,30 +327,30 @@ function ChatList({
             >
               {c.title || "Untitled"}
             </Link>
-					<button
-						type="button"
-						onClick={(event) => {
-							event.preventDefault();
-							event.stopPropagation();
-							void onDelete(c.id);
-						}}
-						className={cn(
-							"absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
-							"transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
-							"bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
-							"hover:text-destructive-foreground focus-visible:text-destructive-foreground",
-							"disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
-							deletingId === c.id ? "opacity-100" : "opacity-0",
-						)}
-						aria-label="Delete chat"
-						disabled={deletingId === c.id}
-					>
-						{deletingId === c.id ? (
-							<span className="animate-pulse text-base">…</span>
-						) : (
-							<X className="h-4 w-4" />
-						)}
-					</button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void onDelete(c.id);
+            }}
+            className={cn(
+              "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
+              "transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
+              "bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
+              "hover:text-destructive-foreground focus-visible:text-destructive-foreground",
+              "disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
+              deletingId === c.id ? "opacity-100" : "opacity-0",
+            )}
+            aria-label="Delete chat"
+            disabled={deletingId === c.id}
+          >
+            {deletingId === c.id ? (
+              <span className="animate-pulse text-base">…</span>
+            ) : (
+              <X className="h-4 w-4" />
+            )}
+          </button>
           </li>
         );
       })}
