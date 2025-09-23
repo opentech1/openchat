@@ -68,6 +68,7 @@ openchat/
 - `bun check-types`: Check TypeScript types across all apps
 - `bun db:push`: Push schema changes to database
 - `bun db:studio`: Open database studio UI
+- `bun run verify:build`: Clean the web build cache and run both the Next.js and Turbo build pipelines (mirrors the Docker deploy build).
 
 ## Environment Variables
 
