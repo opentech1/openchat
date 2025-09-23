@@ -25,7 +25,8 @@
     "db:generate": "turbo -F server db:generate",
     "db:migrate": "turbo -F server db:migrate",
     "setup:db": "bun run scripts/setup-db.ts",
-    "dev:db": "docker compose -f infra/dev.docker-compose.yml up -d postgres"
+    "dev:db": "docker compose -f infra/dev.docker-compose.yml up -d postgres",
+    "verify:build": "rm -rf apps/web/.next && (cd apps/web && bunx next build) && bunx turbo run build --filter=web --filter=server"
   },
   "dependencies": {},
   "devDependencies": {

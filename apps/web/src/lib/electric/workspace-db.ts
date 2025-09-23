@@ -1,5 +1,6 @@
 import { createCollection, type Collection } from "@tanstack/db";
 import { electricCollectionOptions } from "@tanstack/electric-db-collection";
+import type { ElectricCollectionConfig } from "@tanstack/electric-db-collection";
 import { useLiveQuery } from "@tanstack/react-db";
 import { z } from "zod";
 
@@ -63,63 +64,69 @@ type WorkspaceCollections = {
 
 const workspaceCollections = new Map<string, WorkspaceCollections>();
 
+function createElectricCollection<TSchema extends z.ZodTypeAny>(
+	id: string,
+	config: ElectricCollectionConfig<z.infer<TSchema>, TSchema> & { schema: TSchema },
+) {
+	const electricOptions = electricCollectionOptions(config);
+	const { schema, getKey, ...rest } = electricOptions;
+	return createCollection({
+		id,
+		schema,
+		getKey,
+		...rest,
+	});
+}
+
 function buildShapeUrl(scope: "chats" | "messages") {
 	if (!ELECTRIC_ENABLED) return null;
 	return `${SERVER_URL}/api/electric/shapes/${scope}`;
 }
 
 function createChatsCollection(workspaceId: string, shapeUrl: string) {
-	return createCollection({
-		id: `chats-${workspaceId}`,
-		getKey: (row) => row.id,
-		...electricCollectionOptions({
-			schema: chatSchema,
-			shapeOptions: {
-				url: shapeUrl,
-				params: {
-					table: "chat",
-				},
-				headers: {
-					"x-user-id": workspaceId,
-				},
-				subscribe: true,
-				experimentalLiveSse: true,
-				fetchClient: (input, init) =>
-					fetch(input, {
-						...init,
-						credentials: "include",
-					}),
-				onError: () => undefined,
+	return createElectricCollection(`chats-${workspaceId}`, {
+		schema: chatSchema,
+		shapeOptions: {
+			url: shapeUrl,
+			params: {
+				table: "chat",
 			},
-		}),
+			headers: {
+				"x-user-id": workspaceId,
+			},
+			subscribe: true,
+			experimentalLiveSse: true,
+			fetchClient: (input, init) =>
+				fetch(input, {
+					...init,
+					credentials: "include",
+				}),
+			onError: () => undefined,
+		},
 	});
 }
 
 function createMessagesCollection(workspaceId: string, chatId: string, shapeUrl: string) {
-	return createCollection({
-		id: `messages-${workspaceId}-${chatId}`,
-		getKey: (row) => row.id,
-		...electricCollectionOptions({
-			schema: messageSchema,
-			shapeOptions: {
-				url: shapeUrl,
-				params: {
-					table: "message",
-					chatId,
-				},
-				headers: {
-					"x-user-id": workspaceId,
-				},
-				subscribe: true,
-				experimentalLiveSse: true,
-				fetchClient: (input, init) =>
-					fetch(input, {
-						...init,
-						credentials: "include",
-					}),
-				onError: () => undefined,
+	return createElectricCollection(`messages-${workspaceId}-${chatId}`, {
+		schema: messageSchema,
+		shapeOptions: {
+			url: shapeUrl,
+			params: {
+				table: "message",
+				chatId,
 			},
-		}),
+			headers: {
+				"x-user-id": workspaceId,
+			},
+			subscribe: true,
+			experimentalLiveSse: true,
+			fetchClient: (input, init) =>
+				fetch(input, {
+					...init,
+					credentials: "include",
+				}),
+			onError: () => undefined,
+		},
 	});
 }
 
