@@ -20,20 +20,27 @@ import { client } from "@/utils/orpc";
 import { connect, subscribe, type Envelope } from "@/lib/sync";
 
 export type ChatListItem = {
-  id: string;
-  title: string | null;
-  updatedAt?: string | Date;
-  lastMessageAt?: string | Date | null;
+	id: string;
+	title: string | null;
+	updatedAt?: string | Date;
+	lastMessageAt?: string | Date | null;
 };
 
 export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
 
 function normalizeChat(chat: ChatListItem): ChatListItem {
-  return {
-    ...chat,
-    updatedAt: chat.updatedAt ? new Date(chat.updatedAt) : undefined,
-    lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
-  };
+	return {
+		...chat,
+		updatedAt: chat.updatedAt ? new Date(chat.updatedAt) : undefined,
+		lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
+	};
+}
+
+function dateToIso(value: string | Date | null | undefined) {
+	if (!value) return undefined;
+	const date = typeof value === "string" ? new Date(value) : value;
+	if (Number.isNaN(date.getTime())) return undefined;
+	return date.toISOString();
 }
 
 function dedupeChats(list: ChatListItem[]) {
@@ -81,16 +88,16 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
   useEffect(() => {
     setFallbackChats(dedupeChats(normalizedInitial));
   }, [normalizedInitial]);
-  const serializedFallback = useMemo(
-    () =>
-      normalizedInitial.map((chat) => ({
-        id: chat.id,
-        title: chat.title,
-        updatedAt: chat.updatedAt?.toISOString(),
-        lastMessageAt: chat.lastMessageAt?.toISOString() ?? undefined,
-      })),
-    [normalizedInitial],
-  );
+	const serializedFallback = useMemo(
+		() =>
+			normalizedInitial.map((chat) => ({
+				id: chat.id,
+				title: chat.title,
+				updatedAt: dateToIso(chat.updatedAt),
+				lastMessageAt: dateToIso(chat.lastMessageAt),
+			})),
+		[normalizedInitial],
+	);
 
   const chatQuery = useWorkspaceChats(currentUserId, serializedFallback);
   const electricChats = useMemo(() => {
