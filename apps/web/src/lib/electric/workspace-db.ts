@@ -39,6 +39,8 @@ const chatSchema = z.object({
 	user_id: z.string(),
 });
 
+export type WorkspaceChatRow = z.infer<typeof chatSchema>;
+
 const messageSchema = z.object({
 	id: z.string(),
 	chat_id: z.string(),
@@ -143,7 +145,7 @@ function ensureWorkspaceCollections(workspaceId: string) {
 
 export function useWorkspaceChats(
 	workspaceId: string | null | undefined,
-	fallback: Array<{ id: string; title: string | null; updatedAt?: string; lastMessageAt?: string }>,
+	fallback: WorkspaceChatRow[],
 ) {
 	if (typeof window === "undefined") {
 		return { enabled: false, isReady: true, status: "idle", data: fallback } as const;
@@ -159,7 +161,7 @@ export function useWorkspaceChats(
 		enabled: Boolean(entry?.chats),
 		isReady: Boolean(live?.isReady),
 		status: live?.status ?? "idle",
-		data: live?.isReady && live.data ? live.data : fallback,
+		data: (live?.isReady && live.data ? live.data : fallback) as WorkspaceChatRow[],
 	};
 }
 
