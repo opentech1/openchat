@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { UserButton } from "@clerk/nextjs";
 import { X } from "lucide-react";
-import { useWorkspaceChats } from "@/lib/electric/workspace-db";
+import { useWorkspaceChats, type WorkspaceChatRow } from "@/lib/electric/workspace-db";
 import { usePathname, useRouter } from "next/navigation";
 import { client } from "@/utils/orpc";
 import { connect, subscribe, type Envelope } from "@/lib/sync";
@@ -51,15 +51,7 @@ function dedupeChats(list: ChatListItem[]) {
 	return sortChats(Array.from(map.values()));
 }
 
-type ElectricChat = {
-  id: string;
-  title: string | null;
-  updated_at?: string | null;
-  last_message_at?: string | null;
-  user_id: string;
-};
-
-function mapLiveChat(row: ElectricChat): ChatListItem {
+function mapLiveChat(row: WorkspaceChatRow): ChatListItem {
   return {
     id: row.id,
     title: row.title,
@@ -88,15 +80,16 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
   useEffect(() => {
     setFallbackChats(dedupeChats(normalizedInitial));
   }, [normalizedInitial]);
-	const serializedFallback = useMemo(
+	const serializedFallback = useMemo<WorkspaceChatRow[]>(
 		() =>
 			normalizedInitial.map((chat) => ({
 				id: chat.id,
 				title: chat.title,
-				updatedAt: dateToIso(chat.updatedAt),
-				lastMessageAt: dateToIso(chat.lastMessageAt),
+				user_id: currentUserId,
+				updated_at: dateToIso(chat.updatedAt) ?? null,
+				last_message_at: dateToIso(chat.lastMessageAt) ?? null,
 			})),
-		[normalizedInitial],
+		[normalizedInitial, currentUserId],
 	);
 
   const chatQuery = useWorkspaceChats(currentUserId, serializedFallback);
