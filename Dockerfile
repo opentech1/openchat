@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1.6
 
+######################################################################
+# Base dependencies stage – installs workspaces with Bun once
+######################################################################
 FROM oven/bun:1.2.21 AS base
 WORKDIR /app
 ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
@@ -12,39 +15,62 @@ RUN bun install
 
 COPY . .
 
+######################################################################
+# Build the API (Bun + Elysia) bundle
+######################################################################
+FROM base AS build-server
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN bunx turbo run build --filter=server
+
+######################################################################
+# Build the Next.js web app
+######################################################################
+FROM base AS build-web
 ENV NEXT_PUBLIC_SERVER_URL=http://localhost:3000 \
     NEXT_PUBLIC_ELECTRIC_URL=http://localhost:3010 \
     ELECTRIC_SERVICE_URL=http://localhost:3010 \
     NEXT_TELEMETRY_DISABLED=1
-RUN bunx turbo run build --filter=web --filter=server
+RUN bunx turbo run build --filter=web
 
-FROM oven/bun:1.2.21-slim AS runner
+######################################################################
+# Runtime image for the API service
+######################################################################
+FROM oven/bun:1.2.21-slim AS server-runner
 WORKDIR /app
-ENV NODE_ENV=production
-ENV HOST=0.0.0.0
-ENV SERVER_PORT=3000
-ENV WEB_PORT=3001
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000
 
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ca-certificates curl tini \
-	&& rm -rf /var/lib/apt/lists/*
-
-COPY --from=base /app/apps/server/dist ./apps/server/dist
-COPY --from=base /app/apps/server/package.json ./apps/server/package.json
-COPY --from=base /app/apps/web/.next/standalone ./apps/web/.next/standalone
-COPY --from=base /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=base /app/apps/web/public ./apps/web/public
-COPY --from=base /app/apps/web/package.json ./apps/web/package.json
-COPY --from=base /app/package.json ./package.json
+COPY --from=build-server /app/apps/server/dist ./apps/server/dist
+COPY --from=build-server /app/apps/server/package.json ./apps/server/package.json
 COPY --from=base /app/bun.lock ./bun.lock
 COPY --from=base /app/bunfig.toml ./bunfig.toml
-COPY --from=base /app/infra/docker-entrypoint.sh ./infra/docker-entrypoint.sh
-
-RUN chmod +x infra/docker-entrypoint.sh
 
 RUN chown -R bun:bun /app
 USER bun
 
-EXPOSE 3000 3001
+EXPOSE 3000
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/infra/docker-entrypoint.sh"]
+CMD ["bun", "apps/server/dist/index.js"]
+
+######################################################################
+# Runtime image for the Next.js web app
+######################################################################
+FROM node:20-slim AS web-runner
+WORKDIR /app
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    HOSTNAME=0.0.0.0 \
+    PORT=3001
+
+COPY --from=build-web /app/apps/web/.next ./apps/web/.next
+COPY --from=build-web /app/apps/web/public ./apps/web/public
+COPY --from=build-web /app/apps/web/package.json ./apps/web/package.json
+COPY --from=build-web /app/package.json ./package.json
+COPY --from=build-web /app/node_modules ./node_modules
+
+WORKDIR /app/apps/web
+
+EXPOSE 3001
+
+CMD ["node", "../node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3001"]

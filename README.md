@@ -68,7 +68,29 @@ openchat/
 - `bun check-types`: Check TypeScript types across all apps
 - `bun db:push`: Push schema changes to database
 - `bun db:studio`: Open database studio UI
-- `bun run verify:build`: Clean the web build cache and run both the Next.js and Turbo build pipelines (mirrors the Docker deploy build).
+- `bun run verify:build`: Clean the web build cache and run both the Next.js and Turbo build pipelines (mirrors the Docker deploy build)
+
+## Docker Images
+
+The multi-stage `Dockerfile` now exposes separate targets so the Bun API and the
+Next.js frontend can run in different containers. Build them individually:
+
+```bash
+# API (Bun/Elysia listening on 3000)
+docker build --target server-runner -t openchat-server .
+
+# Next.js web (listens on 3001)
+docker build --target web-runner -t openchat-web .
+```
+
+For local orchestration (or a Dokploy reference), use the compose file in
+`infra/`:
+
+```bash
+docker compose -f infra/docker-compose.prod.yml up --build
+```
+
+This exposes the server on `3000` and the web UI on `3001`.
 
 ## Environment Variables
 
