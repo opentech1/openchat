@@ -2,7 +2,7 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
-import type { AppRouterClient } from "@server/router";
+import type { AppRouterClient } from "@/types/server-router";
 
 // Client-safe ORPC utilities. Do not import any server-only modules here.
 export const queryClient = new QueryClient();

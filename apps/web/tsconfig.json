@@ -13,38 +13,32 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"jsx": "preserve",
+		"incremental": true,
+		"baseUrl": ".",
+		"plugins": [
+			{
+				"name": "next"
+			}
     ],
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@server/router": [
-        "../server/src/routers/index.ts"
-      ]
-    }
+		"paths": {
+			"@/*": [
+				"./src/*"
+			]
+		}
   },
-  "include": [
-    "./**/*.ts",
-    "./**/*.tsx",
-    "./.next/types/**/*.ts",
-    "./next-env.d.ts",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "./node_modules"
-  ],
-  "references": [
-    {
-      "path": "../server"
-    }
-  ]
+	"include": [
+		"./**/*.ts",
+		"./**/*.tsx",
+		"./**/*.d.ts",
+		"./.next/types/**/*.ts",
+		"./next-env.d.ts",
+		".next/types/**/*.ts"
+	],
+	"exclude": [
+		"./node_modules"
+	]
 }
