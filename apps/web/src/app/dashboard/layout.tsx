@@ -7,6 +7,7 @@ import { Settings } from "lucide-react";
 import { serverClient } from "@/utils/orpc-server";
 import Script from "next/script";
 import DashboardAccessFallback from "@/components/dashboard-access-fallback";
+import type { ChatSummary } from "@/types/server-router";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -17,7 +18,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 		);
 	}
 
-	const chats = await serverClient.chats.list().catch(() => []);
+	const rawChats: ChatSummary[] = await serverClient.chats.list().catch(() => [] as ChatSummary[]);
+	const chats = rawChats.map((chat: ChatSummary) => ({
+		id: chat.id,
+		title: chat.title,
+		updatedAt: chat.updatedAt ?? undefined,
+		lastMessageAt: chat.lastMessageAt ?? null,
+	}));
 	const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
 	return (
