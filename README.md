@@ -72,25 +72,25 @@ openchat/
 
 ## Docker Images
 
-The multi-stage `Dockerfile` now exposes separate targets so the Bun API and the
-Next.js frontend can run in different containers. Build them individually:
+Each app now has its own Dockerfile so the Bun API and the Next.js UI can be
+containerised separately:
 
 ```bash
 # API (Bun/Elysia listening on 3000)
-docker build --target server-runner -t openchat-server .
+docker build -f apps/server/Dockerfile -t openchat-server .
 
 # Next.js web (listens on 3001)
-docker build --target web-runner -t openchat-web .
+docker build -f apps/web/Dockerfile -t openchat-web .
 ```
 
-For local orchestration (or a Dokploy reference), use the compose file in
-`infra/`:
+For a simple local setup:
 
 ```bash
-docker compose -f infra/docker-compose.prod.yml up --build
+docker run -p 3000:3000 --env-file apps/server/.env openchat-server
+docker run -p 3001:3001 -e NEXT_PUBLIC_SERVER_URL=http://host.docker.internal:3000 openchat-web
 ```
 
-This exposes the server on `3000` and the web UI on `3001`.
+Point `NEXT_PUBLIC_SERVER_URL` at your deployed API URL in production.
 
 ## Environment Variables
 
