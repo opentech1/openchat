@@ -1,6 +1,6 @@
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
-import type { AppRouterClient } from "../../../server/src/routers/index";
+import type { AppRouterClient } from "@server/router";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&

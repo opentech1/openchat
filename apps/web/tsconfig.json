@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@server/router": [
+        "../server/src/routers/index.ts"
       ]
     }
   },
