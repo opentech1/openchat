@@ -31,13 +31,19 @@ const MAX_MESSAGE_COLLECTIONS = (() => {
 	return Math.floor(parsed);
 })();
 
+type FetchWithOptionalPreconnect = typeof fetch & {
+	preconnect?: (
+		...args: Parameters<typeof fetch>
+	) => unknown;
+};
+
 const fetchWithCredentials = (() => {
 	const wrapped = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
 		fetch(input, {
 			...init,
 			credentials: 'include',
-		})) as typeof fetch;
-	const typedFetch = fetch as typeof fetch & { preconnect?: typeof wrapped.preconnect };
+		})) as FetchWithOptionalPreconnect;
+	const typedFetch = fetch as FetchWithOptionalPreconnect;
 	if (typeof typedFetch.preconnect === 'function') {
 		wrapped.preconnect = typedFetch.preconnect.bind(typedFetch);
 	}
