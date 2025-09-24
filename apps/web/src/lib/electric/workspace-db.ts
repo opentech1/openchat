@@ -31,6 +31,19 @@ const MAX_MESSAGE_COLLECTIONS = (() => {
 	return Math.floor(parsed);
 })();
 
+const fetchWithCredentials = (() => {
+	const wrapped = ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+		fetch(input, {
+			...init,
+			credentials: 'include',
+		})) as typeof fetch;
+	const typedFetch = fetch as typeof fetch & { preconnect?: typeof wrapped.preconnect };
+	if (typeof typedFetch.preconnect === 'function') {
+		wrapped.preconnect = typedFetch.preconnect.bind(typedFetch);
+	}
+	return wrapped;
+})();
+
 const chatSchema = z.object({
 	id: z.string(),
 	title: z.string().nullable(),
@@ -73,6 +86,7 @@ function createChatsCollection(workspaceId: string, shapeUrl: string) {
 		id: `chats-${workspaceId}`,
 		...electricCollectionOptions({
 			schema: chatSchema,
+			getKey: (row) => row.id,
 			shapeOptions: {
 				url: shapeUrl,
 				params: {
@@ -83,11 +97,7 @@ function createChatsCollection(workspaceId: string, shapeUrl: string) {
 				},
 				subscribe: true,
 				experimentalLiveSse: true,
-				fetchClient: (input, init) =>
-					fetch(input, {
-						...init,
-						credentials: "include",
-					}),
+				fetchClient: fetchWithCredentials,
 				onError: () => undefined,
 			},
 		}),
@@ -99,6 +109,7 @@ function createMessagesCollection(workspaceId: string, chatId: string, shapeUrl:
 		id: `messages-${workspaceId}-${chatId}`,
 		...electricCollectionOptions({
 			schema: messageSchema,
+			getKey: (row) => row.id,
 			shapeOptions: {
 				url: shapeUrl,
 				params: {
@@ -110,11 +121,7 @@ function createMessagesCollection(workspaceId: string, chatId: string, shapeUrl:
 				},
 				subscribe: true,
 				experimentalLiveSse: true,
-				fetchClient: (input, init) =>
-					fetch(input, {
-						...init,
-						credentials: "include",
-					}),
+				fetchClient: fetchWithCredentials,
 				onError: () => undefined,
 			},
 		}),
