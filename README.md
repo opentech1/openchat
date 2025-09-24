@@ -77,10 +77,10 @@ containerised separately:
 
 ```bash
 # API (Bun/Elysia listening on 3000)
-docker build -f apps/server/Dockerfile -t openchat-server .
+docker build -t openchat-server apps/server
 
 # Next.js web (listens on 3001)
-docker build -f apps/web/Dockerfile -t openchat-web .
+docker build -t openchat-web apps/web
 ```
 
 For a simple local setup:
