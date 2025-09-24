@@ -71,6 +71,8 @@ COPY --from=build-web /app/node_modules ./node_modules
 
 WORKDIR /app/apps/web
 
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
 EXPOSE 3001
 
-CMD ["node", "../node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3001"]
+CMD ["next", "start", "-H", "0.0.0.0", "-p", "3001"]
