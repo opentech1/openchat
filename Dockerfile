@@ -26,7 +26,7 @@ ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
     NEXT_PUBLIC_DEV_BYPASS_AUTH=0 \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN bunx turbo run build --filter=server --filter=web
+RUN SKIP_CLERK_BUILD_CHECK=1 NEXT_TURBO_BUILD=1 bunx turbo run build --filter=server --filter=web
 
 # Node runtime for the Next.js standalone server
 FROM node:20-slim AS node_runtime
