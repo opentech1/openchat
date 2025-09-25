@@ -60,7 +60,6 @@ COPY --from=node_runtime /usr/local/bin/npm /usr/local/bin/npm
 COPY --from=node_runtime /usr/local/bin/npx /usr/local/bin/npx
 COPY --from=node_runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
 # Copy ElectricSQL binary and assets
-COPY --from=electric_runtime /usr/local/bin/electric /usr/local/bin/electric
 COPY --from=electric_runtime /app /opt/electric
 
 WORKDIR /app
