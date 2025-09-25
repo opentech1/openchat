@@ -72,25 +72,28 @@ openchat/
 
 ## Docker Images
 
-Each app now has its own Dockerfile so the Bun API and the Next.js UI can be
-containerised separately:
+The root `Dockerfile` builds both the Bun API and the Next.js web app. Supply
+your Clerk keys at build time so the production bundle is generated correctly:
 
 ```bash
-# API (Bun/Elysia listening on 3000)
-docker build -t openchat-server apps/server
+docker build \
+  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY \
+  --build-arg CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY \
+  --build-arg CLERK_SECRET_KEY=$CLERK_SECRET_KEY \
+  -t openchat-app .
 
-# Next.js web (listens on 3001)
-docker build -t openchat-web apps/web
+# App exposes 3000 (API) and 3001 (web)
+docker run -p 3000:3000 -p 3001:3001 openchat-app
 ```
 
-For a simple local setup:
+To run Postgres + ElectricSQL alongside the app, use the provided compose file:
 
 ```bash
-docker run -p 3000:3000 --env-file apps/server/.env openchat-server
-docker run -p 3001:3001 -e NEXT_PUBLIC_SERVER_URL=http://host.docker.internal:3000 openchat-web
+docker compose -f infra/docker-compose.prod.yml up --build
 ```
 
-Point `NEXT_PUBLIC_SERVER_URL` at your deployed API URL in production.
+This exposes the Bun API on `3000`, the web UI on `3001`, ElectricSQL on `3010`,
+and the proxy on `5133`.
 
 ## Environment Variables
 
