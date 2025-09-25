@@ -26,7 +26,7 @@ ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
     NEXT_PUBLIC_DEV_BYPASS_AUTH=0 \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN SKIP_CLERK_BUILD_CHECK=1 NEXT_TURBO_BUILD=1 bunx turbo run build --filter=server --filter=web
+RUN bunx turbo run build --filter=server --filter=web
 
 # Node runtime for the Next.js standalone server
 FROM node:20-slim AS node_runtime
@@ -50,9 +50,6 @@ RUN apt-get update \
 
 # Copy Bun runtime from builder
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
-COPY --from=builder /usr/local/lib/bun /usr/local/lib/bun
-COPY --from=builder /usr/local/share/bun /usr/local/share/bun
-COPY --from=builder /usr/local/include/bun /usr/local/include/bun
 
 # Copy Node runtime from official image
 COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node

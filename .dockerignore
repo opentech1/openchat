@@ -5,7 +5,6 @@ apps/*/node_modules
 .next
 coverage
 infra/dev.docker-compose.yml
-infra/postgres-init
 bun.lockb
 *.log
 .tmp

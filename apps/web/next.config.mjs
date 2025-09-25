@@ -74,9 +74,7 @@ const nextConfig = {
 			process.env.CLERK_SECRET_KEY,
 		);
 		const isProdBuild = process.env.NODE_ENV === "production";
-		const skipBuildCheck =
-			process.env.SKIP_CLERK_BUILD_CHECK === "1" ||
-			process.env.NEXT_TURBO_BUILD === "1";
+		const skipBuildCheck = false;
 		const allowStubs = !isProdBuild;
 		const forceStubs = process.env.NODE_ENV === "test";
 		if (!hasClerkKeys && isProdBuild && !forceStubs && !skipBuildCheck) {
