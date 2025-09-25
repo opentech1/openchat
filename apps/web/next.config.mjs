@@ -73,10 +73,17 @@ const nextConfig = {
 			process.env.CLERK_PUBLISHABLE_KEY ||
 			process.env.CLERK_SECRET_KEY,
 		);
+		const isProdBuild = process.env.NODE_ENV === "production";
+		const allowStubs = !isProdBuild;
+		const forceStubs = process.env.NODE_ENV === "test";
+		if (!hasClerkKeys && isProdBuild && !forceStubs) {
+			throw new Error(
+				"Clerk environment variables are required in production builds. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.",
+			);
+		}
 		const useClerkStubs =
-			!hasClerkKeys ||
-			process.env.NODE_ENV === "test" ||
-			process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1";
+			forceStubs || (!hasClerkKeys && allowStubs) ||
+			(!isProdBuild && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1");
 		if (useClerkStubs) {
 			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client");
 			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server");
