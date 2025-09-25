@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 FROM oven/bun:1.2.21 AS deps
 WORKDIR /app
 COPY package.json ./
