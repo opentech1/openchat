@@ -50,6 +50,9 @@ RUN apt-get update \
 
 # Copy Bun runtime from builder
 COPY --from=builder /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=builder /usr/local/lib/bun /usr/local/lib/bun
+COPY --from=builder /usr/local/share/bun /usr/local/share/bun
+COPY --from=builder /usr/local/include/bun /usr/local/include/bun
 
 # Copy Node runtime from official image
 COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node

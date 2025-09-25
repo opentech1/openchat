@@ -74,7 +74,14 @@ const nextConfig = {
 			process.env.CLERK_SECRET_KEY,
 		);
 		const isProdBuild = process.env.NODE_ENV === "production";
-		const skipBuildCheck = false;
+		const skipBuildCheck = (() => {
+	const ci = process.env.CI === "true";
+	const branch = process.env.GIT_BRANCH || process.env.BRANCH_NAME || process.env.VERCEL_GIT_COMMIT_REF || "";
+	const isDevBranch = ["dev", "development", "preview"].includes(branch.toLowerCase());
+	if (process.env.SKIP_CLERK_BUILD_CHECK === "1") return true;
+	if (!ci) return true;
+	return isDevBranch;
+})();
 		const allowStubs = !isProdBuild;
 		const forceStubs = process.env.NODE_ENV === "test";
 		if (!hasClerkKeys && isProdBuild && !forceStubs && !skipBuildCheck) {
