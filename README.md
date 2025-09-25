@@ -103,6 +103,8 @@ Point `NEXT_PUBLIC_SERVER_URL` at your deployed API URL in production.
 | `SERVER_INTERNAL_URL` | Server | Optional override for internal ORPC calls when the public URL differs. Defaults to `NEXT_PUBLIC_SERVER_URL`. |
 | `NEXT_DISABLE_REMOTE_FONT_DOWNLOADS` | Web (dev) | Set to `1` to skip Google Fonts downloads when running in a sandbox. |
 | `NEXT_PUBLIC_DEV_BYPASS_AUTH` / `NEXT_PUBLIC_DEV_USER_ID` | Web (dev) | Enables the local mock Clerk user for development flows. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Web | Required in production so Clerk can render auth components. |
+| `CLERK_SECRET_KEY` / `CLERK_PUBLISHABLE_KEY` | Server | Required in production for Clerk session validation on the Bun API. |
 | `OPENROUTER_STREAM_FLUSH_INTERVAL_MS` | Web API | Optional override for how frequently streaming responses persist partial assistant text (defaults to 50ms). |
 | `OPENROUTER_API_KEY_SECRET` | Server | Secret used to encrypt/decrypt each browser’s locally stored OpenRouter API key (must be ≥16 chars). |
 
