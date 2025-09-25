@@ -74,15 +74,17 @@ const nextConfig = {
 			process.env.CLERK_SECRET_KEY,
 		);
 		const isProdBuild = process.env.NODE_ENV === "production";
+		const skipBuildCheck = process.env.SKIP_CLERK_BUILD_CHECK === "1";
 		const allowStubs = !isProdBuild;
 		const forceStubs = process.env.NODE_ENV === "test";
-		if (!hasClerkKeys && isProdBuild && !forceStubs) {
+		if (!hasClerkKeys && isProdBuild && !forceStubs && !skipBuildCheck) {
 			throw new Error(
 				"Clerk environment variables are required in production builds. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.",
 			);
 		}
 		const useClerkStubs =
-			forceStubs || (!hasClerkKeys && allowStubs) ||
+			forceStubs ||
+			(!hasClerkKeys && (allowStubs || skipBuildCheck)) ||
 			(!isProdBuild && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1");
 		if (useClerkStubs) {
 			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client");
@@ -92,6 +94,7 @@ const nextConfig = {
 				...config.resolve.alias,
 				"@clerk/nextjs$": STUB_CLIENT,
 				"@clerk/nextjs/server$": STUB_SERVER,
+				"@clerk/clerk-react$": STUB_CLIENT,
 			};
     }
     return config;

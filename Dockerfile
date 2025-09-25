@@ -56,10 +56,9 @@ COPY --from=builder /usr/local/include/bun /usr/local/include/bun
 
 # Copy Node runtime from official image
 COPY --from=node_runtime /usr/local/bin/node /usr/local/bin/node
+COPY --from=node_runtime /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node_runtime /usr/local/bin/npx /usr/local/bin/npx
 COPY --from=node_runtime /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=node_runtime /usr/local/include/node /usr/local/include/node
-COPY --from=node_runtime /usr/local/share/node /usr/local/share/node
-
 # Copy ElectricSQL binary and assets
 COPY --from=electric_runtime /usr/local/bin/electric /usr/local/bin/electric
 COPY --from=electric_runtime /app /opt/electric
