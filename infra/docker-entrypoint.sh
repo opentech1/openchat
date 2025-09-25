@@ -17,13 +17,21 @@ if [[ -z "$INITDB_BIN" || -z "$PG_CTL_BIN" || -z "$PG_ISREADY_BIN" || -z "$PSQL_
 fi
 
 ELECTRIC_BIN="$(command -v electric || true)"
+ELECTRIC_ARGS=()
 if [[ -z "$ELECTRIC_BIN" ]]; then
-	for candidate in /opt/electric/bin/electric /opt/electric/electric /app/bin/electric; do
-		if [[ -x "$candidate" ]]; then
-			ELECTRIC_BIN="$candidate"
-			break
-		fi
-	done
+	if [[ -x /opt/electric/bin/electric ]]; then
+		ELECTRIC_BIN=/opt/electric/bin/electric
+	elif [[ -x /opt/electric/electric ]]; then
+		ELECTRIC_BIN=/opt/electric/electric
+	elif [[ -x /app/bin/electric ]]; then
+		ELECTRIC_BIN=/app/bin/electric
+	elif [[ -x /opt/electric/bin/entrypoint ]]; then
+		ELECTRIC_BIN=/opt/electric/bin/entrypoint
+		ELECTRIC_ARGS=(start)
+	elif [[ -x /app/bin/entrypoint ]]; then
+		ELECTRIC_BIN=/app/bin/entrypoint
+		ELECTRIC_ARGS=(start)
+	fi
 fi
 
 if [[ -z "$ELECTRIC_BIN" ]]; then
@@ -141,7 +149,7 @@ ELECTRIC__LOG_LEVEL="$ELECTRIC_LOG_LEVEL" \
 DATABASE_URL="$DATABASE_URL" \
 SHADOW_DATABASE_URL="$SHADOW_DATABASE_URL" \
 ELECTRIC_INSECURE="$ELECTRIC_INSECURE" \
- "$ELECTRIC_BIN" &
+ "$ELECTRIC_BIN" "${ELECTRIC_ARGS[@]}" &
 ELECTRIC_PID=$!
 
 log "Starting Bun API on $SERVER_PORT"
