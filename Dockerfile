@@ -65,8 +65,10 @@ WORKDIR /app
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 COPY --from=builder /app/apps/web/.next/standalone ./apps/web/standalone
-COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
+# Place static assets alongside the standalone server so Next can resolve them.
+COPY --from=builder /app/apps/web/.next/static ./apps/web/standalone/apps/web/.next/static
+# Public assets are also resolved relative to the standalone server directory.
+COPY --from=builder /app/apps/web/public ./apps/web/standalone/apps/web/public
 COPY --from=builder /app/apps/web/package.json ./apps/web/package.json
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/bun.lock ./bun.lock
