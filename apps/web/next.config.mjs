@@ -79,20 +79,23 @@ const nextConfig = {
 	const branch = process.env.GIT_BRANCH || process.env.BRANCH_NAME || process.env.VERCEL_GIT_COMMIT_REF || "";
 	const isDevBranch = ["dev", "development", "preview"].includes(branch.toLowerCase());
 	if (process.env.SKIP_CLERK_BUILD_CHECK === "1") return true;
-	if (!ci) return true;
+	if (!ci) {
+		const nodeEnv = process.env.NODE_ENV ?? "production";
+		return nodeEnv !== "production";
+	}
 	return isDevBranch;
 })();
-		const allowStubs = !isProdBuild;
 		const forceStubs = process.env.NODE_ENV === "test";
 		if (!hasClerkKeys && isProdBuild && !forceStubs && !skipBuildCheck) {
 			throw new Error(
 				"Clerk environment variables are required in production builds. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.",
 			);
 		}
+		const stubExplicitly = process.env.SKIP_CLERK_BUILD_CHECK === "1";
 		const useClerkStubs =
 			forceStubs ||
-			(!hasClerkKeys && (allowStubs || skipBuildCheck)) ||
-			(!isProdBuild && process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1");
+			(!isProdBuild && (!hasClerkKeys || skipBuildCheck || process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1")) ||
+			(stubExplicitly && !hasClerkKeys);
 		if (useClerkStubs) {
 			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client");
 			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server");
