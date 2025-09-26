@@ -1,0 +1,2 @@
+# Placeholder to ensure init directory is copied into images.
+# Add *.sql files if you need custom database setup scripts.
