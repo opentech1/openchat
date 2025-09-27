@@ -335,12 +335,13 @@ function ChatList({
               void onDelete(c.id);
             }}
             className={cn(
-              "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
-              "transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
-              "bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
-              "hover:text-destructive-foreground focus-visible:text-destructive-foreground",
-              "disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
-              deletingId === c.id ? "opacity-100" : "opacity-0",
+              "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent",
+              "text-destructive transition-all duration-150",
+              "opacity-100 md:opacity-0 md:group-hover:opacity-100",
+              "hover:bg-destructive/10 hover:text-destructive",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40",
+              "disabled:cursor-progress disabled:text-muted-foreground",
+              (deletingId === c.id || isActive) && "md:opacity-100",
             )}
             aria-label="Delete chat"
             disabled={deletingId === c.id}
