@@ -6,7 +6,7 @@ ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
 # Install workspace dependencies
 COPY bun.lock bunfig.toml package.json turbo.json ./
 COPY apps/server/package.json apps/server/package.json
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source and build the server bundle
 COPY . .
@@ -24,7 +24,7 @@ COPY --from=base /app/bunfig.toml ./bunfig.toml
 COPY --from=base /app/package.json ./package.json
 
 # Install production deps for the server workspace
-RUN bun install --frozen-lockfile --production
+RUN bun install --production
 
 EXPOSE 3000
 CMD ["bun", "run", "--cwd", "apps/server", "start"]

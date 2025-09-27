@@ -13,7 +13,7 @@ This project was created with [Better-T-Stack](https://github.com/AmanVarshney01
 - **Bun** - Runtime environment
 - **Drizzle** - TypeScript-first ORM
 - **PostgreSQL** - Database engine
-- **Authentication** - Clerk (Next.js App Router)
+- **Authentication** - Better Auth (Bun API + Next.js App Router)
 - **Turborepo** - Optimized monorepo build system
 
 ## Getting Started
@@ -76,7 +76,7 @@ Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and
 
 ```bash
 cp .env.docker.example .env
-# edit .env with real Clerk keys and production URLs
+# edit .env with Better Auth secrets and production URLs
 docker compose up --build
 ```
 
@@ -86,18 +86,20 @@ The stack exposes: 3000 (API), 3001 (web), 3010 (Electric HTTP), 5133 (Electric 
 
 | Variable | Scope | Description |
 | --- | --- | --- |
-| `NEXT_PUBLIC_ELECTRIC_URL` | Web | Base URL for the ElectricSQL service used for live TanStack DB collections. |
-| `ELECTRIC_SERVICE_URL` | Server | Base URL for the ElectricSQL HTTP API consumed by the backend proxy. |
-| `ELECTRIC_GATEKEEPER_SECRET` | Server | HMAC secret for issuing ElectricSQL Gatekeeper tokens. |
-| `DEV_ALLOW_HEADER_BYPASS` | Server | Set to `1` in local dev to trust `x-user-id` headers; leave unset in production. |
-| `SERVER_INTERNAL_URL` | Server | Optional override for internal ORPC calls when the public URL differs. Defaults to `NEXT_PUBLIC_SERVER_URL`. |
-| `NEXT_DISABLE_REMOTE_FONT_DOWNLOADS` | Web (dev) | Set to `1` to skip Google Fonts downloads when running in a sandbox. |
-| `NEXT_PUBLIC_DEV_BYPASS_AUTH` / `NEXT_PUBLIC_DEV_USER_ID` | Web (dev) | Enables the local mock Clerk user for development flows. |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Web | Required in production so Clerk can render auth components. |
-| `NEXT_PUBLIC_CLERK_FRONTEND_URL` | Web | Optional custom Clerk domain (e.g. `https://clerk.ochat.pro`) used in CSP. |
-| `CLERK_SECRET_KEY` / `CLERK_PUBLISHABLE_KEY` | Server | Required in production for Clerk session validation on the Bun API. |
-| `OPENROUTER_STREAM_FLUSH_INTERVAL_MS` | Web API | Optional override for how frequently streaming responses persist partial assistant text (defaults to 50ms). |
-| `OPENROUTER_API_KEY_SECRET` | Server | Secret used to encrypt/decrypt each browser’s locally stored OpenRouter API key (must be ≥16 chars). |
+| NEXT_PUBLIC_SERVER_URL | Web | Base URL for the Bun API (e.g. https://api.ochat.pro). |
+| NEXT_PUBLIC_APP_URL | Web | Public origin for the Next.js app, used for CORS and metadata. |
+| NEXT_PUBLIC_ELECTRIC_URL | Web | Base URL for the ElectricSQL service used for live TanStack DB collections. |
+| ELECTRIC_SERVICE_URL | Server | Base URL for the ElectricSQL HTTP API consumed by the backend proxy. |
+| ELECTRIC_GATEKEEPER_SECRET | Server | HMAC secret for issuing ElectricSQL Gatekeeper tokens. |
+| BETTER_AUTH_SECRET | Server | Secret used by Better Auth to encrypt cookies and sessions (generate 32+ characters). |
+| BETTER_AUTH_URL | Server | Public URL where Better Auth handlers are exposed (usually the API origin). |
+| AUTH_COOKIE_DOMAIN | Server | Optional cookie domain (e.g. .ochat.pro) for cross-subdomain sessions. |
+| DATABASE_URL | Server | Postgres connection string consumed by both the Bun API and Better Auth. |
+| SERVER_INTERNAL_URL | Server | Optional override for internal ORPC calls when the public URL differs. |
+| OPENROUTER_API_KEY_SECRET | Server | Secret used to encrypt/decrypt each browser’s locally stored OpenRouter API key (must be ≥16 chars). |
+| DEV_ALLOW_HEADER_BYPASS | Server | Set to 1 in local dev to trust x-user-id headers; leave unset in production. |
+| NEXT_PUBLIC_DEV_BYPASS_AUTH / NEXT_PUBLIC_DEV_USER_ID | Web (dev) | Enables the local Better Auth bypass user for development flows. |
+| NEXT_DISABLE_REMOTE_FONT_DOWNLOADS | Web (dev) | Set to 1 to skip Google Fonts downloads when running in a sandbox. |
 
 ## Streaming & Sync
 
@@ -134,20 +136,14 @@ The stack exposes: 3000 (API), 3001 (web), 3010 (Electric HTTP), 5133 (Electric 
 - Electric-backed TanStack DB collections hydrate the sidebar and chat views when `NEXT_PUBLIC_ELECTRIC_URL`/Gatekeeper are configured. Requests now proxy through the server at `/api/electric/shapes/*`, so the Electric service itself never receives user-identifying cookies directly. The legacy WebSocket fallback remains for non-Electric setups.
 - The new `messages.streamUpsert` ORPC procedure accepts `streaming` and `completed` states so fan-out consumers (Electric or WebSocket) can keep partial content in sync.
 
-## Auth (Clerk)
+## Auth (Better Auth)
 
-Set Clerk environment variables in `apps/web/.env` (do not commit real keys):
+Better Auth replaces Clerk and runs inside the Bun API (Elysia) while also exposing a helper route in the Next.js app.
 
-```
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
-NEXT_PUBLIC_CLERK_FRONTEND_URL=https://clerk.your-domain.tld # optional custom domain
-CLERK_SECRET_KEY=YOUR_SECRET_KEY
-```
+1. Generate a long random string for `BETTER_AUTH_SECRET` and set `BETTER_AUTH_URL` to your API origin (e.g. `https://api.ochat.pro`).
+2. When serving multiple subdomains (web + api), set `AUTH_COOKIE_DOMAIN` to the shared suffix such as `.ochat.pro` so cookies flow across hosts.
+3. The shared `@openchat/auth` package exports the auth instance, the React client (`authClient`), and the Next.js route handler re-exported at `/api/auth/[...all]`.
+4. The Bun API automatically mounts `/api/auth/*` (with rate limiting) and resolves sessions via `auth.api.getSession`.
+5. Components call `authClient.useSession()` to reactively access the current user, and invoke helpers such as `authClient.signIn.email`, `authClient.signUp.email`, and `authClient.signOut` to manage credentials.
 
-Integration:
-
-- `apps/web/middleware.ts` uses `clerkMiddleware()` to protect routes.
-- `apps/web/src/app/layout.tsx` wraps the app with `<ClerkProvider>`.
-- `apps/web/src/app/auth/sign-in/page.tsx` renders `<SignIn afterSignInUrl="/dashboard" />`.
-- `apps/web/src/app/auth/sign-up/page.tsx` renders `<SignUp afterSignUpUrl="/dashboard" />`.
-- `apps/web/src/app/dashboard/page.tsx` uses `auth()` from `@clerk/nextjs/server` to gate access.
+In local development you can still opt into the mock user by setting `NEXT_PUBLIC_DEV_BYPASS_AUTH=1` and `NEXT_PUBLIC_DEV_USER_ID`; the Bun API respects this when `DEV_ALLOW_HEADER_BYPASS=1`.

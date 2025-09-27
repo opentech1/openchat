@@ -1,129 +1,82 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    externalDir: true,
-  },
-  typedRoutes: true,
-  output: "standalone",
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "ik.imagekit.io" },
-    ],
-  },
-  async rewrites() {
-    const server = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
-    return [
-      {
-        source: "/rpc/:path*",
-        destination: `${server}/rpc/:path*`,
-      },
-    ];
-  },
-  async headers() {
-    const isProd = process.env.NODE_ENV === "production";
-    // Build CSP; in dev we omit CSP to avoid blocking Clerk scripts/workers
-    const clerkCustomOrigin = process.env.NEXT_PUBLIC_CLERK_FRONTEND_URL || process.env.NEXT_PUBLIC_CLERK_DOMAIN || "";
-    const clerkSources = ["https://*.clerk.com", "https://*.clerk.services"];
-    if (clerkCustomOrigin) clerkSources.push(clerkCustomOrigin);
-    const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...clerkSources];
-    const connectSrc = [
-      "'self'",
-      process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
-      ...clerkSources,
-      "ws:",
-      "wss:",
-    ];
-    const frameSrc = ["https://*.clerk.com"];
-    if (clerkCustomOrigin) frameSrc.push(clerkCustomOrigin);
-    const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io"];
-    if (clerkCustomOrigin) imgSrc.push(clerkCustomOrigin);
-    const csp = [
-      "default-src 'self'",
-      `script-src ${scriptSrc.join(' ')}` ,
-      "style-src 'self' 'unsafe-inline'",
-      `img-src ${imgSrc.join(' ')}` ,
-      "font-src 'self' data:",
-      `connect-src ${connectSrc.join(' ')}` ,
-      "frame-ancestors 'self'",
-      `frame-src ${frameSrc.join(' ')}` ,
-      "worker-src 'self' blob:",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ');
-    const base = [
-      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "X-Content-Type-Options", value: "nosniff" },
-      { key: "X-Frame-Options", value: "SAMEORIGIN" },
-      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-    ];
-    const prodOnly = isProd
-      ? [
-          { key: "Content-Security-Policy", value: csp },
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
-        ]
-      : [];
-    return [
-      {
-        source: "/(.*)",
-        headers: [...base, ...prodOnly],
-      },
-    ];
-  },
-  webpack(config, { dev }) {
-    // Avoid filesystem cache serialization of very large strings in dev.
-    // Using in-memory cache eliminates PackFileCacheStrategy warnings
-    // and speeds up HMR for our setup.
-    if (dev) {
-      config.cache = { type: "memory" };
-    }
-    // In test, stub Clerk modules to avoid requiring real keys
-		const hasClerkKeys = Boolean(
-			process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
-			process.env.CLERK_PUBLISHABLE_KEY ||
-			process.env.CLERK_SECRET_KEY,
-		);
-		const isProdBuild = process.env.NODE_ENV === "production";
-		const skipBuildCheck = (() => {
-	const ci = process.env.CI === "true";
-	const branch = process.env.GIT_BRANCH || process.env.BRANCH_NAME || process.env.VERCEL_GIT_COMMIT_REF || "";
-	const isDevBranch = ["dev", "development", "preview"].includes(branch.toLowerCase());
-	if (process.env.SKIP_CLERK_BUILD_CHECK === "1") return true;
-	if (!ci) {
-		const nodeEnv = process.env.NODE_ENV ?? "production";
-		return nodeEnv !== "production";
-	}
-	return isDevBranch;
-})();
-		const forceStubs = process.env.NODE_ENV === "test";
-		if (!hasClerkKeys && isProdBuild && !forceStubs && !skipBuildCheck) {
-			throw new Error(
-				"Clerk environment variables are required in production builds. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.",
-			);
+	experimental: {
+		externalDir: true,
+	},
+	typedRoutes: true,
+	output: "standalone",
+	images: {
+		remotePatterns: [{ protocol: "https", hostname: "ik.imagekit.io" }],
+	},
+	async rewrites() {
+		const server = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
+		return [
+			{
+				source: "/rpc/:path*",
+				destination: `${server}/rpc/:path*`,
+			},
+			{
+				source: "/api/auth/:path*",
+				destination: `${server}/api/auth/:path*`,
+			},
+		];
+	},
+	async headers() {
+		const isProd = process.env.NODE_ENV === "production";
+		const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
+		const electricUrl = process.env.NEXT_PUBLIC_ELECTRIC_URL || "http://localhost:3010";
+		const authUrl = process.env.BETTER_AUTH_URL;
+		const additionalConnect = [serverUrl, electricUrl, authUrl]
+			.filter(Boolean)
+			.map((url) => {
+				try {
+					return new URL(url).origin;
+				} catch {
+					return null;
+				}
+			})
+			.filter(Boolean);
+		const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'"];
+		const connectSrc = ["'self'", ...additionalConnect, "ws:", "wss:"];
+		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io"];
+		const frameSrc = ["'self'"];
+		const csp = [
+			"default-src 'self'",
+			`script-src ${scriptSrc.join(' ')}`,
+			"style-src 'self' 'unsafe-inline'",
+			`img-src ${imgSrc.join(' ')}`,
+			"font-src 'self' data:",
+			`connect-src ${connectSrc.join(' ')}`,
+			`frame-src ${frameSrc.join(' ')}`,
+			"worker-src 'self' blob:",
+			"base-uri 'self'",
+			"form-action 'self'",
+		].join("; ");
+		const baseHeaders = [
+			{ key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+			{ key: "X-Content-Type-Options", value: "nosniff" },
+			{ key: "X-Frame-Options", value: "SAMEORIGIN" },
+			{ key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+		];
+		const prodHeaders = isProd
+			? [
+				{ key: "Content-Security-Policy", value: csp },
+				{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+			]
+			: [];
+		return [
+			{
+				source: "/(.*)",
+				headers: [...baseHeaders, ...prodHeaders],
+			},
+		];
+	},
+	webpack(config, { dev }) {
+		if (dev) {
+			config.cache = { type: "memory" };
 		}
-		const stubExplicitly = process.env.SKIP_CLERK_BUILD_CHECK === "1";
-		const useClerkStubs =
-			forceStubs ||
-			(!isProdBuild && (!hasClerkKeys || skipBuildCheck || process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "1")) ||
-			(stubExplicitly && !hasClerkKeys);
-		if (useClerkStubs) {
-			const STUB_CLIENT = path.resolve(__dirname, "src/lib/clerk-stubs-client");
-			const STUB_SERVER = path.resolve(__dirname, "src/lib/clerk-stubs-server");
-			config.resolve = config.resolve || {};
-			config.resolve.alias = {
-				...config.resolve.alias,
-				"@clerk/nextjs$": STUB_CLIENT,
-				"@clerk/nextjs/server$": STUB_SERVER,
-				"@clerk/clerk-react$": STUB_CLIENT,
-			};
-    }
-    return config;
-  },
+		return config;
+	},
 };
 
 export default nextConfig;

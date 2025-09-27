@@ -17,7 +17,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 			<BrandThemeProvider>
 				<QueryClientProvider client={queryClient}>
 					{children}
-					<Toaster richColors position="top-center" />
+					<Toaster richColors position="bottom-right" />
 				</QueryClientProvider>
 			</BrandThemeProvider>
 		</ThemeProvider>

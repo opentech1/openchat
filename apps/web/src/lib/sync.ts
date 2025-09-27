@@ -22,21 +22,6 @@ if (typeof window !== "undefined" && !tabId) {
 	try { sessionStorage.setItem("oc_tab_id", tabId); } catch {}
 }
 
-async function getBearerToken(): Promise<string | null> {
-	try {
-		// Clerk injected global
-		const anyWin = window as any;
-		const s = anyWin?.Clerk?.session;
-		if (s?.getToken) {
-			const t = await s.getToken();
-			return t || null;
-		}
-	} catch {
-		// ignore
-	}
-	return null;
-}
-
 function wsBase(): string {
 	const base = (process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000").replace(/\/$/, "");
 	return base.startsWith("https") ? base.replace(/^https/, "wss") : base.replace(/^http/, "ws");
@@ -45,14 +30,12 @@ function wsBase(): string {
 async function openSocket() {
 	if (connected || connecting) return;
 	connecting = true;
-	const token = await getBearerToken().catch(() => null);
 	const url = new URL(`${wsBase()}/sync`);
 	url.searchParams.set("tabId", tabId);
-	if (token) url.searchParams.set("token", token);
-	// In dev without Clerk, allow x-user-id via cookie-less query param if page set it
+	// In dev bypass mode, allow x-user-id via query param if the page set it
 	try {
 		const devUid = (window as any).__DEV_USER_ID__ as string | undefined;
-		if (!token && devUid) url.searchParams.set("x-user-id", devUid);
+		if (devUid) url.searchParams.set("x-user-id", devUid);
 	} catch {}
 
 	const ws = new WebSocket(url.toString());

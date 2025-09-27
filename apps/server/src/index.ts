@@ -6,6 +6,7 @@ import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { RPCHandler } from "@orpc/server/fetch";
 import { onError } from "@orpc/server";
+import { auth } from "@openchat/auth";
 import { appRouter, inMemoryChatOwned } from "./routers";
 import { createContext } from "./lib/context";
 import { hub, makeEnvelope } from "./lib/sync-hub";
@@ -146,7 +147,14 @@ new Elysia()
             credentials: true,
         }),
     )
-    .ws("/sync", {
+	.all("/api/auth/*", async (context) => {
+		if (isRateLimited(context.request, context.server)) {
+			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+		}
+		const response = await auth.handler(context.request);
+		return withSecurityHeaders(response, context.request);
+	})
+	.ws("/sync", {
         // Authenticate and greet
         open: async (ws) => {
             const ctx = await createContext({ context: ws.data as any });
