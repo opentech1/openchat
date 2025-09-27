@@ -1,35 +1,38 @@
 import type { Context as ElysiaContext } from "elysia";
-import { verifyToken } from "@clerk/backend";
+import { getSessionFromRequest } from "@openchat/auth";
 
 export type CreateContextOptions = {
 	context: ElysiaContext;
 };
 
+type MinimalSession = {
+	user: { id: string };
+	session?: {
+		userId: string;
+		id: string;
+		expiresAt: Date;
+		createdAt: Date;
+		updatedAt: Date;
+	};
+};
+
 export async function createContext({ context }: CreateContextOptions) {
-	let session: { user: { id: string } } | null = null;
+	let session: MinimalSession | null = null;
 	const devBypassEnabled =
 		process.env.NODE_ENV !== "production" &&
 		(process.env.DEV_ALLOW_HEADER_BYPASS ?? process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH ?? "1") !== "0";
 
-	// Prefer real Clerk verification via Bearer token when secret is configured
-	const secret = process.env.CLERK_SECRET_KEY;
-	if (secret) {
-		try {
-			const authz = context.request.headers.get("authorization") || context.request.headers.get("Authorization");
-			let token = authz?.startsWith("Bearer ") ? authz.slice(7) : null;
-			// WebSocket fallback: allow token via query param when headers aren't available
-			if (!token) {
-				const url = new URL(context.request.url);
-				const t = url.searchParams.get("token");
-				if (t) token = t;
-			}
-			if (token) {
-				const claims = await (verifyToken as any)(token, { secretKey: secret });
-				const uid = (claims?.sub ?? claims?.payload?.sub) as string | undefined;
-				if (uid) session = { user: { id: uid } };
-			}
-		} catch {
-			// ignore and fall back to dev header below
+	try {
+		const authSession = await getSessionFromRequest(context.request);
+		if (authSession?.user?.id) {
+			session = {
+				...(authSession as unknown as MinimalSession),
+				user: { id: authSession.user.id },
+			};
+		}
+	} catch (error) {
+		if (process.env.NODE_ENV !== "test") {
+			console.error("better-auth.session", error);
 		}
 	}
 
@@ -44,7 +47,16 @@ export async function createContext({ context }: CreateContextOptions) {
 			} catch {}
 		}
 		if (uid) {
-			session = { user: { id: uid } } as const;
+			session = {
+				user: { id: uid },
+				session: {
+					userId: uid,
+					id: "dev-session",
+					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			};
 		}
 	}
 

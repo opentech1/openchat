@@ -3,7 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
-import { account } from "../db/schema/auth";
+import { account } from "@openchat/auth/schema";
 
 const OPENROUTER_PROVIDER_ID = "openrouter";
 const OPENROUTER_API_BASE = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");

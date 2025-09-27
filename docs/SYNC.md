@@ -6,9 +6,9 @@ This document describes v1 of the in-memory sync system.
 
 - URL: `wss://<server>/sync` (served by Elysia in `apps/server`)
 - One connection per tab.
-- Auth on connect: accept Clerk Bearer token (same as `/rpc`) or dev `x-user-id`.
-  - For browsers (no custom headers), a Bearer token may be passed as `?token=...` query param.
-  - Dev fallback accepts `?x-user-id=...` when Clerk is not configured.
+- Auth on connect: Better Auth session cookies (same as `/rpc`) or the dev `x-user-id` override.
+  - Browsers send the existing session cookie; no query token is required.
+  - Dev fallback accepts `?x-user-id=...` when the bypass flags are enabled.
 
 ## Topics
 
@@ -85,7 +85,7 @@ All WS messages use this shape:
   - `connect()` → opens `wss://<server>/sync`
   - `subscribe(topic, handler)` / `unsubscribe(topic, handler)`
   - Internally keeps a single WS; multiplexes topics; reconnects on drop; resubscribes on reconnect.
-  - Uses Clerk’s `window.Clerk.session.getToken()` to pass a Bearer token as `?token=...` query param.
+  - Uses the Better Auth client to derive the current session (or falls back to the dev `__DEV_USER_ID__`).
 
 2) Sidebar live updates
 

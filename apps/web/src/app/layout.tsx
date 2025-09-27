@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
-import OptionalClerkProvider from "@/lib/optional-clerk";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 
@@ -74,11 +73,9 @@ export default function RootLayout({
 	return (
 		<html lang="en" suppressHydrationWarning data-brand-theme="blue">
 			<body className="font-sans">
-				<OptionalClerkProvider>
-					<Providers>
-						{children}
-					</Providers>
-				</OptionalClerkProvider>
+				<Providers>
+					{children}
+				</Providers>
 			</body>
 		</html>
 	);

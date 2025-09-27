@@ -10,7 +10,7 @@ type DashboardAccessFallbackProps = {
 
 export default function DashboardAccessFallback({
 	title = "Sign in to continue",
-	description = "We couldn't verify your session. Sign in again or try refreshing if Clerk is still starting up.",
+	description = "We couldn't verify your session. Sign in again or refresh if Better Auth is still initialising.",
 	showHomeLink = true,
 }: DashboardAccessFallbackProps) {
 	return (

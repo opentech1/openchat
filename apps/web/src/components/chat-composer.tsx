@@ -105,6 +105,7 @@ export type ChatComposerProps = {
 	apiKey?: string | null;
 	isStreaming?: boolean;
 	onStop?: () => void;
+	onMissingRequirement?: (reason: "apiKey" | "model") => void;
 };
 
 export default function ChatComposer({
@@ -118,6 +119,7 @@ export default function ChatComposer({
 	apiKey,
 	isStreaming = false,
 	onStop,
+	onMissingRequirement,
 }: ChatComposerProps) {
 	const [value, setValue] = useState('');
 	const [attachments, setAttachments] = useState<File[]>([]);
@@ -148,7 +150,15 @@ export default function ChatComposer({
 
 	const send = useCallback(async () => {
 		const trimmed = value.trim();
-		if (!trimmed || disabled || isSending || !activeModelId || !apiKey) return;
+		if (!trimmed || disabled || isSending) return;
+		if (!activeModelId) {
+			onMissingRequirement?.("model");
+			return;
+		}
+		if (!apiKey) {
+			onMissingRequirement?.("apiKey");
+			return;
+		}
 		setErrorMessage(null);
 		setIsSending(true);
 		try {
@@ -163,7 +173,7 @@ export default function ChatComposer({
 		} finally {
 			setIsSending(false);
 		}
-	}, [activeModelId, adjustHeight, apiKey, attachments, disabled, isSending, onSend, value]);
+	}, [activeModelId, adjustHeight, apiKey, attachments, disabled, isSending, onMissingRequirement, onSend, value]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

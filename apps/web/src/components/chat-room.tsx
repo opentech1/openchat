@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { authClient } from "@openchat/auth/client";
 import { useChat } from "@ai-sdk/react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
+import { toast } from "sonner";
 
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
@@ -23,12 +24,12 @@ type ChatRoomProps = {
 };
 
 export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
-  const auth = useAuth();
+  const { data: session } = authClient.useSession();
   const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
   const memoDevUser =
     typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined;
   const workspaceId =
-    auth.userId || memoDevUser || (devBypassEnabled ? process.env.NEXT_PUBLIC_DEV_USER_ID || "dev-user" : null);
+    session?.user?.id || memoDevUser || (devBypassEnabled ? process.env.NEXT_PUBLIC_DEV_USER_ID || "dev-user" : null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -127,11 +128,15 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const composerRef = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(320);
-  const selectedModelRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    selectedModelRef.current = selectedModel;
-  }, [selectedModel]);
+  const handleMissingRequirement = useCallback((reason: "apiKey" | "model") => {
+    if (reason === "apiKey") {
+      setApiKeyError("Add your OpenRouter API key to start chatting.");
+      toast.error("OpenRouter API key required", { description: "Add your API key to start chatting with OpenChat." });
+    } else {
+      toast.error("Select an OpenRouter model to continue.");
+    }
+  }, [setApiKeyError]);
 
   const chatTransport = useMemo(
     () =>
@@ -142,25 +147,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         headers: workspaceId
           ? async () => ({ "x-user-id": workspaceId })
           : undefined,
-        prepareSendMessagesRequest: ({ body }) => {
-          const modelId = selectedModelRef.current;
-          const apiKeyValue = apiKey;
-          if (!modelId) {
-            throw new Error("OpenRouter model not selected");
-          }
-          if (!apiKeyValue) {
-            throw new Error("OpenRouter API key missing");
-          }
-          return {
-            body: {
-              ...body,
-              modelId,
-              apiKey: apiKeyValue,
-            },
-          };
-        },
       }),
-    [apiKey, chatId, workspaceId],
+    [chatId, workspaceId],
   );
 
   const { messages, setMessages, sendMessage, status, stop } = useChat({
@@ -179,6 +167,16 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       );
     },
     onError: (error) => {
+      if (error instanceof Error) {
+        if (error.message === "OpenRouter API key missing") {
+          handleMissingRequirement("apiKey");
+          return;
+        }
+        if (error.message === "OpenRouter model not selected") {
+          handleMissingRequirement("model");
+          return;
+        }
+      }
       console.error("Chat stream error", error);
     },
   });
@@ -220,7 +218,15 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const handleSend = async ({ text, modelId, apiKey: requestApiKey, attachments }: { text: string; modelId: string; apiKey: string; attachments: File[] }) => {
     const content = text.trim();
-    if (!content || !modelId || !requestApiKey) return;
+    if (!content) return;
+    if (!modelId) {
+      handleMissingRequirement("model");
+      return;
+    }
+    if (!requestApiKey) {
+      handleMissingRequirement("apiKey");
+      return;
+    }
     const id = crypto.randomUUID?.() ?? `${Date.now()}`;
     const createdAt = new Date().toISOString();
     try {
@@ -293,6 +299,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             apiKey={apiKey}
             isStreaming={status === "streaming"}
             onStop={() => stop()}
+            onMissingRequirement={handleMissingRequirement}
           />
         </div>
       </div>

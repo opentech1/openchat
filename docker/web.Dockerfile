@@ -2,9 +2,21 @@ FROM oven/bun:1.2.21 AS deps
 WORKDIR /app
 ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
 
+# Build-time configuration
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3001
+ARG NEXT_PUBLIC_SERVER_URL=http://localhost:3000
+ARG NEXT_PUBLIC_ELECTRIC_URL=http://localhost:3010
+ARG BETTER_AUTH_URL=http://localhost:3000
+
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
+    NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL} \
+    NEXT_PUBLIC_ELECTRIC_URL=${NEXT_PUBLIC_ELECTRIC_URL} \
+    BETTER_AUTH_URL=${BETTER_AUTH_URL} \
+    NEXT_TELEMETRY_DISABLED=1
+
 COPY bun.lock bunfig.toml package.json turbo.json ./
 COPY apps/web/package.json apps/web/package.json
-RUN bun install --frozen-lockfile
+RUN bun install
 
 COPY . .
 RUN bunx turbo run build --filter=web
