@@ -106,6 +106,7 @@ ports) as required by your environment orchestrator.
 | `NEXT_DISABLE_REMOTE_FONT_DOWNLOADS` | Web (dev) | Set to `1` to skip Google Fonts downloads when running in a sandbox. |
 | `NEXT_PUBLIC_DEV_BYPASS_AUTH` / `NEXT_PUBLIC_DEV_USER_ID` | Web (dev) | Enables the local mock Clerk user for development flows. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Web | Required in production so Clerk can render auth components. |
+| `NEXT_PUBLIC_CLERK_FRONTEND_URL` | Web | Optional custom Clerk domain (e.g. `https://clerk.ochat.pro`) used in CSP. |
 | `CLERK_SECRET_KEY` / `CLERK_PUBLISHABLE_KEY` | Server | Required in production for Clerk session validation on the Bun API. |
 | `OPENROUTER_STREAM_FLUSH_INTERVAL_MS` | Web API | Optional override for how frequently streaming responses persist partial assistant text (defaults to 50ms). |
 | `OPENROUTER_API_KEY_SECRET` | Server | Secret used to encrypt/decrypt each browser’s locally stored OpenRouter API key (must be ≥16 chars). |
@@ -151,6 +152,7 @@ Set Clerk environment variables in `apps/web/.env` (do not commit real keys):
 
 ```
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+NEXT_PUBLIC_CLERK_FRONTEND_URL=https://clerk.your-domain.tld # optional custom domain
 CLERK_SECRET_KEY=YOUR_SECRET_KEY
 ```
 
