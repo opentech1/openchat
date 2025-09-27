@@ -16,6 +16,12 @@ ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
 
 COPY bun.lock bunfig.toml package.json turbo.json ./
 COPY apps/web/package.json apps/web/package.json
+COPY apps/server/package.json apps/server/package.json
+COPY apps/extension/package.json apps/extension/package.json
+COPY packages/auth/package.json packages/auth/package.json
+COPY apps/extension/wxt.config.ts apps/extension/wxt.config.ts
+COPY apps/extension/tsconfig.json apps/extension/tsconfig.json
+COPY apps/extension/entrypoints apps/extension/entrypoints
 RUN bun install
 
 COPY . .
