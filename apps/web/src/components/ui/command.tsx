@@ -3,6 +3,8 @@
 import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 
+import { Dialog, DialogContent } from "@/components/ui/dialog"
+
 import { cn } from "@/lib/utils"
 
 const Command = React.forwardRef<
@@ -19,6 +21,17 @@ const Command = React.forwardRef<
 	/>
 ))
 Command.displayName = CommandPrimitive.displayName
+
+const CommandDialog = ({ children, ...props }: React.ComponentProps<typeof Dialog>) => (
+	<Dialog {...props}>
+		<DialogContent className="p-0 shadow-2xl sm:max-w-lg">
+			<Command className="h-[420px] max-h-[80vh]">
+				{children}
+			</Command>
+		</DialogContent>
+	</Dialog>
+)
+CommandDialog.displayName = "CommandDialog"
 
 const CommandInput = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Input>,
@@ -110,6 +123,7 @@ CommandShortcut.displayName = "CommandShortcut"
 
 export {
 	Command,
+	CommandDialog,
 	CommandEmpty,
 	CommandGroup,
 	CommandInput,

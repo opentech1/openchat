@@ -191,13 +191,52 @@ export const appRouter = {
 
         memMsgsByChat.delete(input.chatId);
 
-        if (removed) {
-          publish(`chats:index:${userId}`, "chats.index.remove", { chatId: input.chatId });
-          publish(`chat:${input.chatId}`, "chat.removed", { chatId: input.chatId });
-        }
+		if (removed) {
+			publish(`chats:index:${userId}`, "chats.index.remove", { chatId: input.chatId });
+			publish(`chat:${input.chatId}`, "chat.removed", { chatId: input.chatId });
+		}
 
         return { ok: removed } as const;
       }),
+    rename: protectedProcedure
+      .input(z.object({ chatId: z.string().min(1), title: z.string().min(1).max(120) }))
+      .handler(async ({ context, input }) => {
+        const userId = context.session!.user.id;
+        const title = input.title.trim().slice(0, 120);
+        if (!title) {
+          return { ok: false as const };
+        }
+        const now = new Date();
+        let updated = false;
+        try {
+          const res = await db
+            .update(chat)
+            .set({ title, updatedAt: now })
+            .where(and(eq(chat.id, input.chatId), eq(chat.userId, userId)))
+            .returning({ id: chat.id });
+          updated = res.length > 0;
+        } catch (error) {
+          console.error("chats.rename", error);
+        }
+
+        if (!updated) {
+          const list = memChatsByUser.get(userId) ?? [];
+          const record = list.find((row) => row.id === input.chatId);
+          if (!record) {
+            return { ok: false as const };
+          }
+          record.title = title;
+          record.updatedAt = now;
+          memChatsByUser.set(userId, pruneChatList(list));
+          updated = true;
+        }
+
+		if (updated) {
+			publish(`chats:index:${userId}`, "chats.index.update", { chatId: input.chatId, title, updatedAt: now });
+		}
+
+		return { ok: updated } as const;
+		}),
   },
   messages: {
     // List messages for a chat in ascending chronological order

@@ -11,6 +11,7 @@ import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { OpenRouterLinkModal } from "@/components/openrouter-link-modal";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
+import { toast } from "sonner";
 
 type ChatRoomProps = {
   chatId: string;
@@ -56,40 +57,44 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     }
   }, [pathname, router, searchParamsString]);
 
-  const fetchModels = useCallback(
-    async (key: string) => {
-      setModelsLoading(true);
-      setModelsError(null);
-      try {
-        const response = await fetch("/api/openrouter/models", {
-          method: "POST",
+	const fetchModels = useCallback(
+		async (key: string, options: { notify?: boolean } = {}) => {
+			setModelsLoading(true);
+			setModelsError(null);
+			try {
+				const response = await fetch("/api/openrouter/models", {
+					method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ apiKey: key }),
         });
         const data = await response.json();
-        if (!response.ok || !data?.ok) {
-          if (response.status === 401) {
-            removeOpenRouterKey();
-            setApiKey(null);
-          }
-          throw new Error(typeof data?.message === "string" && data.message.length > 0 ? data.message : "Failed to fetch OpenRouter models.");
-        }
-        setModelOptions(data.models);
-        const fallback = data.models[0]?.value ?? null;
-        setSelectedModel((previous) => {
-          if (!previous) return fallback;
-          return data.models.some((model: any) => model.value === previous) ? previous : fallback;
-        });
-      } catch (error) {
-        console.error("Failed to load OpenRouter models", error);
-        setModelOptions([]);
-        setSelectedModel(null);
-        setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
-      } finally {
-        setModelsLoading(false);
-      }
-    },
-    [],
+				if (!response.ok || !data?.ok) {
+					if (response.status === 401) {
+						removeOpenRouterKey();
+						setApiKey(null);
+					}
+					throw new Error(typeof data?.message === "string" && data.message.length > 0 ? data.message : "Failed to fetch OpenRouter models.");
+				}
+				setModelOptions(data.models);
+				const fallback = data.models[0]?.value ?? null;
+				setSelectedModel((previous) => {
+					if (!previous) return fallback;
+					return data.models.some((model: any) => model.value === previous) ? previous : fallback;
+				});
+				if (options.notify) {
+					toast.success("Model list refreshed");
+				}
+			} catch (error) {
+				console.error("Failed to load OpenRouter models", error);
+				setModelOptions([]);
+				setSelectedModel(null);
+				setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
+				toast.error(error instanceof Error && error.message ? error.message : "Failed to load models");
+			} finally {
+				setModelsLoading(false);
+			}
+		},
+		[],
   );
 
   useEffect(() => {
@@ -109,13 +114,15 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       try {
         await saveOpenRouterKey(key);
         setApiKey(key);
-        await fetchModels(key);
-      } catch (error) {
-        console.error("Failed to save OpenRouter API key", error);
-        setApiKeyError(error instanceof Error && error.message ? error.message : "Failed to save OpenRouter API key.");
-      } finally {
-        setSavingApiKey(false);
-      }
+		await fetchModels(key);
+		toast.success("OpenRouter key linked");
+	} catch (error) {
+		console.error("Failed to save OpenRouter API key", error);
+		setApiKeyError(error instanceof Error && error.message ? error.message : "Failed to save OpenRouter API key.");
+		toast.error(error instanceof Error && error.message ? error.message : "Failed to save key");
+	} finally {
+		setSavingApiKey(false);
+	}
     },
     [fetchModels],
   );
@@ -177,11 +184,12 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             : item,
         ),
       );
-    },
-    onError: (error) => {
-      console.error("Chat stream error", error);
-    },
-  });
+	},
+	onError: (error) => {
+		console.error("Chat stream error", error);
+		toast.error(error instanceof Error && error.message ? error.message : "Chat stream error");
+	},
+	});
 
   useLayoutEffect(() => {
     const wrapper = composerRef.current;
@@ -247,10 +255,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           },
         },
       );
-    } catch (error) {
-      console.error("Failed to send message", error);
-    }
-  };
+	} catch (error) {
+		console.error("Failed to send message", error);
+		toast.error(error instanceof Error && error.message ? error.message : "Failed to send message");
+	}
+};
 
   const busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
@@ -266,10 +275,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         errorMessage={apiKeyError ?? modelsError}
         onSubmit={handleSaveApiKey}
         onTroubleshoot={() => {
-          setApiKeyError(null);
-          setModelsError(null);
-          if (apiKey) void fetchModels(apiKey);
-        }}
+		setApiKeyError(null);
+		setModelsError(null);
+		if (apiKey) void fetchModels(apiKey, { notify: true });
+	}}
       />
       <ChatMessagesFeed
         chatId={chatId}

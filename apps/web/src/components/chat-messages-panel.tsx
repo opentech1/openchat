@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDownIcon, Copy, RefreshCw, Quote } from "lucide-react";
 import {
 	memo,
 	useCallback,
@@ -18,11 +18,16 @@ import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatDayLabel, formatRelativeTime } from "@/lib/date";
+import { FOCUS_COMPOSER_EVENT, PREFILL_COMPOSER_EVENT, type PrefillComposerEventDetail } from "@/lib/events";
 
 type ChatMessage = {
 	id: string;
 	role: "user" | "assistant";
 	content: string;
+	createdAt: Date;
 };
 
 type ChatMessagesPanelProps = {
@@ -33,6 +38,14 @@ type ChatMessagesPanelProps = {
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
+
+function isSameDay(a: Date, b: Date) {
+	return (
+		a.getFullYear() === b.getFullYear() &&
+		a.getMonth() === b.getMonth() &&
+		a.getDate() === b.getDate()
+	);
+}
 
 function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true }: ChatMessagesPanelProps) {
 	const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -141,17 +154,115 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 						style={{ paddingBottom }}
 					>
 						{hasMessages ? (
-							messages.map((msg) => (
-								<Message key={msg.id} from={msg.role} className={msg.role === "assistant" ? "justify-start flex-row" : undefined}>
-									{msg.role === "assistant" ? (
-										<Streamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap">
-											{msg.content}
-										</Streamdown>
-									) : (
-										<div className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap">{msg.content}</div>
-									)}
-								</Message>
-							))
+							<TooltipProvider delayDuration={150}>
+								{messages.map((msg, index) => {
+									const previous = messages[index - 1];
+									const showDayDivider =
+										!previous || !isSameDay(previous.createdAt, msg.createdAt);
+									const relativeLabel = formatRelativeTime(msg.createdAt);
+									return (
+										<div key={msg.id} className="space-y-2">
+											{showDayDivider ? (
+												<div className="flex items-center gap-3 pt-2 text-xs text-muted-foreground">
+													<div className="h-px flex-1 bg-border/60" />
+													<span>{formatDayLabel(msg.createdAt)}</span>
+													<div className="h-px flex-1 bg-border/60" />
+												</div>
+											) : null}
+											<Message
+												from={msg.role}
+												className={cn(
+													msg.role === "assistant" ? "justify-start flex-row" : undefined,
+													"relative",
+												)}
+											>
+												<div className="relative flex w-full flex-col gap-2">
+													<div className="pointer-events-none absolute -top-8 right-0 flex gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<button
+																	type="button"
+																	className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/80 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+																	onClick={() => {
+																		void (async () => {
+																			try {
+																				if (navigator.clipboard?.writeText) {
+																					await navigator.clipboard.writeText(msg.content);
+																				} else {
+																					document.execCommand?.("copy", false, msg.content);
+																				}
+																				toast.success("Message copied");
+																			} catch {
+																				toast.error("Failed to copy message");
+																			}
+																		})();
+																}}
+																aria-label="Copy message"
+															>
+																<Copy className="size-4" />
+															</button>
+														</TooltipTrigger>
+														<TooltipContent side="left">Copy</TooltipContent>
+													</Tooltip>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<button
+																	type="button"
+																	className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/80 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+																	onClick={() => {
+																		const detail: PrefillComposerEventDetail = { text: msg.content };
+																		window.dispatchEvent(new CustomEvent(PREFILL_COMPOSER_EVENT, { detail }));
+																		window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT));
+																		toast.success("Composer prefilled");
+																}}
+																aria-label="Use as prompt"
+															>
+																<RefreshCw className="size-4" />
+															</button>
+														</TooltipTrigger>
+														<TooltipContent side="left">Send to composer</TooltipContent>
+													</Tooltip>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<button
+																	type="button"
+																	className="pointer-events-auto inline-flex size-8 items-center justify-center rounded-md border border-border/70 bg-background/80 text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+																	onClick={() => {
+																		const quoted = msg.content
+																			.split(/\r?\n/)
+																			.map((line) => `> ${line}`)
+																			.join("\n");
+																		const detail: PrefillComposerEventDetail = { text: `${quoted}\n\n` };
+																		window.dispatchEvent(new CustomEvent(PREFILL_COMPOSER_EVENT, { detail }));
+																		window.dispatchEvent(new Event(FOCUS_COMPOSER_EVENT));
+																		toast.success("Quoted message in composer");
+																}}
+																aria-label="Quote message"
+															>
+																<Quote className="size-4" />
+															</button>
+														</TooltipTrigger>
+														<TooltipContent side="left">Quote</TooltipContent>
+													</Tooltip>
+												</div>
+												{msg.role === "assistant" ? (
+													<Streamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap">
+														{msg.content}
+													</Streamdown>
+												) : (
+													<div className="border border-border/70 rounded-lg bg-background px-4 py-2 text-sm leading-6 shadow-sm whitespace-pre-wrap">
+														{msg.content}
+													</div>
+												)}
+												<span className="text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+													{relativeLabel || formatDayLabel(msg.createdAt)}
+												</span>
+											</div>
+											</Message>
+										</div>
+									);
+								})}
+							</TooltipProvider>
 						) : (
 							<p className="text-muted-foreground text-sm">No messages yet. Say hi!</p>
 						)}

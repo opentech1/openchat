@@ -8,6 +8,8 @@ import { serverClient } from "@/utils/orpc-server";
 import Script from "next/script";
 import DashboardAccessFallback from "@/components/dashboard-access-fallback";
 import type { ChatSummary } from "@/types/server-router";
+import { DashboardTopBar } from "@/components/dashboard-top-bar";
+import { CommandMenu } from "@/components/command-menu";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
@@ -40,7 +42,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 						{`window.__DEV_USER_ID__ = ${JSON.stringify(userId)};`}
 					</Script>
 				) : null}
-				<div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
+				<CommandMenu currentUserId={userId} initialChats={chats} />
+				<DashboardTopBar currentUserId={userId} initialChats={chats} />
+				<div className="pointer-events-auto absolute right-4 top-4 z-20 hidden items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur md:flex">
 					<Link
 						href="/dashboard/settings"
 						className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"

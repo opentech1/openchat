@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Paperclip, SendIcon, XIcon, LoaderIcon, SquareIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Paperclip, SendIcon, XIcon, LoaderIcon, SquareIcon, Sparkles } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FOCUS_COMPOSER_EVENT, PREFILL_COMPOSER_EVENT, type PrefillComposerEventDetail } from "@/lib/events";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
@@ -93,6 +94,23 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
 Textarea.displayName = "Textarea";
 
 const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5MB safeguard until backend storage lands
+const QUICK_PROMPTS = [
+	"Summarize our last conversation into bullet points.",
+	"Draft a concise follow-up message from this chat.",
+	"Highlight action items and owners from this thread.",
+];
+
+function formatFileSize(bytes: number) {
+	if (!Number.isFinite(bytes) || bytes <= 0) return "";
+	const units = ["B", "KB", "MB", "GB"];
+	let size = bytes;
+	let unitIndex = 0;
+	while (size >= 1024 && unitIndex < units.length - 1) {
+		size /= 1024;
+		unitIndex += 1;
+	}
+	return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
 
 export type ChatComposerProps = {
 	onSend: (payload: { text: string; modelId: string; apiKey: string; attachments: File[] }) => void | Promise<void>;
@@ -128,6 +146,74 @@ export default function ChatComposer({
 	const fast = prefersReducedMotion ? 0 : 0.3;
 	const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const [isDragActive, setIsDragActive] = useState(false);
+	const hasAutoFocusedRef = useRef(false);
+
+	const focusComposer = useCallback(() => {
+		if (disabled) return;
+		const textarea = textareaRef.current;
+		if (!textarea) return;
+		textarea.focus();
+		const length = textarea.value.length;
+		textarea.setSelectionRange(length, length);
+	}, [disabled, textareaRef]);
+
+	useEffect(() => {
+		if (hasAutoFocusedRef.current) return;
+		if (disabled) return;
+		hasAutoFocusedRef.current = true;
+		focusComposer();
+	}, [disabled, focusComposer]);
+
+	useEffect(() => {
+		const handler = () => focusComposer();
+		window.addEventListener(FOCUS_COMPOSER_EVENT, handler);
+		return () => window.removeEventListener(FOCUS_COMPOSER_EVENT, handler);
+	}, [focusComposer]);
+
+	useEffect(() => {
+		const handler = (event: KeyboardEvent) => {
+			if (!(event.metaKey || event.ctrlKey)) return;
+			if (event.key.toLowerCase() !== "l") return;
+			const target = event.target as HTMLElement | null;
+			if (target && target.closest("input, textarea, [contenteditable=true]")) return;
+			event.preventDefault();
+			focusComposer();
+		};
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, [focusComposer]);
+
+	useEffect(() => {
+		const handler = (event: Event) => {
+			const detail = (event as CustomEvent<PrefillComposerEventDetail>).detail;
+			if (!detail?.text) return;
+			setErrorMessage(null);
+			setValue(detail.text);
+			setTimeout(() => {
+				adjustHeight();
+				focusComposer();
+			}, 10);
+		};
+		window.addEventListener(PREFILL_COMPOSER_EVENT, handler as EventListener);
+		return () => window.removeEventListener(PREFILL_COMPOSER_EVENT, handler as EventListener);
+	}, [adjustHeight, focusComposer]);
+
+	const attachmentEntries = useMemo(() => {
+		return attachments.map((file) => {
+			const key = `${file.name}:${file.size}:${file.lastModified}`;
+			const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+			return { file, key, preview };
+		});
+	}, [attachments]);
+
+	useEffect(() => {
+		return () => {
+			for (const entry of attachmentEntries) {
+				if (entry.preview) URL.revokeObjectURL(entry.preview);
+			}
+		};
+	}, [attachmentEntries]);
 
   useEffect(() => {
     if (modelValue) {
@@ -165,20 +251,37 @@ export default function ChatComposer({
 		}
 	}, [activeModelId, adjustHeight, apiKey, attachments, disabled, isSending, onSend, value]);
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void send();
-    }
-  };
+	const handleQuickPrompt = useCallback(
+		(prompt: string) => {
+			setErrorMessage(null);
+			setValue((prev) => {
+				const trimmed = prev.trim();
+				if (!trimmed) return prompt;
+				return `${trimmed}\n\n${prompt}`;
+			});
+			setTimeout(() => {
+				adjustHeight();
+				focusComposer();
+			}, 10);
+		},
+		[adjustHeight, focusComposer],
+	);
+
+	const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			void send();
+		}
+	};
 
 	const isBusy = isSending || isStreaming;
 
-	const handleFileSelection = (files: FileList | null) => {
+	const handleFileSelection = (files: FileList | File[] | null) => {
 		if (!files) return;
+		const list = Array.isArray(files) ? files : Array.from(files);
 		const nextFiles: File[] = [];
 		let rejectedName: string | null = null;
-		for (const file of Array.from(files)) {
+		for (const file of list) {
 			if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
 				rejectedName = file.name;
 				continue;
@@ -190,10 +293,10 @@ export default function ChatComposer({
 		}
 		if (nextFiles.length === 0) return;
 		setAttachments((prev) => {
-			const seen = new Set(prev.map((file) => `${file.name}:${file.size}`));
+			const seen = new Set(prev.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
 			const combined = [...prev];
 			for (const file of nextFiles) {
-				const key = `${file.name}:${file.size}`;
+				const key = `${file.name}:${file.size}:${file.lastModified}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
 				combined.push(file);
@@ -202,12 +305,37 @@ export default function ChatComposer({
 		});
 	};
 
+	const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+		setIsDragActive(true);
+	};
+
+	const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+		if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+		setIsDragActive(false);
+	};
+
+	const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+		event.preventDefault();
+		setIsDragActive(false);
+		handleFileSelection(event.dataTransfer?.files ?? null);
+	};
+
 	return (
     <motion.div
-      className="border-border bg-card/80 relative rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl"
+      className={cn(
+        "border-border bg-card/80 relative rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl",
+        isDragActive && "border-primary/60 bg-primary/10",
+      )}
       initial={{ scale: 0.985 }}
       animate={{ scale: 1 }}
       transition={{ delay: 0.05, duration: fast }}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      data-dragging={isDragActive ? "true" : "false"}
     >
       <div className="p-4">
         <Textarea
@@ -219,6 +347,11 @@ export default function ChatComposer({
             adjustHeight();
           }}
           onKeyDown={onKeyDown}
+          onPaste={(event) => {
+            if (event.clipboardData?.files?.length) {
+              handleFileSelection(event.clipboardData.files);
+            }
+          }}
           placeholder={placeholder}
           containerClassName="w-full"
           className={cn(
@@ -237,38 +370,67 @@ export default function ChatComposer({
         />
       </div>
 
-      <AnimatePresence>
-		{attachments.length > 0 && (
+	<AnimatePresence>
+		{attachmentEntries.length > 0 && (
 			<motion.div
-				className="flex flex-wrap gap-2 px-4 pb-3"
+				className="grid gap-2 px-4 pb-3 sm:grid-cols-2"
 				initial={{ opacity: 0, height: 0 }}
-				animate={{ opacity: 1, height: 'auto' }}
+				animate={{ opacity: 1, height: "auto" }}
 				exit={{ opacity: 0, height: 0 }}
 			>
-				{attachments.map((file, index) => (
+				{attachmentEntries.map(({ file, key, preview }) => (
 					<motion.div
-						key={index}
-						className="bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
-						initial={{ opacity: 0, scale: 0.9 }}
-						animate={{ opacity: 1, scale: 1 }}
-						exit={{ opacity: 0, scale: 0.9 }}
+						key={key}
+						className="border-border/60 relative flex items-center gap-3 overflow-hidden rounded-lg border bg-background/90 p-2 shadow-sm"
+						initial={{ opacity: 0, y: 6 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: -6 }}
 					>
-						<span>
-							{file.name}
-							{file.size ? ` (${Math.round(file.size / 1024)} KB)` : ''}
-						</span>
+						<div className="border-border/60 flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/40">
+							{preview ? (
+								<img src={preview} alt={file.name} className="h-full w-full object-cover" />
+							) : (
+								<Paperclip className="size-4 text-muted-foreground" />
+							)}
+						</div>
+						<div className="min-w-0 flex-1">
+							<p className="truncate text-sm font-medium text-foreground">{file.name}</p>
+							<p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+						</div>
 						<button
-							onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== index))}
-							className="text-muted-foreground hover:text-foreground transition-colors"
+							type="button"
+							onClick={() => setAttachments((prev) => prev.filter((existing) => existing !== file))}
+							className="hover:bg-destructive/10 text-muted-foreground hover:text-destructive absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-full transition-colors"
 							aria-label="Remove attachment"
 						>
-							<XIcon className="h-3 w-3" />
+							<XIcon className="size-3.5" />
 						</button>
 					</motion.div>
 				))}
 			</motion.div>
 		)}
 	</AnimatePresence>
+
+	{QUICK_PROMPTS.length > 0 ? (
+		<div className="px-4 pb-3">
+			<div className="flex flex-wrap gap-2">
+				{QUICK_PROMPTS.map((prompt) => (
+					<button
+						type="button"
+						key={prompt}
+						className={cn(
+							buttonVariants({ variant: "secondary", size: "sm" }),
+							"gap-1 text-xs",
+						)}
+						onClick={() => handleQuickPrompt(prompt)}
+					>
+						<Sparkles className="size-3.5" />
+						<span>{prompt}</span>
+					</button>
+				))}
+			</div>
+		</div>
+	) : null}
 
 	<div className="border-border flex items-center justify-between gap-4 border-t p-4">
 		<div className="flex items-center gap-2">

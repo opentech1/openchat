@@ -72,7 +72,7 @@ export function ChatMessagesFeed({
 
 	return (
 		<ChatMessagesPanel
-			messages={merged.map((msg) => ({ id: msg.id, role: msg.role, content: msg.content }))}
+			messages={merged.map((msg) => ({ id: msg.id, role: msg.role, content: msg.content, createdAt: msg.createdAt }))}
 			paddingBottom={paddingBottom}
 			className={className}
 		/>
