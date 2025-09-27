@@ -70,29 +70,17 @@ openchat/
 - `bun db:studio`: Open database studio UI
 - `bun run verify:build`: Clean the web build cache and run both the Next.js and Turbo build pipelines (mirrors the Docker deploy build)
 
-## Docker Image
+## Docker Compose
 
-The root `Dockerfile` builds the full stack (Postgres, ElectricSQL, Bun API,
-and the Next.js web app). Provide your Clerk keys at build time so the web bundle
-can render real auth components:
+Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and the Next.js frontend together:
 
 ```bash
-docker build \
-  --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY \
-  --build-arg CLERK_PUBLISHABLE_KEY=$CLERK_PUBLISHABLE_KEY \
-  --build-arg CLERK_SECRET_KEY=$CLERK_SECRET_KEY \
-  -t openchat-app .
-
-# Container exposes: 3000 (API), 3001 (web), 3010 (Electric HTTP),
-# 5133 (Electric proxy), 5432 (Postgres)
-docker run -p 3000:3000 -p 3001:3001 -p 3010:3010 -p 5133:5133 -p 5432:5432 \
-  openchat-app
+cp .env.docker.example .env
+# edit .env with real Clerk keys and production URLs
+docker compose up --build
 ```
 
-The entrypoint will initialise Postgres (including the Electric shadow
-database), boot ElectricSQL, then launch the Bun API and Next.js server. Pass in
-environment overrides (e.g. `POSTGRES_PASSWORD`, `PG_PROXY_PASSWORD`, custom
-ports) as required by your environment orchestrator.
+The stack exposes: 3000 (API), 3001 (web), 3010 (Electric HTTP), 5133 (Electric proxy), and 5432 (Postgres). Update the `.env` file to point at your Traefik routes or production domains before running `docker compose up`.
 
 ## Environment Variables
 
@@ -116,7 +104,7 @@ ports) as required by your environment orchestrator.
 ### ElectricSQL (local dev)
 
 1. Copy the environment examples: `cp apps/web/.env.example apps/web/.env.local` and `cp apps/server/.env.example apps/server/.env` (adjust values as needed).
-2. If you prefer containers, build/run the all-in-one image (see [Docker Image](#docker-image)); it exposes Electric on `http://localhost:3010` and Postgres on `5432`. Otherwise, provide your own Postgres + Electric services and point the URLs below at them.
+2. To run everything in containers, `docker compose up --build` (see [Docker Compose](#docker-compose)); this exposes Electric on `http://localhost:3010` and Postgres on `5432`. Otherwise provide your own Postgres + Electric services and point the URLs below at them.
 3. Ensure the following variables are set before running `bun dev`:
 
    ```bash
