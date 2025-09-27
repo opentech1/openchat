@@ -28,19 +28,34 @@ const nextConfig = {
   async headers() {
     const isProd = process.env.NODE_ENV === "production";
     // Build CSP; in dev we omit CSP to avoid blocking Clerk scripts/workers
+    const clerkCustomOrigin = process.env.NEXT_PUBLIC_CLERK_FRONTEND_URL || process.env.NEXT_PUBLIC_CLERK_DOMAIN || "";
+    const clerkSources = ["https://*.clerk.com", "https://*.clerk.services"];
+    if (clerkCustomOrigin) clerkSources.push(clerkCustomOrigin);
+    const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'", ...clerkSources];
+    const connectSrc = [
+      "'self'",
+      process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
+      ...clerkSources,
+      "ws:",
+      "wss:",
+    ];
+    const frameSrc = ["https://*.clerk.com"];
+    if (clerkCustomOrigin) frameSrc.push(clerkCustomOrigin);
+    const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io"];
+    if (clerkCustomOrigin) imgSrc.push(clerkCustomOrigin);
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.clerk.com https://*.clerk.services",
+      `script-src ${scriptSrc.join(' ')}` ,
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://ik.imagekit.io",
+      `img-src ${imgSrc.join(' ')}` ,
       "font-src 'self' data:",
-      "connect-src 'self' "+(process.env.NEXT_PUBLIC_SERVER_URL||"http://localhost:3000")+" https://*.clerk.com https://*.clerk.services ws: wss:",
+      `connect-src ${connectSrc.join(' ')}` ,
       "frame-ancestors 'self'",
-      "frame-src https://*.clerk.com",
+      `frame-src ${frameSrc.join(' ')}` ,
       "worker-src 'self' blob:",
       "base-uri 'self'",
       "form-action 'self'",
-    ].join("; ");
+    ].join('; ');
     const base = [
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
       { key: "X-Content-Type-Options", value: "nosniff" },
