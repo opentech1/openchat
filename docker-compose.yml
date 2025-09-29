@@ -9,8 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-openchat}
     command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10"]
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d
@@ -38,9 +38,9 @@ services:
       ELECTRIC__PG_PROXY__PORT: 5133
       ELECTRIC__PG_PROXY__HOST: 0.0.0.0
       ELECTRIC__PG_PROXY__PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
-    ports:
-      - "${ELECTRIC_HTTP_PORT:-3010}:3010"
-      - "${ELECTRIC_PROXY_PORT:-5133}:5133"
+    expose:
+      - "3010"
+      - "5133"
 
   server:
     build:
@@ -66,8 +66,8 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
-    ports:
-      - "${SERVER_PORT:-3000}:3000"
+    expose:
+      - "3000"
 
   web:
     build:
@@ -89,8 +89,8 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://web:3001}
       NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://server:3000}
       NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
-    ports:
-      - "${WEB_PORT:-3001}:3001"
+    expose:
+      - "3001"
 
 volumes:
   postgres-data:
