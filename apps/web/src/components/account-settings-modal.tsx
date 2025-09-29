@@ -193,6 +193,10 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 	}
 
 	async function handleCopyUserId() {
+		if (!user) {
+			toast.error("No user session available");
+			return;
+		}
 		try {
 			await navigator.clipboard.writeText(user.id);
 			toast.success("User ID copied to clipboard");

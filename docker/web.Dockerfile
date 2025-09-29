@@ -31,8 +31,8 @@ FROM node:20-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy standalone Next.js server output
-COPY --from=deps /app/apps/web/.next/standalone/apps/web ./apps/web
+# Copy standalone Next.js server output (includes node_modules)
+COPY --from=deps /app/apps/web/.next/standalone ./
 COPY --from=deps /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=deps /app/apps/web/public ./apps/web/public
 

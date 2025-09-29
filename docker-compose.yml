@@ -54,19 +54,19 @@ services:
       electric:
         condition: service_started
     environment:
-        DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat}
-        SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat_shadow}
-        ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://electric:3010}
-        PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
-        ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
-        ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:-dev-gatekeeper-secret}
-        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://web:3001}
-        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
-        CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
-        BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me}
-        BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
-        AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
-      ports:
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat}
+      SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat_shadow}
+      ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://electric:3010}
+      PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
+      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
+      ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:-dev-gatekeeper-secret}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://web:3001}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
+      AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+    ports:
       - "${SERVER_PORT:-3000}:3000"
 
   web:

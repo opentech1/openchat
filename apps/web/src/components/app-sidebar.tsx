@@ -39,9 +39,9 @@ function toDate(value: string | Date | null | undefined) {
 	return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function pickLatestDate(a?: Date | null, b?: Date | null) {
-	const aDate = a ?? undefined;
-	const bDate = b ?? undefined;
+function pickLatestDate(a?: string | Date | null, b?: string | Date | null) {
+	const aDate = toDate(a ?? undefined);
+	const bDate = toDate(b ?? undefined);
 	if (!aDate && !bDate) return undefined;
 	if (!aDate) return bDate;
 	if (!bDate) return aDate;
@@ -330,8 +330,9 @@ function ChatList({
 	return (
 		<ul className="px-1 space-y-1">
 			{chats.map((c) => {
-				const href = `/dashboard/chat/${c.id}`;
-				const isActive = activePath === href;
+				const hrefPath = `/dashboard/chat/${c.id}`;
+				const href = { pathname: "/dashboard/chat/[id]" as const, query: { id: c.id } };
+				const isActive = activePath === hrefPath;
 				return (
 					<li key={c.id} className="group relative">
 						<Link
