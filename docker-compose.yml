@@ -4,10 +4,8 @@ services:
     image: postgres:17-alpine
     container_name: openchat-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-openchat}
+    env_file:
+      - docker/.env.compose
     command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10"]
     expose:
       - "5432"
@@ -15,7 +13,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -27,17 +25,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - docker/.env.compose
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat}
-      SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat_shadow}
-      PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
       ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
       ELECTRIC_LOG_LEVEL: ${ELECTRIC_LOG_LEVEL:-info}
       ELECTRIC_HTTP_PORT: 3010
       ELECTRIC__HTTP__HOST: 0.0.0.0
       ELECTRIC__PG_PROXY__PORT: 5133
       ELECTRIC__PG_PROXY__HOST: 0.0.0.0
-      ELECTRIC__PG_PROXY__PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
     expose:
       - "3010"
       - "5133"
@@ -53,17 +49,14 @@ services:
         condition: service_healthy
       electric:
         condition: service_started
+    env_file:
+      - docker/.env.compose
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat}
-      SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL:-postgres://postgres:postgres@postgres:5432/openchat_shadow}
       ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://electric:3010}
-      PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:-dev-proxy-password}
       ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
-      ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:-dev-gatekeeper-secret}
       NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://web:3001}
       NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-secret-change-me}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
     expose:
