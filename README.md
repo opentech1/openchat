@@ -72,15 +72,15 @@ openchat/
 
 ## Docker Compose
 
-Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and the Next.js frontend together. Generate a secrets file once (or whenever you want to rotate credentials):
+Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and the Next.js frontend together. The repo includes `docker/.env.compose` with development defaults; rotate the database credentials any time with:
 
 ```bash
-bun run generate:secrets --force
+bun run generate:secrets --force  # rewrites Postgres + Electric proxy secrets only
 # edits land in docker/.env.compose
 docker compose up --build
 ```
 
-Alternatively, copy `docker/.env.compose.example` to `docker/.env.compose` and edit the values manually. The stack exposes internal ports only (3000 API, 3001 web, 3010 Electric HTTP, 5133 Electric proxy, 5432 Postgres); adjust the secrets file to reflect your external hosts before deploying behind a proxy.
+Update the non-database secrets (`ELECTRIC_GATEKEEPER_SECRET`, `BETTER_AUTH_SECRET`, etc.) manually or via your deployment secret store. The stack exposes internal ports only (3000 API, 3001 web, 3010 Electric HTTP, 5133 Electric proxy, 5432 Postgres); adjust the secrets file to reflect your external hosts before deploying behind a proxy.
 
 ## Environment Variables
 

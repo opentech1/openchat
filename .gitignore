@@ -3,8 +3,8 @@ node_modules
 .alchemy
 .env
 .env.local
-docker/.env.compose
 docker/.env.compose.*
+!docker/.env.compose
 !docker/.env.compose.example
 docker/secrets/
 coverage/
