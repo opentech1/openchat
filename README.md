@@ -72,15 +72,15 @@ openchat/
 
 ## Docker Compose
 
-Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and the Next.js frontend together:
+Use the root `docker-compose.yml` to run Postgres, ElectricSQL, the Bun API, and the Next.js frontend together. Generate a secrets file once (or whenever you want to rotate credentials):
 
 ```bash
-cp .env.docker.example .env
-# edit .env with Better Auth secrets and production URLs
+bun run generate:secrets --force
+# edits land in docker/.env.compose
 docker compose up --build
 ```
 
-The stack exposes: 3000 (API), 3001 (web), 3010 (Electric HTTP), 5133 (Electric proxy), and 5432 (Postgres). Update the `.env` file to point at your Traefik routes or production domains before running `docker compose up`.
+Alternatively, copy `docker/.env.compose.example` to `docker/.env.compose` and edit the values manually. The stack exposes internal ports only (3000 API, 3001 web, 3010 Electric HTTP, 5133 Electric proxy, 5432 Postgres); adjust the secrets file to reflect your external hosts before deploying behind a proxy.
 
 ## Environment Variables
 
