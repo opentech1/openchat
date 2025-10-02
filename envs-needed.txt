@@ -1,0 +1,32 @@
+NEXT_PUBLIC_APP_URL=https://ochat.pro
+NEXT_PUBLIC_SERVER_URL=https://api.ochat.pro
+NEXT_PUBLIC_ELECTRIC_URL=https://electric.ochat.pro
+BETTER_AUTH_URL=https://api.ochat.pro
+CORS_ORIGIN=https://ochat.pro
+AUTH_COOKIE_DOMAIN=.ochat.pro
+DATABASE_URL=postgresql://openchat_user:<GENERATED_DB_PASSWORD>@postgres-host:5432/openchat
+SHADOW_DATABASE_URL=postgresql://openchat_user:<GENERATED_DB_PASSWORD>@postgres-host:5432/openchat_shadow
+SERVER_INTERNAL_URL=http://server:3000
+ELECTRIC_SERVICE_URL=https://electric.ochat.pro
+ELECTRIC_GATEKEEPER_SECRET=<64_CHAR_RANDOM>
+BETTER_AUTH_SECRET=<64_CHAR_RANDOM>
+OPENROUTER_API_KEY_SECRET=<32_CHAR_RANDOM>
+PG_PROXY_PASSWORD=<SAME_AS_ELECTRIC>
+ELECTRIC_HTTP_PORT=3010
+ELECTRIC__HTTP__HOST=0.0.0.0
+ELECTRIC__PG_PROXY__PORT=5133
+ELECTRIC__PG_PROXY__HOST=0.0.0.0
+ELECTRIC_INSECURE=false
+ELECTRIC_LOG_LEVEL=info
+
+INSTRUCTIONS
+Generate GENERATED_DB_PASSWORD with: openssl rand -base64 24 | tr -d '\n'
+Same password is reused for DATABASE_URL and SHADOW_DATABASE_URL (same user, different database)
+Generate ELECTRIC_GATEKEEPER_SECRET with: openssl rand -base64 48 | tr -d '\n'
+Generate BETTER_AUTH_SECRET with: openssl rand -base64 48 | tr -d '\n'
+Generate OPENROUTER_API_KEY_SECRET with: openssl rand -hex 16
+Generate PG_PROXY_PASSWORD with: openssl rand -base64 32 | tr -d '\n'
+Docker Compose auto-creates the shadow database via docker/postgres-init/01-create-shadow-db.sql
+For external Postgres, create manually once: createdb -h postgres-host -U openchat_user openchat_shadow
+After setting envs, restart Electric, server, and web services to load them
+Run bun db:push from apps/server whenever schema changes hit production

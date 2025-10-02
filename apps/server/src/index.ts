@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env";
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
