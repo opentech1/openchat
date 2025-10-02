@@ -6,6 +6,7 @@ import { Pool } from "pg";
 import * as authSchema from "./schema";
 
 const globalSymbol = Symbol.for("openchat.auth.pool");
+const memorySymbol = Symbol.for("openchat.auth.memory");
 
 function getConnectionString() {
 	return (
@@ -20,6 +21,10 @@ type GlobalWithAuth = typeof globalThis & {
 	[globalSymbol]?: {
 		pool: Pool;
 		db: ReturnType<typeof drizzle>;
+	};
+	[memorySymbol]?: {
+		db: Record<string, any[]>;
+		adapter: ReturnType<typeof memoryAdapter>;
 	};
 };
 
@@ -53,6 +58,18 @@ function computeCookieDomain(baseURL: string | undefined) {
 
 const connectionString = getConnectionString();
 const dbResources = connectionString ? getPool(connectionString) : null;
+
+function getMemoryAdapter() {
+	const globalRef = globalThis as GlobalWithAuth;
+	if (!globalRef[memorySymbol]) {
+		const db: Record<string, any[]> = {};
+		const adapter = memoryAdapter(db);
+		globalRef[memorySymbol] = { db, adapter };
+	}
+	return globalRef[memorySymbol]!.adapter;
+}
+
+const fallbackAdapter = getMemoryAdapter();
 
 const rawBaseUrl = process.env.BETTER_AUTH_URL || process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 const baseURL = rawBaseUrl.replace(/\/$/, "");
@@ -106,7 +123,7 @@ export const auth = betterAuth({
 			schema: authSchema,
 			provider: "pg",
 		})
-		: memoryAdapter(),
+		: fallbackAdapter,
 	session: {
 		expiresIn: 60 * 60 * 24 * 7, // 7 days
 		freshAge: 60 * 60, // 1 hour
