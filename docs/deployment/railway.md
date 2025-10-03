@@ -101,9 +101,11 @@ Generate strong secrets locally (reusing `bun run generate:secrets --force` is f
 ```bash
 railway variables set --service server BETTER_AUTH_SECRET=<generated>
 railway variables set --service server ELECTRIC_GATEKEEPER_SECRET=<generated>
+railway variables set --service server ELECTRIC_SECRET=<generated>
 
 railway variables set --service electric ELECTRIC_GATEKEEPER_SECRET=<same-as-server>
 railway variables set --service electric PG_PROXY_PASSWORD=<generated>
+railway variables set --service electric ELECTRIC_SECRET=<same-as-server>
 railway variables set --service server PG_PROXY_PASSWORD='${{electric.PG_PROXY_PASSWORD}}'
 ```
 
