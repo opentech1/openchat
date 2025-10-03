@@ -29,9 +29,7 @@ Generate ELECTRIC_SECRET with: openssl rand -base64 48 | tr -d '\n'
 Generate BETTER_AUTH_SECRET with: openssl rand -base64 48 | tr -d '\n'
 Generate OPENROUTER_API_KEY_SECRET with: openssl rand -hex 16
 Generate PG_PROXY_PASSWORD with: openssl rand -base64 32 | tr -d '\n'
-Docker Compose auto-creates the primary + shadow databases via docker/postgres-init/01-create-shadow-db.sql
-For external Postgres, create the databases once:
-createdb -h postgres-host -U openchat_user openchat
-createdb -h postgres-host -U openchat_user openchat_shadow
+Docker Compose auto-creates the primary + shadow databases via docker/postgres-init/01-create-shadow-db.sql.
+For external Postgres, provision empty `openchat` and `openchat_shadow` databases using your provider's tools before first deploy.
 After setting envs, restart Electric, server, and web services to load them
 Run bun db:push from apps/server whenever schema changes hit production
