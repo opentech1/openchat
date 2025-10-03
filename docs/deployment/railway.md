@@ -85,11 +85,12 @@ railway variables set --service electric DATABASE_URL='${{postgres.DATABASE_URL}
 railway variables set --service electric SHADOW_DATABASE_URL='${{postgres.DATABASE_URL}}?schema=openchat_shadow'
 ```
 
-Create the shadow database once:
+Create the databases once (if the default `openchat` DB is missing, recreate it too):
 
 ```bash
 railway connect postgres
 # inside psql
+CREATE DATABASE openchat;
 CREATE DATABASE openchat_shadow;
 \q
 ```
