@@ -9,6 +9,7 @@ SHADOW_DATABASE_URL=postgresql://openchat_user:<GENERATED_DB_PASSWORD>@postgres-
 SERVER_INTERNAL_URL=http://server:3000
 ELECTRIC_SERVICE_URL=https://electric.ochat.pro
 ELECTRIC_GATEKEEPER_SECRET=<64_CHAR_RANDOM>
+ELECTRIC_SECRET=<64_CHAR_RANDOM>
 BETTER_AUTH_SECRET=<64_CHAR_RANDOM>
 OPENROUTER_API_KEY_SECRET=<32_CHAR_RANDOM>
 PG_PROXY_PASSWORD=<SAME_AS_ELECTRIC>
@@ -23,6 +24,7 @@ INSTRUCTIONS
 Generate GENERATED_DB_PASSWORD with: openssl rand -base64 24 | tr -d '\n'
 Same password is reused for DATABASE_URL and SHADOW_DATABASE_URL (same user, different database)
 Generate ELECTRIC_GATEKEEPER_SECRET with: openssl rand -base64 48 | tr -d '\n'
+Generate ELECTRIC_SECRET with: openssl rand -base64 48 | tr -d '\n'
 Generate BETTER_AUTH_SECRET with: openssl rand -base64 48 | tr -d '\n'
 Generate OPENROUTER_API_KEY_SECRET with: openssl rand -hex 16
 Generate PG_PROXY_PASSWORD with: openssl rand -base64 32 | tr -d '\n'
