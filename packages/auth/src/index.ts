@@ -2,11 +2,19 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { lookup as resolveHost } from "node:dns/promises";
 import { Pool } from "pg";
 import * as authSchema from "./schema";
 
 const globalSymbol = Symbol.for("openchat.auth.pool");
 const memorySymbol = Symbol.for("openchat.auth.memory");
+
+type ConnectionFingerprint = {
+	protocol: string;
+	host: string;
+	port?: string;
+	database?: string;
+};
 
 function getConnectionString() {
 	return (
@@ -15,6 +23,43 @@ function getConnectionString() {
 		process.env.POSTGRES_CONNECTION ||
 		""
 	);
+}
+
+function parseConnectionFingerprint(value: string): ConnectionFingerprint | null {
+	try {
+		const url = new URL(value);
+		return {
+			protocol: url.protocol.replace(/:$/, ""),
+			host: url.hostname,
+			port: url.port || undefined,
+			database: url.pathname.replace(/^\//, "") || undefined,
+		};
+	} catch {
+		return null;
+	}
+}
+
+function warnOnUnresolvedHost(info: ConnectionFingerprint) {
+	const placeholderHosts = new Set([
+		"postgres-host",
+		"postgres.example.com",
+		"db-host",
+		"database-host",
+	]);
+
+	if (!info.host) return;
+	if (placeholderHosts.has(info.host)) {
+		console.warn(
+			`[auth] DATABASE_URL host \"${info.host}\" looks like a template placeholder. Update it to the actual Postgres host or set SERVER_REQUIRE_WORKSPACE_ENV=1 to load workspace-level .env values.`,
+		);
+		return;
+	}
+
+	void resolveHost(info.host).catch(() => {
+		console.warn(
+			`[auth] Unable to resolve Postgres host \"${info.host}\" from DATABASE_URL. Verify DNS or override the connection string in the runtime environment.`,
+		);
+	});
 }
 
 type GlobalWithAuth = typeof globalThis & {
@@ -57,6 +102,9 @@ function computeCookieDomain(baseURL: string | undefined) {
 }
 
 const connectionString = getConnectionString();
+const connectionInfo = connectionString ? parseConnectionFingerprint(connectionString) : null;
+if (connectionInfo) warnOnUnresolvedHost(connectionInfo);
+
 const dbResources = connectionString ? getPool(connectionString) : null;
 
 function getMemoryAdapter() {
