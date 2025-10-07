@@ -58,6 +58,12 @@ const TRUST_PROXY_FORWARDED = (() => {
 	return value === "true" || value === "1" || value === "yes";
 })();
 
+const AUTH_DEBUG_ERRORS = (() => {
+	const raw = process.env.SERVER_AUTH_DEBUG_ERRORS || process.env.AUTH_DEBUG_ERRORS || "";
+	const normalized = raw.trim().toLowerCase();
+	return ["1", "true", "yes", "on"].includes(normalized);
+})();
+
 type ServerLike = {
 	requestIP?: (request: Request) => { address?: string | null } | null;
 } | null | undefined;
@@ -151,8 +157,46 @@ new Elysia()
 		if (isRateLimited(context.request, context.server)) {
 			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
 		}
-		const response = await auth.handler(context.request);
-		return withSecurityHeaders(response, context.request);
+		try {
+			const response = await auth.handler(context.request);
+			return withSecurityHeaders(response, context.request);
+		} catch (error) {
+			let wantsDebug = AUTH_DEBUG_ERRORS;
+			try {
+				const requestUrl = new URL(context.request.url);
+				if (!wantsDebug) {
+					wantsDebug =
+						requestUrl.searchParams.get("debug") === "1" ||
+						context.request.headers.get("x-debug-auth") === "1";
+				}
+			} catch {
+				// ignore parse errors; fall back to env toggle only
+			}
+			console.error("[auth] request failed", error);
+			if (wantsDebug) {
+				const message = error instanceof Error ? error.message : String(error);
+				const stack =
+					error instanceof Error && typeof error.stack === "string"
+						? error.stack
+						: undefined;
+				return withSecurityHeaders(
+					new Response(
+						JSON.stringify({
+							error: message,
+							stack,
+						}),
+						{
+							status: 500,
+							headers: {
+								"Content-Type": "application/json",
+							},
+						},
+					),
+					context.request,
+				);
+			}
+			return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
+		}
 	})
 	.ws("/sync", {
         // Authenticate and greet
