@@ -21,6 +21,13 @@ const forceWorkspaceEnv = parseBoolean(process.env.SERVER_REQUIRE_WORKSPACE_ENV)
 const defaultSkip = process.env.NODE_ENV === "production";
 const skipWorkspaceEnv = explicitSkip ?? defaultSkip;
 
+function normalizeUrl(value: string | undefined) {
+	if (value === undefined) return undefined;
+	const trimmed = value.trim();
+	if (trimmed === "") return undefined;
+	return trimmed.replace(/\/+$/, "");
+}
+
 const appEnvFiles = [
 	resolve(appRoot, ".env.local"),
 	resolve(appRoot, ".env"),
@@ -42,6 +49,30 @@ function loadFiles(files: string[]) {
 }
 
 loadFiles(appEnvFiles);
+
+const normalizedBetterAuthUrl = normalizeUrl(process.env.BETTER_AUTH_URL);
+if (normalizedBetterAuthUrl) {
+	process.env.BETTER_AUTH_URL = normalizedBetterAuthUrl;
+} else if (process.env.BETTER_AUTH_URL) {
+	delete process.env.BETTER_AUTH_URL;
+}
+
+const normalizedPublicServerUrl = normalizeUrl(process.env.NEXT_PUBLIC_SERVER_URL);
+if (normalizedPublicServerUrl) {
+	process.env.NEXT_PUBLIC_SERVER_URL = normalizedPublicServerUrl;
+} else if (process.env.NEXT_PUBLIC_SERVER_URL) {
+	delete process.env.NEXT_PUBLIC_SERVER_URL;
+}
+
+const normalizedInternalUrl = normalizeUrl(process.env.SERVER_INTERNAL_URL);
+if (normalizedInternalUrl) {
+	process.env.SERVER_INTERNAL_URL = normalizedInternalUrl;
+} else {
+	const fallbackInternalUrl = normalizedBetterAuthUrl ?? normalizedPublicServerUrl;
+	if (fallbackInternalUrl) {
+		process.env.SERVER_INTERNAL_URL = fallbackInternalUrl;
+	}
+}
 
 const criticalKeys = [
 	"DATABASE_URL",

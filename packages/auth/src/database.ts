@@ -14,13 +14,18 @@ type HostWarningOptions = {
 	hint?: string;
 };
 
+type EnvValue = {
+	value: string;
+	source: string;
+};
+
 type Overrides = {
-	host?: string;
-	port?: string;
-	user?: string;
-	password?: string;
-	database?: string;
-	protocol?: string;
+	host?: EnvValue;
+	port?: EnvValue;
+	user?: EnvValue;
+	password?: EnvValue;
+	database?: EnvValue;
+	protocol?: EnvValue;
 };
 
 export type ResolvedDatabaseConfig = {
@@ -45,19 +50,26 @@ function cleanValue(value: string | undefined) {
 	return trimmed === "" ? undefined : trimmed;
 }
 
-function readEnvValue(key: string) {
+function readEnvValue(key: string): EnvValue | undefined {
 	const fileKey = `${key}_FILE`;
 	const filePath = cleanValue(process.env[fileKey]);
 	if (filePath) {
 		try {
-			return cleanValue(readFileSync(filePath, "utf8"));
+			const fileValue = cleanValue(readFileSync(filePath, "utf8"));
+			if (fileValue !== undefined) {
+				return { value: fileValue, source: key };
+			}
 		} catch (error) {
 			console.warn(
 				`[database] Failed to read ${fileKey} at ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
 	}
-	return cleanValue(process.env[key]);
+	const envValue = cleanValue(process.env[key]);
+	if (envValue !== undefined) {
+		return { value: envValue, source: key };
+	}
+	return undefined;
 }
 
 function pickFirst(keys: string[]) {
@@ -117,41 +129,53 @@ export function warnOnUnresolvedHost(info: ConnectionFingerprint, options: HostW
 }
 
 export function resolveDatabaseConfig(): ResolvedDatabaseConfig {
-	const baseUrl = pickFirst(["DATABASE_URL", "POSTGRES_URL", "POSTGRES_CONNECTION"]);
+	const baseUrlInfo = pickFirst(["DATABASE_URL", "POSTGRES_URL", "POSTGRES_CONNECTION"]);
+	const baseUrl = baseUrlInfo?.value;
 	const overrides = collectOverrides();
 	const overridesUsed = new Set<string>();
 
 	let connectionString = baseUrl;
+	const baseNamespace = baseUrlInfo ? classifySource(baseUrlInfo.source) : undefined;
 
 	if (connectionString) {
 		try {
 			const url = new URL(connectionString);
-			if (overrides.host) {
-				url.hostname = overrides.host;
-				overridesUsed.add("host");
-			}
-			if (overrides.port) {
-				url.port = overrides.port;
-				overridesUsed.add("port");
-			}
-			if (overrides.database) {
-				url.pathname = `/${overrides.database.replace(/^\//, "")}`;
-				overridesUsed.add("database");
-			}
-			if (overrides.user !== undefined) {
-				url.username = overrides.user;
-				overridesUsed.add("user");
-			}
-			if (overrides.password !== undefined) {
-				url.password = overrides.password;
-				overridesUsed.add("password");
-			}
-			if (overrides.protocol) {
-				url.protocol = overrides.protocol.endsWith(":")
-					? overrides.protocol
-					: `${overrides.protocol}:`;
-				overridesUsed.add("protocol");
-			}
+			const allowPostgresOverrides = !baseNamespace || baseNamespace === "postgres";
+
+			const applyOverride = (
+				key: keyof Overrides,
+				setter: (value: string) => void,
+			) => {
+				const entry = overrides[key];
+				if (!entry) return;
+				const namespace = classifySource(entry.source);
+				const shouldApply =
+					namespace === "database" ||
+					namespace === "pg" ||
+					(namespace === "postgres" && allowPostgresOverrides);
+				if (!shouldApply) return;
+				setter(entry.value);
+				overridesUsed.add(key);
+			};
+
+			applyOverride("host", (value) => {
+				url.hostname = value;
+			});
+			applyOverride("port", (value) => {
+				url.port = value;
+			});
+			applyOverride("database", (value) => {
+				url.pathname = `/${value.replace(/^\//, "")}`;
+			});
+			applyOverride("user", (value) => {
+				url.username = value;
+			});
+			applyOverride("password", (value) => {
+				url.password = value;
+			});
+			applyOverride("protocol", (value) => {
+				url.protocol = value.endsWith(":") ? value : `${value}:`;
+			});
 			connectionString = url.toString();
 		} catch (error) {
 			console.warn(
@@ -159,15 +183,15 @@ export function resolveDatabaseConfig(): ResolvedDatabaseConfig {
 			);
 		}
 	} else {
-		const anyOverrides = Object.values(overrides).some((value) => value !== undefined);
+		const anyOverrides = Object.values(overrides).some((value) => value?.value !== undefined);
 		if (anyOverrides) {
-			const protocol = overrides.protocol || "postgres";
-			const host = overrides.host || "localhost";
-			const portSegment = overrides.port ? `:${overrides.port}` : "";
-			const username = overrides.user ?? "postgres";
-			const password = overrides.password ?? "";
-			const databaseName = (overrides.database ??
-				pickFirst(["POSTGRES_DB", "PGDATABASE"]) ??
+			const protocol = overrides.protocol?.value || "postgres";
+			const host = overrides.host?.value || "localhost";
+			const portSegment = overrides.port?.value ? `:${overrides.port.value}` : "";
+			const username = overrides.user?.value ?? "postgres";
+			const password = overrides.password?.value ?? "";
+			const databaseName = (overrides.database?.value ||
+				pickFirst(["POSTGRES_DB", "PGDATABASE"])?.value ||
 				"postgres"
 			).replace(/^\//, "");
 			const auth =
@@ -178,7 +202,7 @@ export function resolveDatabaseConfig(): ResolvedDatabaseConfig {
 						: "";
 			connectionString = `${protocol}://${auth}${host}${portSegment}/${databaseName}`;
 			for (const key of Object.keys(overrides) as Array<keyof Overrides>) {
-				if (overrides[key] !== undefined) overridesUsed.add(key);
+				if (overrides[key]?.value !== undefined) overridesUsed.add(key);
 			}
 		}
 	}
@@ -191,4 +215,11 @@ export function resolveDatabaseConfig(): ResolvedDatabaseConfig {
 		source: connectionString ? (baseUrl ? "url" : "overrides") : undefined,
 		appliedOverrides: Array.from(overridesUsed),
 	};
+}
+
+function classifySource(source: string): "database" | "postgres" | "pg" | "other" {
+	if (source.startsWith("DATABASE_")) return "database";
+	if (source.startsWith("POSTGRES_")) return "postgres";
+	if (source.startsWith("PG")) return "pg";
+	return "other";
 }
