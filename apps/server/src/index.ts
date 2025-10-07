@@ -81,6 +81,45 @@ type DebugTrace =
 
 let lastAuthError: DebugTrace | null = null;
 
+function serializeError(error: unknown, depth = 0): Record<string, any> {
+	if (depth > 2) {
+		return { message: "Max depth reached" };
+	}
+	if (!(error instanceof Error)) {
+		return {
+			message: error === undefined ? "undefined" : String(error),
+		};
+	}
+	const payload: Record<string, any> = {
+		name: error.name,
+		message: error.message,
+	};
+	if (typeof error.stack === "string") {
+		payload.stack = error.stack;
+	}
+	const extras = Reflect.ownKeys(error).filter(
+		(key) => !["name", "message", "stack", "cause"].includes(String(key)),
+	);
+	for (const key of extras) {
+		try {
+			const value = (error as any)[key];
+			payload[String(key)] =
+				value instanceof Error ? serializeError(value, depth + 1) : value;
+		} catch {
+			payload[String(key)] = "[unserializable]";
+		}
+	}
+	const cause = (error as any).cause;
+	if (cause !== undefined) {
+		try {
+			payload.cause = serializeError(cause, depth + 1);
+		} catch {
+			payload.cause = "[unserializable]";
+		}
+	}
+	return payload;
+}
+
 function wantsDebugOutput(request: Request) {
 	if (AUTH_DEBUG_ERRORS) return true;
 	let url: URL | null = null;
@@ -228,23 +267,16 @@ new Elysia()
 		} catch (error) {
 			console.error("[auth] request failed", error);
 			if (wantsDebug) {
-				const message = error instanceof Error ? error.message : String(error);
-				const stack =
-					error instanceof Error && typeof error.stack === "string"
-						? error.stack
-						: undefined;
+				const serialized = serializeError(error);
 				lastAuthError = {
 					at: new Date().toISOString(),
 					origin: "exception",
-					message,
-					stack,
+					message: serialized.message ?? "Error",
+					stack: typeof serialized.stack === "string" ? serialized.stack : undefined,
 				};
 				return withSecurityHeaders(
 					new Response(
-						JSON.stringify({
-							error: message,
-							stack,
-						}),
+						JSON.stringify(serialized),
 						{
 							status: 500,
 							headers: {
@@ -294,26 +326,11 @@ new Elysia()
 				request,
 			);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			const stack =
-				error instanceof Error && typeof error.stack === "string" ? error.stack : undefined;
-			const cause =
-				error && typeof error === "object" && "cause" in (error as any)
-					? (error as any).cause
-					: undefined;
 			return withSecurityHeaders(
 				new Response(
 					JSON.stringify({
 						ok: false,
-						error: message,
-						stack,
-						cause:
-							cause instanceof Error
-								? {
-										message: cause.message,
-										stack: typeof cause.stack === "string" ? cause.stack : undefined,
-									}
-								: cause,
+						error: serializeError(error),
 					}),
 					{
 						status: 500,
