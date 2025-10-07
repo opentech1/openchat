@@ -297,12 +297,23 @@ new Elysia()
 			const message = error instanceof Error ? error.message : String(error);
 			const stack =
 				error instanceof Error && typeof error.stack === "string" ? error.stack : undefined;
+			const cause =
+				error && typeof error === "object" && "cause" in (error as any)
+					? (error as any).cause
+					: undefined;
 			return withSecurityHeaders(
 				new Response(
 					JSON.stringify({
 						ok: false,
 						error: message,
 						stack,
+						cause:
+							cause instanceof Error
+								? {
+										message: cause.message,
+										stack: typeof cause.stack === "string" ? cause.stack : undefined,
+									}
+								: cause,
 					}),
 					{
 						status: 500,
