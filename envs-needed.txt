@@ -33,3 +33,5 @@ Docker Compose auto-creates the primary + shadow databases via docker/postgres-i
 For external Postgres, provision empty `openchat` and `openchat_shadow` databases using your provider's tools before first deploy.
 After setting envs, restart Electric, server, and web services to load them
 Run bun db:push from apps/server whenever schema changes hit production
+# If your platform provides Postgres credentials as separate values, set DATABASE_HOST / DATABASE_PORT / DATABASE_USER / DATABASE_PASSWORD / DATABASE_NAME and the server will derive DATABASE_URL automatically.
+# Production builds no longer auto-load workspace-level .env files. Provide all required env vars via your deployment platform or set SERVER_REQUIRE_WORKSPACE_ENV=1 to explicitly opt-in to workspace fallbacks.

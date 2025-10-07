@@ -2,65 +2,12 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { lookup as resolveHost } from "node:dns/promises";
 import { Pool } from "pg";
+import { resolveDatabaseConfig, warnOnUnresolvedHost } from "./database";
 import * as authSchema from "./schema";
 
 const globalSymbol = Symbol.for("openchat.auth.pool");
 const memorySymbol = Symbol.for("openchat.auth.memory");
-
-type ConnectionFingerprint = {
-	protocol: string;
-	host: string;
-	port?: string;
-	database?: string;
-};
-
-function getConnectionString() {
-	return (
-		process.env.DATABASE_URL ||
-		process.env.POSTGRES_URL ||
-		process.env.POSTGRES_CONNECTION ||
-		""
-	);
-}
-
-function parseConnectionFingerprint(value: string): ConnectionFingerprint | null {
-	try {
-		const url = new URL(value);
-		return {
-			protocol: url.protocol.replace(/:$/, ""),
-			host: url.hostname,
-			port: url.port || undefined,
-			database: url.pathname.replace(/^\//, "") || undefined,
-		};
-	} catch {
-		return null;
-	}
-}
-
-function warnOnUnresolvedHost(info: ConnectionFingerprint) {
-	const placeholderHosts = new Set([
-		"postgres-host",
-		"postgres.example.com",
-		"db-host",
-		"database-host",
-	]);
-
-	if (!info.host) return;
-	if (placeholderHosts.has(info.host)) {
-		console.warn(
-			`[auth] DATABASE_URL host \"${info.host}\" looks like a template placeholder. Update it to the actual Postgres host or set SERVER_REQUIRE_WORKSPACE_ENV=1 to load workspace-level .env values.`,
-		);
-		return;
-	}
-
-	void resolveHost(info.host).catch(() => {
-		console.warn(
-			`[auth] Unable to resolve Postgres host \"${info.host}\" from DATABASE_URL. Verify DNS or override the connection string in the runtime environment.`,
-		);
-	});
-}
 
 type GlobalWithAuth = typeof globalThis & {
 	[globalSymbol]?: {
@@ -72,6 +19,14 @@ type GlobalWithAuth = typeof globalThis & {
 		adapter: ReturnType<typeof memoryAdapter>;
 	};
 };
+
+function parseBoolean(value: string | undefined) {
+	if (!value) return undefined;
+	const normalized = value.trim().toLowerCase();
+	if (["1", "true", "yes", "on"].includes(normalized)) return true;
+	if (["0", "false", "no", "off"].includes(normalized)) return false;
+	return undefined;
+}
 
 function getPool(connectionString: string) {
 	const globalRef = globalThis as GlobalWithAuth;
@@ -101,11 +56,37 @@ function computeCookieDomain(baseURL: string | undefined) {
 	}
 }
 
-const connectionString = getConnectionString();
-const connectionInfo = connectionString ? parseConnectionFingerprint(connectionString) : null;
-if (connectionInfo) warnOnUnresolvedHost(connectionInfo);
+const resolvedDatabase = resolveDatabaseConfig();
+const connectionString = resolvedDatabase.connectionString;
+
+const hostHint = process.env.SERVER_REQUIRE_WORKSPACE_ENV
+	? undefined
+	: "Update the runtime environment or set SERVER_REQUIRE_WORKSPACE_ENV=1 to load workspace-level .env values.";
+if (resolvedDatabase.fingerprint) {
+	warnOnUnresolvedHost(resolvedDatabase.fingerprint, { label: "auth", hint: hostHint });
+}
+
+const logDetails = process.env.NODE_ENV !== "test";
+if (logDetails && resolvedDatabase.appliedOverrides.length > 0) {
+	const descriptor =
+		resolvedDatabase.source === "overrides"
+			? "Derived Postgres connection from"
+			: "Applied Postgres overrides for";
+	console.info(
+		`[auth] ${descriptor} ${resolvedDatabase.appliedOverrides.join(", ")}`,
+	);
+}
 
 const dbResources = connectionString ? getPool(connectionString) : null;
+
+const allowMemoryFallback = parseBoolean(process.env.AUTH_ALLOW_MEMORY_FALLBACK);
+const memoryFallbackEnabled = allowMemoryFallback ?? process.env.NODE_ENV !== "production";
+
+if (!dbResources && !memoryFallbackEnabled) {
+	throw new Error(
+		"[auth] Database connection not configured. Set DATABASE_URL or the DATABASE_* overrides before starting the server.",
+	);
+}
 
 function getMemoryAdapter() {
 	const globalRef = globalThis as GlobalWithAuth;
@@ -117,7 +98,25 @@ function getMemoryAdapter() {
 	return globalRef[memorySymbol]!.adapter;
 }
 
-const fallbackAdapter = getMemoryAdapter();
+const fallbackAdapter = memoryFallbackEnabled ? getMemoryAdapter() : null;
+if (!dbResources && fallbackAdapter && logDetails) {
+	console.warn(
+		"[auth] Database connection not configured. Falling back to in-memory auth store; sessions reset on restart.",
+	);
+}
+
+const databaseAdapter = dbResources
+	? drizzleAdapter(dbResources.db, {
+		schema: authSchema,
+		provider: "pg",
+	})
+	: fallbackAdapter;
+
+if (!databaseAdapter) {
+	throw new Error(
+		"[auth] Database adapter unavailable. Enable AUTH_ALLOW_MEMORY_FALLBACK or configure Postgres connectivity.",
+	);
+}
 
 const rawBaseUrl = process.env.BETTER_AUTH_URL || process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 const baseURL = rawBaseUrl.replace(/\/$/, "");
@@ -166,12 +165,7 @@ export const auth = betterAuth({
 			: undefined,
 		cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
 	},
-	database: dbResources
-		? drizzleAdapter(dbResources.db, {
-			schema: authSchema,
-			provider: "pg",
-		})
-		: fallbackAdapter,
+	database: databaseAdapter,
 	session: {
 		expiresIn: 60 * 60 * 24 * 7, // 7 days
 		freshAge: 60 * 60, // 1 hour

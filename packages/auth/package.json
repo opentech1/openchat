@@ -9,7 +9,8 @@
     "./auth": "./src/index.ts",
     "./client": "./src/client.ts",
     "./next": "./src/next.ts",
-    "./schema": "./src/schema.ts"
+    "./schema": "./src/schema.ts",
+    "./database": "./src/database.ts"
   },
   "dependencies": {
     "better-auth": "^1.3.18",
