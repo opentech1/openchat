@@ -121,6 +121,28 @@ function serializeError(error: unknown, depth = 0): Record<string, any> {
 	return payload;
 }
 
+function getDatabaseEnvDetails() {
+	const raw = process.env.DATABASE_URL;
+	if (!raw) return null;
+	try {
+		const url = new URL(raw);
+		return {
+			host: url.hostname,
+			port: url.port || undefined,
+			database: url.pathname.replace(/^\//, "") || undefined,
+			hasUser: Boolean(url.username),
+			hasPassword: Boolean(url.password),
+			rawPreview: `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ""}/${url.pathname.replace(/^\//, "")}`,
+		};
+	} catch (error) {
+		return {
+			invalid: true,
+			message: error instanceof Error ? error.message : String(error),
+			rawPreview: raw.slice(0, 32),
+		};
+	}
+}
+
 function wantsDebugOutput(request: Request) {
 	if (AUTH_DEBUG_ERRORS) return true;
 	let url: URL | null = null;
@@ -311,6 +333,7 @@ new Elysia()
 		}
 		try {
 			const databaseConfig = resolveSharedDatabaseConfig();
+			const envDetails = getDatabaseEnvDetails();
 			const result = await db.execute(sql`select 1 as ok`);
 			return withSecurityHeaders(
 				new Response(
@@ -318,6 +341,7 @@ new Elysia()
 						ok: true,
 						result,
 						fingerprint: databaseConfig.fingerprint,
+						env: envDetails,
 					}),
 					{
 						status: 200,
@@ -330,12 +354,14 @@ new Elysia()
 			);
 		} catch (error) {
 			const databaseConfig = resolveSharedDatabaseConfig();
+			const envDetails = getDatabaseEnvDetails();
 			return withSecurityHeaders(
 				new Response(
 					JSON.stringify({
 						ok: false,
 						error: serializeError(error),
 						fingerprint: databaseConfig.fingerprint,
+						env: envDetails,
 					}),
 					{
 						status: 500,
