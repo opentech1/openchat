@@ -172,14 +172,21 @@ new Elysia()
 			const response = await auth.handler(context.request);
 			if (wantsDebug && response.status >= 500) {
 				let diagnostic: string | undefined;
+				let headers: Record<string, string> | undefined;
 				try {
 					diagnostic = await response.clone().text();
 				} catch {
 					diagnostic = undefined;
 				}
+				try {
+					headers = Object.fromEntries(response.headers.entries());
+				} catch {
+					headers = undefined;
+				}
 				const payload = JSON.stringify({
 					status: response.status,
 					body: diagnostic,
+					headers,
 				});
 				return withSecurityHeaders(
 					new Response(payload, {
