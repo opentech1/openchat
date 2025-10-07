@@ -52,14 +52,21 @@ const criticalKeys = [
 	"CORS_ORIGIN",
 ];
 
-const missingCritical = criticalKeys.filter((key) => !process.env[key]);
-const shouldLoadWorkspaceEnv = !skipWorkspaceEnv || forceWorkspaceEnv || missingCritical.length > 0;
-
+const shouldLoadWorkspaceEnv = forceWorkspaceEnv || !skipWorkspaceEnv;
 if (shouldLoadWorkspaceEnv) {
 	loadFiles(workspaceEnvFiles);
-	if (missingCritical.length > 0 && skipWorkspaceEnv && !forceWorkspaceEnv) {
-		console.warn(
-			`[server:env] Loaded workspace-level .env to supply missing vars: ${missingCritical.join(", ")}`,
-		);
+}
+
+const unresolvedCritical = criticalKeys.filter((key) => !process.env[key]);
+if (unresolvedCritical.length > 0) {
+	const hint = skipWorkspaceEnv && !forceWorkspaceEnv
+		? "Set them in the runtime environment or export SERVER_REQUIRE_WORKSPACE_ENV=1 to allow workspace-level .env fallbacks."
+		: "Populate them in the app's .env file or provide them at runtime.";
+	const message = `[server:env] Missing required environment variables: ${unresolvedCritical.join(", ")}. ${hint}`;
+	if (process.env.NODE_ENV === "production") {
+		throw new Error(message);
+	}
+	if (process.env.NODE_ENV !== "test") {
+		console.warn(message);
 	}
 }

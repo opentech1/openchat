@@ -85,6 +85,8 @@ railway variables set --service electric DATABASE_URL='${{postgres.DATABASE_URL}
 railway variables set --service electric SHADOW_DATABASE_URL='${{postgres.DATABASE_URL}}?schema=openchat_shadow'
 ```
 
+> **Note:** If Railway (or another platform) provides Postgres credentials as individual variables, you can omit `DATABASE_URL` and instead set `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, and `DATABASE_NAME`. The server will derive the connection string at runtime, but you still need to supply `SHADOW_DATABASE_URL` separately. Production builds no longer load workspace `.env` defaults automatically; configure these vars in Railway or set `SERVER_REQUIRE_WORKSPACE_ENV=1` only if you intentionally want to fallback to workspace files.
+
 Create the databases once (if the default `openchat` DB is missing, recreate it too):
 
 ```bash
