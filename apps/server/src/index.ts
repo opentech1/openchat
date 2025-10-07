@@ -157,21 +157,42 @@ new Elysia()
 		if (isRateLimited(context.request, context.server)) {
 			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
 		}
+		let wantsDebug = AUTH_DEBUG_ERRORS;
+		try {
+			const requestUrl = new URL(context.request.url);
+			if (!wantsDebug) {
+				wantsDebug =
+					requestUrl.searchParams.get("debug") === "1" ||
+					context.request.headers.get("x-debug-auth") === "1";
+			}
+		} catch {
+			// ignore parse errors; fall back to env toggle only
+		}
 		try {
 			const response = await auth.handler(context.request);
+			if (wantsDebug && response.status >= 500) {
+				let diagnostic: string | undefined;
+				try {
+					diagnostic = await response.clone().text();
+				} catch {
+					diagnostic = undefined;
+				}
+				const payload = JSON.stringify({
+					status: response.status,
+					body: diagnostic,
+				});
+				return withSecurityHeaders(
+					new Response(payload, {
+						status: response.status,
+						headers: {
+							"Content-Type": "application/json",
+						},
+					}),
+					context.request,
+				);
+			}
 			return withSecurityHeaders(response, context.request);
 		} catch (error) {
-			let wantsDebug = AUTH_DEBUG_ERRORS;
-			try {
-				const requestUrl = new URL(context.request.url);
-				if (!wantsDebug) {
-					wantsDebug =
-						requestUrl.searchParams.get("debug") === "1" ||
-						context.request.headers.get("x-debug-auth") === "1";
-				}
-			} catch {
-				// ignore parse errors; fall back to env toggle only
-			}
 			console.error("[auth] request failed", error);
 			if (wantsDebug) {
 				const message = error instanceof Error ? error.message : String(error);
