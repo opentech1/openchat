@@ -12,7 +12,7 @@ import { createContext } from "./lib/context";
 import { hub, makeEnvelope } from "./lib/sync-hub";
 import { db } from "./db";
 import { chat } from "./db/schema/chat";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isIP } from "node:net";
 import {
@@ -63,6 +63,35 @@ const AUTH_DEBUG_ERRORS = (() => {
 	const normalized = raw.trim().toLowerCase();
 	return ["1", "true", "yes", "on"].includes(normalized);
 })();
+
+type DebugTrace =
+	| {
+			at: string;
+			origin: "response";
+			status: number;
+			body?: string;
+			headers?: Record<string, string>;
+	  }
+	| {
+			at: string;
+			origin: "exception";
+			message: string;
+			stack?: string;
+	  };
+
+let lastAuthError: DebugTrace | null = null;
+
+function wantsDebugOutput(request: Request) {
+	if (AUTH_DEBUG_ERRORS) return true;
+	let url: URL | null = null;
+	try {
+		url = new URL(request.url);
+	} catch {
+		url = null;
+	}
+	if (url?.searchParams.get("debug") === "1") return true;
+	return request.headers.get("x-debug-auth") === "1";
+}
 
 type ServerLike = {
 	requestIP?: (request: Request) => { address?: string | null } | null;
@@ -157,17 +186,7 @@ new Elysia()
 		if (isRateLimited(context.request, context.server)) {
 			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
 		}
-		let wantsDebug = AUTH_DEBUG_ERRORS;
-		try {
-			const requestUrl = new URL(context.request.url);
-			if (!wantsDebug) {
-				wantsDebug =
-					requestUrl.searchParams.get("debug") === "1" ||
-					context.request.headers.get("x-debug-auth") === "1";
-			}
-		} catch {
-			// ignore parse errors; fall back to env toggle only
-		}
+		const wantsDebug = wantsDebugOutput(context.request);
 		try {
 			const response = await auth.handler(context.request);
 			if (wantsDebug && response.status >= 500) {
@@ -183,6 +202,13 @@ new Elysia()
 				} catch {
 					headers = undefined;
 				}
+				lastAuthError = {
+					at: new Date().toISOString(),
+					origin: "response",
+					status: response.status,
+					body: diagnostic,
+					headers,
+				};
 				const payload = JSON.stringify({
 					status: response.status,
 					body: diagnostic,
@@ -207,6 +233,12 @@ new Elysia()
 					error instanceof Error && typeof error.stack === "string"
 						? error.stack
 						: undefined;
+				lastAuthError = {
+					at: new Date().toISOString(),
+					origin: "exception",
+					message,
+					stack,
+				};
 				return withSecurityHeaders(
 					new Response(
 						JSON.stringify({
@@ -224,6 +256,63 @@ new Elysia()
 				);
 			}
 			return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
+		}
+	})
+	.get("/api/__debug/auth/last-error", async ({ request }) => {
+		if (!wantsDebugOutput(request)) {
+			return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
+		}
+		return withSecurityHeaders(
+			new Response(JSON.stringify(lastAuthError), {
+				status: 200,
+				headers: {
+					"Content-Type": "application/json",
+				},
+			}),
+			request,
+		);
+	})
+	.get("/api/__debug/db/ping", async ({ request }) => {
+		if (!wantsDebugOutput(request)) {
+			return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
+		}
+		try {
+			const result = await db.execute(sql`select 1 as ok`);
+			return withSecurityHeaders(
+				new Response(
+					JSON.stringify({
+						ok: true,
+						result,
+					}),
+					{
+						status: 200,
+						headers: {
+							"Content-Type": "application/json",
+						},
+					},
+				),
+				request,
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const stack =
+				error instanceof Error && typeof error.stack === "string" ? error.stack : undefined;
+			return withSecurityHeaders(
+				new Response(
+					JSON.stringify({
+						ok: false,
+						error: message,
+						stack,
+					}),
+					{
+						status: 500,
+						headers: {
+							"Content-Type": "application/json",
+						},
+					},
+				),
+				request,
+			);
 		}
 	})
 	.ws("/sync", {
