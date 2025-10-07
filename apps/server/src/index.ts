@@ -7,6 +7,7 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { RPCHandler } from "@orpc/server/fetch";
 import { onError } from "@orpc/server";
 import { auth } from "@openchat/auth";
+import { resolveDatabaseConfig as resolveSharedDatabaseConfig } from "@openchat/auth/database";
 import { appRouter, inMemoryChatOwned } from "./routers";
 import { createContext } from "./lib/context";
 import { hub, makeEnvelope } from "./lib/sync-hub";
@@ -309,12 +310,14 @@ new Elysia()
 			return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
 		}
 		try {
+			const databaseConfig = resolveSharedDatabaseConfig();
 			const result = await db.execute(sql`select 1 as ok`);
 			return withSecurityHeaders(
 				new Response(
 					JSON.stringify({
 						ok: true,
 						result,
+						fingerprint: databaseConfig.fingerprint,
 					}),
 					{
 						status: 200,
@@ -326,11 +329,13 @@ new Elysia()
 				request,
 			);
 		} catch (error) {
+			const databaseConfig = resolveSharedDatabaseConfig();
 			return withSecurityHeaders(
 				new Response(
 					JSON.stringify({
 						ok: false,
 						error: serializeError(error),
+						fingerprint: databaseConfig.fingerprint,
 					}),
 					{
 						status: 500,
