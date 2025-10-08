@@ -1,46 +1,59 @@
+x-required-db-env: &required-db-env
+  DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required (postgresql://user:pass@openchat-postgres:5432/openchat)}
+  SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL:?SHADOW_DATABASE_URL is required (postgresql://user:pass@openchat-postgres:5432/openchat_shadow)}
 
 services:
   postgres:
     image: postgres:17-alpine
     container_name: openchat-postgres
     restart: unless-stopped
-    env_file:
-      - docker/.env.compose
-    command: ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10"]
-    expose:
-      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-openchat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openchat}
+      POSTGRES_DB: ${POSTGRES_DB:-openchat}
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/postgres-init:/docker-entrypoint-initdb.d
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
-      default:
-        aliases:
-          - postgres-host
+      - openchat
 
   electric:
-    image: electricsql/electric:latest
+    image: electricsql/electric:1.1.13
     container_name: openchat-electric
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - docker/.env.compose
     environment:
-      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
+      <<: *required-db-env
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:?ELECTRIC_SECRET is required}
+      ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:?ELECTRIC_GATEKEEPER_SECRET is required}
+      PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:?PG_PROXY_PASSWORD is required}
+      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-false}
       ELECTRIC_LOG_LEVEL: ${ELECTRIC_LOG_LEVEL:-info}
-      ELECTRIC_HTTP_PORT: 3010
-      ELECTRIC__HTTP__HOST: 0.0.0.0
-      ELECTRIC__PG_PROXY__PORT: 5133
-      ELECTRIC__PG_PROXY__HOST: 0.0.0.0
+      ELECTRIC_HTTP_PORT: ${ELECTRIC_HTTP_PORT:-3010}
+      ELECTRIC__HTTP__HOST: ${ELECTRIC__HTTP__HOST:-0.0.0.0}
+      ELECTRIC__PG_PROXY__PORT: ${ELECTRIC__PG_PROXY__PORT:-5133}
+      ELECTRIC__PG_PROXY__HOST: ${ELECTRIC__PG_PROXY__HOST:-0.0.0.0}
+      ELECTRIC__PG_PROXY__PASSWORD: ${ELECTRIC__PG_PROXY__PASSWORD:?ELECTRIC__PG_PROXY__PASSWORD is required}
     expose:
       - "3010"
       - "5133"
+    networks:
+      - openchat
 
   server:
     build:
@@ -53,28 +66,35 @@ services:
         condition: service_healthy
       electric:
         condition: service_started
-    env_file:
-      - docker/.env.compose
     environment:
-      ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://electric:3010}
-      ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-true}
-      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://web:3001}
-      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001}
-      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
+      <<: *required-db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?BETTER_AUTH_URL is required (https://api.example.com)}
+      SERVER_INTERNAL_URL: ${SERVER_INTERNAL_URL:?SERVER_INTERNAL_URL is required (https://api.example.com)}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required (https://app.example.com)}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
+      ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://openchat-electric:3010}
+      ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:?}
+      PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:?}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+      OPENROUTER_API_KEY_SECRET: ${OPENROUTER_API_KEY_SECRET:-}
     expose:
       - "3000"
+    networks:
+      - openchat
 
   web:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
       args:
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://web:3001}
-        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://server:3000}
-        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
-        BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://server:3000}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+        BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://openchat-server:3000}
     container_name: openchat-web
     restart: unless-stopped
     depends_on:
@@ -83,11 +103,17 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://web:3001}
-      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://server:3000}
-      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://electric:3010}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
     expose:
       - "3001"
+    networks:
+      - openchat
+
+networks:
+  openchat:
+    driver: bridge
 
 volumes:
   postgres-data:
