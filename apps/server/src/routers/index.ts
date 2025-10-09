@@ -3,6 +3,13 @@ import type { RouterClient } from "@orpc/server";
 import { z } from "zod";
 import { db } from "../db";
 import { chat, message } from "../db/schema/chat";
+import {
+	createInviteCodes,
+	reserveInviteCode,
+	releaseInviteReservation,
+	consumeInviteReservation,
+} from "../lib/invite";
+import { capturePosthogEvent } from "../lib/posthog";
 import { and, desc, eq, asc } from "drizzle-orm";
 import { publish } from "../lib/sync-hub";
 
@@ -111,29 +118,30 @@ export const appRouter = {
           })
           .optional(),
       )
-      .handler(async ({ context, input }) => {
-        const id = input?.id ?? cuid();
-        const now = new Date();
-        try {
-          await db.insert(chat).values({
-            id,
-            userId: context.session!.user.id,
-            title: input?.title ?? "New Chat",
-            createdAt: now,
-            updatedAt: now,
-            lastMessageAt: now,
-          });
-          // emit sidebar add
-          publish(
-            `chats:index:${context.session!.user.id}`,
-            "chats.index.add",
-            { chatId: id, title: input?.title ?? "New Chat", updatedAt: now, lastMessageAt: now },
-          );
+	  .handler(async ({ context, input }) => {
+		const id = input?.id ?? cuid();
+		const now = new Date();
+		const title = input?.title ?? "New Chat";
+		try {
+			await db.insert(chat).values({
+				id,
+				userId: context.session!.user.id,
+				title,
+				createdAt: now,
+				updatedAt: now,
+				lastMessageAt: now,
+			});
+			// emit sidebar add
+			publish(
+				`chats:index:${context.session!.user.id}`,
+				"chats.index.add",
+				{ chatId: id, title, updatedAt: now, lastMessageAt: now },
+			);
 		} catch {
 			addFallbackChat(context.session!.user.id, {
 				id,
 				userId: context.session!.user.id,
-				title: input?.title ?? "New Chat",
+				title,
 				createdAt: now,
 				updatedAt: now,
 				lastMessageAt: now,
@@ -141,11 +149,16 @@ export const appRouter = {
 			publish(
 				`chats:index:${context.session!.user.id}`,
 				"chats.index.add",
-				{ chatId: id, title: input?.title ?? "New Chat", updatedAt: now, lastMessageAt: now },
-          );
-        }
-        return { id };
-      }),
+				{ chatId: id, title, updatedAt: now, lastMessageAt: now },
+			);
+		}
+		capturePosthogEvent("chat_created", context.session!.user.id, {
+			chatId: id,
+			title,
+			recordedAt: now.toISOString(),
+		});
+		return { id };
+	  }),
     // List chats for the current user (sorted by last activity)
     list: protectedProcedure.handler(async ({ context }) => {
       try {
@@ -508,6 +521,58 @@ export const appRouter = {
         }
       }),
   },
+  invite: {
+	generate: protectedProcedure
+		.input(
+			z
+				.object({
+					count: z.number().int().min(1).max(100).default(1),
+					expiresInHours: z.number().int().min(1).max(24 * 90).optional(),
+				})
+				.optional(),
+		)
+		.handler(async ({ context, input }) => {
+			const count = input?.count ?? 1;
+			const expiresAt = input?.expiresInHours
+				? new Date(Date.now() + input.expiresInHours * 60 * 60 * 1000)
+				: null;
+			const codes = await createInviteCodes({
+				count,
+				createdBy: context.session!.user.id,
+				expiresAt,
+			});
+			return { ok: true as const, codes };
+		}),
+	reserve: publicProcedure
+		.input(z.object({ code: z.string().min(4).max(64), email: z.string().email() }))
+		.handler(async ({ input }) => {
+			const reservation = await reserveInviteCode({ code: input.code, email: input.email });
+			if (!reservation) {
+				return { ok: false as const };
+			}
+			return {
+				ok: true as const,
+				reservationToken: reservation.reservationToken,
+				expiresAt: reservation.expiresAt ?? null,
+			};
+		}),
+	release: publicProcedure
+		.input(z.object({ reservationToken: z.string().min(4) }))
+		.handler(async ({ input }) => {
+			await releaseInviteReservation(input.reservationToken);
+			return { ok: true as const };
+		}),
+	consume: publicProcedure
+		.input(z.object({ reservationToken: z.string().min(4), userId: z.string().min(1), email: z.string().email() }))
+		.handler(async ({ input }) => {
+			const ok = await consumeInviteReservation({
+				reservationToken: input.reservationToken,
+				userId: input.userId,
+				email: input.email,
+			});
+			return ok ? { ok: true as const } : { ok: false as const };
+		}),
+	},
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;

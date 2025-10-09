@@ -12,6 +12,7 @@ import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { OpenRouterLinkModal } from "@/components/openrouter-link-modal";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
+import { captureClientEvent, identifyClient } from "@/lib/posthog";
 
 type ChatRoomProps = {
   chatId: string;
@@ -30,6 +31,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined;
   const workspaceId =
     session?.user?.id || memoDevUser || (devBypassEnabled ? process.env.NEXT_PUBLIC_DEV_USER_ID || "dev-user" : null);
+
+  useEffect(() => {
+    const identifier = session?.user?.id || memoDevUser;
+    if (identifier) {
+      identifyClient(identifier);
+    }
+  }, [memoDevUser, session?.user?.id]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -253,6 +261,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           },
         },
       );
+      captureClientEvent("chat_message_submitted", {
+        chatId,
+        modelId,
+        characters: content.length,
+      });
     } catch (error) {
       console.error("Failed to send message", error);
     }

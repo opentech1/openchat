@@ -9,7 +9,7 @@ function decodePayload(token: string) {
 
 describe("makeGatekeeperToken", () => {
 	it("creates a signed token with provided fields", () => {
-		const { token, issuedAt, expiresAtSeconds } = makeGatekeeperToken({
+		const tokenInfo = makeGatekeeperToken({
 			userId: "user-123",
 			workspaceId: "workspace-xyz",
 			tables: ["chat", "message"],
@@ -17,6 +17,8 @@ describe("makeGatekeeperToken", () => {
 			now: () => 1_700_000_000,
 			secret: "super-secret",
 		});
+		expect(tokenInfo).not.toBeNull();
+		const { token, issuedAt, expiresAtSeconds } = tokenInfo!;
 
 		expect(typeof token).toBe("string");
 		expect(issuedAt).toBe(1_700_000_000);
@@ -31,20 +33,21 @@ describe("makeGatekeeperToken", () => {
 	});
 
 	it("falls back to default tables and ttl", () => {
-		const { token, expiresAtSeconds } = makeGatekeeperToken({
+		const tokenInfo = makeGatekeeperToken({
 			userId: "abc",
 			workspaceId: "abc",
 			tables: [],
 			secret: "secret",
 		});
+		expect(tokenInfo).not.toBeNull();
+		const { token, expiresAtSeconds } = tokenInfo!;
 		const payload = decodePayload(token);
 		expect(payload.tables).toEqual(DEFAULT_GATEKEEPER_TABLES);
 		expect(expiresAtSeconds - (payload.iat as number)).toBe(DEFAULT_GATEKEEPER_TTL);
 	});
 
-	it("throws when secret is missing", () => {
-		expect(() =>
-			makeGatekeeperToken({ userId: "u", workspaceId: "w", tables: ["chat"], secret: "" }),
-		).toThrow(/ELECTRIC_GATEKEEPER_SECRET/);
+	it("returns null when secret is missing", () => {
+		const result = makeGatekeeperToken({ userId: "u", workspaceId: "w", tables: ["chat"], secret: "" });
+		expect(result).toBeNull();
 	});
 });

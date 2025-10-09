@@ -5,6 +5,8 @@ const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrou
 type OpenRouterModelOption = {
 	value: string;
 	label: string;
+	description?: string;
+	context?: number | null;
 	pricing?: {
 		prompt: number | null;
 		completion: number | null;
@@ -41,6 +43,11 @@ export async function POST(request: Request) {
 						? candidate.name
 						: "";
 				if (!id) return null;
+				const name = typeof candidate?.name === "string" && candidate.name.length > 0 ? candidate.name : id;
+				const description = typeof candidate?.description === "string" && candidate.description.length > 0
+					? candidate.description
+					: undefined;
+				const contextLength = typeof candidate?.context_length === "number" ? candidate.context_length : undefined;
 				const pricingCandidate = candidate?.pricing as Record<string, unknown> | undefined;
 				const pricing = pricingCandidate && typeof pricingCandidate === "object"
 					? {
@@ -50,11 +57,14 @@ export async function POST(request: Request) {
 					: undefined;
 				return {
 					value: id,
-					label: typeof candidate?.name === "string" ? candidate.name : id,
+					label: name,
+					description,
+					context: contextLength ?? null,
 					pricing,
 				};
 			})
-			.filter((model): model is OpenRouterModelOption => Boolean(model));
+			.filter((model): model is OpenRouterModelOption => Boolean(model))
+			.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
 		return NextResponse.json({ ok: true, models });
 	} catch (error) {

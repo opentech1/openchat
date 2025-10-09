@@ -33,7 +33,7 @@ export function makeGatekeeperToken({
 	now = () => Math.floor(Date.now() / 1000),
 	secret = process.env.ELECTRIC_GATEKEEPER_SECRET,
 }: MakeTokenOptions) {
-	if (!secret) throw new Error("Missing ELECTRIC_GATEKEEPER_SECRET env for gatekeeper");
+	if (!secret) return null;
 	const normalizedTables = (tables && tables.length > 0 ? tables : DEFAULT_GATEKEEPER_TABLES)
 		.map((t) => t.toLowerCase())
 		.filter((table) => ALLOWED_TABLE_SET.has(table));
