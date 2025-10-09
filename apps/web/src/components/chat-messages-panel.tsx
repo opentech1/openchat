@@ -138,22 +138,25 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 					<div
 						ref={contentRef}
 						className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
+						data-ph-no-capture
 						style={{ paddingBottom }}
 					>
 						{hasMessages ? (
 							messages.map((msg) => (
 								<Message key={msg.id} from={msg.role} className={msg.role === "assistant" ? "justify-start flex-row" : undefined}>
 									{msg.role === "assistant" ? (
-										<Streamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap">
+										<Streamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap" data-ph-no-capture>
 											{msg.content}
 										</Streamdown>
 									) : (
-										<div className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap">{msg.content}</div>
+										<div className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap" data-ph-no-capture>
+											{msg.content}
+										</div>
 									)}
 								</Message>
 							))
 						) : (
-							<p className="text-muted-foreground text-sm">No messages yet. Say hi!</p>
+							<p className="text-muted-foreground text-sm" data-ph-no-capture>No messages yet. Say hi!</p>
 						)}
 					</div>
 				</ScrollAreaPrimitive.Viewport>

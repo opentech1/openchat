@@ -22,6 +22,7 @@ import {
 	GATEKEEPER_SCHEMA,
 	makeGatekeeperToken,
 } from "./lib/gatekeeper";
+import { capturePosthogEvent, withPosthogTracing } from "./lib/posthog";
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
@@ -477,15 +478,15 @@ new Elysia()
 		});
 	} catch (error) {
 		console.error("/api/electric/gatekeeper", error);
-            return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
-        }
-        const response = new Response(
-            JSON.stringify({
-                token: tokenInfo.token,
-                expiresAt: new Date(tokenInfo.expiresAtSeconds * 1000).toISOString(),
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-        );
+		return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
+	}
+	const response = new Response(
+		JSON.stringify({
+			token: tokenInfo ? tokenInfo.token : null,
+			expiresAt: tokenInfo ? new Date(tokenInfo.expiresAtSeconds * 1000).toISOString() : null,
+		}),
+		{ status: 200, headers: { "content-type": "application/json" } },
+	);
         return withSecurityHeaders(response, context.request);
     })
     .all("/rpc*", async (context) => {
@@ -580,21 +581,16 @@ new Elysia()
                 return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
         }
 
-        let token: string;
-        try {
-            const tokenInfo = makeGatekeeperToken({
-                userId,
-                workspaceId: userId,
-                tables: allowTables,
-            });
-            token = tokenInfo.token;
-        } catch (error) {
-            console.error("gatekeeper.token", error);
-            return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
-        }
+	const tokenInfo = makeGatekeeperToken({
+		userId,
+		workspaceId: userId,
+		tables: allowTables,
+	});
 
-        const upstreamHeaders = new Headers();
-        upstreamHeaders.set("authorization", `Bearer ${token}`);
+	const upstreamHeaders = new Headers();
+	if (tokenInfo) {
+		upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
+	}
         const ifNoneMatch = context.request.headers.get("if-none-match");
         if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
 

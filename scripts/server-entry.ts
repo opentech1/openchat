@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 import { Client } from "pg";
 
+import { shutdownPosthog } from "../apps/server/src/lib/posthog";
+
 const DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
@@ -84,6 +86,20 @@ async function main() {
 	server.on("error", (error) => {
 		console.error("[server-entry] Server process failed", error);
 		process.exit(1);
+	});
+
+	const cleanup = async () => {
+		await shutdownPosthog();
+	};
+
+	process.on("exit", () => {
+		void cleanup();
+	});
+	process.on("SIGTERM", () => {
+		void cleanup();
+	});
+	process.on("SIGINT", () => {
+		void cleanup();
 	});
 }
 

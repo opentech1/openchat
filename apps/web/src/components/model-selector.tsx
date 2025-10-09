@@ -19,6 +19,7 @@ export type ModelSelectorOption = {
 	value: string
 	label: string
 	description?: string
+	context?: number | null
 	pricing?: {
 		prompt: number | null
 		completion: number | null
@@ -39,7 +40,7 @@ function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
 		if (cost == null) return "–"
 		return `$${cost.toFixed(3)}`
 	}
-	return `${format(pricing.prompt)} / ${format(pricing.completion)} per 1M tokens`
+	return `In: ${format(pricing.prompt)} · Out: ${format(pricing.completion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {
@@ -97,9 +98,11 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 
 	const triggerTitle = React.useMemo(() => {
 		if (!selectedOption) return undefined
-		if (selectedOption.description) return selectedOption.description
-		if (selectedOption.pricing) return formatPricing(selectedOption.pricing)
-		return undefined
+		const parts: string[] = []
+		if (selectedOption.description) parts.push(selectedOption.description)
+		if (selectedOption.context) parts.push(`Context: ${Intl.NumberFormat().format(selectedOption.context)} tokens`)
+		if (selectedOption.pricing) parts.push(formatPricing(selectedOption.pricing))
+		return parts.length > 0 ? parts.join(" • ") : undefined
 	}, [selectedOption])
 
 	return (
@@ -112,18 +115,18 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					role="combobox"
 					aria-expanded={open}
 					title={triggerTitle}
-					className="flex h-9 min-w-[150px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-foreground"
+					className="flex h-10 min-w-[220px] max-w-[360px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-left text-foreground"
 				>
 					<span className="flex min-w-0 items-center gap-2">
-						<span className="bg-muted text-muted-foreground/90 flex size-7 items-center justify-center rounded-lg">
+						<span className="bg-muted text-muted-foreground/90 flex size-8 items-center justify-center rounded-lg">
 							<OptionGlyph option={selectedOption} />
 						</span>
-						<span className="truncate text-sm font-medium leading-none">{triggerLabel}</span>
+						<span className="text-sm font-medium leading-tight text-left whitespace-normal">{triggerLabel}</span>
 					</span>
 					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent align="end" className="w-[220px] border-none bg-popover/95 p-0 shadow-xl">
+			<PopoverContent align="end" className="w-[320px] max-w-[90vw] border-none bg-popover/95 p-0 shadow-xl">
 				<Command className="border-none bg-transparent shadow-none">
 					<CommandInput placeholder="Search models" className="h-9 px-3 text-sm" />
 					<CommandList className="max-h-60 overflow-y-auto">
@@ -149,26 +152,31 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
 										)}
 									>
-											<span className="flex min-w-0 items-start gap-2">
-												<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
-													<OptionGlyph option={option} />
-												</span>
-												<span className="flex min-w-0 flex-col gap-0.5 truncate">
-													<span className="truncate text-sm font-medium leading-tight">
-														{option.label}
-													</span>
-													{option.description ? (
-														<span className="text-muted-foreground text-[11px] leading-tight">
-															{option.description}
-														</span>
-													) : null}
-													{option.pricing ? (
-														<span className="text-muted-foreground text-[11px] leading-tight">
-															{formatPricing(option.pricing)}
-														</span>
-													) : null}
-												</span>
+									<span className="flex min-w-0 items-start gap-2">
+										<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
+											<OptionGlyph option={option} />
+										</span>
+										<span className="flex min-w-0 flex-col gap-0.5">
+											<span className="text-sm font-medium leading-tight text-left whitespace-normal">
+												{option.label}
 											</span>
+											{option.description ? (
+												<span className="text-muted-foreground text-[11px] leading-tight text-left whitespace-normal">
+													{option.description}
+												</span>
+											) : null}
+											{option.pricing ? (
+												<span className="text-muted-foreground text-[11px] leading-tight">
+													{formatPricing(option.pricing)}
+												</span>
+											) : null}
+											{option.context ? (
+												<span className="text-muted-foreground text-[11px] leading-tight">
+													Context: {Intl.NumberFormat().format(option.context)} tokens
+												</span>
+											) : null}
+										</span>
+									</span>
 											<Check className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
 												aria-hidden={!isSelected}
 											/>

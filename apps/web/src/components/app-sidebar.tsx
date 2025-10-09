@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useWorkspaceChats, type WorkspaceChatRow } from "@/lib/electric/workspace-db";
 import { client } from "@/utils/orpc";
 import { connect, subscribe, type Envelope } from "@/lib/sync";
+import { captureClientEvent } from "@/lib/posthog";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 
 export type ChatListItem = {
@@ -172,18 +173,19 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 			if (!currentUserId) router.push("/auth/sign-in");
 			return;
 		}
-		setIsCreating(true);
-		try {
-			const now = new Date();
-			const { id } = await client.chats.create({ title: "New Chat" });
-			const optimisticChat: ChatListItem = { id, title: "New Chat", updatedAt: now, lastMessageAt: now };
-			setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
-			setFallbackChats((prev) => upsertChat(prev, optimisticChat));
-			await router.push(`/dashboard/chat/${id}`);
-		} catch (error) {
-			console.error("create chat", error);
-		} finally {
-			setIsCreating(false);
+	setIsCreating(true);
+	try {
+		const now = new Date();
+		const { id } = await client.chats.create({ title: "New Chat" });
+		const optimisticChat: ChatListItem = { id, title: "New Chat", updatedAt: now, lastMessageAt: now };
+		setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
+		setFallbackChats((prev) => upsertChat(prev, optimisticChat));
+		captureClientEvent("chat_created", { chatId: id, createdAt: now.toISOString() });
+		await router.push(`/dashboard/chat/${id}`);
+	} catch (error) {
+		console.error("create chat", error);
+	} finally {
+		setIsCreating(false);
 		}
 	}, [currentUserId, isCreating, router]);
 
@@ -328,7 +330,7 @@ function ChatList({
 	}
 	if (chats.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
 	return (
-		<ul className="px-1 space-y-1">
+		<ul className="px-1 space-y-1" data-ph-no-capture>
 			{chats.map((c) => {
 				const hrefPath = `/dashboard/chat/${c.id}`;
 				const href = { pathname: "/dashboard/chat/[id]" as const, query: { id: c.id } };

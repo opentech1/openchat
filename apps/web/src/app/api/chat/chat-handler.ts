@@ -1,6 +1,8 @@
 import { streamText, convertToCoreMessages, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 
+import { withServerTracing, captureServerEvent } from "@/lib/posthog-server";
+
 import { serverClient } from "@/utils/orpc-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 
@@ -231,6 +233,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response(responseMessage, { status, headers });
 		}
 
+		const distinctId = request.headers.get("x-user-id")?.trim() || null;
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
 		if (!chatId) {
 			const headers = buildCorsHeaders(request, allowOrigin);
@@ -374,8 +377,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		};
 
 		try {
+			const startedAt = Date.now();
+			let streamStatus: "completed" | "aborted" | "error" = "completed";
+			const tracedModel = withServerTracing(config.provider.chat(config.modelId), {
+				posthogDistinctId: distinctId ?? undefined,
+				posthogProperties: {
+					chatId,
+					modelId: config.modelId,
+				},
+			});
 			const result = await streamTextImpl({
-				model: config.provider.chat(config.modelId),
+				model: tracedModel,
 				messages: convertToCoreMessagesImpl(safeMessages),
 				onChunk: async ({ chunk }) => {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
@@ -384,15 +396,27 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					}
 				},
 				onFinish: async () => {
+					streamStatus = "completed";
 					await finalize();
 				},
 				onAbort: async () => {
+					streamStatus = "aborted";
 					await finalize();
 				},
 				onError: async ({ error }) => {
 					console.error("/api/chat stream", error);
+					streamStatus = "error";
 					await finalize();
 				},
+			});
+			captureServerEvent("chat_message_stream", distinctId, {
+				chatId,
+				modelId: config.modelId,
+				userMessageId,
+				assistantMessageId,
+				characters: assistantText.length,
+				durationMs: Date.now() - startedAt,
+				status: streamStatus,
 			});
 
 			const aiResponse = result.toUIMessageStreamResponse({
@@ -415,6 +439,14 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		} catch (error) {
 			console.error("/api/chat", error);
 			await finalize();
+			captureServerEvent("chat_message_stream", distinctId, {
+				chatId,
+				modelId: config.modelId,
+				userMessageId,
+				assistantMessageId,
+				characters: assistantText.length,
+				status: "error",
+			});
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Upstream error", { status: 502, headers });
 		}
