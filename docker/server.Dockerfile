@@ -25,12 +25,16 @@ WORKDIR /app
 # Copy compiled server bundle and minimal workspace metadata
 COPY --from=base /app/apps/server/dist ./apps/server/dist
 COPY --from=base /app/apps/server/package.json ./apps/server/package.json
+COPY --from=base /app/apps/server/drizzle.config.ts ./apps/server/drizzle.config.ts
+COPY --from=base /app/apps/server/tsconfig.json ./apps/server/tsconfig.json
+COPY --from=base /app/apps/server/src ./apps/server/src
 COPY --from=base /app/packages/auth ./packages/auth
 COPY --from=base /app/bun.lock ./bun.lock
 COPY --from=base /app/bunfig.toml ./bunfig.toml
 COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/scripts ./scripts
+COPY --from=base /app/turbo.json ./turbo.json
 
 ENV RUN_DB_MIGRATIONS=1
 
