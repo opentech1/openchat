@@ -58,15 +58,15 @@ async function main() {
 	await waitForPostgres();
 
 	if (runMigrations) {
-		console.log("[server-entry] Running migrations (bun run db:push)");
-		await runCommand("bun", ["run", "db:push"]);
+		console.log("[server-entry] Running migrations (apps/server)");
+		await runCommand("bun", ["run", "db:push"], { cwd: "/app/apps/server" });
 	} else {
 		console.log("[server-entry] Skipping migrations (RUN_DB_MIGRATIONS=0)");
 	}
 
 	console.log("[server-entry] Starting API server");
-	const server = spawn("bun", ["run", "--cwd", "apps/server", "start"], {
-		cwd: "/app",
+	const server = spawn("bun", ["run", "start"], {
+		cwd: "/app/apps/server",
 		stdio: "inherit",
 		env: process.env,
 	});
