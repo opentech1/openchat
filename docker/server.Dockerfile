@@ -30,8 +30,11 @@ COPY --from=base /app/bun.lock ./bun.lock
 COPY --from=base /app/bunfig.toml ./bunfig.toml
 COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/scripts ./scripts
+
+ENV RUN_DB_MIGRATIONS=1
 
 # node_modules already pruned in build stage; no extra install necessary
 
 EXPOSE 3000
-CMD ["bun", "run", "--cwd", "apps/server", "start"]
+CMD ["bun", "scripts/server-entry.ts"]
