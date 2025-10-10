@@ -1,12 +1,12 @@
 import { cache } from "react";
 import { headers } from "next/headers";
-import { resolveServerBaseUrl } from "@/utils/server-url";
+import { resolveServerBaseUrls } from "@/utils/server-url";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
 	process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
-const SERVER_ORIGIN = resolveServerBaseUrl();
+const { primary: SERVER_ORIGIN } = resolveServerBaseUrls();
 
 async function fetchServerSession(headerList: Headers) {
 	const cookie = headerList.get("cookie");
