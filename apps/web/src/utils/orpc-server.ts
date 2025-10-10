@@ -2,22 +2,48 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { AppRouterClient } from "@/types/server-router";
 import { getUserId } from "@/lib/auth-server";
-import { resolveServerBaseUrl } from "./server-url";
+import { resolveServerBaseUrls } from "./server-url";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
 	process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
-const SERVER_BASE_URL = resolveServerBaseUrl();
+const { primary: SERVER_BASE_URL, fallback: SERVER_FALLBACK_URL } = resolveServerBaseUrls();
 
 // Server-only ORPC client that enriches headers with Better Auth context.
 export const serverLink = new RPCLink({
 	url: `${SERVER_BASE_URL}/rpc`,
-	fetch(url, options) {
-		return fetch(url, {
-			...options,
-			credentials: "include",
-		});
+	async fetch(url, options) {
+		const requestUrl = typeof url === "string" ? url : (url as Request).url;
+
+		const attempt = async (target: string) =>
+			fetch(target, {
+				...options,
+				credentials: "include",
+			});
+
+		try {
+			const response = await attempt(requestUrl);
+			if (
+				SERVER_FALLBACK_URL &&
+				response.status >= 500 &&
+				response.status < 600 &&
+				requestUrl.startsWith(SERVER_BASE_URL)
+			) {
+				const fallbackUrl = requestUrl.replace(SERVER_BASE_URL, SERVER_FALLBACK_URL);
+				if (fallbackUrl !== requestUrl) {
+					return attempt(fallbackUrl);
+				}
+			}
+			return response;
+		} catch (error) {
+			if (!SERVER_FALLBACK_URL || !requestUrl.startsWith(SERVER_BASE_URL)) {
+				throw error;
+			}
+			const fallbackUrl = requestUrl.replace(SERVER_BASE_URL, SERVER_FALLBACK_URL);
+			if (fallbackUrl === requestUrl) throw error;
+			return attempt(fallbackUrl);
+		}
 	},
 	headers: async () => {
 		const { headers } = await import("next/headers");

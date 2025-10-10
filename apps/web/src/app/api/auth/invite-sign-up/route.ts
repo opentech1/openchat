@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { serverClient } from "@/utils/orpc-server";
-import { resolveServerBaseUrl } from "@/utils/server-url";
+import { resolveServerBaseUrls } from "@/utils/server-url";
 
-const SERVER_BASE_URL = resolveServerBaseUrl();
+const { primary: SERVER_BASE_URL } = resolveServerBaseUrls();
 
 function sanitizeString(value: unknown) {
 	return typeof value === "string" ? value.trim() : "";
