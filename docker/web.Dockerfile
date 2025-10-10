@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.1 AS deps
+FROM oven/bun:1.3 AS deps
 WORKDIR /app
 ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
 
