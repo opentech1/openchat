@@ -28,6 +28,7 @@ COPY --from=base /app/apps/server/package.json ./apps/server/package.json
 COPY --from=base /app/apps/server/drizzle.config.ts ./apps/server/drizzle.config.ts
 COPY --from=base /app/apps/server/tsconfig.json ./apps/server/tsconfig.json
 COPY --from=base /app/apps/server/src ./apps/server/src
+COPY --from=base /app/apps/server/scripts ./apps/server/scripts
 COPY --from=base /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=base /app/packages/auth ./packages/auth
 COPY --from=base /app/packages/auth/node_modules ./packages/auth/node_modules
