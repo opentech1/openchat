@@ -123,10 +123,18 @@ const baseURL = rawBaseUrl.replace(/\/$/, "");
 const secret = process.env.BETTER_AUTH_SECRET || "dev-secret";
 const crossDomain = process.env.AUTH_COOKIE_DOMAIN || computeCookieDomain(baseURL);
 
+function parseOriginList(raw: string | undefined) {
+	if (!raw) return [];
+	return raw
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter((entry) => entry.length > 0);
+}
+
 const originCandidates = [
 	baseURL,
 	process.env.NEXT_PUBLIC_APP_URL || (process.env.NODE_ENV !== "production" ? "http://localhost:3001" : undefined),
-	process.env.CORS_ORIGIN,
+	...parseOriginList(process.env.CORS_ORIGIN),
 	process.env.NEXT_PUBLIC_SERVER_URL,
 	process.env.NEXT_PUBLIC_ELECTRIC_URL,
 ]

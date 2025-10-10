@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { headers } from "next/headers";
 import { resolveServerBaseUrl } from "@/utils/server-url";
 
@@ -27,9 +28,18 @@ async function fetchServerSession(headerList: Headers) {
 	return response.json().catch(() => null);
 }
 
-export async function getUserId(): Promise<string | null> {
+export const getUserId = cache(async (): Promise<string | null> => {
+	let headerList: Headers;
 	try {
-		const headerList = await headers();
+		headerList = await headers();
+	} catch (error) {
+		if (process.env.NODE_ENV !== "test") {
+			console.error("auth-server.getUserId headers", error);
+		}
+		headerList = new Headers();
+	}
+
+	try {
 		const session = await fetchServerSession(headerList);
 		if (session?.user?.id) return session.user.id as string;
 		const headerUser = headerList.get("x-user-id");
@@ -47,4 +57,4 @@ export async function getUserId(): Promise<string | null> {
 	}
 
 	return null;
-}
+});

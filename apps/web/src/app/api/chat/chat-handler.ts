@@ -311,26 +311,23 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		let pendingFlush: Promise<void> | null = null;
 		let pendingResolve: (() => void) | null = null;
 		let finalized = false;
+		let persistenceError: Error | null = null;
 
 		const persistAssistant = async (status: "streaming" | "completed", force = false) => {
 			if (!force && status === "streaming" && assistantText.length === lastPersistedLength) {
 				return;
 			}
 			lastPersistedLength = assistantText.length;
-			try {
-				const response = await persistMessageImpl({
-					chatId,
-					messageId: assistantMessageId,
-					role: "assistant",
-					content: assistantText,
-					createdAt: assistantCreatedAtIso,
-					status,
-				});
-				if (!response.ok) {
-					throw new Error("assistant streamUpsert rejected");
-				}
-			} catch (error) {
-				console.error("Failed to persist assistant chunk", error);
+			const response = await persistMessageImpl({
+				chatId,
+				messageId: assistantMessageId,
+				role: "assistant",
+				content: assistantText,
+				createdAt: assistantCreatedAtIso,
+				status,
+			});
+			if (!response.ok) {
+				throw new Error("assistant streamUpsert rejected");
 			}
 		};
 
@@ -344,6 +341,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				flushTimeout = null;
 				try {
 					await persistAssistant("streaming");
+				} catch (error) {
+					console.error("Failed to persist assistant chunk", error);
+					if (!persistenceError) {
+						persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant chunk");
+					}
 				} finally {
 					pendingResolve?.();
 					pendingResolve = null;
@@ -373,7 +375,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					// ignore
 				}
 			}
-			await persistAssistant("completed", true);
+			try {
+				await persistAssistant("completed", true);
+			} catch (error) {
+				console.error("Failed to persist assistant completion", error);
+				if (!persistenceError) {
+					persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant completion");
+				}
+			}
+			if (persistenceError) {
+				throw persistenceError;
+			}
 		};
 
 		try {
@@ -425,6 +437,10 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			corsHeaders.forEach((value, key) => {
 				headers.set(key, value);
 			});
+
+			if (persistenceError) {
+				throw persistenceError;
+			}
 
 			return new Response(aiResponse.body, {
 				status: aiResponse.status,

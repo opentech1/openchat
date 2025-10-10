@@ -1,5 +1,4 @@
 const STORAGE_KEY = "openchat.openrouter.apiKey";
-const MASTER_KEY_STORAGE_KEY = "openchat.openrouter.masterKey";
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
 	return btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -14,23 +13,27 @@ function base64ToArrayBuffer(base64: string) {
 	return bytes.buffer;
 }
 
+let masterKeyPromise: Promise<CryptoKey> | null = null;
+
 async function getCryptoKey() {
 	if (typeof window === "undefined" || !window.crypto?.subtle) {
 		throw new Error("Web Crypto not available");
 	}
-	let master = localStorage.getItem(MASTER_KEY_STORAGE_KEY);
-	if (!master) {
-		const random = new Uint8Array(32);
-		crypto.getRandomValues(random);
-		master = arrayBufferToBase64(random.buffer);
-		localStorage.setItem(MASTER_KEY_STORAGE_KEY, master);
+	if (!masterKeyPromise) {
+		masterKeyPromise = (async () => {
+			const random = new Uint8Array(32);
+			crypto.getRandomValues(random);
+			return crypto.subtle.importKey("raw", random.buffer, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+		})();
 	}
-	const keyData = base64ToArrayBuffer(master);
-	return crypto.subtle.importKey("raw", keyData, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+	return masterKeyPromise;
 }
 
 export async function saveOpenRouterKey(apiKey: string) {
 	if (typeof window === "undefined") return;
+	if (!window.sessionStorage) {
+		throw new Error("Session storage unavailable");
+	}
 	const cryptoKey = await getCryptoKey();
 	const iv = new Uint8Array(12);
 	crypto.getRandomValues(iv);
@@ -40,12 +43,13 @@ export async function saveOpenRouterKey(apiKey: string) {
 		iv: arrayBufferToBase64(iv.buffer),
 		data: arrayBufferToBase64(ciphertext),
 	};
-	localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+	sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 export async function loadOpenRouterKey() {
 	if (typeof window === "undefined") return null;
-	const stored = localStorage.getItem(STORAGE_KEY);
+	if (!window.sessionStorage) return null;
+	const stored = sessionStorage.getItem(STORAGE_KEY);
 	if (!stored) return null;
 	try {
 		const parsed = JSON.parse(stored) as { iv: string; data: string };
@@ -56,16 +60,19 @@ export async function loadOpenRouterKey() {
 		return new TextDecoder().decode(decrypted);
 	} catch (error) {
 		console.error("Failed to decrypt stored OpenRouter API key", error);
+		sessionStorage.removeItem(STORAGE_KEY);
 		return null;
 	}
 }
 
 export function removeOpenRouterKey() {
 	if (typeof window === "undefined") return;
-	localStorage.removeItem(STORAGE_KEY);
+	if (!window.sessionStorage) return;
+	sessionStorage.removeItem(STORAGE_KEY);
 }
 
 export function hasStoredOpenRouterKey() {
 	if (typeof window === "undefined") return false;
-	return localStorage.getItem(STORAGE_KEY) != null;
+	if (!window.sessionStorage) return false;
+	return sessionStorage.getItem(STORAGE_KEY) != null;
 }
