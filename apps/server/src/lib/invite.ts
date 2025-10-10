@@ -4,13 +4,24 @@ import { db } from "../db";
 import { inviteCode } from "../db/schema/invite";
 
 const RESERVATION_TTL_MS = Number(process.env.INVITE_RESERVATION_TTL_MS ?? 10 * 60_000);
+const DEFAULT_CODE_LENGTH = Number(process.env.INVITE_CODE_LENGTH ?? 12);
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function hashInviteCode(code: string) {
 	return createHash("sha256").update(code.trim().toLowerCase()).digest("hex");
 }
 
-function generateCode(byteLength = 6) {
-	return randomBytes(byteLength).toString("base64url").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, byteLength * 2);
+function generateCode(length = DEFAULT_CODE_LENGTH) {
+	const targetLength = Number.isFinite(length) && length > 0 ? Math.floor(length) : DEFAULT_CODE_LENGTH;
+	let output = "";
+	while (output.length < targetLength) {
+		const buf = randomBytes(targetLength);
+		for (const byte of buf) {
+			if (output.length >= targetLength) break;
+			output += CODE_ALPHABET[byte % CODE_ALPHABET.length]!;
+		}
+	}
+	return output;
 }
 
 export async function createInviteCodes({
@@ -22,22 +33,46 @@ export async function createInviteCodes({
 	createdBy?: string;
 	expiresAt?: Date | null;
 }) {
-	const codes: Array<{ code: string; codeHash: string }> = [];
-	while (codes.length < count) {
-		const code = generateCode();
-		const codeHash = hashInviteCode(code);
-		codes.push({ code, codeHash });
+	const normalizedCount = Math.max(0, Math.floor(count));
+	const createdByValue = createdBy ?? null;
+	const expiresValue = expiresAt ?? null;
+	const issued: string[] = [];
+	const seenHashes = new Set<string>();
+
+	while (issued.length < normalizedCount) {
+		const remaining = normalizedCount - issued.length;
+		const batchSize = Math.max(remaining * 2, 4);
+		const candidates = new Map<string, string>();
+
+		while (candidates.size < batchSize) {
+			const code = generateCode();
+			const codeHash = hashInviteCode(code);
+			if (seenHashes.has(codeHash) || candidates.has(codeHash)) continue;
+			candidates.set(codeHash, code);
+		}
+
+		const rows = Array.from(candidates.keys()).map((codeHash) => ({
+			codeHash,
+			createdBy: createdByValue,
+			expiresAt: expiresValue,
+		}));
+
+		const inserted = await db
+			.insert(inviteCode)
+			.values(rows)
+			.onConflictDoNothing({ target: inviteCode.codeHash })
+			.returning({ codeHash: inviteCode.codeHash });
+
+		for (const { codeHash } of inserted) {
+			const code = candidates.get(codeHash);
+			if (!code) continue;
+			issued.push(code);
+			seenHashes.add(codeHash);
+			if (issued.length >= normalizedCount) break;
+		}
 	}
-	const rows = codes.map(({ codeHash }) => ({
-		codeHash,
-		createdBy: createdBy ?? null,
-		expiresAt: expiresAt ?? null,
-	}));
-	await db
-		.insert(inviteCode)
-		.values(rows)
-		.onConflictDoNothing({ target: inviteCode.codeHash });
-	return codes.map(({ code }) => code);
+
+	return issued;
 }
 
 export async function reserveInviteCode({

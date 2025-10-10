@@ -12,4 +12,7 @@ export type MessageRow = {
 	createdAt: string | Date | null | undefined;
 };
 
-export type AppRouterClient = any;
+import type { AppRouterClient as ServerAppRouterClient, AppRouter } from "../../../server/src/routers";
+
+export type { AppRouter };
+export type AppRouterClient = ServerAppRouterClient;
