@@ -20,25 +20,25 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
-	const providerProps = posthogClient
-		? { client: posthogClient }
-		: { apiKey: "", options: { enabled: false } };
-
-	return (
-		<PostHogProvider {...providerProps}>
-			<ThemeProvider
-				attribute="class"
-				defaultTheme="system"
-				enableSystem
-				disableTransitionOnChange
-			>
-				<BrandThemeProvider>
-					<QueryClientProvider client={queryClient}>
-						{children}
-						<Toaster richColors position="bottom-right" />
-					</QueryClientProvider>
-				</BrandThemeProvider>
-			</ThemeProvider>
-		</PostHogProvider>
+	const appTree = (
+		<ThemeProvider
+			attribute="class"
+			defaultTheme="system"
+			enableSystem
+			disableTransitionOnChange
+		>
+			<BrandThemeProvider>
+				<QueryClientProvider client={queryClient}>
+					{children}
+					<Toaster richColors position="bottom-right" />
+				</QueryClientProvider>
+			</BrandThemeProvider>
+		</ThemeProvider>
 	);
+
+	if (posthogClient) {
+		return <PostHogProvider client={posthogClient}>{appTree}</PostHogProvider>;
+	}
+
+	return appTree;
 }
