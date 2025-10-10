@@ -3,6 +3,9 @@
   "workspaces": {
     "": {
       "name": "openchat",
+      "dependencies": {
+        "pg": "^8.14.1",
+      },
       "devDependencies": {
         "@types/ws": "^8.18.1",
         "@vitest/coverage-v8": "^2.1.4",

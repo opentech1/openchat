@@ -28,7 +28,9 @@
     "generate:secrets": "bun run scripts/generate-secrets.ts",
     "verify:build": "rm -rf apps/web/.next && (cd apps/web && bunx next build) && bunx turbo run build --filter=web --filter=server"
   },
-  "dependencies": {},
+  "dependencies": {
+    "pg": "^8.14.1"
+  },
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^2.1.4",
