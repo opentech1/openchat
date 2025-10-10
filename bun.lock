@@ -44,10 +44,10 @@
         "@posthog/ai": "^1.1.2",
         "ai": "^5.0.44",
         "dotenv": "^17.2.1",
-        "drizzle-orm": "^0.44.2",
+        "drizzle-orm": "^0.44.5",
         "elysia": "^1.3.21",
-        "pg": "^8.14.1",
-        "posthog-node": "^4.3.0",
+        "pg": "^8.16.3",
+        "posthog-node": "^5.9.5",
         "zod": "^4.0.2",
       },
       "devDependencies": {
@@ -122,6 +122,9 @@
         "better-auth": "^1.3.18",
         "drizzle-orm": "^0.44.5",
         "pg": "^8.16.3",
+      },
+      "devDependencies": {
+        "@types/pg": "^8.11.11",
       },
     },
   },
@@ -2527,8 +2530,6 @@
     "rc/strip-json-comments": ["strip-json-comments@2.0.1", "", {}, "sha512-4gB8na07fecVVkOI6Rs4e7T6NOTki5EmL7TUduTs6bu3EdnSycntVJ4re8kgZA+wx9IueI2Y11bfbgwtzuE0KQ=="],
 
     "rolldown/@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0-beta.37", "", {}, "sha512-0taU1HpxFzrukvWIhLRI4YssJX2wOW5q1MxPXWztltsQ13TE51/larZIwhFdpyk7+K43TH7x6GJ8oEqAo+vDbA=="],
-
-    "server/posthog-node": ["posthog-node@4.18.0", "", { "dependencies": { "axios": "^1.8.2" } }, "sha512-XROs1h+DNatgKh/AlIlCtDxWzwrKdYDb2mOs58n4yN8BkGN9ewqeQwG5ApS4/IzwCb7HPttUkOVulkYatd2PIw=="],
 
     "simple-swizzle/is-arrayish": ["is-arrayish@0.3.4", "", {}, "sha512-m6UrgzFVUYawGBh1dUsWR5M2Clqic9RVXC/9f8ceNlv2IcO9j9J/z8UoCLPqtsPBFNzEpfR3xftohbfqDx8EQA=="],
 

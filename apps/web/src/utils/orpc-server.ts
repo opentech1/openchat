@@ -7,7 +7,7 @@ const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
 	process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
-const SERVER_BASE_URL = (process.env.NEXT_PUBLIC_SERVER_URL || process.env.SERVER_INTERNAL_URL || "http://localhost:3000").replace(/\/$/, "");
+const SERVER_BASE_URL = (process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000").replace(/\/$/, "");
 
 // Server-only ORPC client that enriches headers with Better Auth context.
 export const serverLink = new RPCLink({

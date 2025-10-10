@@ -34,7 +34,7 @@ deployment to fail fast.
 | `ELECTRIC_INSECURE` | electric, server | `false` | Set `true` only when the service is reachable **only** via plain HTTP inside the Docker network. |
 | `BETTER_AUTH_SECRET` | server | `openssl rand -base64 48 | tr -d '\n'` | Session encryption key. |
 | `BETTER_AUTH_URL` | server | `https://api.ochat.pro` | Base URL used in auth callbacks. |
-| `SERVER_INTERNAL_URL` | server | `https://api.ochat.pro` | Origin the server uses when talking to itself. |
+| `SERVER_INTERNAL_URL` | server, web | `http://openchat-server:3000` | Internal origin containers use when calling the API (Traefik can still expose `https://api.ochat.pro` externally). |
 | `CORS_ORIGIN` | server | `https://ochat.pro` | Comma-separated list if multiple origins. |
 | `NEXT_PUBLIC_APP_URL` | web | `https://ochat.pro` | Public site URL (omit if hosting web elsewhere). |
 | `NEXT_PUBLIC_SERVER_URL` | web | `https://api.ochat.pro` | Public API URL. |
@@ -55,7 +55,7 @@ openssl rand -base64 48 | tr -d '\n'
 Production sign-up now requires a single-use invite code. Generate codes directly on the Dokploy instance by opening the **Terminal** tab for the server service and running:
 
 ```bash
-bun run --cwd apps/server invite:generate -- --count 5 --expires 24
+bun run --cwd /app/apps/server invite:generate -- --count 5 --expires 24
 ```
 
 - `--count` (default `1`) controls how many codes are minted.
@@ -86,8 +86,8 @@ Compose to abort with a helpful error message.
 2. Dokploy pulls the repo, builds each service via the provided Dockerfiles, and
    launches the compose stack.
 3. Verify:
-   - `https://api.ochat.pro/api/__debug/db/ping?debug=1` returns `{ "ok": true }`
-   - Electric SQL container remains in `healthy` state.
+   - API and web containers report `Ready` in Dokploy logs.
+   - Electric SQL container remains in the `running` state.
    - Frontend loads and completes the sign-up flow.
 
 If you host the web app on Vercel, you can disable the `web` service in Dokploy

@@ -7,13 +7,12 @@ import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { RPCHandler } from "@orpc/server/fetch";
 import { onError } from "@orpc/server";
 import { auth } from "@openchat/auth";
-import { resolveDatabaseConfig as resolveSharedDatabaseConfig } from "@openchat/auth/database";
 import { appRouter, inMemoryChatOwned } from "./routers";
 import { createContext } from "./lib/context";
 import { hub, makeEnvelope } from "./lib/sync-hub";
 import { db } from "./db";
 import { chat } from "./db/schema/chat";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { isIP } from "node:net";
 import {
@@ -59,102 +58,6 @@ const TRUST_PROXY_FORWARDED = (() => {
 	const value = String(process.env.TRUST_PROXY_FORWARDED || "").toLowerCase();
 	return value === "true" || value === "1" || value === "yes";
 })();
-
-const AUTH_DEBUG_ERRORS = (() => {
-	const raw = process.env.SERVER_AUTH_DEBUG_ERRORS || process.env.AUTH_DEBUG_ERRORS || "";
-	const normalized = raw.trim().toLowerCase();
-	return ["1", "true", "yes", "on"].includes(normalized);
-})();
-
-type DebugTrace =
-	| {
-			at: string;
-			origin: "response";
-			status: number;
-			body?: string;
-			headers?: Record<string, string>;
-	  }
-	| {
-			at: string;
-			origin: "exception";
-			message: string;
-			stack?: string;
-	  };
-
-let lastAuthError: DebugTrace | null = null;
-
-function serializeError(error: unknown, depth = 0): Record<string, any> {
-	if (depth > 2) {
-		return { message: "Max depth reached" };
-	}
-	if (!(error instanceof Error)) {
-		return {
-			message: error === undefined ? "undefined" : String(error),
-		};
-	}
-	const payload: Record<string, any> = {
-		name: error.name,
-		message: error.message,
-	};
-	if (typeof error.stack === "string") {
-		payload.stack = error.stack;
-	}
-	const extras = Reflect.ownKeys(error).filter(
-		(key) => !["name", "message", "stack", "cause"].includes(String(key)),
-	);
-	for (const key of extras) {
-		try {
-			const value = (error as any)[key];
-			payload[String(key)] =
-				value instanceof Error ? serializeError(value, depth + 1) : value;
-		} catch {
-			payload[String(key)] = "[unserializable]";
-		}
-	}
-	const cause = (error as any).cause;
-	if (cause !== undefined) {
-		try {
-			payload.cause = serializeError(cause, depth + 1);
-		} catch {
-			payload.cause = "[unserializable]";
-		}
-	}
-	return payload;
-}
-
-function getDatabaseEnvDetails() {
-	const raw = process.env.DATABASE_URL;
-	if (!raw) return null;
-	try {
-		const url = new URL(raw);
-		return {
-			host: url.hostname,
-			port: url.port || undefined,
-			database: url.pathname.replace(/^\//, "") || undefined,
-			hasUser: Boolean(url.username),
-			hasPassword: Boolean(url.password),
-			rawPreview: `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ""}/${url.pathname.replace(/^\//, "")}`,
-		};
-	} catch (error) {
-		return {
-			invalid: true,
-			message: error instanceof Error ? error.message : String(error),
-			rawPreview: raw.slice(0, 32),
-		};
-	}
-}
-
-function wantsDebugOutput(request: Request) {
-	if (AUTH_DEBUG_ERRORS) return true;
-	let url: URL | null = null;
-	try {
-		url = new URL(request.url);
-	} catch {
-		url = null;
-	}
-	if (url?.searchParams.get("debug") === "1") return true;
-	return request.headers.get("x-debug-auth") === "1";
-}
 
 type ServerLike = {
 	requestIP?: (request: Request) => { address?: string | null } | null;
@@ -249,130 +152,12 @@ new Elysia()
 		if (isRateLimited(context.request, context.server)) {
 			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
 		}
-		const wantsDebug = wantsDebugOutput(context.request);
 		try {
 			const response = await auth.handler(context.request);
-			if (wantsDebug && response.status >= 500) {
-				let diagnostic: string | undefined;
-				let headers: Record<string, string> | undefined;
-				try {
-					diagnostic = await response.clone().text();
-				} catch {
-					diagnostic = undefined;
-				}
-				try {
-					headers = Object.fromEntries(response.headers.entries());
-				} catch {
-					headers = undefined;
-				}
-				lastAuthError = {
-					at: new Date().toISOString(),
-					origin: "response",
-					status: response.status,
-					body: diagnostic,
-					headers,
-				};
-				const payload = JSON.stringify({
-					status: response.status,
-					body: diagnostic,
-					headers,
-				});
-				return withSecurityHeaders(
-					new Response(payload, {
-						status: response.status,
-						headers: {
-							"Content-Type": "application/json",
-						},
-					}),
-					context.request,
-				);
-			}
 			return withSecurityHeaders(response, context.request);
 		} catch (error) {
 			console.error("[auth] request failed", error);
-			if (wantsDebug) {
-				const serialized = serializeError(error);
-				lastAuthError = {
-					at: new Date().toISOString(),
-					origin: "exception",
-					message: serialized.message ?? "Error",
-					stack: typeof serialized.stack === "string" ? serialized.stack : undefined,
-				};
-				return withSecurityHeaders(
-					new Response(
-						JSON.stringify(serialized),
-						{
-							status: 500,
-							headers: {
-								"Content-Type": "application/json",
-							},
-						},
-					),
-					context.request,
-				);
-			}
 			return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
-		}
-	})
-	.get("/api/__debug/auth/last-error", async ({ request }) => {
-		if (!wantsDebugOutput(request)) {
-			return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
-		}
-		return withSecurityHeaders(
-			new Response(JSON.stringify(lastAuthError), {
-				status: 200,
-				headers: {
-					"Content-Type": "application/json",
-				},
-			}),
-			request,
-		);
-	})
-	.get("/api/__debug/db/ping", async ({ request }) => {
-		if (!wantsDebugOutput(request)) {
-			return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
-		}
-		try {
-			const databaseConfig = resolveSharedDatabaseConfig();
-			const envDetails = getDatabaseEnvDetails();
-			const result = await db.execute(sql`select 1 as ok`);
-			return withSecurityHeaders(
-				new Response(
-					JSON.stringify({
-						ok: true,
-						result,
-						fingerprint: databaseConfig.fingerprint,
-						env: envDetails,
-					}),
-					{
-						status: 200,
-						headers: {
-							"Content-Type": "application/json",
-						},
-					},
-				),
-				request,
-			);
-		} catch (error) {
-			const databaseConfig = resolveSharedDatabaseConfig();
-			const envDetails = getDatabaseEnvDetails();
-			return withSecurityHeaders(
-				new Response(
-					JSON.stringify({
-						ok: false,
-						error: serializeError(error),
-						fingerprint: databaseConfig.fingerprint,
-						env: envDetails,
-					}),
-					{
-						status: 500,
-						headers: {
-							"Content-Type": "application/json",
-						},
-					},
-				),
-				request,
-			);
 		}
 	})
 	.ws("/sync", {
