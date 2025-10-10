@@ -72,6 +72,7 @@
         "@radix-ui/react-scroll-area": "^1.2.10",
         "@radix-ui/react-slot": "^1.2.3",
         "@radix-ui/react-tooltip": "^1.2.8",
+        "@tanstack/db": "^0.2.5",
         "@tanstack/electric-db-collection": "^0.1.20",
         "@tanstack/react-db": "^0.1.18",
         "@tanstack/react-form": "^1.12.3",
