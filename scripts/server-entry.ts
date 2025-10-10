@@ -1,8 +1,11 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
-import { Client } from "pg";
+import { createRequire } from "node:module";
 
 import { shutdownPosthog } from "../apps/server/src/lib/posthog";
+
+const requireFromServer = createRequire(new URL("../apps/server/package.json", import.meta.url));
+const { Client } = requireFromServer("pg") as typeof import("pg");
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
