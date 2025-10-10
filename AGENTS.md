@@ -36,3 +36,7 @@
 - Server env: `DATABASE_URL`, `CORS_ORIGIN` (e.g., `http://localhost:3001`). Store in `apps/server/.env` and never commit.
 - Auth: Better-Auth under `/api/auth`; use HTTPS in production (`SameSite=None; Secure` cookies). For local dev, set `CORS_ORIGIN` to the web URL.
 - After editing `apps/server/src/db/schema`, run `bun db:push` and commit generated artifacts if applicable.
+
+## Agent Pitfalls & Checks
+- When updating Docker images, copy every workspace directory the runtime needs (including `apps/server/scripts`) so container-only commands like `invite:generate` still exist.
+- For CLI scripts invoked inside containers, prefer absolute paths (e.g., `bun run --cwd /app/apps/server …`) and confirm the script file is present after a build.
