@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { serverClient } from "@/utils/orpc-server";
+import { resolveServerBaseUrl } from "@/utils/server-url";
 
-const SERVER_BASE_URL = (process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000").replace(/\/$/, "");
+const SERVER_BASE_URL = resolveServerBaseUrl();
 
 function sanitizeString(value: unknown) {
 	return typeof value === "string" ? value.trim() : "";

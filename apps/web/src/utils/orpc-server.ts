@@ -2,12 +2,13 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { AppRouterClient } from "@/types/server-router";
 import { getUserId } from "@/lib/auth-server";
+import { resolveServerBaseUrl } from "./server-url";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
 	process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
-const SERVER_BASE_URL = (process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000").replace(/\/$/, "");
+const SERVER_BASE_URL = resolveServerBaseUrl();
 
 // Server-only ORPC client that enriches headers with Better Auth context.
 export const serverLink = new RPCLink({
