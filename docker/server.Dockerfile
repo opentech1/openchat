@@ -1,5 +1,5 @@
 # Build and run the Bun/Elysia server
-FROM oven/bun:1.2.21 AS base
+FROM oven/bun:1.3.1 AS base
 WORKDIR /app
 ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
 
@@ -19,7 +19,7 @@ COPY . .
 RUN bunx turbo run build --filter=server
 
 # Runtime image
-FROM oven/bun:1.2.21 AS runtime
+FROM oven/bun:1.3.1 AS runtime
 WORKDIR /app
 
 # Copy compiled server bundle and minimal workspace metadata
