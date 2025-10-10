@@ -3,7 +3,10 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
-import { account } from "@openchat/auth/schema";
+import { account } from "../db/schema/auth";
+
+// Cast away cross-package drizzle type differences so the server can reuse the auth schema safely.
+const accountTable = account as any;
 
 const OPENROUTER_PROVIDER_ID = "openrouter";
 const OPENROUTER_API_BASE = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
@@ -115,7 +118,7 @@ export async function storeOpenRouterApiKey({
 	const recordId = `openrouter-${userId}`;
 	const encrypted = encryptApiKey(apiKey);
 	await db
-		.insert(account)
+		.insert(accountTable)
 		.values({
 			id: recordId,
 			accountId: recordId,
@@ -130,7 +133,7 @@ export async function storeOpenRouterApiKey({
 			updatedAt: now,
 		})
 		.onConflictDoUpdate({
-			target: account.id,
+			target: accountTable.id,
 			set: {
 				accountId: recordId,
 				accessToken: encrypted,
@@ -153,13 +156,13 @@ export async function getOpenRouterAccount(userId: string) {
 	const recordId = `openrouter-${userId}`;
 	const rows = await db
 		.select()
-		.from(account)
-		.where(eq(account.id, recordId))
+		.from(accountTable)
+		.where(eq(accountTable.id, recordId))
 		.limit(1);
 	return rows[0] ?? null;
 }
 
 export async function deleteOpenRouterAccount(userId: string) {
 	const recordId = `openrouter-${userId}`;
-	await db.delete(account).where(eq(account.id, recordId));
+	await db.delete(accountTable).where(eq(accountTable.id, recordId));
 }
