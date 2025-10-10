@@ -20,8 +20,12 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
+	const providerProps = posthogClient
+		? { client: posthogClient }
+		: { apiKey: "", options: { enabled: false } };
+
 	return (
-		<PostHogProvider client={posthogClient ?? undefined}>
+		<PostHogProvider {...providerProps}>
 			<ThemeProvider
 				attribute="class"
 				defaultTheme="system"
