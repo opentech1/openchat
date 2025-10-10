@@ -1,13 +1,11 @@
 import { headers } from "next/headers";
+import { resolveServerBaseUrl } from "@/utils/server-url";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
 	process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
-const SERVER_ORIGIN = (() => {
-	const base = process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
-	return base.replace(/\/$/, "");
-})();
+const SERVER_ORIGIN = resolveServerBaseUrl();
 
 async function fetchServerSession(headerList: Headers) {
 	const cookie = headerList.get("cookie");
