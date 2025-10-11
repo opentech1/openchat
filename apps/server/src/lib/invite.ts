@@ -3,15 +3,15 @@ import { and, eq, gt, isNull, lt, or } from "drizzle-orm";
 import { db } from "../db";
 import { inviteCode } from "../db/schema/invite";
 
-const RESERVATION_TTL_MS = Number(process.env.INVITE_RESERVATION_TTL_MS ?? 10 * 60_000);
-const DEFAULT_CODE_LENGTH = Number(process.env.INVITE_CODE_LENGTH ?? 12);
+export const RESERVATION_TTL_MS = Number(process.env.INVITE_RESERVATION_TTL_MS ?? 10 * 60_000);
+export const DEFAULT_CODE_LENGTH = Number(process.env.INVITE_CODE_LENGTH ?? 12);
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function hashInviteCode(code: string) {
 	return createHash("sha256").update(code.trim().toLowerCase()).digest("hex");
 }
 
-function generateCode(length = DEFAULT_CODE_LENGTH) {
+export function generateInviteCode(length = DEFAULT_CODE_LENGTH) {
 	const targetLength = Number.isFinite(length) && length > 0 ? Math.floor(length) : DEFAULT_CODE_LENGTH;
 	let output = "";
 	while (output.length < targetLength) {
@@ -45,7 +45,7 @@ export async function createInviteCodes({
 		const candidates = new Map<string, string>();
 
 		while (candidates.size < batchSize) {
-			const code = generateCode();
+			const code = generateInviteCode();
 			const codeHash = hashInviteCode(code);
 			if (seenHashes.has(codeHash) || candidates.has(codeHash)) continue;
 			candidates.set(codeHash, code);
