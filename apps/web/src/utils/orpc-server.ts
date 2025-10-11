@@ -16,11 +16,14 @@ export const serverLink = new RPCLink({
 	async fetch(url, options) {
 		const requestUrl = typeof url === "string" ? url : (url as Request).url;
 
-		const attempt = async (target: string) =>
-			fetch(target, {
-				...options,
+		const attempt = async (target: string) => {
+			const baseInit: RequestInit = {
+				...(options as RequestInit),
+				method: (options as RequestInit)?.method ?? "POST",
 				credentials: "include",
-			});
+			};
+			return fetch(target, baseInit);
+		};
 
 		try {
 			const response = await attempt(requestUrl);
