@@ -22,6 +22,7 @@ import {
 	makeGatekeeperToken,
 } from "./lib/gatekeeper";
 import { capturePosthogEvent, withPosthogTracing } from "./lib/posthog";
+import { extractForwardedToken, parseForwardedHeader } from "./lib/forwarded";
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
@@ -62,49 +63,6 @@ const TRUST_PROXY_FORWARDED = (() => {
 type ServerLike = {
 	requestIP?: (request: Request) => { address?: string | null } | null;
 } | null | undefined;
-
-function extractForwardedToken(raw: string) {
-	let token = raw.trim();
-	if (!token) return null;
-	if (token.toLowerCase().startsWith("for=")) {
-		token = token.slice(4).trim();
-	}
-	const semicolonIndex = token.indexOf(";");
-	if (semicolonIndex !== -1) {
-		token = token.slice(0, semicolonIndex);
-	}
-	if (token.startsWith("\"") && token.endsWith("\"") && token.length >= 2) {
-		token = token.slice(1, -1);
-	}
-	if (token.startsWith("[")) {
-		const end = token.indexOf("]");
-		if (end !== -1) {
-			token = token.slice(1, end);
-		}
-	}
-	if (token.includes(":")) {
-		const ipv4PortMatch = token.match(/^(\d{1,3}(?:\.\d{1,3}){3})\:\d+$/);
-		if (ipv4PortMatch) {
-			token = ipv4PortMatch[1]!;
-		} else if (token.indexOf(":") === token.lastIndexOf(":") && token.includes(".")) {
-			// IPv4 with port but without regex match (defensive)
-			token = token.split(":")[0]!;
-		}
-	}
-	token = token.trim();
-	return token.length > 0 ? token : null;
-}
-
-function parseForwardedHeader(value: string | null) {
-	if (!value) return null;
-	for (const part of value.split(",")) {
-		const token = extractForwardedToken(part);
-		if (token && isIP(token)) {
-			return token;
-		}
-	}
-	return null;
-}
 
 function getClientIp(request: Request, server?: ServerLike) {
 	const socketAddress = server?.requestIP?.(request);
@@ -309,6 +267,13 @@ new Elysia()
         return withSecurityHeaders(response, context.request);
     })
     .all("/rpc*", async (context) => {
+		const method = context.request.method.toUpperCase();
+		if (method === "OPTIONS") {
+			return withSecurityHeaders(new Response(null, { status: 204 }), context.request);
+		}
+		if (method !== "POST") {
+			return withSecurityHeaders(new Response("Method Not Allowed", { status: 405 }), context.request);
+		}
 		if (isRateLimited(context.request, context.server)) {
             return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
         }
