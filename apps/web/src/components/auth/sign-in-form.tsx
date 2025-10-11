@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { captureClientEvent } from "@/lib/posthog";
 
 export default function SignInForm() {
 	const router = useRouter();
@@ -23,18 +24,22 @@ export default function SignInForm() {
 		if (submitting) return;
 		setSubmitting(true);
 		try {
-			const { error } = await authClient.signIn.email({
+		const { error } = await authClient.signIn.email({
 				email,
 				password,
 				rememberMe,
 				callbackURL: "/dashboard",
 			});
-			if (error) {
-				toast.error(error.message ?? "Unable to sign in");
-				return;
-			}
-			toast.success("Signed in successfully");
-			router.push("/dashboard");
+		if (error) {
+			toast.error(error.message ?? "Unable to sign in");
+			return;
+		}
+		toast.success("Signed in successfully");
+		captureClientEvent("auth.sign_in", {
+			emailDomain: email.split("@")[1] ?? "unknown",
+			rememberMe,
+		});
+		router.push("/dashboard");
 			router.refresh();
 		} catch (error) {
 			console.error("sign-in", error);
