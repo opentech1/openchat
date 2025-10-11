@@ -531,6 +531,7 @@ export const appRouter = {
 				})
 				.optional(),
 		)
+		.route({ method: "POST" })
 		.handler(async ({ context, input }) => {
 			const count = input?.count ?? 1;
 			const expiresAt = input?.expiresInHours
@@ -545,6 +546,7 @@ export const appRouter = {
 		}),
 	reserve: publicProcedure
 		.input(z.object({ code: z.string().min(4).max(64), email: z.string().email() }))
+		.route({ method: "POST" })
 		.handler(async ({ input }) => {
 			const reservation = await reserveInviteCode({ code: input.code, email: input.email });
 			if (!reservation) {
@@ -558,12 +560,14 @@ export const appRouter = {
 		}),
 	release: publicProcedure
 		.input(z.object({ reservationToken: z.string().min(4) }))
+		.route({ method: "POST" })
 		.handler(async ({ input }) => {
 			await releaseInviteReservation(input.reservationToken);
 			return { ok: true as const };
 		}),
 	consume: publicProcedure
 		.input(z.object({ reservationToken: z.string().min(4), userId: z.string().min(1), email: z.string().email() }))
+		.route({ method: "POST" })
 		.handler(async ({ input }) => {
 			const ok = await consumeInviteReservation({
 				reservationToken: input.reservationToken,

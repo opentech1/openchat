@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { captureClientEvent } from "@/lib/posthog";
 
 export default function SignUpForm() {
 	const router = useRouter();
@@ -33,6 +35,10 @@ export default function SignUpForm() {
 			return;
 		}
 		toast.success("Account created");
+		captureClientEvent("auth.sign_up", {
+			emailDomain: email.split("@")[1] ?? "unknown",
+			inviteCodeUsed: Boolean(inviteCode),
+		});
 		router.push("/dashboard");
 		router.refresh();
 	} catch (error) {
@@ -91,6 +97,27 @@ export default function SignUpForm() {
 				onChange={(event) => setInviteCode(event.target.value)}
 				disabled={submitting}
 			/>
+			<div className="text-xs text-muted-foreground">
+				<Popover>
+					<PopoverTrigger asChild>
+						<Button type="button" variant="link" className="h-auto p-0 text-xs">Need an invite?</Button>
+					</PopoverTrigger>
+					<PopoverContent align="start">
+						<p className="text-sm font-medium">Request an invite</p>
+						<p className="mt-1 text-sm text-muted-foreground">
+							Please DM Leo on
+							<a className="text-primary underline ml-1" href="https://x.com/leoisadev" target="_blank" rel="noreferrer">
+								X (@leoisadev)
+							</a>
+							or
+							<a className="text-primary underline ml-1" href="https://discord.com/users/leoisadev" target="_blank" rel="noreferrer">
+								Discord (@leoisadev)
+							</a>
+							for a code.
+						</p>
+					</PopoverContent>
+				</Popover>
+			</div>
 		</div>
 			<Button type="submit" className="w-full" disabled={submitting}>
 				{submitting ? "Creating account…" : "Create account"}
