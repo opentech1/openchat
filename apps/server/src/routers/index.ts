@@ -284,14 +284,23 @@ export const appRouter = {
             .where(and(eq(chat.id, input.chatId), eq(chat.userId, context.session!.user.id)));
           if (owned.length === 0) return { ok: false as const };
 
-          await db.insert(message).values({
-            id: userMsgId,
-            chatId: input.chatId,
-            role: "user",
-            content: input.userMessage.content,
-            createdAt: userCreatedAt,
-            updatedAt: userCreatedAt,
-          });
+          await db
+            .insert(message)
+            .values({
+              id: userMsgId,
+              chatId: input.chatId,
+              role: "user",
+              content: input.userMessage.content,
+              createdAt: userCreatedAt,
+              updatedAt: userCreatedAt,
+            })
+            .onConflictDoUpdate({
+              target: message.id,
+              set: {
+                content: input.userMessage.content,
+                updatedAt: userCreatedAt,
+              },
+            });
           publish(
             `chat:${input.chatId}`,
             "chat.new",
@@ -300,14 +309,23 @@ export const appRouter = {
 
           let lastActivity = userCreatedAt;
           if (assistantProvided && assistantCreatedAt) {
-            await db.insert(message).values({
-              id: assistantMsgId!,
-              chatId: input.chatId,
-              role: "assistant",
-              content: input.assistantMessage!.content,
-              createdAt: assistantCreatedAt,
-              updatedAt: assistantCreatedAt,
-            });
+            await db
+              .insert(message)
+              .values({
+                id: assistantMsgId!,
+                chatId: input.chatId,
+                role: "assistant",
+                content: input.assistantMessage!.content,
+                createdAt: assistantCreatedAt,
+                updatedAt: assistantCreatedAt,
+              })
+              .onConflictDoUpdate({
+                target: message.id,
+                set: {
+                  content: input.assistantMessage!.content,
+                  updatedAt: assistantCreatedAt,
+                },
+              });
             publish(
               `chat:${input.chatId}`,
               "chat.new",
