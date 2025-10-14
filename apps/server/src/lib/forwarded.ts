@@ -20,7 +20,7 @@ export function extractForwardedToken(raw: string) {
 		}
 	}
 	if (token.includes(":")) {
-		const ipv4PortMatch = token.match(/^(\d{1,3}(?:\.\d{1,3}){3})\:\d+$/);
+		const ipv4PortMatch = token.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
 		if (ipv4PortMatch) {
 			token = ipv4PortMatch[1]!;
 		} else if (token.indexOf(":") === token.lastIndexOf(":") && token.includes(".")) {

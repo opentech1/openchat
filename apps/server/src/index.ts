@@ -21,8 +21,7 @@ import {
 	GATEKEEPER_SCHEMA,
 	makeGatekeeperToken,
 } from "./lib/gatekeeper";
-import { capturePosthogEvent, withPosthogTracing } from "./lib/posthog";
-import { extractForwardedToken, parseForwardedHeader } from "./lib/forwarded";
+import { parseForwardedHeader } from "./lib/forwarded";
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
