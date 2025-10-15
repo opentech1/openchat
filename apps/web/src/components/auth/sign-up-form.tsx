@@ -25,7 +25,6 @@ export default function SignUpForm() {
 				name,
 				email,
 				password,
-				rememberMe: true,
 				callbackURL: "/dashboard",
 			});
 			if (error) {
