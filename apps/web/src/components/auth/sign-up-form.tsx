@@ -71,8 +71,8 @@ export default function SignUpForm() {
 					disabled={submitting}
 				/>
 			</div>
-		<div className="space-y-2">
-			<Label htmlFor="password">Password</Label>
+			<div className="space-y-2">
+				<Label htmlFor="password">Password</Label>
 				<Input
 					id="password"
 					type="password"
@@ -82,7 +82,7 @@ export default function SignUpForm() {
 					onChange={(event) => setPassword(event.target.value)}
 					disabled={submitting}
 				/>
-		</div>
+			</div>
 			<Button type="submit" className="w-full" disabled={submitting}>
 				{submitting ? "Creating account…" : "Create account"}
 			</Button>
