@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "oxlint",
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "dev:tanstack": "bunx vite --config vite.config.ts",
+    "build:tanstack": "bunx vite build --config vite.config.ts",
+    "preview:tanstack": "bunx vite preview --config vite.config.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^2.0.44",
@@ -28,6 +31,9 @@
     "@tanstack/react-db": "^0.1.18",
     "@tanstack/react-form": "^1.12.3",
     "@tanstack/react-query": "^5.85.5",
+    "@tanstack/react-router": "^1.132.52",
+    "@tanstack/react-start": "^1.132.52",
+    "@tanstack/router-devtools": "^1.132.52",
     "@posthog/ai": "^1.1.2",
     "ai": "^5.0.44",
     "class-variance-authority": "^0.7.1",
@@ -54,6 +60,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.10",
+    "@tanstack/react-query-devtools": "^5.85.5",
+    "@tanstack/router-cli": "^1.132.52",
+    "@vitejs/plugin-react": "^5.0.4",
     "@types/node": "^20",
     "@types/react": "~19.1.10",
     "@types/react-dom": "^19",
@@ -61,6 +70,7 @@
     "happy-dom": "^16.7.3",
     "tailwindcss": "^4.1.10",
     "typescript": "^5",
-    "@tanstack/react-query-devtools": "^5.85.5"
+    "vite": "^5.4.10",
+    "vite-tsconfig-paths": "^5.1.2"
   }
 }
