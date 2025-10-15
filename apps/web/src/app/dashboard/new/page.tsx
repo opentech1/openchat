@@ -1,22 +1,12 @@
 import { redirect } from "next/navigation";
 import { getUserId } from "@/lib/auth-server";
 import { serverClient } from "@/utils/orpc-server";
-import DashboardAccessFallback from "@/components/dashboard-access-fallback";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewChatPage() {
-	const userId = await getUserId();
-	if (!userId) {
-		return (
-			<DashboardAccessFallback
-				title="Sign in to start a chat"
-				description="Creating a new conversation requires an authenticated session. Please sign in and try again."
-				showHomeLink={false}
-			/>
-		);
-	}
 
+export default async function NewChatPage() {
+	await getUserId();
 	// Prefer server-created UUID; fallback to client-generated on failure
 	try {
 		const { id } = await serverClient.chats.create({ title: "New Chat" });

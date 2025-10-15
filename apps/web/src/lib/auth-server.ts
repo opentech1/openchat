@@ -1,6 +1,8 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { resolveServerBaseUrls } from "@/utils/server-url";
+import { ensureGuestIdServer } from "@/lib/guest.server";
+import { GUEST_ID_HEADER } from "@/lib/guest-id";
 
 const DEV_BYPASS_ENABLED =
 	process.env.NODE_ENV !== "production" &&
@@ -41,9 +43,14 @@ export const getUserId = cache(async (): Promise<string | null> => {
 
 	try {
 		const session = await fetchServerSession(headerList);
-		if (session?.user?.id) return session.user.id as string;
-		const headerUser = headerList.get("x-user-id");
-		if (headerUser && (process.env.NODE_ENV === "test" || DEV_BYPASS_ENABLED)) {
+		if (session?.user?.id) {
+			const id = session.user.id as string;
+			ensureGuestIdServer(id);
+			return id;
+		}
+		const headerUser = headerList.get(GUEST_ID_HEADER);
+		if (headerUser) {
+			ensureGuestIdServer(headerUser);
 			return headerUser;
 		}
 	} catch (error) {
@@ -53,8 +60,12 @@ export const getUserId = cache(async (): Promise<string | null> => {
 	}
 
 	if (DEV_BYPASS_ENABLED) {
-		return process.env.NEXT_PUBLIC_DEV_USER_ID || process.env.DEV_DEFAULT_USER_ID || "dev-user";
+		const override = process.env.NEXT_PUBLIC_DEV_USER_ID || process.env.DEV_DEFAULT_USER_ID;
+		if (override) {
+			ensureGuestIdServer(override);
+			return override;
+		}
 	}
 
-	return null;
+	return ensureGuestIdServer();
 });

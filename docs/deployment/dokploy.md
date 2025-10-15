@@ -50,19 +50,9 @@ Recommended command for secrets:
 openssl rand -base64 48 | tr -d '\n'
 ```
 
-### Invite-only sign-up
+### Sign-up behaviour
 
-Production sign-up now requires a single-use invite code. Generate codes directly on the Dokploy instance by opening the **Terminal** tab for the server service and running:
-
-```bash
-bun run --cwd /app/apps/server invite:generate -- --count 5 --expires 24
-```
-
-- `--count` (default `1`) controls how many codes are minted.
-- `--expires` (optional) specifies the validity window in hours.
-- `--created-by` lets you annotate who generated the batch.
-
-Each code may be redeemed exactly once. The API will reserve the code during sign-up and release it automatically if the flow fails.
+OpenChat supports anonymous usage out of the box. Visitors can land on `/dashboard`, start chatting, and optionally create an account through the built-in Better Auth form. No invite codes or extra configuration are required.
 
 ### Analytics & session replay
 
@@ -88,7 +78,7 @@ Compose to abort with a helpful error message.
 3. Verify:
    - API and web containers report `Ready` in Dokploy logs.
    - Electric SQL container remains in the `running` state.
-   - Frontend loads and completes the sign-up flow.
+   - Frontend loads, `/dashboard` opens without errors, and you can send a chat response end-to-end.
 
 If you host the web app on Vercel, you can disable the `web` service in Dokploy
 by removing it from the compose file or leaving it undeployed; the rest of the
