@@ -29,6 +29,10 @@ const BASE_SUPER_PROPERTIES = Object.freeze({
 	deployment_region: DEPLOYMENT_REGION,
 });
 
+const POSTHOG_FLUSH_AT_RAW = Number(process.env.POSTHOG_FLUSH_AT ?? 10);
+const POSTHOG_FLUSH_AT =
+	Number.isFinite(POSTHOG_FLUSH_AT_RAW) && POSTHOG_FLUSH_AT_RAW > 1 ? POSTHOG_FLUSH_AT_RAW : 10;
+
 function buildClient() {
 	const apiKey = process.env.POSTHOG_API_KEY;
 	if (!apiKey) return null;
@@ -36,7 +40,7 @@ function buildClient() {
 	const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
 	client = new PostHog(apiKey, {
 		host,
-		flushAt: 1,
+		flushAt: POSTHOG_FLUSH_AT,
 		flushInterval: 5_000,
 	});
 	client.register(BASE_SUPER_PROPERTIES);
