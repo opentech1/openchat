@@ -29,6 +29,9 @@ export type ChatListItem = {
 	title: string | null;
 	updatedAt?: string | Date;
 	lastMessageAt?: string | Date | null;
+	updatedAtMs?: number | null;
+	lastMessageAtMs?: number | null;
+	lastActivityMs?: number | null;
 };
 
 export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
@@ -42,23 +45,27 @@ function toDate(value: string | Date | null | undefined) {
 	return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
-function pickLatestDate(a?: string | Date | null, b?: string | Date | null) {
-	const aDate = toDate(a ?? undefined);
-	const bDate = toDate(b ?? undefined);
-	if (!aDate && !bDate) return undefined;
-	if (!aDate) return bDate;
-	if (!bDate) return aDate;
-	return aDate.getTime() >= bDate.getTime() ? aDate : bDate;
-}
-
 function normalizeChat(chat: ChatListItem): ChatListItem {
 	const updatedAt = toDate(chat.updatedAt ?? undefined);
-	const lastMessageAt = toDate(chat.lastMessageAt ?? undefined) ?? null;
+	const lastMessageAt = chat.lastMessageAt === null ? null : toDate(chat.lastMessageAt ?? undefined) ?? null;
+	const updatedAtMs = updatedAt ? updatedAt.getTime() : null;
+	const lastMessageAtMs = lastMessageAt ? lastMessageAt.getTime() : null;
+	const lastActivityMsRaw = Math.max(
+		lastMessageAtMs ?? Number.NEGATIVE_INFINITY,
+		updatedAtMs ?? Number.NEGATIVE_INFINITY,
+	);
 	return {
 		...chat,
 		updatedAt,
 		lastMessageAt,
+		updatedAtMs,
+		lastMessageAtMs,
+		lastActivityMs: lastActivityMsRaw === Number.NEGATIVE_INFINITY ? null : lastActivityMsRaw,
 	};
+}
+
+function ensureNormalizedChat(chat: ChatListItem): ChatListItem {
+	return chat.lastActivityMs != null ? chat : normalizeChat(chat);
 }
 
 function dateToIso(value: string | Date | null | undefined) {
@@ -69,23 +76,45 @@ function dateToIso(value: string | Date | null | undefined) {
 }
 
 function mergeChat(existing: ChatListItem | undefined, incoming: ChatListItem): ChatListItem {
-	const next = normalizeChat(incoming);
+	const next = ensureNormalizedChat(incoming);
 	if (!existing) return next;
-	const current = normalizeChat(existing);
+	const current = ensureNormalizedChat(existing);
+	const updatedAtMax = Math.max(
+		current.updatedAtMs ?? Number.NEGATIVE_INFINITY,
+		next.updatedAtMs ?? Number.NEGATIVE_INFINITY,
+	);
+	const lastMessageAtMax = Math.max(
+		current.lastMessageAtMs ?? Number.NEGATIVE_INFINITY,
+		next.lastMessageAtMs ?? Number.NEGATIVE_INFINITY,
+	);
+	const lastActivityMax = Math.max(
+		current.lastActivityMs ?? Number.NEGATIVE_INFINITY,
+		next.lastActivityMs ?? Number.NEGATIVE_INFINITY,
+	);
 	return {
 		...current,
 		...next,
 		title: next.title ?? current.title ?? null,
-		updatedAt: pickLatestDate(current.updatedAt, next.updatedAt),
-		lastMessageAt: pickLatestDate(current.lastMessageAt, next.lastMessageAt) ?? null,
+		updatedAt:
+			updatedAtMax === (next.updatedAtMs ?? Number.NEGATIVE_INFINITY)
+				? next.updatedAt
+				: current.updatedAt,
+		lastMessageAt:
+			lastMessageAtMax === (next.lastMessageAtMs ?? Number.NEGATIVE_INFINITY)
+				? next.lastMessageAt ?? null
+				: current.lastMessageAt ?? null,
+		updatedAtMs: updatedAtMax === Number.NEGATIVE_INFINITY ? null : updatedAtMax,
+		lastMessageAtMs: lastMessageAtMax === Number.NEGATIVE_INFINITY ? null : lastMessageAtMax,
+		lastActivityMs: lastActivityMax === Number.NEGATIVE_INFINITY ? null : lastActivityMax,
 	};
 }
 
 function dedupeChats(list: ChatListItem[]) {
 	const map = new Map<string, ChatListItem>();
 	for (const chat of list) {
-		const existing = map.get(chat.id);
-		map.set(chat.id, mergeChat(existing, chat));
+		const normalized = ensureNormalizedChat(chat);
+		const existing = map.get(normalized.id);
+		map.set(normalized.id, mergeChat(existing, normalized));
 	}
 	return sortChats(Array.from(map.values()));
 }
@@ -187,7 +216,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	try {
 		const now = new Date();
 		const { id, storageBackend = "postgres" } = await client.chats.create({ title: "New Chat" });
-		const optimisticChat: ChatListItem = { id, title: "New Chat", updatedAt: now, lastMessageAt: now };
+		const optimisticChat = normalizeChat({ id, title: "New Chat", updatedAt: now, lastMessageAt: now });
 		setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
 		setFallbackChats((prev) => upsertChat(prev, optimisticChat));
 		captureClientEvent("chat.created", {
@@ -235,12 +264,12 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 						updatedAt?: number | string | Date;
 						lastMessageAt?: number | string | Date | null;
 				};
-				const optimisticChat: ChatListItem = {
+				const optimisticChat = normalizeChat({
 					id: payload.chatId,
 					title: payload.title ?? "New Chat",
 					updatedAt: payload.updatedAt ? new Date(payload.updatedAt) : new Date(),
 					lastMessageAt: payload.lastMessageAt ? new Date(payload.lastMessageAt) : null,
-				};
+				});
 				setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
 				setFallbackChats((prev) => upsertChat(prev, optimisticChat));
 				break;
@@ -420,14 +449,15 @@ function ChatList({
 }
 
 function sortChats(list: ChatListItem[]) {
-	const copy = list.slice();
+	const copy = list.map(ensureNormalizedChat);
 	copy.sort((a, b) => {
-		const aLast = (a.lastMessageAt ? new Date(a.lastMessageAt) : a.updatedAt ? new Date(a.updatedAt) : new Date(0)).getTime();
-		const bLast = (b.lastMessageAt ? new Date(b.lastMessageAt) : b.updatedAt ? new Date(b.updatedAt) : new Date(0)).getTime();
+		const aLast = a.lastActivityMs ?? 0;
+		const bLast = b.lastActivityMs ?? 0;
 		if (bLast !== aLast) return bLast - aLast;
-		const aUp = (a.updatedAt ? new Date(a.updatedAt) : new Date(0)).getTime();
-		const bUp = (b.updatedAt ? new Date(b.updatedAt) : new Date(0)).getTime();
-		return bUp - aUp;
+		const aUp = a.updatedAtMs ?? 0;
+		const bUp = b.updatedAtMs ?? 0;
+		if (bUp !== aUp) return bUp - aUp;
+		return a.id.localeCompare(b.id);
 	});
 	return copy;
 }
