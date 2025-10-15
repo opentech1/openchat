@@ -89,37 +89,12 @@ services:
   web:
     build:
       context: .
-      dockerfile: docker/web.Dockerfile
-      args:
-        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
-        NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
-        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
-        BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://openchat-server:3000}
-    container_name: openchat-web
-    restart: unless-stopped
-    depends_on:
-      server:
-        condition: service_started
-    environment:
-      NODE_ENV: production
-      PORT: 3001
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
-      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
-      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
-    expose:
-      - "3001"
-    networks:
-      - openchat
-
-  web_start:
-    build:
-      context: .
       dockerfile: docker/web-start.Dockerfile
       args:
         VITE_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
         VITE_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
         VITE_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
-    container_name: openchat-web-start
+    container_name: openchat-web
     restart: unless-stopped
     depends_on:
       server:
@@ -130,6 +105,9 @@ services:
       VITE_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
       VITE_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
       VITE_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
     expose:
       - "3001"
     networks:

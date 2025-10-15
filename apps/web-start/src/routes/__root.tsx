@@ -1,5 +1,6 @@
 import * as React from "react";
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import "@web/index.css";
 import { Providers } from "../providers";
 
 export const Route = createRootRoute({
@@ -9,7 +10,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <Providers>
-      <div style={{ padding: 16 }}>
+      <div style={{ padding: 16 }} className="font-sans">
         <nav style={{ display: "flex", gap: 12, marginBottom: 16 }}>
           <Link to="/" activeProps={{ style: { fontWeight: 700 } }}>Home</Link>
           {/* placeholders for future routes */}

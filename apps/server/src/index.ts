@@ -22,6 +22,10 @@ import {
 	makeGatekeeperToken,
 } from "./lib/gatekeeper";
 import { parseForwardedHeader } from "./lib/forwarded";
+import { resolveAllowedOrigins, validateRequestOrigin } from "./lib/request-origin";
+import { createChatHandler, createOptionsHandler } from "./lib/chat-handler";
+import { RPCLink } from "@orpc/client/fetch";
+import { createORPCClient } from "@orpc/client";
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
@@ -282,6 +286,108 @@ new Elysia()
         });
         const res = response ?? new Response("Not Found", { status: 404 });
 	return withSecurityHeaders(res, context.request);
+    })
+    .options("/api/chat", async (context) => {
+        const handler = createOptionsHandler({ corsOrigin: process.env.CORS_ORIGIN });
+        return withSecurityHeaders(await handler(context.request), context.request);
+    })
+    .post("/api/chat", async (context) => {
+        if (isRateLimited(context.request, context.server)) {
+            return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+        }
+        const ctx = await createContext({ context });
+        const userId = ctx.session?.user?.id;
+        if (!userId) {
+            return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+        }
+        // Loopback ORPC client with user header to reuse server router logic
+        const base = new URL(context.request.url);
+        const link = new RPCLink({
+            url: `${base.origin}/rpc`,
+            headers: async () => ({ "x-user-id": userId }),
+            fetch(url, options) { return fetch(url, { ...options, credentials: "include" }); },
+        });
+        const client = createORPCClient(link);
+        const handler = createChatHandler({
+            corsOrigin: process.env.CORS_ORIGIN,
+            persistMessage: async (input) => client.messages.streamUpsert(input),
+            distinctId: userId,
+        });
+        const res = await handler(context.request);
+        return withSecurityHeaders(res, context.request);
+    })
+    .post("/api/chat/send", async (context) => {
+        if (isRateLimited(context.request, context.server)) {
+            return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+        }
+        const ctx = await createContext({ context });
+        const userId = ctx.session?.user?.id;
+        if (!userId) {
+            return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+        }
+        let payload: any;
+        try {
+            payload = await context.request.json();
+        } catch {
+            return withSecurityHeaders(new Response("Invalid JSON", { status: 400 }), context.request);
+        }
+        const allowedOrigins = resolveAllowedOrigins(process.env.CORS_ORIGIN);
+        const originResult = validateRequestOrigin(context.request, allowedOrigins);
+        if (!originResult.ok) {
+            return withSecurityHeaders(new Response(JSON.stringify({ ok: false, error: "Invalid request origin" }), { status: 403, headers: { "content-type": "application/json" } }), context.request);
+        }
+        const base = new URL(context.request.url);
+        const link = new RPCLink({ url: `${base.origin}/rpc`, headers: async () => ({ "x-user-id": userId }) });
+        const client = createORPCClient(link) as any;
+        try {
+            const result = await client.messages.send(payload);
+            return withSecurityHeaders(new Response(JSON.stringify(result), { status: 200, headers: { "content-type": "application/json", "Vary": "Origin", "Access-Control-Allow-Origin": originResult.origin ?? WEB_ORIGIN } }), context.request);
+        } catch (error) {
+            if ((error as any)?.issues) {
+                return withSecurityHeaders(new Response(JSON.stringify({ ok: false, issues: (error as any).issues }), { status: 422, headers: { "content-type": "application/json" } }), context.request);
+            }
+            console.error("/api/chat/send", error);
+            return withSecurityHeaders(new Response(JSON.stringify({ ok: false }), { status: 500, headers: { "content-type": "application/json" } }), context.request);
+        }
+    })
+    .post("/api/openrouter/models", async (context) => {
+        try {
+            const body = await context.request.json().catch(() => ({}));
+            const apiKey = typeof body?.apiKey === "string" && body.apiKey.trim() ? body.apiKey.trim() : null;
+            if (!apiKey) {
+                return withSecurityHeaders(new Response(JSON.stringify({ ok: false, error: "Missing apiKey" }), { status: 400, headers: { "content-type": "application/json" } }), context.request);
+            }
+            const BASE = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+            const resp = await fetch(`${BASE}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+            if (!resp.ok) {
+                const message = await resp.text().catch(() => "");
+                return withSecurityHeaders(new Response(JSON.stringify({ ok: false, status: resp.status, message }), { status: resp.status, headers: { "content-type": "application/json" } }), context.request);
+            }
+            const payload = await resp.json().catch(() => ({}));
+            const data = Array.isArray(payload?.data) ? payload.data : [];
+            const models = (data as any[])
+                .map((entry) => {
+                    const id = typeof entry?.id === "string" ? entry.id : (typeof entry?.name === "string" ? entry.name : "");
+                    if (!id) return null;
+                    const name = typeof entry?.name === "string" && entry.name.length > 0 ? entry.name : id;
+                    const description = typeof entry?.description === "string" && entry.description.length > 0 ? entry.description : undefined;
+                    const contextLength = typeof entry?.context_length === "number" ? entry.context_length : undefined;
+                    const pricingCandidate = (entry?.pricing ?? {}) as Record<string, unknown>;
+                    const pricing = pricingCandidate && typeof pricingCandidate === "object"
+                        ? {
+                            prompt: typeof pricingCandidate?.prompt === "number" ? (pricingCandidate.prompt as number) : null,
+                            completion: typeof pricingCandidate?.completion === "number" ? (pricingCandidate.completion as number) : null,
+                          }
+                        : undefined;
+                    return { value: id, label: name, description, context: contextLength ?? null, pricing };
+                })
+                .filter(Boolean)
+                .sort((a: any, b: any) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+            return withSecurityHeaders(new Response(JSON.stringify({ ok: true, models }), { status: 200, headers: { "content-type": "application/json" } }), context.request);
+        } catch (error) {
+            console.error("/api/openrouter/models", error);
+            return withSecurityHeaders(new Response(JSON.stringify({ ok: false, error: "Failed to fetch models" }), { status: 500, headers: { "content-type": "application/json" } }), context.request);
+        }
     })
     .all("/api*", async (context) => {
         console.log(JSON.stringify({ ts: Date.now(), lvl: "info", msg: "api", m: context.request.method, u: new URL(context.request.url).pathname }));
