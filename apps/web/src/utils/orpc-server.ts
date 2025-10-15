@@ -79,7 +79,7 @@ export const serverLink = new RPCLink({
 				"dev-user";
 		}
 
-		const ensuredId = ensureGuestIdServer(resolvedUserId);
+		const ensuredId = await ensureGuestIdServer(resolvedUserId);
 		nextHeaders[GUEST_ID_HEADER] = ensuredId;
 
 		return nextHeaders;

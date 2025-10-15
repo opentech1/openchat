@@ -3,8 +3,8 @@ import { createGuestId, GUEST_ID_COOKIE } from "./guest-id";
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 
-export function ensureGuestIdServer(preferredId?: string): string {
-	const store = cookies();
+export async function ensureGuestIdServer(preferredId?: string): Promise<string> {
+	const store = await cookies();
 	const existing = store.get(GUEST_ID_COOKIE)?.value;
 	if (existing) {
 		if (preferredId && existing !== preferredId) {

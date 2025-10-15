@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { getUserId } from "@/lib/auth-server";
+import { getUserContext } from "@/lib/auth-server";
 import AppSidebar from "@/components/app-sidebar-wrapper";
 import ThemeToggle from "@/components/theme-toggle";
 import Link from "next/link";
@@ -10,7 +10,7 @@ import type { ChatSummary } from "@/types/server-router";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-	const userId = await getUserId();
+	const { userId } = await getUserContext();
 
 	const rawChats: ChatSummary[] = await serverClient.chats.list().catch(() => [] as ChatSummary[]);
 	const chats = rawChats.map((chat: ChatSummary) => ({

@@ -30,7 +30,12 @@ async function fetchServerSession(headerList: Headers) {
 	return response.json().catch(() => null);
 }
 
-export const getUserId = cache(async (): Promise<string | null> => {
+type UserContext = {
+	userId: string;
+	isGuest: boolean;
+};
+
+const resolveUserContext = cache(async (): Promise<UserContext> => {
 	let headerList: Headers;
 	try {
 		headerList = await headers();
@@ -45,13 +50,8 @@ export const getUserId = cache(async (): Promise<string | null> => {
 		const session = await fetchServerSession(headerList);
 		if (session?.user?.id) {
 			const id = session.user.id as string;
-			ensureGuestIdServer(id);
-			return id;
-		}
-		const headerUser = headerList.get(GUEST_ID_HEADER);
-		if (headerUser) {
-			ensureGuestIdServer(headerUser);
-			return headerUser;
+			await ensureGuestIdServer(id);
+			return { userId: id, isGuest: false };
 		}
 	} catch (error) {
 		if (process.env.NODE_ENV !== "test") {
@@ -59,13 +59,29 @@ export const getUserId = cache(async (): Promise<string | null> => {
 		}
 	}
 
+	const headerUser = headerList.get(GUEST_ID_HEADER);
+	if (headerUser) {
+		await ensureGuestIdServer(headerUser);
+		return { userId: headerUser, isGuest: true };
+	}
+
 	if (DEV_BYPASS_ENABLED) {
 		const override = process.env.NEXT_PUBLIC_DEV_USER_ID || process.env.DEV_DEFAULT_USER_ID;
 		if (override) {
-			ensureGuestIdServer(override);
-			return override;
+			await ensureGuestIdServer(override);
+			return { userId: override, isGuest: true };
 		}
 	}
 
-	return ensureGuestIdServer();
+	const fallbackId = await ensureGuestIdServer();
+	return { userId: fallbackId, isGuest: true };
 });
+
+export async function getUserContext(): Promise<UserContext> {
+	return resolveUserContext();
+}
+
+export async function getUserId(): Promise<string> {
+	const { userId } = await resolveUserContext();
+	return userId;
+}
