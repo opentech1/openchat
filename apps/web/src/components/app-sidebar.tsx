@@ -325,7 +325,12 @@ function ChatList({
 	deletingId: string | null;
 }) {
 	if (isLoading && chats.length === 0) {
-		return <p className="px-2 text-xs text-muted-foreground">Syncing chats…</p>;
+		return (
+			<div className="mx-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+				Syncing chats… If this message sticks around, Electric SQL may be offline. New conversations will still appear here
+				while we fall back to local storage.
+			</div>
+		);
 	}
 	if (chats.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
 	return (
