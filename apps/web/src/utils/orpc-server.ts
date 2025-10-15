@@ -2,6 +2,8 @@ import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { AppRouterClient } from "@/types/server-router";
 import { getUserId } from "@/lib/auth-server";
+import { ensureGuestIdServer } from "@/lib/guest.server";
+import { GUEST_ID_HEADER } from "@/lib/guest-id";
 import { resolveServerBaseUrls } from "./server-url";
 
 const DEV_BYPASS_ENABLED =
@@ -63,7 +65,7 @@ export const serverLink = new RPCLink({
 		delete nextHeaders["upgrade"];
 
 		let resolvedUserId: string | undefined =
-			typeof nextHeaders["x-user-id"] === "string" ? nextHeaders["x-user-id"] : undefined;
+			typeof nextHeaders[GUEST_ID_HEADER] === "string" ? nextHeaders[GUEST_ID_HEADER] : undefined;
 
 		if (!resolvedUserId) {
 			resolvedUserId = await getUserId().catch(() => null) || undefined;
@@ -71,15 +73,14 @@ export const serverLink = new RPCLink({
 
 		if (!resolvedUserId && DEV_BYPASS_ENABLED) {
 			resolvedUserId =
-				nextHeaders["x-user-id"] ||
+				nextHeaders[GUEST_ID_HEADER] ||
 				process.env.NEXT_PUBLIC_DEV_USER_ID ||
 				process.env.DEV_DEFAULT_USER_ID ||
 				"dev-user";
 		}
 
-		if (resolvedUserId) {
-			nextHeaders["x-user-id"] = resolvedUserId;
-		}
+		const ensuredId = ensureGuestIdServer(resolvedUserId);
+		nextHeaders[GUEST_ID_HEADER] = ensuredId;
 
 		return nextHeaders;
 	},

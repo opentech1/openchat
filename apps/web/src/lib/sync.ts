@@ -1,3 +1,5 @@
+import { ensureGuestIdClient, resolveClientUserId } from "@/lib/guest.client";
+
 // Minimal single-socket sync client for /sync
 // Envelope: { id, ts, topic, type, data }
 
@@ -32,10 +34,10 @@ async function openSocket() {
 	connecting = true;
 	const url = new URL(`${wsBase()}/sync`);
 	url.searchParams.set("tabId", tabId);
-	// In dev bypass mode, allow x-user-id via query param if the page set it
+	// Attach current user/guest id for server context
 	try {
-		const devUid = (window as any).__DEV_USER_ID__ as string | undefined;
-		if (devUid) url.searchParams.set("x-user-id", devUid);
+		const userId = resolveClientUserId();
+		if (userId) url.searchParams.set("x-user-id", userId);
 	} catch {}
 
 	const ws = new WebSocket(url.toString());
@@ -78,6 +80,9 @@ async function openSocket() {
 }
 
 export async function connect() {
+	if (typeof window !== "undefined") {
+		ensureGuestIdClient();
+	}
 	await openSocket();
 }
 
@@ -113,4 +118,3 @@ export function unsubscribe(topic: string, handler?: Handler) {
 export function ping() {
 	if (socket && connected) socket.send("ping");
 }
-

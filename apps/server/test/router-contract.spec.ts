@@ -1,12 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { appRouter } from "../src/routers";
 
-describe("appRouter HTTP methods", () => {
-	it("uses POST for invite mutations", () => {
-		const { invite } = appRouter;
-		expect(invite.reserve["~orpc"].route?.method).toBe("POST");
-		expect(invite.release["~orpc"].route?.method).toBe("POST");
-		expect(invite.consume["~orpc"].route?.method).toBe("POST");
-		expect(invite.generate["~orpc"].route?.method).toBe("POST");
+describe("appRouter shape", () => {
+	it("exposes chat procedures", () => {
+		const { chats } = appRouter;
+		expect(typeof chats.create.handler).toBe("function");
+		expect(typeof chats.list.handler).toBe("function");
+		expect(typeof chats.delete.handler).toBe("function");
 	});
 });

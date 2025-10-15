@@ -3,6 +3,7 @@ import { RPCLink } from "@orpc/client/fetch";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryClient } from "@tanstack/react-query";
 import type { AppRouterClient } from "@/types/server-router";
+import { ensureGuestIdClient, resolveClientUserId, GUEST_ID_HEADER } from "@/lib/guest.client";
 
 // Client-safe ORPC utilities. Do not import any server-only modules here.
 export const queryClient = new QueryClient();
@@ -20,8 +21,10 @@ export const link = new RPCLink({
 	headers: async () => {
 		const headers: Record<string, string> = {};
 		if (typeof window !== "undefined") {
-			const devUserId = (window as any).__DEV_USER_ID__ as string | undefined;
-			if (devUserId) headers["x-user-id"] = devUserId;
+			const userId = resolveClientUserId();
+			headers[GUEST_ID_HEADER] = userId;
+			// ensure cookie/localStorage persists
+			ensureGuestIdClient();
 		}
 		return headers;
 	},

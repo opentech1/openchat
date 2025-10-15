@@ -38,5 +38,5 @@
 - After editing `apps/server/src/db/schema`, run `bun db:push` and commit generated artifacts if applicable.
 
 ## Agent Pitfalls & Checks
-- When updating Docker images, copy every workspace directory the runtime needs (including `apps/server/scripts`) so container-only commands like `invite:generate` still exist.
+- When updating Docker images, copy every workspace directory the runtime needs so container-only commands remain available.
 - For CLI scripts invoked inside containers, prefer absolute paths (e.g., `bun run --cwd /app/apps/server …`) and confirm the script file is present after a build.

@@ -2,21 +2,11 @@ import { getUserId } from "@/lib/auth-server";
 import { serverClient } from "@/utils/orpc-server";
 import type { MessageRow } from "@/types/server-router";
 import ChatRoomClient from "@/components/chat-room-wrapper";
-import DashboardAccessFallback from "@/components/dashboard-access-fallback";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-	const userId = await getUserId();
-	if (!userId) {
-		return (
-			<DashboardAccessFallback
-				title="Sign in to open this chat"
-				description="We need to verify your account before showing conversation history."
-				showHomeLink={false}
-			/>
-		);
-	}
+	await getUserId();
 	const { id: chatId } = await params;
 	// Preload initial messages on the server for faster first paint
 	const fetchedMessages: MessageRow[] = await serverClient.messages

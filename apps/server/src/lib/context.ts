@@ -36,25 +36,30 @@ export async function createContext({ context }: CreateContextOptions) {
 		}
 	}
 
-	// Dev fallback: trust x-user-id header locally when explicitly allowed
-	if (!session && devBypassEnabled) {
+	if (!session) {
 		let uid = context.request.headers.get("x-user-id") || null;
 		if (!uid) {
-			// WebSocket fallback: allow dev user via query param
 			try {
 				const url = new URL(context.request.url);
 				uid = url.searchParams.get("x-user-id");
 			} catch {}
 		}
+		if (!uid && devBypassEnabled) {
+			uid =
+				process.env.NEXT_PUBLIC_DEV_USER_ID ||
+				process.env.DEV_DEFAULT_USER_ID ||
+				"dev-user";
+		}
 		if (uid) {
+			const now = new Date();
 			session = {
 				user: { id: uid },
 				session: {
 					userId: uid,
-					id: "dev-session",
-					expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-					createdAt: new Date(),
-					updatedAt: new Date(),
+					id: `header-${uid}`,
+					expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+					createdAt: now,
+					updatedAt: now,
 				},
 			};
 		}

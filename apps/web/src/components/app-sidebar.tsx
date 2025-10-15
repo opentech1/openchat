@@ -109,14 +109,13 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
 	const [optimisticChats, setOptimisticChats] = useState<ChatListItem[]>([]);
-	const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
 
 	useEffect(() => {
-		if (!devBypassEnabled) return;
 		if (typeof window === "undefined") return;
 		if (!currentUserId) return;
 		(window as any).__DEV_USER_ID__ = currentUserId;
-	}, [currentUserId, devBypassEnabled]);
+		(window as any).__OC_USER_ID__ = currentUserId;
+	}, [currentUserId]);
 
 	const normalizedInitial = useMemo(() => initialChats.map(normalizeChat), [initialChats]);
 	const [fallbackChats, setFallbackChats] = useState<ChatListItem[]>(() => dedupeChats(normalizedInitial));
