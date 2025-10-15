@@ -51,6 +51,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string; description?: string }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const missingKeyToastRef = useRef<string | number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -110,6 +111,24 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       }
     })();
   }, [fetchModels]);
+
+  useEffect(() => {
+    if (!apiKey) {
+      if (missingKeyToastRef.current == null) {
+        missingKeyToastRef.current = toast.warning("Add your OpenRouter API key", {
+          description: "Open settings to paste your key and start chatting.",
+          duration: Infinity,
+          action: {
+            label: "Settings",
+            onClick: () => router.push("/dashboard/settings"),
+          },
+        });
+      }
+    } else if (missingKeyToastRef.current !== null) {
+      toast.dismiss(missingKeyToastRef.current);
+      missingKeyToastRef.current = null;
+    }
+  }, [apiKey, router]);
 
   const handleSaveApiKey = useCallback(
     async (key: string) => {
