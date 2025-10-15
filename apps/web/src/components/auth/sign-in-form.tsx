@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { authClient } from "@openchat/auth/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { captureClientEvent } from "@/lib/posthog";
 
 export default function SignInForm() {
+	const navigate = useNavigate();
 	const router = useRouter();
 	const { data: session, isPending } = authClient.useSession();
 	const [email, setEmail] = useState("");
@@ -24,7 +25,7 @@ export default function SignInForm() {
 		if (submitting) return;
 		setSubmitting(true);
 		try {
-		const { error } = await authClient.signIn.email({
+			const { error } = await authClient.signIn.email({
 				email,
 				password,
 				rememberMe,
@@ -39,8 +40,8 @@ export default function SignInForm() {
 			emailDomain: email.split("@")[1] ?? "unknown",
 			rememberMe,
 		});
-		router.push("/dashboard");
-			router.refresh();
+		await navigate({ to: "/dashboard" });
+		await router.invalidate();
 		} catch (error) {
 			console.error("sign-in", error);
 			toast.error("Unexpected error while signing in");
