@@ -9,7 +9,9 @@
   "scripts": {
     "check": "turbo lint",
     "dev": "turbo -F web -F server dev",
+    "dev:web-start": "turbo -F web-start dev",
     "build": "turbo build",
+    "build:web-start": "turbo -F web-start build",
     "check-types": "turbo check-types",
     "test": "vitest run --coverage",
     "test:watch": "vitest",

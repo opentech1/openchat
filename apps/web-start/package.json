@@ -1,0 +1,29 @@
+{
+  "name": "web-start",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.85.5",
+    "@tanstack/react-query-devtools": "^5.85.5",
+    "@tanstack/react-router": "^1.80.3",
+    "@tanstack/router-devtools": "^1.80.3",
+    "@tanstack/react-start": "^1.80.3",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.80.3",
+    "@types/react": "~19.1.10",
+    "@types/react-dom": "^19",
+    "typescript": "^5.8.2",
+    "vite": "^5.4.10",
+    "@vitejs/plugin-react": "^4.3.4"
+  }
+}
+

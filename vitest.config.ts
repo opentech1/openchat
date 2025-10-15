@@ -8,6 +8,8 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "apps/web/src"),
+			// Allow Bun-style test imports to run under Vitest
+			"bun:test": "vitest",
 		},
 	},
 	root: process.cwd(),

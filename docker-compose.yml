@@ -111,6 +111,30 @@ services:
     networks:
       - openchat
 
+  web_start:
+    build:
+      context: .
+      dockerfile: docker/web-start.Dockerfile
+      args:
+        VITE_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+        VITE_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+        VITE_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+    container_name: openchat-web-start
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      VITE_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
+      VITE_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
+      VITE_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+    expose:
+      - "3001"
+    networks:
+      - openchat
+
 networks:
   openchat:
     driver: bridge
