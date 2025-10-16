@@ -17,18 +17,27 @@ function writeCookie(name: string, value: string) {
 }
 
 function persistGuestId(value: string) {
+	let stored: string | null = null;
 	try {
-		localStorage.setItem(GUEST_ID_STORAGE_KEY, value);
+		stored = localStorage.getItem(GUEST_ID_STORAGE_KEY);
+		if (stored !== value) {
+			localStorage.setItem(GUEST_ID_STORAGE_KEY, value);
+		}
 	} catch {
 		// ignore storage errors (private mode, etc.)
 	}
-	writeCookie(GUEST_ID_COOKIE, value);
+	const cookieValue = readCookie(GUEST_ID_COOKIE);
+	if (cookieValue !== value) {
+		writeCookie(GUEST_ID_COOKIE, value);
+	}
 }
 
 export function ensureGuestIdClient(): string {
 	let id: string | null = null;
+	let stored: string | null = null;
 	try {
-		id = localStorage.getItem(GUEST_ID_STORAGE_KEY);
+		stored = localStorage.getItem(GUEST_ID_STORAGE_KEY);
+		id = stored;
 	} catch {
 		id = null;
 	}
@@ -39,9 +48,14 @@ export function ensureGuestIdClient(): string {
 
 	if (!id) {
 		id = createGuestId();
+		persistGuestId(id);
+	} else {
+		const cookieValue = readCookie(GUEST_ID_COOKIE);
+		if (stored !== id || cookieValue !== id) {
+			persistGuestId(id);
+		}
 	}
 
-	persistGuestId(id);
 	(window as any).__OC_GUEST_ID__ = id;
 	return id;
 }
