@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, LoaderIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { captureClientEvent } from "@/lib/posthog";
 
 type OpenRouterLinkModalProps = {
 	open: boolean;
@@ -14,14 +15,34 @@ type OpenRouterLinkModalProps = {
 	errorMessage?: string | null;
 	onSubmit: (apiKey: string) => void | Promise<void>;
 	onTroubleshoot?: () => void;
+	hasApiKey?: boolean;
 };
 
-export function OpenRouterLinkModal({ open, saving, errorMessage, onSubmit, onTroubleshoot }: OpenRouterLinkModalProps) {
+export function OpenRouterLinkModal({
+	open,
+	saving,
+	errorMessage,
+	onSubmit,
+	onTroubleshoot,
+	hasApiKey,
+}: OpenRouterLinkModalProps) {
 	const [apiKey, setApiKey] = useState("");
+	const trackedRef = useRef(false);
 
 	useEffect(() => {
-		if (!open) setApiKey("");
-	}, [open]);
+		if (!open) {
+			setApiKey("");
+			trackedRef.current = false;
+			return;
+		}
+		if (trackedRef.current) return;
+		trackedRef.current = true;
+		const reason = errorMessage ? "error" : "missing";
+		captureClientEvent("openrouter.key_prompt_shown", {
+			reason,
+			has_api_key: Boolean(hasApiKey),
+		});
+	}, [open, errorMessage, hasApiKey]);
 
 	if (!open) return null;
 

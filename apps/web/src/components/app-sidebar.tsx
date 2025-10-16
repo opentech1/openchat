@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,8 +19,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useWorkspaceChats, type WorkspaceChatRow } from "@/lib/electric/workspace-db";
 import { client } from "@/utils/orpc";
 import { connect, subscribe, type Envelope } from "@/lib/sync";
-import { captureClientEvent } from "@/lib/posthog";
+import { captureClientEvent, identifyClient, registerClientProperties } from "@/lib/posthog";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
+import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
+import { useBrandTheme } from "@/components/brand-theme-provider";
 
 export type ChatListItem = {
 	id: string;
@@ -105,6 +107,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	const router = useRouter();
 	const pathname = usePathname();
 	const { data: session } = authClient.useSession();
+	const { theme: brandTheme } = useBrandTheme();
 	const [accountOpen, setAccountOpen] = useState(false);
 	const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
@@ -115,7 +118,15 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 		if (!currentUserId) return;
 		(window as any).__DEV_USER_ID__ = currentUserId;
 		(window as any).__OC_USER_ID__ = currentUserId;
-	}, [currentUserId]);
+		identifyClient(currentUserId, {
+			workspaceId: currentUserId,
+			properties: { auth_state: session?.user ? "member" : "guest" },
+		});
+		registerClientProperties({
+			auth_state: session?.user ? "member" : "guest",
+			workspace_id: currentUserId,
+		});
+	}, [currentUserId, session?.user]);
 
 	const normalizedInitial = useMemo(() => initialChats.map(normalizeChat), [initialChats]);
 	const [fallbackChats, setFallbackChats] = useState<ChatListItem[]>(() => dedupeChats(normalizedInitial));
@@ -175,17 +186,22 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	setIsCreating(true);
 	try {
 		const now = new Date();
-		const { id } = await client.chats.create({ title: "New Chat" });
+		const { id, storageBackend = "postgres" } = await client.chats.create({ title: "New Chat" });
 		const optimisticChat: ChatListItem = { id, title: "New Chat", updatedAt: now, lastMessageAt: now };
 		setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
 		setFallbackChats((prev) => upsertChat(prev, optimisticChat));
-		captureClientEvent("chat_created", { chatId: id, createdAt: now.toISOString() });
+		captureClientEvent("chat.created", {
+			chat_id: id,
+			source: "sidebar_button",
+			storage_backend: storageBackend,
+			title_length: optimisticChat.title?.length ?? 0,
+		});
 		await router.push(`/dashboard/chat/${id}`);
 	} catch (error) {
 		console.error("create chat", error);
 	} finally {
 		setIsCreating(false);
-		}
+	}
 	}, [currentUserId, isCreating, router]);
 
 	const handleDelete = useCallback(
@@ -253,6 +269,30 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 		const parts = label.trim().split(/\s+/);
 		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
 	}, [session?.user?.email, session?.user?.name]);
+
+	const dashboardTrackedRef = useRef(false);
+	useEffect(() => {
+		if (dashboardTrackedRef.current) return;
+		if (isLoading) return;
+		dashboardTrackedRef.current = true;
+		void (async () => {
+			let hasKey = false;
+			try {
+				const key = await loadOpenRouterKey();
+				hasKey = Boolean(key);
+				registerClientProperties({ has_openrouter_key: hasKey });
+			} catch {
+				hasKey = false;
+			}
+			const entryPath = typeof window !== "undefined" ? window.location.pathname || "/dashboard" : "/dashboard";
+			captureClientEvent("dashboard.entered", {
+				chat_total: baseChats.length,
+				has_api_key: hasKey,
+				entry_path: entryPath,
+				brand_theme: brandTheme,
+			});
+		})();
+	}, [baseChats.length, brandTheme, isLoading]);
 
 	return (
 		<Sidebar defaultCollapsed {...sidebarProps}>
