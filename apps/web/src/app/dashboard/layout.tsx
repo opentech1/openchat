@@ -60,24 +60,24 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 					<AppSidebar initialChats={chats} currentUserId={userId} />
 				</div>
 			</div>
-			<main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
-		<Script id="oc-user-bootstrap" strategy="afterInteractive">
-			{`(() => { const u = ${escapeUnsafeChars(JSON.stringify(userId))}; window.__DEV_USER_ID__ = u; window.__OC_GUEST_ID__ = u; })();`}
-		</Script>
-				<div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
-					<Link
-						href="/dashboard/settings"
-						className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
-						aria-label="Settings"
-					>
-						<Settings className="size-4" />
-					</Link>
-					<ThemeToggle />
-				</div>
-				<div className="flex h-full w-full flex-1 flex-col overflow-hidden min-h-0">
-					{children}
-				</div>
-			</main>
+				<main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
+					<Script id="oc-user-bootstrap" strategy="afterInteractive">
+						{`(() => { const u = ${escapeUnsafeChars(JSON.stringify(userId))}; window.__DEV_USER_ID__ = u; window.__OC_GUEST_ID__ = u; })();`}
+					</Script>
+					<div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
+						<Link
+							href="/dashboard/settings"
+							className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+							aria-label="Settings"
+						>
+							<Settings className="size-4" />
+						</Link>
+						<ThemeToggle />
+					</div>
+					<div className="flex h-full w-full flex-1 flex-col overflow-hidden min-h-0">
+						{children}
+					</div>
+				</main>
 		</div>
 	);
 }
