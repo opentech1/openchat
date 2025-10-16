@@ -7,3 +7,9 @@
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=opentech1/openchat&type=Date" />
  </picture>
 </a>
+
+## License
+
+Copyright (C) 2025 OpenChat.
+
+This project is free software; you can redistribute it and/or modify it under the terms of the GNU Affero General Public License version 3 as published by the Free Software Foundation. See `LICENSE` for the full text.
