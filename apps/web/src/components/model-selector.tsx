@@ -14,6 +14,7 @@ import {
 	CommandList,
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { registerClientProperties } from "@/lib/posthog"
 
 export type ModelSelectorOption = {
 	value: string
@@ -90,6 +91,11 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 		return options.find((option) => option.value === selectedValue) ?? null
 	}, [options, selectedValue])
 
+	React.useEffect(() => {
+		if (!selectedValue) return
+		registerClientProperties({ model_id: selectedValue })
+	}, [selectedValue])
+
 	const triggerLabel = React.useMemo(() => {
 		if (selectedOption) return selectedOption.label
 		if (loading) return "Loading models..."
@@ -145,6 +151,7 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 												setInternalValue(currentValue)
 											}
 											onChange?.(currentValue)
+											registerClientProperties({ model_id: currentValue })
 											setOpen(false)
 										}}
 										className={cn(

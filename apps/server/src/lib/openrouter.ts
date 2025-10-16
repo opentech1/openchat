@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -67,7 +67,10 @@ function getEncryptionKey() {
 	if (!secret || secret.length < 16) {
 		throw new Error("Missing OPENROUTER_API_KEY_SECRET env for encrypting OpenRouter API keys");
 	}
-	return createHash("sha256").update(secret).digest();
+	const salt = "openrouter:key-derivation-salt";
+	const iterations = 100_000;
+	const keyLength = 32; // AES-256-GCM expects 32-byte key
+	return pbkdf2Sync(secret, salt, iterations, keyLength, "sha256");
 }
 
 function base64UrlEncode(buffer: Buffer) {
