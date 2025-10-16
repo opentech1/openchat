@@ -18,7 +18,7 @@ export function createGuestId(): string {
 	if (cryptoApi && typeof (cryptoApi as { randomUUID?: () => string }).randomUUID === "function") {
 		const uuid = (cryptoApi as { randomUUID: () => string }).randomUUID();
 		return `guest_${uuid.replace(/-/g, "")}`;
-}
+	}
 
 	if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
 		const bytes = new Uint8Array(16);
