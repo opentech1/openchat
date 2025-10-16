@@ -79,6 +79,7 @@ function deriveEncryptionKey(secret: string) {
 }
 
 function deriveLegacyKey(secret: string) {
+	// codeql[js/insufficient-password-hash]: Legacy tokens were derived with SHA-256; keep this path for backward compatibility.
 	return createHash("sha256").update(secret).digest();
 }
 
