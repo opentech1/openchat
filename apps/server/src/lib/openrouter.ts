@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -11,6 +11,10 @@ const accountTable = account as any;
 const OPENROUTER_PROVIDER_ID = "openrouter";
 const OPENROUTER_API_BASE = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 const DEFAULT_SCOPE = process.env.OPENROUTER_SCOPE || "openid offline_access models.read";
+const ENCRYPTION_VERSION = "v2";
+const ENCRYPTION_SALT = "openrouter:key-derivation-salt";
+const ENCRYPTION_ITERATIONS = 100_000;
+const ENCRYPTION_KEY_LENGTH = 32; // AES-256-GCM expects 32-byte key
 
 export type OpenRouterModelSummary = {
 	id: string;
@@ -62,15 +66,20 @@ export function getDefaultScope() {
 	return DEFAULT_SCOPE;
 }
 
-function getEncryptionKey() {
+function assertEncryptionSecret(): string {
 	const secret = process.env.OPENROUTER_API_KEY_SECRET;
 	if (!secret || secret.length < 16) {
 		throw new Error("Missing OPENROUTER_API_KEY_SECRET env for encrypting OpenRouter API keys");
 	}
-	const salt = "openrouter:key-derivation-salt";
-	const iterations = 100_000;
-	const keyLength = 32; // AES-256-GCM expects 32-byte key
-	return pbkdf2Sync(secret, salt, iterations, keyLength, "sha256");
+	return secret;
+}
+
+function deriveEncryptionKey(secret: string) {
+	return pbkdf2Sync(secret, ENCRYPTION_SALT, ENCRYPTION_ITERATIONS, ENCRYPTION_KEY_LENGTH, "sha256");
+}
+
+function deriveLegacyKey(secret: string) {
+	return createHash("sha256").update(secret).digest();
 }
 
 function base64UrlEncode(buffer: Buffer) {
@@ -85,27 +94,43 @@ function base64UrlDecode(value: string) {
 }
 
 export function encryptApiKey(raw: string) {
-	const key = getEncryptionKey();
+	const secret = assertEncryptionSecret();
+	const key = deriveEncryptionKey(secret);
 	const iv = randomBytes(12);
 	const cipher = createCipheriv("aes-256-gcm", key, iv);
 	const ciphertext = Buffer.concat([cipher.update(raw, "utf8"), cipher.final()]);
 	const authTag = cipher.getAuthTag();
-	return `${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
+	return `${ENCRYPTION_VERSION}:${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
 }
 
 export function decryptApiKey(payload: string) {
-	const [ivEncoded, tagEncoded, dataEncoded] = payload.split(".");
+	const secret = assertEncryptionSecret();
+	const [maybeVersion, rest] = payload.includes(":") ? payload.split(":", 2) : [null, null];
+	const encryptedPayload = rest ?? payload;
+	const isVersioned = maybeVersion === ENCRYPTION_VERSION;
+	const [ivEncoded, tagEncoded, dataEncoded] = encryptedPayload.split(".");
 	if (!ivEncoded || !tagEncoded || !dataEncoded) {
 		throw new Error("Invalid OpenRouter API key payload");
 	}
-	const key = getEncryptionKey();
-	const iv = base64UrlDecode(ivEncoded);
-	const authTag = base64UrlDecode(tagEncoded);
-	const ciphertext = base64UrlDecode(dataEncoded);
-	const decipher = createDecipheriv("aes-256-gcm", key, iv);
-	decipher.setAuthTag(authTag);
-	const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-	return decrypted.toString("utf8");
+	const attemptDecrypt = (key: Buffer) => {
+		const iv = base64UrlDecode(ivEncoded);
+		const authTag = base64UrlDecode(tagEncoded);
+		const ciphertext = base64UrlDecode(dataEncoded);
+		const decipher = createDecipheriv("aes-256-gcm", key, iv);
+		decipher.setAuthTag(authTag);
+		const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+		return decrypted.toString("utf8");
+	};
+
+	try {
+		const key = deriveEncryptionKey(secret);
+		return attemptDecrypt(key);
+	} catch (error) {
+		// If the payload was not encrypted with the new scheme (no version prefix) fall back to pre-PBKDF2.
+		if (isVersioned) throw error;
+		const legacyKey = deriveLegacyKey(secret);
+		return attemptDecrypt(legacyKey);
+	}
 }
 
 export async function storeOpenRouterApiKey({
