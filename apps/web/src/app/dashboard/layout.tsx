@@ -9,6 +9,25 @@ import Script from "next/script";
 import type { ChatSummary } from "@/types/server-router";
 export const dynamic = "force-dynamic";
 
+const charMap = {
+    '<': '\\u003C',
+    '>': '\\u003E',
+    '/': '\\u002F',
+    '\\': '\\\\',
+    '\b': '\\b',
+    '\f': '\\f',
+    '\n': '\\n',
+    '\r': '\\r',
+    '\t': '\\t',
+    '\0': '\\0',
+    '\u2028': '\\u2028',
+    '\u2029': '\\u2029'
+};
+
+function escapeUnsafeChars(str: string): string {
+    return str.replace(/[<>\b\f\n\r\t\0\u2028\u2029/\\]/g, x => charMap[x] || x);
+}
+
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
 	const { userId } = await getUserContext();
 
@@ -29,7 +48,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 			</div>
 			<main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
 		<Script id="oc-user-bootstrap" strategy="afterInteractive">
-			{`(() => { const u = ${JSON.stringify(userId)}; window.__DEV_USER_ID__ = u; window.__OC_GUEST_ID__ = u; })();`}
+			{`(() => { const u = ${escapeUnsafeChars(JSON.stringify(userId))}; window.__DEV_USER_ID__ = u; window.__OC_GUEST_ID__ = u; })();`}
 		</Script>
 				<div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
 					<Link
