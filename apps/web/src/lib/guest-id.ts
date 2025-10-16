@@ -2,24 +2,36 @@ export const GUEST_ID_COOKIE = "oc_guest_id";
 export const GUEST_ID_STORAGE_KEY = "oc_guest_id";
 export const GUEST_ID_HEADER = "x-user-id";
 
+function toHex(bytes: ArrayLike<number>): string {
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function getCrypto(): Crypto | null {
+	if (typeof globalThis === "undefined") return null;
+	const maybeCrypto = (globalThis as { crypto?: Crypto }).crypto;
+	return maybeCrypto ?? null;
+}
+
 export function createGuestId(): string {
-	let entropy: string;
-	// Use window.crypto.getRandomValues if available (browser), fallback to Node.js crypto.randomBytes
-	if (typeof window !== "undefined" && window.crypto && window.crypto.getRandomValues) {
-		const arr = new Uint8Array(16);
-		window.crypto.getRandomValues(arr);
-		entropy = Array.from(arr).map(b => b.toString(36).padStart(2, "0")).join('');
-	} else {
-		// Node.js or fallback
-		let bytes: Uint8Array;
-		try {
-			// Try to use Node.js crypto module if available
-			bytes = (require("crypto").randomBytes(16));
-		} catch {
-			// As a VERY last resort (should not happen), fallback to Date.now (at least unique)
-			return `guest_${Date.now().toString(36)}`;
-		}
-		entropy = Array.from(bytes).map(b => b.toString(36).padStart(2, "0")).join('');
+	const cryptoApi = getCrypto();
+
+	if (cryptoApi && typeof (cryptoApi as { randomUUID?: () => string }).randomUUID === "function") {
+		const uuid = (cryptoApi as { randomUUID: () => string }).randomUUID();
+		return `guest_${uuid.replace(/-/g, "")}`;
 	}
-	return `guest_${entropy}`;
+
+	if (cryptoApi && typeof cryptoApi.getRandomValues === "function") {
+		const bytes = new Uint8Array(16);
+		cryptoApi.getRandomValues(bytes);
+		return `guest_${toHex(bytes)}`;
+	}
+
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
+		const nodeCrypto = require("crypto") as { randomBytes: (size: number) => Uint8Array };
+		const bytes = nodeCrypto.randomBytes(16);
+		return `guest_${toHex(bytes)}`;
+	} catch {
+		return `guest_${Date.now().toString(36)}`;
+	}
 }
