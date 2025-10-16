@@ -1,4 +1,5 @@
 const STORAGE_KEY = "openchat.openrouter.apiKey";
+const MASTER_KEY_STORAGE_KEY = "openchat.openrouter.masterKey";
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
 	return btoa(String.fromCharCode(...new Uint8Array(buffer)));
@@ -21,9 +22,37 @@ async function getCryptoKey() {
 	}
 	if (!masterKeyPromise) {
 		masterKeyPromise = (async () => {
+			let storedKey: string | null = null;
+			try {
+				storedKey = window.sessionStorage?.getItem(MASTER_KEY_STORAGE_KEY) ?? null;
+			} catch {
+				storedKey = null;
+			}
+
+			if (storedKey) {
+				try {
+					const rawKey = base64ToArrayBuffer(storedKey);
+					return await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+				} catch {
+					try {
+						window.sessionStorage?.removeItem(MASTER_KEY_STORAGE_KEY);
+					} catch {
+						// ignore inability to clear corrupted key material
+					}
+				}
+			}
+
 			const random = new Uint8Array(32);
 			crypto.getRandomValues(random);
-			return crypto.subtle.importKey("raw", random.buffer, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+			let key = await crypto.subtle.importKey("raw", random.buffer, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
+			try {
+				const exported = await crypto.subtle.exportKey("raw", key);
+				window.sessionStorage?.setItem(MASTER_KEY_STORAGE_KEY, arrayBufferToBase64(exported));
+				key = await crypto.subtle.importKey("raw", exported, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+			} catch {
+				// ignore storage/export failures; key will live only in-memory this session
+			}
+			return key;
 		})();
 	}
 	return masterKeyPromise;
@@ -61,6 +90,11 @@ export async function loadOpenRouterKey() {
 	} catch (error) {
 		console.error("Failed to decrypt stored OpenRouter API key", error);
 		sessionStorage.removeItem(STORAGE_KEY);
+		try {
+			sessionStorage.removeItem(MASTER_KEY_STORAGE_KEY);
+		} catch {
+			// ignore storage errors
+		}
 		return null;
 	}
 }
