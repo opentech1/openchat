@@ -1,4 +1,5 @@
 import { ensureGuestIdClient, resolveClientUserId } from "@/lib/guest.client";
+import { captureClientEvent } from "@/lib/posthog";
 
 // Minimal single-socket sync client for /sync
 // Envelope: { id, ts, topic, type, data }
@@ -47,6 +48,11 @@ async function openSocket() {
 		connected = true;
 		connecting = false;
 		retry = 0;
+		captureClientEvent("sync.connection_state", {
+			state: "connected",
+			retry_count: retry,
+			tab_id: tabId,
+		});
 		// resubscribe current topics
 		for (const [topic] of handlers) {
 			ws.send(JSON.stringify({ op: "sub", topic }));
@@ -72,9 +78,19 @@ async function openSocket() {
 		connecting = false;
 		// exponential backoff up to ~5s
 		retry = Math.min(retry + 1, 5);
+		captureClientEvent("sync.connection_state", {
+			state: "retry",
+			retry_count: retry,
+			tab_id: tabId,
+		});
 		setTimeout(() => { if (!connected) void openSocket(); }, retry * 500);
 	};
 	ws.onerror = () => {
+		captureClientEvent("sync.connection_state", {
+			state: "failed",
+			retry_count: retry,
+			tab_id: tabId,
+		});
 		try { ws.close(); } catch {}
 	};
 }

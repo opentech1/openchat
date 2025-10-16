@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
+import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
@@ -145,6 +146,12 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 			setStoredKeyTail(trimmed.slice(-4));
 			setApiKeyInput("");
 			toast.success("OpenRouter key saved");
+			captureClientEvent("openrouter.key_saved", {
+				source: "settings",
+				masked_tail: trimmed.slice(-4),
+				scope: "workspace",
+			});
+			registerClientProperties({ has_openrouter_key: true });
 		} catch (error) {
 			console.error("save-openrouter-key", error);
 			setApiKeyError("Failed to save OpenRouter key.");
@@ -156,6 +163,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 
 	async function handleRemoveApiKey() {
 		if (removingKey) return;
+		const wasLinked = hasStoredKey;
 		setRemovingKey(true);
 		try {
 			removeOpenRouterKey();
@@ -164,6 +172,11 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 			setApiKeyInput("");
 			setApiKeyError(null);
 			toast.success("OpenRouter key removed");
+			captureClientEvent("openrouter.key_removed", {
+				source: "settings",
+				had_models_cached: wasLinked,
+			});
+			registerClientProperties({ has_openrouter_key: false });
 		} catch (error) {
 			console.error("remove-openrouter-key", error);
 			toast.error("Failed to remove OpenRouter key");

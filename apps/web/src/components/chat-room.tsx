@@ -12,7 +12,7 @@ import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { OpenRouterLinkModal } from "@/components/openrouter-link-modal";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
-import { captureClientEvent, identifyClient } from "@/lib/posthog";
+import { captureClientEvent, identifyClient, registerClientProperties } from "@/lib/posthog";
 
 type ChatRoomProps = {
   chatId: string;
@@ -34,10 +34,16 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   useEffect(() => {
     const identifier = session?.user?.id || memoDevUser;
-    if (identifier) {
-      identifyClient(identifier);
-    }
-  }, [memoDevUser, session?.user?.id]);
+    if (!identifier) return;
+    identifyClient(identifier, {
+      workspaceId: workspaceId ?? identifier,
+      properties: { auth_state: session?.user ? "member" : "guest" },
+    });
+    registerClientProperties({
+      auth_state: session?.user ? "member" : "guest",
+      workspace_id: workspaceId ?? identifier,
+    });
+  }, [memoDevUser, session?.user, session?.user?.id, workspaceId]);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -52,6 +58,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string; description?: string }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const missingKeyToastRef = useRef<string | number | null>(null);
+
+  useEffect(() => {
+    registerClientProperties({ has_openrouter_key: Boolean(apiKey) });
+  }, [apiKey]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -82,7 +92,27 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             removeOpenRouterKey();
             setApiKey(null);
           }
-          throw new Error(typeof data?.message === "string" && data.message.length > 0 ? data.message : "Failed to fetch OpenRouter models.");
+          const errorMessage =
+            typeof data?.message === "string" && data.message.length > 0
+              ? data.message
+              : "Failed to fetch OpenRouter models.";
+          let providerHost = "openrouter.ai";
+          try {
+            providerHost = new URL(response.url ?? "https://openrouter.ai/api/v1").host;
+          } catch {
+            providerHost = "openrouter.ai";
+          }
+          captureClientEvent("openrouter.models_fetch_failed", {
+            status: response.status,
+            error_message: errorMessage,
+            provider_host: providerHost,
+            has_api_key: Boolean(key),
+          });
+          throw Object.assign(new Error(errorMessage), {
+            __posthogTracked: true,
+            status: response.status,
+            providerUrl: response.url,
+          });
         }
         setModelOptions(data.models);
         const fallback = data.models[0]?.value ?? null;
@@ -92,6 +122,25 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         });
       } catch (error) {
         console.error("Failed to load OpenRouter models", error);
+        if (!(error as any)?.__posthogTracked) {
+          const status = typeof (error as any)?.status === "number" ? (error as any).status : 0;
+          let providerHost = "openrouter.ai";
+          const providerUrl = (error as any)?.providerUrl;
+          if (typeof providerUrl === "string" && providerUrl.length > 0) {
+            try {
+              providerHost = new URL(providerUrl).host;
+            } catch {
+              providerHost = "openrouter.ai";
+            }
+          }
+          captureClientEvent("openrouter.models_fetch_failed", {
+            status,
+            error_message:
+              error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.",
+            provider_host: providerHost,
+            has_api_key: Boolean(key),
+          });
+        }
         setModelOptions([]);
         setSelectedModel(null);
         setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
@@ -137,6 +186,12 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       try {
         await saveOpenRouterKey(key);
         setApiKey(key);
+        registerClientProperties({ has_openrouter_key: true });
+        captureClientEvent("openrouter.key_saved", {
+          source: "modal",
+          masked_tail: key.slice(-4),
+          scope: "workspace",
+        });
         await fetchModels(key);
       } catch (error) {
         console.error("Failed to save OpenRouter API key", error);
@@ -281,11 +336,38 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         },
       );
       captureClientEvent("chat_message_submitted", {
-        chatId,
-        modelId,
+        chat_id: chatId,
+        model_id: modelId,
         characters: content.length,
+        attachment_count: attachments.length,
+        has_api_key: Boolean(requestApiKey),
       });
     } catch (error) {
+      const status =
+        error instanceof Response
+          ? error.status
+          : typeof (error as any)?.status === "number"
+            ? (error as any).status
+            : typeof (error as any)?.cause?.status === "number"
+              ? (error as any).cause.status
+              : null;
+      if (status === 429) {
+        let limitHeader: number | undefined;
+        let windowHeader: number | undefined;
+        if (error instanceof Response) {
+          const limit = error.headers.get("x-ratelimit-limit") || error.headers.get("X-RateLimit-Limit");
+          const windowMs = error.headers.get("x-ratelimit-window") || error.headers.get("X-RateLimit-Window");
+          const parsedLimit = limit ? Number(limit) : Number.NaN;
+          const parsedWindow = windowMs ? Number(windowMs) : Number.NaN;
+          limitHeader = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+          windowHeader = Number.isFinite(parsedWindow) ? parsedWindow : undefined;
+        }
+        captureClientEvent("chat.rate_limited", {
+          chat_id: chatId,
+          limit: limitHeader,
+          window_ms: windowHeader,
+        });
+      }
       console.error("Failed to send message", error);
     }
   };
@@ -308,6 +390,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           setModelsError(null);
           if (apiKey) void fetchModels(apiKey);
         }}
+        hasApiKey={Boolean(apiKey)}
       />
       <ChatMessagesFeed
         chatId={chatId}
@@ -329,6 +412,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             onModelChange={setSelectedModel}
             modelsLoading={modelsLoading}
             apiKey={apiKey}
+            chatId={chatId}
             isStreaming={status === "streaming"}
             onStop={() => stop()}
             onMissingRequirement={handleMissingRequirement}
