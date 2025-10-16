@@ -113,45 +113,55 @@ export const appRouter = {
           .optional(),
       )
 	  .handler(async ({ context, input }) => {
+		const userId = context.session!.user.id;
 		const id = input?.id ?? cuid();
 		const now = new Date();
 		const title = input?.title ?? "New Chat";
+		let storageBackend: "postgres" | "memory_fallback" = "postgres";
 		try {
 			await db.insert(chat).values({
 				id,
-				userId: context.session!.user.id,
+				userId,
 				title,
 				createdAt: now,
 				updatedAt: now,
 				lastMessageAt: now,
 			});
-			// emit sidebar add
 			publish(
-				`chats:index:${context.session!.user.id}`,
+				`chats:index:${userId}`,
 				"chats.index.add",
 				{ chatId: id, title, updatedAt: now, lastMessageAt: now },
 			);
 		} catch {
-			addFallbackChat(context.session!.user.id, {
+			storageBackend = "memory_fallback";
+			addFallbackChat(userId, {
 				id,
-				userId: context.session!.user.id,
+				userId,
 				title,
 				createdAt: now,
 				updatedAt: now,
 				lastMessageAt: now,
 			});
 			publish(
-				`chats:index:${context.session!.user.id}`,
+				`chats:index:${userId}`,
 				"chats.index.add",
 				{ chatId: id, title, updatedAt: now, lastMessageAt: now },
 			);
+			capturePosthogEvent("workspace.fallback_storage_used", userId, {
+				operation: "create",
+				chat_id: id,
+				fallback_size: (memChatsByUser.get(userId) ?? []).length,
+				workspace_id: userId,
+			});
 		}
-		capturePosthogEvent("chat_created", context.session!.user.id, {
-			chatId: id,
-			title,
-			recordedAt: now.toISOString(),
+		capturePosthogEvent("chat.created", userId, {
+			chat_id: id,
+			title_length: title.length,
+			storage_backend: storageBackend,
+			source: "server_router",
+			workspace_id: userId,
 		});
-		return { id };
+		return { id, storageBackend };
 	  }),
     // List chats for the current user (sorted by last activity)
     list: protectedProcedure.handler(async ({ context }) => {
@@ -163,8 +173,15 @@ export const appRouter = {
           .orderBy(desc(chat.lastMessageAt), desc(chat.updatedAt));
         return rows;
 		} catch {
-			pruneUserChats(context.session!.user.id);
-			const list = memChatsByUser.get(context.session!.user.id) ?? [];
+			const userId = context.session!.user.id;
+			pruneUserChats(userId);
+			const list = memChatsByUser.get(userId) ?? [];
+			capturePosthogEvent("workspace.fallback_storage_used", userId, {
+				operation: "list",
+				chat_id: null,
+				fallback_size: list.length,
+				workspace_id: userId,
+			});
 			return list.map(({ id, title, lastMessageAt, updatedAt }) => ({ id, title, lastMessageAt, updatedAt }));
 		}
 	}),
@@ -231,13 +248,21 @@ export const appRouter = {
 			} else {
 				memMsgsByChat.delete(input.chatId);
 			}
-			const permissibleChats = pruneChatList(memChatsByUser.get(context.session!.user.id) ?? []);
+			const userId = context.session!.user.id;
+			const permissibleChats = pruneChatList(memChatsByUser.get(userId) ?? []);
 			if (permissibleChats.length > 0) {
-				memChatsByUser.set(context.session!.user.id, permissibleChats);
+				memChatsByUser.set(userId, permissibleChats);
 			}
 			const hasAccess = permissibleChats.some((c) => c.id === input.chatId);
 			if (!hasAccess) return [];
-			return (memMsgsByChat.get(input.chatId) ?? prunedMessages)
+			const fallbackMessages = memMsgsByChat.get(input.chatId) ?? prunedMessages;
+			capturePosthogEvent("workspace.fallback_storage_used", userId, {
+				operation: "list",
+				chat_id: input.chatId,
+				fallback_size: fallbackMessages.length,
+				workspace_id: userId,
+			});
+			return fallbackMessages
 				.map(({ id, role, content, createdAt }) => ({ id, role, content, createdAt }));
 		}
 	}),
@@ -261,6 +286,7 @@ export const appRouter = {
         }),
       )
       .handler(async ({ context, input }) => {
+        const userId = context.session!.user.id;
         const userCreatedAt = input.userMessage.createdAt ? new Date(input.userMessage.createdAt) : new Date();
         const assistantProvided = input.assistantMessage != null;
         const assistantCreatedAt = assistantProvided
@@ -275,7 +301,7 @@ export const appRouter = {
           const owned = await db
             .select({ id: chat.id })
             .from(chat)
-            .where(and(eq(chat.id, input.chatId), eq(chat.userId, context.session!.user.id)));
+            .where(and(eq(chat.id, input.chatId), eq(chat.userId, userId)));
           if (owned.length === 0) return { ok: false as const };
 
           await db
@@ -333,14 +359,14 @@ export const appRouter = {
             .set({ updatedAt: lastActivity, lastMessageAt: lastActivity })
             .where(eq(chat.id, input.chatId));
           publish(
-            `chats:index:${context.session!.user.id}`,
+            `chats:index:${userId}`,
             "chats.index.update",
             { chatId: input.chatId, updatedAt: lastActivity, lastMessageAt: lastActivity },
           );
           return { ok: true as const, userMessageId: userMsgId, assistantMessageId: assistantMsgId };
 		} catch {
-			pruneUserChats(context.session!.user.id);
-			const userChats = memChatsByUser.get(context.session!.user.id) ?? [];
+			pruneUserChats(userId);
+			const userChats = memChatsByUser.get(userId) ?? [];
 			if (!userChats.some((c) => c.id === input.chatId)) return { ok: false as const };
 			addFallbackMessage(input.chatId, {
 				id: userMsgId,
@@ -377,12 +403,19 @@ export const appRouter = {
 				record.updatedAt = latest;
 				record.lastMessageAt = latest;
 			}
-			memChatsByUser.set(context.session!.user.id, pruneChatList(owned));
+			memChatsByUser.set(userId, pruneChatList(owned));
 			publish(
-				`chats:index:${context.session!.user.id}`,
+				`chats:index:${userId}`,
 				"chats.index.update",
 				{ chatId: input.chatId, updatedAt: assistantCreatedAt ?? userCreatedAt, lastMessageAt: assistantCreatedAt ?? userCreatedAt },
           );
+          const fallbackMessages = memMsgsByChat.get(input.chatId) ?? [];
+          capturePosthogEvent("workspace.fallback_storage_used", userId, {
+            operation: "send",
+            chat_id: input.chatId,
+            fallback_size: fallbackMessages.length,
+            workspace_id: userId,
+          });
           return { ok: true as const, userMessageId: userMsgId, assistantMessageId: assistantMsgId };
         }
       }),
@@ -398,6 +431,7 @@ export const appRouter = {
         }),
       )
       .handler(async ({ context, input }) => {
+        const userId = context.session!.user.id;
         const createdAt = input.createdAt ? new Date(input.createdAt) : new Date();
         const now = new Date();
         const content = input.content ?? '';
@@ -408,7 +442,7 @@ export const appRouter = {
           const owned = await db
             .select({ id: chat.id })
             .from(chat)
-            .where(and(eq(chat.id, input.chatId), eq(chat.userId, context.session!.user.id)));
+            .where(and(eq(chat.id, input.chatId), eq(chat.userId, userId)));
           if (owned.length === 0) return { ok: false as const };
 
           let inserted = false;
@@ -456,7 +490,7 @@ export const appRouter = {
           }
 
           publish(
-            `chats:index:${context.session!.user.id}`,
+            `chats:index:${userId}`,
             'chats.index.update',
             sidebarPayload,
           );
@@ -477,8 +511,8 @@ export const appRouter = {
 
           return { ok: true as const };
 		} catch {
-			pruneUserChats(context.session!.user.id);
-			const userChats = memChatsByUser.get(context.session!.user.id) ?? [];
+			pruneUserChats(userId);
+			const userChats = memChatsByUser.get(userId) ?? [];
 			if (!userChats.some((c) => c.id === input.chatId)) return { ok: false as const };
 
 			const existingMessages = memMsgsByChat.get(input.chatId) ?? [];
@@ -514,7 +548,7 @@ export const appRouter = {
 					record.lastMessageAt = createdAt;
 				}
 			}
-			memChatsByUser.set(context.session!.user.id, pruneChatList(userChats));
+			memChatsByUser.set(userId, pruneChatList(userChats));
 
           publish(
             `chat:${input.chatId}`,
@@ -529,6 +563,13 @@ export const appRouter = {
               updatedAt: now,
             },
           );
+          const fallbackMessages = memMsgsByChat.get(input.chatId) ?? [];
+          capturePosthogEvent("workspace.fallback_storage_used", userId, {
+            operation: "streamUpsert",
+            chat_id: input.chatId,
+            fallback_size: fallbackMessages.length,
+            workspace_id: userId,
+          });
           return { ok: true as const };
         }
       }),

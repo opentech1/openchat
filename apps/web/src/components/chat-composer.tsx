@@ -6,6 +6,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { captureClientEvent } from "@/lib/posthog";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
@@ -107,6 +108,7 @@ export type ChatComposerProps = {
 	isStreaming?: boolean;
 	onStop?: () => void;
 	onMissingRequirement?: (reason: "apiKey" | "model") => void;
+	chatId?: string;
 };
 
 export default function ChatComposer({
@@ -121,6 +123,7 @@ export default function ChatComposer({
 	isStreaming = false,
 	onStop,
 	onMissingRequirement,
+	chatId,
 }: ChatComposerProps) {
 	const [value, setValue] = useState('');
 	const [attachments, setAttachments] = useState<File[]>([]);
@@ -192,6 +195,13 @@ export default function ChatComposer({
 		for (const file of Array.from(files)) {
 			if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
 				rejectedName = file.name;
+				captureClientEvent("chat.attachment_event", {
+					chat_id: chatId,
+					result: "rejected",
+					file_mime: file.type || "application/octet-stream",
+					file_size_bytes: file.size,
+					limit_bytes: MAX_ATTACHMENT_SIZE_BYTES,
+				});
 				continue;
 			}
 			nextFiles.push(file);
@@ -200,6 +210,7 @@ export default function ChatComposer({
 			setErrorMessage(`Attachment ${rejectedName} exceeds the 5MB limit.`);
 		}
 		if (nextFiles.length === 0) return;
+		const added: File[] = [];
 		setAttachments((prev) => {
 			const seen = new Set(prev.map((file) => `${file.name}:${file.size}`));
 			const combined = [...prev];
@@ -208,9 +219,19 @@ export default function ChatComposer({
 				if (seen.has(key)) continue;
 				seen.add(key);
 				combined.push(file);
+				added.push(file);
 			}
 			return combined;
 		});
+		for (const file of added) {
+			captureClientEvent("chat.attachment_event", {
+				chat_id: chatId,
+				result: "accepted",
+				file_mime: file.type || "application/octet-stream",
+				file_size_bytes: file.size,
+				limit_bytes: MAX_ATTACHMENT_SIZE_BYTES,
+			});
+		}
 	};
 
 	return (
