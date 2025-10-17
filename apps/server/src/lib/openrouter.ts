@@ -79,7 +79,8 @@ function deriveEncryptionKey(secret: string) {
 }
 
 function deriveLegacyKey(secret: string) {
-	return createHash("sha256").update(secret).digest(); // codeql[js/insufficient-password-hash]: legacy tokens require sha256-derived key; reissued records use PBKDF2.
+	// codeql[js/insufficient-password-hash]: legacy tokens require sha256-derived key; reissued records use PBKDF2.
+	return createHash("sha256").update(secret).digest();
 }
 
 function base64UrlEncode(buffer: Buffer) {
