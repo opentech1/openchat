@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, webcrypto } from "node:crypto";
+import { TextEncoder } from "node:util";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -99,7 +100,12 @@ export function encryptApiKey(raw: string) {
 	return `${ENCRYPTION_VERSION}:${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
 }
 
-export function decryptApiKey(payload: string) {
+async function deriveLegacyKey(secret: string) {
+	const digest = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+	return Buffer.from(digest);
+}
+
+export async function decryptApiKey(payload: string) {
 	const secret = assertEncryptionSecret();
 	const [maybeVersion, rest] = payload.includes(":") ? payload.split(":", 2) : [null, null];
 	const encryptedPayload = rest ?? payload;
@@ -124,8 +130,9 @@ export function decryptApiKey(payload: string) {
 		const key = deriveEncryptionKey(secret);
 		return attemptDecrypt(key);
 	} catch {
-		// Likely legacy payload without version prefix; instruct caller to reset.
-		throw new Error("Legacy OpenRouter API key detected; please re-enter your API key.");
+		if (maybeVersion === ENCRYPTION_VERSION) throw new Error("Failed to decrypt OpenRouter API key payload");
+		const legacyKey = await deriveLegacyKey(secret);
+		return attemptDecrypt(legacyKey);
 	}
 }
 
@@ -173,7 +180,15 @@ export async function storeOpenRouterApiKey({
 export async function getDecryptedApiKey(userId: string) {
 	const record = await getOpenRouterAccount(userId);
 	if (!record?.accessToken) return null;
-	const apiKey = decryptApiKey(record.accessToken);
+	const isLegacy = !record.accessToken.includes(":");
+	const apiKey = await decryptApiKey(record.accessToken);
+	if (isLegacy) {
+		await storeOpenRouterApiKey({
+			userId,
+			apiKey,
+			scope: record.scope ?? null,
+		});
+	}
 	return { apiKey, scope: record.scope ?? null };
 }
 export async function getOpenRouterAccount(userId: string) {
