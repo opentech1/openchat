@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -78,11 +78,6 @@ function deriveEncryptionKey(secret: string) {
 	return pbkdf2Sync(secret, ENCRYPTION_SALT, ENCRYPTION_ITERATIONS, ENCRYPTION_KEY_LENGTH, "sha256");
 }
 
-function deriveLegacyKey(secret: string) {
-	// codeql[js/insufficient-password-hash]: legacy tokens require sha256-derived key; reissued records use PBKDF2.
-	return createHash("sha256").update(secret).digest();
-}
-
 function base64UrlEncode(buffer: Buffer) {
 	return buffer.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
@@ -108,7 +103,9 @@ export function decryptApiKey(payload: string) {
 	const secret = assertEncryptionSecret();
 	const [maybeVersion, rest] = payload.includes(":") ? payload.split(":", 2) : [null, null];
 	const encryptedPayload = rest ?? payload;
-	const isVersioned = maybeVersion === ENCRYPTION_VERSION;
+	if (maybeVersion && maybeVersion !== ENCRYPTION_VERSION) {
+		throw new Error(`Unsupported OpenRouter API key version: ${maybeVersion}`);
+	}
 	const [ivEncoded, tagEncoded, dataEncoded] = encryptedPayload.split(".");
 	if (!ivEncoded || !tagEncoded || !dataEncoded) {
 		throw new Error("Invalid OpenRouter API key payload");
@@ -126,11 +123,9 @@ export function decryptApiKey(payload: string) {
 	try {
 		const key = deriveEncryptionKey(secret);
 		return attemptDecrypt(key);
-	} catch (error) {
-		// If the payload was not encrypted with the new scheme (no version prefix) fall back to pre-PBKDF2.
-		if (isVersioned) throw error;
-		const legacyKey = deriveLegacyKey(secret);
-		return attemptDecrypt(legacyKey);
+	} catch {
+		// Likely legacy payload without version prefix; instruct caller to reset.
+		throw new Error("Legacy OpenRouter API key detected; please re-enter your API key.");
 	}
 }
 
