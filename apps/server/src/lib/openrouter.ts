@@ -101,6 +101,8 @@ export function encryptApiKey(raw: string) {
 }
 
 async function deriveLegacyKey(secret: string) {
+	// codeql[js/inadequate-password-hashing]: Legacy OpenRouter tokens used a simple SHA-256 digest.
+	// Keep this fallback temporarily so we can decrypt and re-encrypt stored credentials with PBKDF2.
 	const digest = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
 	return Buffer.from(digest);
 }
