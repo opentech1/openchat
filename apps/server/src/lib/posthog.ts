@@ -3,6 +3,32 @@ import { withTracing } from "@posthog/ai";
 
 let client: PostHog | null = null;
 
+const APP_VERSION =
+	process.env.SERVER_APP_VERSION ??
+	process.env.APP_VERSION ??
+	process.env.NEXT_PUBLIC_APP_VERSION ??
+	process.env.VERCEL_GIT_COMMIT_SHA ??
+	"dev";
+
+const DEPLOYMENT =
+	process.env.SERVER_DEPLOYMENT ??
+	process.env.DEPLOYMENT ??
+	process.env.POSTHOG_DEPLOYMENT ??
+	process.env.VERCEL_ENV ??
+	(process.env.NODE_ENV === "production" ? "prod" : "local");
+
+const ENVIRONMENT = process.env.POSTHOG_ENVIRONMENT ?? process.env.NODE_ENV ?? "development";
+const DEPLOYMENT_REGION =
+	process.env.POSTHOG_DEPLOYMENT_REGION ?? process.env.VERCEL_REGION ?? "local";
+
+const BASE_SUPER_PROPERTIES = Object.freeze({
+	app: "openchat-server",
+	app_version: APP_VERSION,
+	deployment: DEPLOYMENT,
+	environment: ENVIRONMENT,
+	deployment_region: DEPLOYMENT_REGION,
+});
+
 function buildClient() {
 	const apiKey = process.env.POSTHOG_API_KEY;
 	if (!apiKey) return null;
@@ -13,6 +39,7 @@ function buildClient() {
 		flushAt: 1,
 		flushInterval: 5_000,
 	});
+	client.register(BASE_SUPER_PROPERTIES);
 	return client;
 }
 
@@ -27,13 +54,20 @@ export function capturePosthogEvent(
 ) {
 	const instance = buildClient();
 	if (!instance || !distinctId) return;
-	instance.capture({
-		distinctId,
-		event,
-		properties,
-	}).catch((error: unknown) => {
-		console.error("[posthog] capture failed", error);
-	});
+	const sanitized: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(properties)) {
+		if (value === undefined) continue;
+		sanitized[key] = value;
+	}
+	instance
+		.capture({
+			distinctId,
+			event,
+			properties: sanitized,
+		})
+		.catch((error: unknown) => {
+			console.error("[posthog] capture failed", error);
+		});
 }
 
 export function withPosthogTracing<Model extends (...args: any[]) => any>(
