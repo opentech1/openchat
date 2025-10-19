@@ -35,6 +35,7 @@
 ## Security & Configuration Tips
 - Server env: `DATABASE_URL`, `CORS_ORIGIN` (e.g., `http://localhost:3001`). Store in `apps/server/.env` and never commit.
 - Auth: Better-Auth under `/api/auth`; use HTTPS in production (`SameSite=None; Secure` cookies). For local dev, set `CORS_ORIGIN` to the web URL.
+- Electric: when Electric runs behind an internal load balancer, set `ELECTRIC_SERVICE_URL` and optionally `ELECTRIC_FALLBACK_PORT`/`ELECTRIC_FALLBACK_DELAY_MS` so the API can retry the standby instance.
 - After editing `apps/server/src/db/schema`, run `bun db:push` and commit generated artifacts if applicable.
 
 ## Agent Pitfalls & Checks

@@ -153,14 +153,22 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   );
 
   useEffect(() => {
+    let active = true;
     void (async () => {
-      const stored = await loadOpenRouterKey();
-      if (stored) {
-        setApiKey(stored);
-        await fetchModels(stored);
+      try {
+        const stored = await loadOpenRouterKey();
+        if (!active) return;
+        if (stored) {
+          setApiKey(stored);
+          await fetchModels(stored);
+        }
+      } finally {
+        if (active) setCheckedApiKey(true);
       }
-      setCheckedApiKey(true);
     })();
+    return () => {
+      active = false;
+    };
   }, [fetchModels]);
 
   useEffect(() => {
