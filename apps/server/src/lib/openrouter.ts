@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes, webcrypto } from "node:crypto";
-import { TextEncoder } from "node:util";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -100,11 +99,17 @@ export function encryptApiKey(raw: string) {
 	return `${ENCRYPTION_VERSION}:${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
 }
 
-async function deriveLegacyKey(secret: string) {
-	// codeql[js/inadequate-password-hashing]: Legacy OpenRouter tokens used a simple SHA-256 digest.
-	// Keep this fallback temporarily so we can decrypt and re-encrypt stored credentials with PBKDF2.
-	const digest = await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
-	return Buffer.from(digest);
+function deriveLegacyKey(secret: string) {
+	void secret;
+	const encoded = process.env.OPENROUTER_LEGACY_KEY;
+	if (!encoded) {
+		throw new Error("Missing OPENROUTER_LEGACY_KEY env for decrypting legacy OpenRouter API keys");
+	}
+	const legacyKey = base64UrlDecode(encoded);
+	if (legacyKey.length !== ENCRYPTION_KEY_LENGTH) {
+		throw new Error(`OPENROUTER_LEGACY_KEY must decode to ${ENCRYPTION_KEY_LENGTH} bytes`);
+	}
+	return legacyKey;
 }
 
 export async function decryptApiKey(payload: string) {
@@ -133,7 +138,7 @@ export async function decryptApiKey(payload: string) {
 		return attemptDecrypt(key);
 	} catch {
 		if (maybeVersion === ENCRYPTION_VERSION) throw new Error("Failed to decrypt OpenRouter API key payload");
-		const legacyKey = await deriveLegacyKey(secret);
+		const legacyKey = deriveLegacyKey(secret);
 		return attemptDecrypt(legacyKey);
 	}
 }
