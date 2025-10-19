@@ -445,18 +445,20 @@ export const appRouter = {
             .where(and(eq(chat.id, input.chatId), eq(chat.userId, userId)));
           if (owned.length === 0) return { ok: false as const };
 
-          let inserted = false;
-          try {
-            await db.insert(message).values({
+          const insertResult = await db
+            .insert(message)
+            .values({
               id: input.messageId,
               chatId: input.chatId,
               role,
               content,
               createdAt,
               updatedAt: now,
-            });
-            inserted = true;
-          } catch {
+            })
+            .onConflictDoNothing()
+            .returning({ id: message.id });
+          const inserted = insertResult.length > 0;
+          if (!inserted) {
             await db
               .update(message)
               .set({ content, updatedAt: now })
