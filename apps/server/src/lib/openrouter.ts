@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -78,11 +78,6 @@ function deriveEncryptionKey(secret: string) {
 	return pbkdf2Sync(secret, ENCRYPTION_SALT, ENCRYPTION_ITERATIONS, ENCRYPTION_KEY_LENGTH, "sha256");
 }
 
-function deriveLegacyKey(secret: string) {
-	// codeql[js/insufficient-password-hash]: Legacy tokens were derived with SHA-256; keep this path for backward compatibility.
-	return createHash("sha256").update(secret).digest();
-}
-
 function base64UrlEncode(buffer: Buffer) {
 	return buffer.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
@@ -104,11 +99,26 @@ export function encryptApiKey(raw: string) {
 	return `${ENCRYPTION_VERSION}:${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
 }
 
-export function decryptApiKey(payload: string) {
+function deriveLegacyKey(secret: string) {
+	void secret;
+	const encoded = process.env.OPENROUTER_LEGACY_KEY;
+	if (!encoded) {
+		throw new Error("Missing OPENROUTER_LEGACY_KEY env for decrypting legacy OpenRouter API keys");
+	}
+	const legacyKey = base64UrlDecode(encoded);
+	if (legacyKey.length !== ENCRYPTION_KEY_LENGTH) {
+		throw new Error(`OPENROUTER_LEGACY_KEY must decode to ${ENCRYPTION_KEY_LENGTH} bytes`);
+	}
+	return legacyKey;
+}
+
+export async function decryptApiKey(payload: string) {
 	const secret = assertEncryptionSecret();
 	const [maybeVersion, rest] = payload.includes(":") ? payload.split(":", 2) : [null, null];
 	const encryptedPayload = rest ?? payload;
-	const isVersioned = maybeVersion === ENCRYPTION_VERSION;
+	if (maybeVersion && maybeVersion !== ENCRYPTION_VERSION) {
+		throw new Error(`Unsupported OpenRouter API key version: ${maybeVersion}`);
+	}
 	const [ivEncoded, tagEncoded, dataEncoded] = encryptedPayload.split(".");
 	if (!ivEncoded || !tagEncoded || !dataEncoded) {
 		throw new Error("Invalid OpenRouter API key payload");
@@ -126,9 +136,8 @@ export function decryptApiKey(payload: string) {
 	try {
 		const key = deriveEncryptionKey(secret);
 		return attemptDecrypt(key);
-	} catch (error) {
-		// If the payload was not encrypted with the new scheme (no version prefix) fall back to pre-PBKDF2.
-		if (isVersioned) throw error;
+	} catch {
+		if (maybeVersion === ENCRYPTION_VERSION) throw new Error("Failed to decrypt OpenRouter API key payload");
 		const legacyKey = deriveLegacyKey(secret);
 		return attemptDecrypt(legacyKey);
 	}
@@ -178,7 +187,15 @@ export async function storeOpenRouterApiKey({
 export async function getDecryptedApiKey(userId: string) {
 	const record = await getOpenRouterAccount(userId);
 	if (!record?.accessToken) return null;
-	const apiKey = decryptApiKey(record.accessToken);
+	const isLegacy = !record.accessToken.includes(":");
+	const apiKey = await decryptApiKey(record.accessToken);
+	if (isLegacy) {
+		await storeOpenRouterApiKey({
+			userId,
+			apiKey,
+			scope: record.scope ?? null,
+		});
+	}
 	return { apiKey, scope: record.scope ?? null };
 }
 export async function getOpenRouterAccount(userId: string) {
