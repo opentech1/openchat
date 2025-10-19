@@ -21,7 +21,18 @@ const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) &
 	? RAW_MAX_TRACKED_RATE_BUCKETS
 	: null;
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
-const STREAM_FLUSH_INTERVAL_MS = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 50);
+const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 250);
+const STREAM_FLUSH_INTERVAL_MS =
+	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
+		? STREAM_FLUSH_INTERVAL_RAW
+		: 250;
+const STREAM_MIN_CHARS_PER_FLUSH_RAW = Number(
+	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? 120,
+);
+const STREAM_MIN_CHARS_PER_FLUSH =
+	Number.isFinite(STREAM_MIN_CHARS_PER_FLUSH_RAW) && STREAM_MIN_CHARS_PER_FLUSH_RAW > 0
+		? STREAM_MIN_CHARS_PER_FLUSH_RAW
+		: 120;
 
 type StreamPersistRequest = {
 	chatId: string;
@@ -339,10 +350,16 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		let streamStatus: "completed" | "aborted" | "error" = "completed";
 
 		const persistAssistant = async (status: "streaming" | "completed", force = false) => {
-			if (!force && status === "streaming" && assistantText.length === lastPersistedLength) {
+			const pendingLength = assistantText.length;
+			const delta = pendingLength - lastPersistedLength;
+			if (!force && status === "streaming") {
+				if (delta <= 0) return;
+				if (delta < STREAM_MIN_CHARS_PER_FLUSH) return;
+			}
+			if (delta <= 0 && !force) {
 				return;
 			}
-			lastPersistedLength = assistantText.length;
+			lastPersistedLength = pendingLength;
 			const response = await persistMessageImpl({
 				chatId,
 				messageId: assistantMessageId,

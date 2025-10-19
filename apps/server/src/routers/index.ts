@@ -463,37 +463,40 @@ export const appRouter = {
               .where(eq(message.id, input.messageId));
           }
 
-          const sidebarPayload: Record<string, unknown> = {
-            chatId: input.chatId,
-            updatedAt: role === 'assistant' ? now : createdAt,
-          };
+		  const chatUpdates: Partial<{ updatedAt: Date; lastMessageAt: Date }> = {};
+		  if (role === 'assistant') {
+			  if (inserted) {
+				  chatUpdates.updatedAt = now;
+			  }
+			  if (status === 'completed') {
+				  chatUpdates.updatedAt = now;
+				  chatUpdates.lastMessageAt = now;
+			  }
+		  } else {
+			  chatUpdates.updatedAt = createdAt;
+			  chatUpdates.lastMessageAt = createdAt;
+		  }
 
-          if (role === 'assistant') {
-            if (status === 'completed') {
-              sidebarPayload['lastMessageAt'] = now;
-              await db
-                .update(chat)
-                .set({ updatedAt: now, lastMessageAt: now })
-                .where(eq(chat.id, input.chatId));
-            } else {
-              await db
-                .update(chat)
-                .set({ updatedAt: now })
-                .where(eq(chat.id, input.chatId));
-            }
-          } else {
-            sidebarPayload['lastMessageAt'] = createdAt;
-            await db
-              .update(chat)
-              .set({ updatedAt: createdAt, lastMessageAt: createdAt })
-              .where(eq(chat.id, input.chatId));
-          }
+		  let sidebarPayload: Record<string, unknown> | null = null;
+		  if (Object.keys(chatUpdates).length > 0) {
+			  await db
+				  .update(chat)
+				  .set(chatUpdates)
+				  .where(eq(chat.id, input.chatId));
+			  sidebarPayload = {
+				  chatId: input.chatId,
+				  ...(chatUpdates.updatedAt ? { updatedAt: chatUpdates.updatedAt } : {}),
+				  ...(chatUpdates.lastMessageAt ? { lastMessageAt: chatUpdates.lastMessageAt } : {}),
+			  };
+		  }
 
-          publish(
-            `chats:index:${userId}`,
-            'chats.index.update',
-            sidebarPayload,
-          );
+		  if (sidebarPayload) {
+			  publish(
+				  `chats:index:${userId}`,
+				  'chats.index.update',
+				  sidebarPayload,
+			  );
+		  }
 
           publish(
             `chat:${input.chatId}`,
@@ -537,41 +540,64 @@ export const appRouter = {
 			}
 
 			const record = userChats.find((c) => c.id === input.chatId);
+			let sidebarPayload: Record<string, unknown> | null = null;
 			if (record) {
 				if (role === 'assistant') {
-					if (status === 'completed') {
-						record.lastMessageAt = now;
+					if (existingIdx === -1) {
+						record.updatedAt = now;
+						sidebarPayload = { chatId: input.chatId, updatedAt: now };
 					}
-					record.updatedAt = now;
+					if (status === 'completed') {
+						record.updatedAt = now;
+						record.lastMessageAt = now;
+						sidebarPayload = {
+							chatId: input.chatId,
+							updatedAt: now,
+							lastMessageAt: now,
+						};
+					}
 				} else {
 					record.updatedAt = createdAt;
 					record.lastMessageAt = createdAt;
+					sidebarPayload = {
+						chatId: input.chatId,
+						updatedAt: createdAt,
+						lastMessageAt: createdAt,
+					};
 				}
 			}
 			memChatsByUser.set(userId, pruneChatList(userChats));
 
-          publish(
-            `chat:${input.chatId}`,
-            existingIdx == -1 ? 'chat.new' : 'chat.update',
-            {
-              chatId: input.chatId,
-              messageId: input.messageId,
-              role,
-              content,
-              status,
-              createdAt,
-              updatedAt: now,
-            },
-          );
-          const fallbackMessages = memMsgsByChat.get(input.chatId) ?? [];
-          capturePosthogEvent("workspace.fallback_storage_used", userId, {
-            operation: "streamUpsert",
-            chat_id: input.chatId,
-            fallback_size: fallbackMessages.length,
-            workspace_id: userId,
-          });
-          return { ok: true as const };
-        }
+			if (sidebarPayload) {
+				publish(
+					`chats:index:${userId}`,
+					'chats.index.update',
+					sidebarPayload,
+				);
+			}
+
+			publish(
+				`chat:${input.chatId}`,
+				existingIdx === -1 ? 'chat.new' : 'chat.update',
+				{
+					chatId: input.chatId,
+					messageId: input.messageId,
+					role,
+					content,
+					status,
+					createdAt,
+					updatedAt: now,
+				},
+			);
+			const fallbackMessages = memMsgsByChat.get(input.chatId) ?? [];
+			capturePosthogEvent("workspace.fallback_storage_used", userId, {
+				operation: "streamUpsert",
+				chat_id: input.chatId,
+				fallback_size: fallbackMessages.length,
+				workspace_id: userId,
+			});
+			return { ok: true as const };
+		}
       }),
   },
 };
