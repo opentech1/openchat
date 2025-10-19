@@ -1,4 +1,6 @@
-import React from 'react'
+"use client";
+
+import React, { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,6 +8,8 @@ import { TextEffect } from '@/components/ui/text-effect'
 import { AnimatedGroup } from '@/components/ui/animated-group'
 import { HeroHeader } from './header'
 import type { Variants } from 'motion/react'
+import { authClient } from '@openchat/auth/client'
+import { captureClientEvent } from '@/lib/posthog'
 
 const transitionVariants = {
     item: {
@@ -27,7 +31,63 @@ const transitionVariants = {
     },
 } satisfies { item: Variants }
 
+function screenWidthBucket(width: number) {
+    if (width < 640) return 'xs'
+    if (width < 768) return 'sm'
+    if (width < 1024) return 'md'
+    if (width < 1280) return 'lg'
+    return 'xl'
+}
+
 export default function HeroSection() {
+	const { data: session } = authClient.useSession()
+	const visitTrackedRef = useRef(false)
+
+	const handleCtaClick = useCallback((ctaId: string, ctaCopy: string, section: string) => {
+		return () => {
+			const width = typeof window !== 'undefined' ? window.innerWidth : 0
+			captureClientEvent('marketing.cta_clicked', {
+				cta_id: ctaId,
+				cta_copy: ctaCopy,
+				section,
+				screen_width_bucket: screenWidthBucket(width),
+			})
+		}
+	}, [])
+
+	useEffect(() => {
+		if (visitTrackedRef.current) return
+		if (typeof session === 'undefined') return
+		visitTrackedRef.current = true
+		const referrerUrl = document.referrer && document.referrer.length > 0 ? document.referrer : 'direct'
+		let referrerDomain = 'direct'
+		if (referrerUrl !== 'direct') {
+			try {
+				referrerDomain = new URL(referrerUrl).hostname
+			} catch {
+				referrerDomain = 'direct'
+			}
+		}
+		let utmSource: string | null = null
+		try {
+			const params = new URLSearchParams(window.location.search)
+			const source = params.get('utm_source')
+			if (source && source.length > 0) {
+				utmSource = source
+			}
+		} catch {
+			utmSource = null
+		}
+		const entryPath = window.location.pathname || '/'
+		captureClientEvent('marketing.visit_landing', {
+			referrer_url: referrerUrl,
+			referrer_domain: referrerDomain,
+			utm_source: utmSource ?? undefined,
+			entry_path: entryPath,
+			session_is_guest: !session?.user,
+		})
+	}, [session])
+
     return (
         <>
             <HeroHeader />
@@ -137,7 +197,9 @@ export default function HeroSection() {
                                             asChild
                                             size="lg"
                                             className="rounded-xl px-5 text-base">
-                                            <Link href="/dashboard">
+                                            <Link
+                                                href="/dashboard"
+                                                onClick={handleCtaClick('hero_try_openchat', 'Try OpenChat', 'hero')}>
                                                 <span className="text-nowrap">Try OpenChat</span>
                                             </Link>
                                         </Button>
@@ -148,7 +210,9 @@ export default function HeroSection() {
                                         size="lg"
                                         variant="ghost"
                                         className="h-10.5 rounded-xl px-5">
-                                        <Link href="/#demo">
+                                        <Link
+                                            href="/#demo"
+                                            onClick={handleCtaClick('hero_request_demo', 'Request a demo', 'hero')}>
                                             <span className="text-nowrap">Request a demo</span>
                                         </Link>
                                     </Button>

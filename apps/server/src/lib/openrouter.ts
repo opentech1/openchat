@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db } from "../db";
@@ -11,6 +11,10 @@ const accountTable = account as any;
 const OPENROUTER_PROVIDER_ID = "openrouter";
 const OPENROUTER_API_BASE = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 const DEFAULT_SCOPE = process.env.OPENROUTER_SCOPE || "openid offline_access models.read";
+const ENCRYPTION_VERSION = "v2";
+const ENCRYPTION_SALT = "openrouter:key-derivation-salt";
+const ENCRYPTION_ITERATIONS = 100_000;
+const ENCRYPTION_KEY_LENGTH = 32; // AES-256-GCM expects 32-byte key
 
 export type OpenRouterModelSummary = {
 	id: string;
@@ -62,16 +66,16 @@ export function getDefaultScope() {
 	return DEFAULT_SCOPE;
 }
 
-function getEncryptionKey() {
+function assertEncryptionSecret(): string {
 	const secret = process.env.OPENROUTER_API_KEY_SECRET;
 	if (!secret || secret.length < 16) {
 		throw new Error("Missing OPENROUTER_API_KEY_SECRET env for encrypting OpenRouter API keys");
 	}
-	// Use PBKDF2 for key derivation
-	const salt = "openrouter:key-derivation-salt"; // should be a constant that remains stable across encryption/decryption
-	const iterations = 100000; // recommended minimum
-	const keylen = 32; // 256 bits for aes-256-gcm
-	return pbkdf2Sync(secret, salt, iterations, keylen, "sha256");
+	return secret;
+}
+
+function deriveEncryptionKey(secret: string) {
+	return pbkdf2Sync(secret, ENCRYPTION_SALT, ENCRYPTION_ITERATIONS, ENCRYPTION_KEY_LENGTH, "sha256");
 }
 
 function base64UrlEncode(buffer: Buffer) {
@@ -86,27 +90,57 @@ function base64UrlDecode(value: string) {
 }
 
 export function encryptApiKey(raw: string) {
-	const key = getEncryptionKey();
+	const secret = assertEncryptionSecret();
+	const key = deriveEncryptionKey(secret);
 	const iv = randomBytes(12);
 	const cipher = createCipheriv("aes-256-gcm", key, iv);
 	const ciphertext = Buffer.concat([cipher.update(raw, "utf8"), cipher.final()]);
 	const authTag = cipher.getAuthTag();
-	return `${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
+	return `${ENCRYPTION_VERSION}:${base64UrlEncode(iv)}.${base64UrlEncode(authTag)}.${base64UrlEncode(ciphertext)}`;
 }
 
-export function decryptApiKey(payload: string) {
-	const [ivEncoded, tagEncoded, dataEncoded] = payload.split(".");
+function deriveLegacyKey(secret: string) {
+	void secret;
+	const encoded = process.env.OPENROUTER_LEGACY_KEY;
+	if (!encoded) {
+		throw new Error("Missing OPENROUTER_LEGACY_KEY env for decrypting legacy OpenRouter API keys");
+	}
+	const legacyKey = base64UrlDecode(encoded);
+	if (legacyKey.length !== ENCRYPTION_KEY_LENGTH) {
+		throw new Error(`OPENROUTER_LEGACY_KEY must decode to ${ENCRYPTION_KEY_LENGTH} bytes`);
+	}
+	return legacyKey;
+}
+
+export async function decryptApiKey(payload: string) {
+	const secret = assertEncryptionSecret();
+	const [maybeVersion, rest] = payload.includes(":") ? payload.split(":", 2) : [null, null];
+	const encryptedPayload = rest ?? payload;
+	if (maybeVersion && maybeVersion !== ENCRYPTION_VERSION) {
+		throw new Error(`Unsupported OpenRouter API key version: ${maybeVersion}`);
+	}
+	const [ivEncoded, tagEncoded, dataEncoded] = encryptedPayload.split(".");
 	if (!ivEncoded || !tagEncoded || !dataEncoded) {
 		throw new Error("Invalid OpenRouter API key payload");
 	}
-	const key = getEncryptionKey();
-	const iv = base64UrlDecode(ivEncoded);
-	const authTag = base64UrlDecode(tagEncoded);
-	const ciphertext = base64UrlDecode(dataEncoded);
-	const decipher = createDecipheriv("aes-256-gcm", key, iv);
-	decipher.setAuthTag(authTag);
-	const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-	return decrypted.toString("utf8");
+	const attemptDecrypt = (key: Buffer) => {
+		const iv = base64UrlDecode(ivEncoded);
+		const authTag = base64UrlDecode(tagEncoded);
+		const ciphertext = base64UrlDecode(dataEncoded);
+		const decipher = createDecipheriv("aes-256-gcm", key, iv);
+		decipher.setAuthTag(authTag);
+		const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+		return decrypted.toString("utf8");
+	};
+
+	try {
+		const key = deriveEncryptionKey(secret);
+		return attemptDecrypt(key);
+	} catch {
+		if (maybeVersion === ENCRYPTION_VERSION) throw new Error("Failed to decrypt OpenRouter API key payload");
+		const legacyKey = deriveLegacyKey(secret);
+		return attemptDecrypt(legacyKey);
+	}
 }
 
 export async function storeOpenRouterApiKey({
@@ -153,7 +187,15 @@ export async function storeOpenRouterApiKey({
 export async function getDecryptedApiKey(userId: string) {
 	const record = await getOpenRouterAccount(userId);
 	if (!record?.accessToken) return null;
-	const apiKey = decryptApiKey(record.accessToken);
+	const isLegacy = !record.accessToken.includes(":");
+	const apiKey = await decryptApiKey(record.accessToken);
+	if (isLegacy) {
+		await storeOpenRouterApiKey({
+			userId,
+			apiKey,
+			scope: record.scope ?? null,
+		});
+	}
 	return { apiKey, scope: record.scope ?? null };
 }
 export async function getOpenRouterAccount(userId: string) {

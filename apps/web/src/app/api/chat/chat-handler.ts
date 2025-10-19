@@ -1,5 +1,6 @@
 import { streamText, convertToCoreMessages, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createHash } from "crypto";
 
 import { captureServerEvent } from "@/lib/posthog-server";
 
@@ -89,6 +90,14 @@ function pickClientIp(request: Request): string {
 	}
 }
 
+function hashClientIp(ip: string): string {
+	try {
+		return createHash("sha256").update(ip).digest("hex").slice(0, 16);
+	} catch {
+		return "unknown";
+	}
+}
+
 function buildCorsHeaders(request: Request, allowedOrigin?: string | null) {
 	const headers = new Headers();
 	if (allowedOrigin) {
@@ -175,10 +184,24 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Invalid request origin", { status: 403 });
 		}
 		const allowOrigin = originResult.origin ?? corsOrigin ?? null;
-
+		const distinctIdHeader = request.headers.get("x-user-id")?.trim() || null;
+		const clientIp = pickClientIp(request);
+		const ipHash = hashClientIp(clientIp);
+		const requestOriginValue = originResult.origin ?? request.headers.get("origin") ?? allowOrigin ?? null;
+		const rateLimitBucketLabel = `${rateLimit.limit}/${bucketWindowMs}`;
 		if (isRateLimited(request)) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			headers.set("Retry-After", Math.ceil(bucketWindowMs / 1000).toString());
+			headers.set("X-RateLimit-Limit", rateLimit.limit.toString());
+			headers.set("X-RateLimit-Window", bucketWindowMs.toString());
+			captureServerEvent("chat.rate_limited", distinctIdHeader, {
+				chat_id: null,
+				limit: rateLimit.limit,
+				window_ms: bucketWindowMs,
+				client_ip_hash_trunc: ipHash,
+				origin: requestOriginValue,
+				rate_limit_bucket: rateLimitBucketLabel,
+			});
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
@@ -233,7 +256,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response(responseMessage, { status, headers });
 		}
 
-		const distinctId = request.headers.get("x-user-id")?.trim() || null;
+		const distinctId = distinctIdHeader;
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
 		if (!chatId) {
 			const headers = buildCorsHeaders(request, allowOrigin);
@@ -312,6 +335,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		let pendingResolve: (() => void) | null = null;
 		let finalized = false;
 		let persistenceError: Error | null = null;
+		const startedAt = Date.now();
+		let streamStatus: "completed" | "aborted" | "error" = "completed";
 
 		const persistAssistant = async (status: "streaming" | "completed", force = false) => {
 			if (!force && status === "streaming" && assistantText.length === lastPersistedLength) {
@@ -389,8 +414,6 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		};
 
 		try {
-			const startedAt = Date.now();
-			let streamStatus: "completed" | "aborted" | "error" = "completed";
 			const model = config.provider.chat(config.modelId);
 			const result = await streamTextImpl({
 				model,
@@ -415,14 +438,21 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					await finalize();
 				},
 			});
+			const duration = Date.now() - startedAt;
+			const openrouterStatus = streamStatus === "completed" ? "ok" : streamStatus;
 			captureServerEvent("chat_message_stream", distinctId, {
-				chatId,
-				modelId: config.modelId,
-				userMessageId,
-				assistantMessageId,
+				chat_id: chatId,
+				model_id: config.modelId,
+				user_message_id: userMessageId,
+				assistant_message_id: assistantMessageId,
 				characters: assistantText.length,
-				durationMs: Date.now() - startedAt,
+				duration_ms: duration,
 				status: streamStatus,
+				openrouter_status: openrouterStatus,
+				openrouter_latency_ms: duration,
+				origin: requestOriginValue,
+				ip_hash: ipHash,
+				rate_limit_bucket: rateLimitBucketLabel,
 			});
 
 			const aiResponse = result.toUIMessageStreamResponse({
@@ -449,13 +479,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		} catch (error) {
 			console.error("/api/chat", error);
 			await finalize();
+			const duration = Date.now() - startedAt;
 			captureServerEvent("chat_message_stream", distinctId, {
-				chatId,
-				modelId: config.modelId,
-				userMessageId,
-				assistantMessageId,
+				chat_id: chatId,
+				model_id: config.modelId,
+				user_message_id: userMessageId,
+				assistant_message_id: assistantMessageId,
 				characters: assistantText.length,
+				duration_ms: duration,
 				status: "error",
+				openrouter_status: "error",
+				openrouter_latency_ms: duration,
+				origin: requestOriginValue,
+				ip_hash: ipHash,
+				rate_limit_bucket: rateLimitBucketLabel,
 			});
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Upstream error", { status: 502, headers });
