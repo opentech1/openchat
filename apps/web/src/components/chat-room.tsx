@@ -57,6 +57,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string; description?: string }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [checkedApiKey, setCheckedApiKey] = useState(false);
   const missingKeyToastRef = useRef<string | number | null>(null);
 
   useEffect(() => {
@@ -158,10 +159,12 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         setApiKey(stored);
         await fetchModels(stored);
       }
+      setCheckedApiKey(true);
     })();
   }, [fetchModels]);
 
   useEffect(() => {
+    if (!checkedApiKey) return;
     if (!apiKey) {
       if (missingKeyToastRef.current == null) {
         missingKeyToastRef.current = toast.warning("Add your OpenRouter API key", {
@@ -177,7 +180,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       toast.dismiss(missingKeyToastRef.current);
       missingKeyToastRef.current = null;
     }
-  }, [apiKey, router]);
+  }, [apiKey, router, checkedApiKey]);
 
   const handleSaveApiKey = useCallback(
     async (key: string) => {
