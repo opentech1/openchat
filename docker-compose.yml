@@ -44,8 +44,8 @@ services:
       PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:?PG_PROXY_PASSWORD is required}
       ELECTRIC_INSECURE: ${ELECTRIC_INSECURE:-false}
       ELECTRIC_LOG_LEVEL: ${ELECTRIC_LOG_LEVEL:-info}
-      ELECTRIC_HTTP_PORT: ${ELECTRIC_HTTP_PORT:-3010}
-      ELECTRIC__HTTP__PORT: ${ELECTRIC_HTTP_PORT:-3010}
+      ELECTRIC_HTTP_PORT: ${ELECTRIC_HTTP_PORT:-3000}
+      ELECTRIC__HTTP__PORT: ${ELECTRIC_HTTP_PORT:-3000}
       ELECTRIC__HTTP__HOST: ${ELECTRIC__HTTP__HOST:-0.0.0.0}
       ELECTRIC__PG_PROXY__PORT: ${ELECTRIC__PG_PROXY__PORT:-5133}
       ELECTRIC__PG_PROXY__HOST: ${ELECTRIC__PG_PROXY__HOST:-0.0.0.0}
@@ -75,11 +75,11 @@ services:
       SERVER_INTERNAL_URL: ${SERVER_INTERNAL_URL:?SERVER_INTERNAL_URL is required (https://api.example.com)}
       CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required (https://app.example.com)}
       AUTH_COOKIE_DOMAIN: ${AUTH_COOKIE_DOMAIN:-}
-      ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://openchat-electric:3010}
+      ELECTRIC_SERVICE_URL: ${ELECTRIC_SERVICE_URL:-http://openchat-electric:3000}
       ELECTRIC_GATEKEEPER_SECRET: ${ELECTRIC_GATEKEEPER_SECRET:?}
       PG_PROXY_PASSWORD: ${PG_PROXY_PASSWORD:?}
       NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
-      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
       OPENROUTER_API_KEY_SECRET: ${OPENROUTER_API_KEY_SECRET:-}
     expose:
@@ -94,7 +94,7 @@ services:
       args:
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
         NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
-        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+        NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3000}
         BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://openchat-server:3000}
     container_name: openchat-web
     restart: unless-stopped
@@ -106,7 +106,7 @@ services:
       PORT: 3001
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://openchat-web:3001}
       NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://openchat-server:3000}
-      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3010}
+      NEXT_PUBLIC_ELECTRIC_URL: ${NEXT_PUBLIC_ELECTRIC_URL:-http://openchat-electric:3000}
     expose:
       - "3001"
     networks:
