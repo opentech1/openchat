@@ -317,46 +317,34 @@ new Elysia()
             if (value !== null) passthroughParams.set(key, value);
         }
 
-        const target = new URL(`${ELECTRIC_BASE_URL}/v1/shape`);
-        passthroughParams.forEach((value, key) => {
-            target.searchParams.set(key, value);
-        });
-
         let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
+        let chatIdParam: string | null = null;
         switch (scope) {
             case "chats": {
-                target.searchParams.set("table", "chat");
-                target.searchParams.set("where", `"user_id" = $1`);
-                target.searchParams.set("params[1]", userId);
-                target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
                 allowTables = ["chat"];
                 break;
             }
             case "messages": {
-                const chatId = url.searchParams.get("chatId");
-                if (!chatId) {
+                chatIdParam = url.searchParams.get("chatId");
+                if (!chatIdParam) {
                     return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), context.request);
                 }
                 try {
                     const owned = await db
                         .select({ id: chat.id })
                         .from(chat)
-                        .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+                        .where(and(eq(chat.id, chatIdParam), eq(chat.userId, userId)));
                     if (owned.length === 0) {
-                        if (!inMemoryChatOwned(userId, chatId)) {
+                        if (!inMemoryChatOwned(userId, chatIdParam)) {
                             return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
                         }
                     }
                 } catch (error) {
                     if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
-                    if (!inMemoryChatOwned(userId, chatId)) {
+                    if (!inMemoryChatOwned(userId, chatIdParam)) {
                         return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
                     }
                 }
-                target.searchParams.set("table", "message");
-                target.searchParams.set("where", `"chat_id" = $1`);
-                target.searchParams.set("params[1]", chatId);
-                target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
                 allowTables = ["message"];
                 break;
             }
@@ -374,30 +362,116 @@ new Elysia()
 	if (tokenInfo) {
 		upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
 	}
-        const ifNoneMatch = context.request.headers.get("if-none-match");
-        if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
+	const ifNoneMatch = context.request.headers.get("if-none-match");
+	if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
 
-        let upstreamResponse: Response;
-        try {
-            upstreamResponse = await fetch(target, {
-                method: "GET",
-                headers: upstreamHeaders,
-            });
-        } catch (error) {
-            console.error("electric.fetch", error);
-            return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
-        }
+	let parsedBase: URL;
+	try {
+		parsedBase = new URL(ELECTRIC_BASE_URL);
+	} catch (error) {
+		console.error("electric.fetch invalid ELECTRIC_SERVICE_URL", ELECTRIC_BASE_URL, error);
+		return withSecurityHeaders(new Response("Electric service misconfigured", { status: 500 }), context.request);
+	}
 
-        const headers = new Headers(upstreamResponse.headers);
-        headers.delete("content-encoding");
-        headers.delete("content-length");
+	const baseCandidates: string[] = [parsedBase.origin];
+	const fallbackPorts: string[] = [];
+	const fallbackPortEnv = process.env.ELECTRIC_FALLBACK_PORT?.trim();
+	if (fallbackPortEnv) {
+		fallbackPorts.push(fallbackPortEnv);
+	} else if (parsedBase.port === "3010") {
+		fallbackPorts.push("3000");
+	}
 
-        const proxied = new Response(upstreamResponse.body, {
-            status: upstreamResponse.status,
-            statusText: upstreamResponse.statusText,
-            headers,
-        });
-        return withSecurityHeaders(proxied, context.request);
+	for (const port of fallbackPorts) {
+		try {
+			const candidate = new URL(parsedBase.toString());
+			candidate.port = port;
+			const origin = candidate.origin;
+			if (!baseCandidates.includes(origin)) {
+				baseCandidates.push(origin);
+			}
+		} catch (error) {
+			if (process.env.NODE_ENV !== "test") {
+				console.warn("electric.fetch fallback skipped", { port, error });
+			}
+		}
+	}
+
+	const fallbackDelayRaw = process.env.ELECTRIC_FALLBACK_DELAY_MS;
+	const fallbackDelayMs =
+		typeof fallbackDelayRaw === "string" && fallbackDelayRaw.trim().length > 0
+			? Math.max(0, Number(fallbackDelayRaw))
+			: 150;
+
+	const buildTarget = (base: string) => {
+		const target = new URL(`${base}/v1/shape`);
+		passthroughParams.forEach((value, key) => {
+			target.searchParams.set(key, value);
+		});
+		switch (scope) {
+			case "chats":
+				target.searchParams.set("table", "chat");
+				target.searchParams.set("where", `"user_id" = $1`);
+				target.searchParams.set("params[1]", userId);
+				target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
+				break;
+			case "messages": {
+				target.searchParams.set("table", "message");
+				target.searchParams.set("where", `"chat_id" = $1`);
+				target.searchParams.set("params[1]", chatIdParam ?? "");
+				target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
+				break;
+			}
+		}
+		return target;
+	};
+
+	let upstreamResponse: Response | null = null;
+	let lastError: unknown = null;
+	for (const [candidateIndex, base] of baseCandidates.entries()) {
+		const target = buildTarget(base);
+		try {
+			const response = await fetch(target, {
+				method: "GET",
+				headers: upstreamHeaders,
+			});
+			if (response.status >= 400) {
+				lastError = new Error(`electric responded ${response.status} for ${base}`);
+				if (response.body) {
+					try {
+						await response.body.cancel();
+					} catch {}
+				}
+				if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
+					await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
+				}
+				continue;
+			}
+			upstreamResponse = response;
+			break;
+		} catch (error) {
+			lastError = error;
+			if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
+				await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
+			}
+		}
+	}
+
+		if (!upstreamResponse) {
+			console.error("electric.fetch", lastError);
+			return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
+		}
+
+		const headers = new Headers(upstreamResponse.headers);
+		headers.delete("content-encoding");
+		headers.delete("content-length");
+
+		const proxied = new Response(upstreamResponse.body, {
+			status: upstreamResponse.status,
+			statusText: upstreamResponse.statusText,
+			headers,
+		});
+		return withSecurityHeaders(proxied, context.request);
     })
     .get("/", () => "OK")
     .get("/health", () => ({ ok: true }))

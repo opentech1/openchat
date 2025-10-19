@@ -92,4 +92,77 @@ describe("Electric shape proxy", () => {
 		// Ensure no additional request hit Electric for the forbidden call
 		expect(requests.length).toBe(1);
 	});
+
+	it("falls back to ELECTRIC_FALLBACK_PORT when the primary Electric endpoint fails", async () => {
+		const fallbackRequests: RecordedRequest[] = [];
+		const workingElectric = createServer((req, res) => {
+			const address = workingElectric.address() as AddressInfo;
+			const origin = `http://127.0.0.1:${address.port}`;
+			const url = new URL(req.url ?? "", origin);
+			fallbackRequests.push({
+				url,
+				headers: Object.fromEntries(Object.entries(req.headers).map(([k, v]) => [k, String(v)])),
+			});
+			res.statusCode = 200;
+			res.setHeader("content-type", "application/json");
+			res.setHeader("electric-handle", "handle-fallback");
+			res.setHeader("electric-offset", "offset-fallback");
+			res.end(
+				JSON.stringify([
+					{ headers: { operation: "insert" }, key: "row-fallback", value: { id: "row-fallback" } },
+				]),
+			);
+		});
+	const fallbackPort = await new Promise<number>((resolve) => {
+		workingElectric.listen(0, "127.0.0.1", () => {
+			const address = workingElectric.address() as AddressInfo;
+			resolve(address.port);
+		});
+	});
+
+	const unreachablePort = await new Promise<number>((resolve, reject) => {
+		const probe = createServer();
+		probe.once("error", (error) => {
+			probe.close(() => reject(error));
+		});
+		probe.listen(0, "127.0.0.1", () => {
+			const address = probe.address() as AddressInfo;
+			probe.close((error) => {
+				if (error) reject(error);
+				else resolve(address.port);
+			});
+		});
+	});
+
+	const unreachableElectric = `http://127.0.0.1:${unreachablePort}`;
+		const originalPortEnv = process.env.PORT;
+		delete process.env.PORT;
+
+		let fallbackServer: RunningServer | null = null;
+		try {
+			fallbackServer = await startTestServer({
+				ELECTRIC_GATEKEEPER_SECRET: "test-secret",
+				ELECTRIC_SERVICE_URL: unreachableElectric,
+				ELECTRIC_FALLBACK_PORT: String(fallbackPort),
+				DEV_ALLOW_HEADER_BYPASS: "1",
+			});
+
+			const response = await fetch(`${fallbackServer.baseURL}/api/electric/shapes/chats?offset=-1`, {
+				headers: { "x-user-id": "fallback-user" },
+			});
+			expect(response.status).toBe(200);
+			await response.json();
+			expect(fallbackRequests.length).toBeGreaterThan(0);
+		} finally {
+			await fallbackServer?.close();
+			if (originalPortEnv !== undefined) {
+				process.env.PORT = originalPortEnv;
+			} else {
+				delete process.env.PORT;
+			}
+			await new Promise<void>((resolve) => {
+				workingElectric.close(() => resolve());
+			});
+		}
+	});
 });
