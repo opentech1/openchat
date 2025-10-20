@@ -1,18 +1,22 @@
 import { createApp } from "../src/app";
 
-const app = (() => {
+let appInstance: ReturnType<typeof createApp> | null = null;
+
+function getApp() {
+	if (appInstance) return appInstance;
 	try {
-		return createApp();
+		appInstance = createApp();
+		return appInstance;
 	} catch (error) {
 		console.error("[server] Failed to initialise Elysia app", error);
 		throw error;
 	}
-})();
+}
 
 export const config = {
 	runtime: "nodejs20.x",
 };
 
-const fetchHandler = app.fetch.bind(app);
-
-export default fetchHandler;
+export default function handler(request: Request) {
+	return getApp().fetch(request);
+}

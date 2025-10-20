@@ -54,6 +54,7 @@ const ENABLE_WEBSOCKETS = (() => {
 	return typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
 })();
 let websocketWarningLogged = false;
+let anonymousRateBucketWarningLogged = false;
 
 // Basic in-memory rate limiter (per-IP, 60 req/min)
 const RATE_WINDOW_MS = 60_000;
@@ -99,10 +100,14 @@ function isRateLimited(request: Request, server?: ServerLike) {
 	const now = Date.now();
 	pruneExpiredBuckets(now);
 	const ip = getClientIp(request, server);
-	if (!ip) return true;
-	const bucket = rateMap.get(ip);
+	const bucketKey = ip ?? "__anonymous__";
+	if (!ip && !anonymousRateBucketWarningLogged) {
+		console.warn("[server] Falling back to anonymous rate-limit bucket. Set TRUST_PROXY_FORWARDED=1 if behind a proxy.");
+		anonymousRateBucketWarningLogged = true;
+	}
+	const bucket = rateMap.get(bucketKey);
 	if (!bucket || now > bucket.resetAt) {
-		rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+		rateMap.set(bucketKey, { count: 1, resetAt: now + RATE_WINDOW_MS });
 		return false;
 	}
 	bucket.count += 1;
