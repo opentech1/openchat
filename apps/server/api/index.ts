@@ -1,9 +1,18 @@
 import { createApp } from "../src/app";
 
-const app = createApp();
+const app = (() => {
+	try {
+		return createApp();
+	} catch (error) {
+		console.error("[server] Failed to initialise Elysia app", error);
+		throw error;
+	}
+})();
 
 export const config = {
-	runtime: "nodejs18.x",
+	runtime: "nodejs20.x",
 };
 
-export default app.fetch;
+const fetchHandler = app.fetch.bind(app);
+
+export default fetchHandler;
