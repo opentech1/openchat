@@ -47,6 +47,14 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 
 const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
 
+const ENABLE_WEBSOCKETS = (() => {
+	const explicit = process.env.SERVER_ENABLE_WEBSOCKETS?.trim().toLowerCase();
+	if (explicit === "1" || explicit === "true" || explicit === "yes" || explicit === "on") return true;
+	if (explicit === "0" || explicit === "false" || explicit === "no" || explicit === "off") return false;
+	return typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
+})();
+let websocketWarningLogged = false;
+
 // Basic in-memory rate limiter (per-IP, 60 req/min)
 const RATE_WINDOW_MS = 60_000;
 const rateMap = new Map<string, { count: number; resetAt: number }>();
@@ -75,7 +83,7 @@ function getClientIp(request: Request, server?: ServerLike) {
 			if (sanitized && isIP(sanitized)) return sanitized;
 		}
 	}
-	return "0.0.0.0";
+	return null;
 }
 
 function pruneExpiredBuckets(now: number) {
@@ -91,14 +99,14 @@ function isRateLimited(request: Request, server?: ServerLike) {
 	const now = Date.now();
 	pruneExpiredBuckets(now);
 	const ip = getClientIp(request, server);
+	if (!ip) return true;
 	const bucket = rateMap.get(ip);
 	if (!bucket || now > bucket.resetAt) {
 		rateMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
 		return false;
 	}
-	const nextCount = bucket.count + 1;
-	bucket.count = nextCount;
-	if (nextCount > RATE_LIMIT) return true;
+	bucket.count += 1;
+	if (bucket.count > RATE_LIMIT) return true;
 	return false;
 }
 
@@ -130,28 +138,30 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 }
 
 export function createApp() {
-	return new Elysia()
-		.use(
-			cors({
-				origin: WEB_ORIGIN,
-				methods: ["GET", "POST", "OPTIONS"],
-				allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
-				credentials: true,
-			}),
-		)
-		.all("/api/auth/*", async (context) => {
-			if (isRateLimited(context.request, context.server)) {
-				return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
-			}
-			try {
-				const response = await auth.handler(context.request);
-				return withSecurityHeaders(response, context.request);
-			} catch (error) {
-				console.error("[auth] request failed", error);
-				return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
-			}
-		})
-		.ws("/sync", {
+	const app = new Elysia().use(
+		cors({
+			origin: WEB_ORIGIN,
+			methods: ["GET", "POST", "OPTIONS"],
+			allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
+			credentials: true,
+		}),
+	);
+
+	app.all("/api/auth/*", async (context) => {
+		if (isRateLimited(context.request, context.server)) {
+			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+		}
+		try {
+			const response = await auth.handler(context.request);
+			return withSecurityHeaders(response, context.request);
+		} catch (error) {
+			console.error("[auth] request failed", error);
+			return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
+		}
+	});
+
+	if (ENABLE_WEBSOCKETS) {
+		app.ws("/sync", {
 			// Authenticate and greet
 			open: async (ws) => {
 				const ctx = await createContext({ context: ws.data as any });
@@ -214,281 +224,292 @@ export function createApp() {
 					hub.unsubscribeAll(ws as any);
 				} catch {}
 			},
-		})
-		.post("/api/electric/gatekeeper", async (context) => {
-			if (isRateLimited(context.request, context.server)) {
-				return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
-			}
-			const ctx = await createContext({ context });
-			const userId = ctx.session?.user?.id;
-			if (!userId) {
-				return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
-			}
-			let parsed: z.infer<typeof GATEKEEPER_SCHEMA>;
-			try {
-				const body = await context.request.json();
-				parsed = GATEKEEPER_SCHEMA.parse(body ?? {});
-			} catch (error) {
-				if (error instanceof z.ZodError) {
-					const resp = new Response(JSON.stringify({ ok: false, issues: error.issues }), {
-						status: 422,
-						headers: { "content-type": "application/json" },
-					});
-					return withSecurityHeaders(resp, context.request);
-				}
-				return withSecurityHeaders(new Response("Invalid JSON payload", { status: 400 }), context.request);
-			}
-			const requestedTables = (parsed.tables && parsed.tables.length > 0 ? parsed.tables : DEFAULT_GATEKEEPER_TABLES)
-				.map((t) => t.toLowerCase())
-				.filter((table) => GATEKEEPER_ALLOWED_TABLES.has(table));
-			if (requestedTables.length === 0) {
-				return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
-			}
-			let workspaceId = parsed.workspaceId != null ? parsed.workspaceId.trim() : userId;
-			if (!workspaceId) {
-				return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
-			}
-			if (workspaceId !== userId) {
-				return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
-			}
-			const ttlSeconds = parsed.ttlSeconds ?? DEFAULT_GATEKEEPER_TTL;
-			let tokenInfo;
-			try {
-				tokenInfo = makeGatekeeperToken({
-					userId,
-					workspaceId,
-					tables: requestedTables,
-					ttlSeconds,
+		});
+	} else if (!websocketWarningLogged && process.env.VERCEL) {
+		console.warn("[server] WebSocket routes disabled on this runtime; set SERVER_ENABLE_WEBSOCKETS=1 to override.");
+		websocketWarningLogged = true;
+	}
+
+	app.post("/api/electric/gatekeeper", async (context) => {
+		if (isRateLimited(context.request, context.server)) {
+			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+		}
+		const ctx = await createContext({ context });
+		const userId = ctx.session?.user?.id;
+		if (!userId) {
+			return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+		}
+		let parsed: z.infer<typeof GATEKEEPER_SCHEMA>;
+		try {
+			const body = await context.request.json();
+			parsed = GATEKEEPER_SCHEMA.parse(body ?? {});
+		} catch (error) {
+			if (error instanceof z.ZodError) {
+				const resp = new Response(JSON.stringify({ ok: false, issues: error.issues }), {
+					status: 422,
+					headers: { "content-type": "application/json" },
 				});
-			} catch (error) {
-				console.error("/api/electric/gatekeeper", error);
-				return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
+				return withSecurityHeaders(resp, context.request);
 			}
-			const response = new Response(
-				JSON.stringify({
-					token: tokenInfo ? tokenInfo.token : null,
-					expiresAt: tokenInfo ? new Date(tokenInfo.expiresAtSeconds * 1000).toISOString() : null,
-				}),
-				{ status: 200, headers: { "content-type": "application/json" } },
-			);
-			return withSecurityHeaders(response, context.request);
-		})
-		.all("/rpc*", async (context) => {
-			const method = context.request.method.toUpperCase();
-			if (method === "OPTIONS") {
-				return withSecurityHeaders(new Response(null, { status: 204 }), context.request);
-			}
-			if (method !== "POST") {
-				return withSecurityHeaders(new Response("Method Not Allowed", { status: 405 }), context.request);
-			}
-			if (isRateLimited(context.request, context.server)) {
-				return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
-			}
-			const { response } = await rpcHandler.handle(context.request, {
-				prefix: "/rpc",
-				context: await createContext({ context }),
+			return withSecurityHeaders(new Response("Invalid JSON payload", { status: 400 }), context.request);
+		}
+		const requestedTables = (parsed.tables && parsed.tables.length > 0 ? parsed.tables : DEFAULT_GATEKEEPER_TABLES)
+			.map((t) => t.toLowerCase())
+			.filter((table) => GATEKEEPER_ALLOWED_TABLES.has(table));
+		if (requestedTables.length === 0) {
+			return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+		}
+		let workspaceId = parsed.workspaceId != null ? parsed.workspaceId.trim() : userId;
+		if (!workspaceId) {
+			return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+		}
+		if (workspaceId !== userId) {
+			return withSecurityHeaders(new Response("Forbidden", { status: 403 }), context.request);
+		}
+		const ttlSeconds = parsed.ttlSeconds ?? DEFAULT_GATEKEEPER_TTL;
+		let tokenInfo;
+		try {
+			tokenInfo = makeGatekeeperToken({
+				userId,
+				workspaceId,
+				tables: requestedTables,
+				ttlSeconds,
 			});
-			const res = response ?? new Response("Not Found", { status: 404 });
-			return withSecurityHeaders(res, context.request);
-		})
-		.all("/api*", async (context) => {
-			console.log(
-				JSON.stringify({
-					ts: Date.now(),
-					lvl: "info",
-					msg: "api",
-					m: context.request.method,
-					u: new URL(context.request.url).pathname,
-				}),
-			);
-			if (isRateLimited(context.request, context.server)) {
-				return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
-			}
-			const { response } = await apiHandler.handle(context.request, {
-				prefix: "/api",
-				context: await createContext({ context }),
-			});
-			const res = response ?? new Response("Not Found", { status: 404 });
-			return withSecurityHeaders(res, context.request);
-		})
-		.get("/api/electric/shapes/:scope", async (context) => {
-			if (!HAS_ELECTRIC) {
-				return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
-			}
-			const { scope } = context.params as { scope?: string };
-			if (!scope) {
-				return withSecurityHeaders(new Response("Missing shape scope", { status: 400 }), context.request);
-			}
-			const ctx = await createContext({ context });
-			const userId = ctx.session?.user?.id;
-			if (!userId) {
-				return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
-			}
+		} catch (error) {
+			console.error("/api/electric/gatekeeper", error);
+			return withSecurityHeaders(new Response("Server configuration error", { status: 500 }), context.request);
+		}
+		const response = new Response(
+			JSON.stringify({
+				token: tokenInfo ? tokenInfo.token : null,
+				expiresAt: tokenInfo ? new Date(tokenInfo.expiresAtSeconds * 1000).toISOString() : null,
+			}),
+			{ status: 200, headers: { "content-type": "application/json" } },
+		);
+		return withSecurityHeaders(response, context.request);
+	});
 
-			const url = new URL(context.request.url);
-			const passthroughParams = new URLSearchParams();
-			const allowed = ["offset", "handle", "cursor", "live", "replica", "columns"];
-			for (const key of allowed) {
-				const value = url.searchParams.get(key);
-				if (value !== null) passthroughParams.set(key, value);
-			}
+	app.all("/rpc*", async (context) => {
+		const method = context.request.method.toUpperCase();
+		if (method === "OPTIONS") {
+			return withSecurityHeaders(new Response(null, { status: 204 }), context.request);
+		}
+		if (method !== "POST") {
+			return withSecurityHeaders(new Response("Method Not Allowed", { status: 405 }), context.request);
+		}
+		if (isRateLimited(context.request, context.server)) {
+			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+		}
+		const { response } = await rpcHandler.handle(context.request, {
+			prefix: "/rpc",
+			context: await createContext({ context }),
+		});
+		const res = response ?? new Response("Not Found", { status: 404 });
+		return withSecurityHeaders(res, context.request);
+	});
 
-			let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
-			let chatIdParam: string | null = null;
-			switch (scope) {
-				case "chats": {
-					allowTables = ["chat"];
-					break;
+	app.all("/api*", async (context) => {
+		console.log(
+			JSON.stringify({
+				ts: Date.now(),
+				lvl: "info",
+				msg: "api",
+				m: context.request.method,
+				u: new URL(context.request.url).pathname,
+			}),
+		);
+		if (isRateLimited(context.request, context.server)) {
+			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
+		}
+		const { response } = await apiHandler.handle(context.request, {
+			prefix: "/api",
+			context: await createContext({ context }),
+		});
+		const res = response ?? new Response("Not Found", { status: 404 });
+		return withSecurityHeaders(res, context.request);
+	});
+
+	app.get("/api/electric/shapes/:scope", async (context) => {
+		if (!HAS_ELECTRIC) {
+			return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
+		}
+		const { scope } = context.params as { scope?: string };
+		if (!scope) {
+			return withSecurityHeaders(new Response("Missing shape scope", { status: 400 }), context.request);
+		}
+		const ctx = await createContext({ context });
+		const userId = ctx.session?.user?.id;
+		if (!userId) {
+			return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+		}
+
+		const url = new URL(context.request.url);
+		const passthroughParams = new URLSearchParams();
+		const allowed = ["offset", "handle", "cursor", "live", "replica", "columns"];
+		for (const key of allowed) {
+			const value = url.searchParams.get(key);
+			if (value !== null) passthroughParams.set(key, value);
+		}
+
+		let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
+		let chatIdParam: string | null = null;
+		switch (scope) {
+			case "chats": {
+				allowTables = ["chat"];
+				break;
+			}
+			case "messages": {
+				chatIdParam = url.searchParams.get("chatId");
+				if (!chatIdParam) {
+					return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), context.request);
 				}
-				case "messages": {
-					chatIdParam = url.searchParams.get("chatId");
-					if (!chatIdParam) {
-						return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), context.request);
-					}
-					try {
-						const owned = await db
-							.select({ id: chat.id })
-							.from(chat)
-							.where(and(eq(chat.id, chatIdParam), eq(chat.userId, userId)));
-						if (owned.length === 0) {
-							if (!inMemoryChatOwned(userId, chatIdParam)) {
-								return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
-							}
-						}
-					} catch (error) {
-						if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
+				try {
+					const owned = await db
+						.select({ id: chat.id })
+						.from(chat)
+						.where(and(eq(chat.id, chatIdParam), eq(chat.userId, userId)));
+					if (owned.length === 0) {
 						if (!inMemoryChatOwned(userId, chatIdParam)) {
 							return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
 						}
 					}
-					allowTables = ["message"];
-					break;
+				} catch (error) {
+					if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
+					if (!inMemoryChatOwned(userId, chatIdParam)) {
+						return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
+					}
 				}
-				default:
-					return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
+				allowTables = ["message"];
+				break;
 			}
+			default:
+				return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
+		}
 
-			const tokenInfo = makeGatekeeperToken({
-				userId,
-				workspaceId: userId,
-				tables: allowTables,
-			});
+		const tokenInfo = makeGatekeeperToken({
+			userId,
+			workspaceId: userId,
+			tables: allowTables,
+		});
 
-			const upstreamHeaders = new Headers();
-			if (tokenInfo) {
-				upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
-			}
-			const ifNoneMatch = context.request.headers.get("if-none-match");
-			if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
+		const upstreamHeaders = new Headers();
+		if (tokenInfo) {
+			upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
+		}
+		const ifNoneMatch = context.request.headers.get("if-none-match");
+		if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
 
-			let parsedBase: URL;
+		let parsedBase: URL;
+		try {
+			parsedBase = new URL(ELECTRIC_BASE_URL);
+		} catch (error) {
+			console.error("electric.fetch invalid ELECTRIC_SERVICE_URL", ELECTRIC_BASE_URL, error);
+			return withSecurityHeaders(new Response("Electric service misconfigured", { status: 500 }), context.request);
+		}
+
+		const baseCandidates: string[] = [parsedBase.origin];
+		const fallbackPorts: string[] = [];
+		const fallbackPortEnv = process.env.ELECTRIC_FALLBACK_PORT?.trim();
+		if (fallbackPortEnv) {
+			fallbackPorts.push(fallbackPortEnv);
+		} else if (parsedBase.port === "3010") {
+			fallbackPorts.push("3000");
+		}
+
+		for (const port of fallbackPorts) {
 			try {
-				parsedBase = new URL(ELECTRIC_BASE_URL);
+				const candidate = new URL(parsedBase.toString());
+				candidate.port = port;
+				const origin = candidate.origin;
+				if (!baseCandidates.includes(origin)) {
+					baseCandidates.push(origin);
+				}
 			} catch (error) {
-				console.error("electric.fetch invalid ELECTRIC_SERVICE_URL", ELECTRIC_BASE_URL, error);
-				return withSecurityHeaders(new Response("Electric service misconfigured", { status: 500 }), context.request);
-			}
-
-			const baseCandidates: string[] = [parsedBase.origin];
-			const fallbackPorts: string[] = [];
-			const fallbackPortEnv = process.env.ELECTRIC_FALLBACK_PORT?.trim();
-			if (fallbackPortEnv) {
-				fallbackPorts.push(fallbackPortEnv);
-			} else if (parsedBase.port === "3010") {
-				fallbackPorts.push("3000");
-			}
-
-			for (const port of fallbackPorts) {
-				try {
-					const candidate = new URL(parsedBase.toString());
-					candidate.port = port;
-					const origin = candidate.origin;
-					if (!baseCandidates.includes(origin)) {
-						baseCandidates.push(origin);
-					}
-				} catch (error) {
-					if (process.env.NODE_ENV !== "test") {
-						console.warn("electric.fetch fallback skipped", { port, error });
-					}
+				if (process.env.NODE_ENV !== "test") {
+					console.warn("electric.fetch fallback skipped", { port, error });
 				}
 			}
+		}
 
-			const fallbackDelayRaw = process.env.ELECTRIC_FALLBACK_DELAY_MS;
-			const fallbackDelayMs =
-				typeof fallbackDelayRaw === "string" && fallbackDelayRaw.trim().length > 0 ? Math.max(0, Number(fallbackDelayRaw)) : 150;
+		const fallbackDelayRaw = process.env.ELECTRIC_FALLBACK_DELAY_MS;
+		const fallbackDelayMs =
+			typeof fallbackDelayRaw === "string" && fallbackDelayRaw.trim().length > 0 ? Math.max(0, Number(fallbackDelayRaw)) : 150;
 
-			const buildTarget = (base: string) => {
-				const target = new URL(`${base}/v1/shape`);
-				passthroughParams.forEach((value, key) => {
-					target.searchParams.set(key, value);
-				});
-				switch (scope) {
-					case "chats":
-						target.searchParams.set("table", "chat");
-						target.searchParams.set("where", `"user_id" = $1`);
-						target.searchParams.set("params[1]", userId);
-						target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
-						break;
-					case "messages": {
-						target.searchParams.set("table", "message");
-						target.searchParams.set("where", `"chat_id" = $1`);
-						target.searchParams.set("params[1]", chatIdParam ?? "");
-						target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
-						break;
-					}
-				}
-				return target;
-			};
-
-			let upstreamResponse: Response | null = null;
-			let lastError: unknown = null;
-			for (const [candidateIndex, base] of baseCandidates.entries()) {
-				const target = buildTarget(base);
-				try {
-					const response = await fetch(target, {
-						method: "GET",
-						headers: upstreamHeaders,
-					});
-					if (response.status >= 400) {
-						lastError = new Error(`electric responded ${response.status} for ${base}`);
-						if (response.body) {
-							try {
-								await response.body.cancel();
-							} catch {}
-						}
-						if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
-							await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
-						}
-						continue;
-					}
-					upstreamResponse = response;
+		const buildTarget = (base: string) => {
+			const target = new URL(`${base}/v1/shape`);
+			passthroughParams.forEach((value, key) => {
+				target.searchParams.set(key, value);
+			});
+			switch (scope) {
+				case "chats":
+					target.searchParams.set("table", "chat");
+					target.searchParams.set("where", `"user_id" = $1`);
+					target.searchParams.set("params[1]", userId);
+					target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
 					break;
-				} catch (error) {
-					lastError = error;
+				case "messages": {
+					target.searchParams.set("table", "message");
+					target.searchParams.set("where", `"chat_id" = $1`);
+					target.searchParams.set("params[1]", chatIdParam ?? "");
+					target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
+					break;
+				}
+			}
+			return target;
+		};
+
+		let upstreamResponse: Response | null = null;
+		let lastError: unknown = null;
+		for (const [candidateIndex, base] of baseCandidates.entries()) {
+			const target = buildTarget(base);
+			try {
+				const response = await fetch(target, {
+					method: "GET",
+					headers: upstreamHeaders,
+				});
+				if (response.status >= 400) {
+					lastError = new Error(`electric responded ${response.status} for ${base}`);
+					if (response.body) {
+						try {
+							await response.body.cancel();
+						} catch {}
+					}
 					if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
 						await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
 					}
+					continue;
+				}
+				upstreamResponse = response;
+				break;
+			} catch (error) {
+				lastError = error;
+				if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
+					await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
 				}
 			}
+		}
 
-			if (!upstreamResponse) {
-				console.error("electric.fetch", lastError);
-				return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
-			}
+		if (!upstreamResponse) {
+			console.error("electric.fetch", lastError);
+			return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
+		}
 
-			const headers = new Headers(upstreamResponse.headers);
-			headers.delete("content-encoding");
-			headers.delete("content-length");
+		const headers = new Headers(upstreamResponse.headers);
+		headers.delete("content-encoding");
+		headers.delete("content-length");
 
-			const proxied = new Response(upstreamResponse.body, {
-				status: upstreamResponse.status,
-				statusText: upstreamResponse.statusText,
-				headers,
-			});
-			return withSecurityHeaders(proxied, context.request);
-		})
-		.get("/", () => "OK")
-		.get("/health", () => ({ ok: true }));
+		const proxied = new Response(upstreamResponse.body, {
+			status: upstreamResponse.status,
+			statusText: upstreamResponse.statusText,
+			headers,
+		});
+		return withSecurityHeaders(proxied, context.request);
+	});
+
+	app.get("/", () => "OK");
+	app.get("/health", () => ({ ok: true }));
+
+	return app;
 }
 
 async function handleOp(ws: any, userId: string, op: string, payload?: any) {
