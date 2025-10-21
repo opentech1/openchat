@@ -26,8 +26,8 @@ export default {
 			return new Response("Internal Server Error", { status: 500 });
 		}
 		const originalUrl = new URL(request.url);
-		const strippedPath = originalUrl.pathname.replace(/^\/api/, "") || "/";
-		const targetUrl = new URL(strippedPath + originalUrl.search, originalUrl.origin);
+		const targetPath = normalizeApiPath(originalUrl.pathname);
+		const targetUrl = new URL(targetPath + originalUrl.search, originalUrl.origin);
 
 		try {
 			const proxiedRequest = new Request(targetUrl.toString(), request);
@@ -44,3 +44,15 @@ export default {
 		}
 	},
 };
+
+function normalizeApiPath(pathname: string) {
+	let normalized = pathname;
+	while (true) {
+		const next = normalized.replace(/^\/api(?:\/|$)/, "/");
+		if (next === normalized) break;
+		normalized = next;
+	}
+	if (normalized === "") normalized = "/";
+	if (!normalized.startsWith("/")) normalized = `/${normalized}`;
+	return normalized;
+}
