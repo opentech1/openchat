@@ -4,8 +4,13 @@ let appInstance: ReturnType<typeof createApp> | null = null;
 
 function getApp() {
 	if (appInstance) return appInstance;
-	appInstance = createApp();
-	return appInstance;
+	try {
+		appInstance = createApp();
+		return appInstance;
+	} catch (error) {
+		console.error("[server] failed to initialise app", error);
+		throw error;
+	}
 }
 
 export const config = {
@@ -14,7 +19,12 @@ export const config = {
 
 export default {
 	async fetch(request: Request) {
-		const app = getApp();
+		let app: ReturnType<typeof createApp>;
+		try {
+			app = getApp();
+		} catch (error) {
+			return new Response("Internal Server Error", { status: 500 });
+		}
 		const originalUrl = new URL(request.url);
 		const strippedPath = originalUrl.pathname.replace(/^\/api/, "") || "/";
 		const targetUrl = new URL(strippedPath + originalUrl.search, originalUrl.origin);
