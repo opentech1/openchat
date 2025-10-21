@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { node } from "@elysiajs/node";
 import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
@@ -47,11 +48,13 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 
 const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
 
+const IS_BUN_RUNTIME = typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
+
 const ENABLE_WEBSOCKETS = (() => {
 	const explicit = process.env.SERVER_ENABLE_WEBSOCKETS?.trim().toLowerCase();
 	if (explicit === "1" || explicit === "true" || explicit === "yes" || explicit === "on") return true;
 	if (explicit === "0" || explicit === "false" || explicit === "no" || explicit === "off") return false;
-	return typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
+	return IS_BUN_RUNTIME;
 })();
 let websocketWarningLogged = false;
 let anonymousRateBucketWarningLogged = false;
@@ -143,7 +146,9 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 }
 
 export function createApp() {
-	const app = new Elysia().use(
+	const app = new Elysia({
+		adapter: IS_BUN_RUNTIME ? undefined : node(),
+	}).use(
 		cors({
 			origin: WEB_ORIGIN,
 			methods: ["GET", "POST", "OPTIONS"],
