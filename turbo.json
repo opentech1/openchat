@@ -5,7 +5,21 @@
 		"build": {
 			"dependsOn": ["^build"],
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
-			"outputs": ["dist/**", ".output/**", ".next/**"]
+			"outputs": ["dist/**", ".output/**", ".next/**"],
+			"env": [
+				"DATABASE_URL",
+				"DATABASE_URL_UNPOOLED",
+				"ELECTRIC_SECRET",
+				"ELECTRIC_GATEKEEPER_SECRET",
+				"ELECTRIC_SERVICE_URL",
+				"BETTER_AUTH_SECRET",
+				"BETTER_AUTH_URL",
+				"SERVER_INTERNAL_URL",
+				"CORS_ORIGIN",
+				"TRUST_PROXY_FORWARDED",
+				"POSTHOG_API_KEY",
+				"POSTHOG_HOST"
+			]
 		},
 		"lint": {
 			"dependsOn": ["^lint"]
