@@ -6,7 +6,7 @@
 		"strict": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
-		"verbatimModuleSyntax": false,
+		"verbatimModuleSyntax": true,
 		"noEmit": true,
 		"rootDir": "./src"
 	},
