@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/pg": "^8.11.11",
-    "typescript": "workspace:*"
+    "typescript": "^5.9.2"
   },
   "scripts": {
     "build": "bun x tsc -p tsconfig.build.json",
