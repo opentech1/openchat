@@ -38,7 +38,9 @@ export default {
 				target: targetUrl.toString(),
 				error,
 			});
-			return new Response("Internal Server Error", { status: 500 });
+			const message =
+				error instanceof Error ? error.stack || error.message : typeof error === "string" ? error : "Internal Server Error";
+			return new Response(message, { status: 500 });
 		}
 	},
 };
