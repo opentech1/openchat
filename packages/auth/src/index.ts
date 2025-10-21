@@ -3,8 +3,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { resolveDatabaseConfig, warnOnUnresolvedHost } from "./database";
-import * as authSchema from "./schema";
+import { resolveDatabaseConfig, warnOnUnresolvedHost } from "./database.js";
+import * as authSchema from "./schema.js";
 
 const globalSymbol = Symbol.for("openchat.auth.pool");
 const memorySymbol = Symbol.for("openchat.auth.memory");

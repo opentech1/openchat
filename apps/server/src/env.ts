@@ -74,21 +74,22 @@ if (normalizedInternalUrl) {
 	}
 }
 
-const criticalKeys = [
+const requiredRuntimeKeys = [
 	"DATABASE_URL",
-	"SHADOW_DATABASE_URL",
 	"BETTER_AUTH_SECRET",
 	"BETTER_AUTH_URL",
 	"SERVER_INTERNAL_URL",
 	"CORS_ORIGIN",
 ];
 
+const optionalRuntimeKeys = ["SHADOW_DATABASE_URL"];
+
 const shouldLoadWorkspaceEnv = forceWorkspaceEnv || !skipWorkspaceEnv;
 if (shouldLoadWorkspaceEnv) {
 	loadFiles(workspaceEnvFiles);
 }
 
-const unresolvedCritical = criticalKeys.filter((key) => !process.env[key]);
+const unresolvedCritical = requiredRuntimeKeys.filter((key) => !process.env[key]);
 if (unresolvedCritical.length > 0) {
 	const hint = skipWorkspaceEnv && !forceWorkspaceEnv
 		? "Set them in the runtime environment or export SERVER_REQUIRE_WORKSPACE_ENV=1 to allow workspace-level .env fallbacks."
@@ -100,4 +101,10 @@ if (unresolvedCritical.length > 0) {
 	if (process.env.NODE_ENV !== "test") {
 		console.warn(message);
 	}
+}
+
+const unresolvedOptional = optionalRuntimeKeys.filter((key) => !process.env[key]);
+if (unresolvedOptional.length > 0 && process.env.NODE_ENV !== "test") {
+	const hint = "Shadow database URL is only required for local migrations. Populate SHADOW_DATABASE_URL when running drizzle migrations.";
+	console.warn(`[server:env] Optional environment variables missing: ${unresolvedOptional.join(", ")}. ${hint}`);
 }

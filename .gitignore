@@ -8,3 +8,4 @@ docker/secrets/
 coverage/
 test-results/
 tmp/
+packages/auth/dist/
