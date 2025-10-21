@@ -6,11 +6,14 @@ type AppInstance = ReturnType<AppFactory>;
 let appPromise: Promise<AppInstance> | null = null;
 
 const preferCompiledBundle = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const compiledBundleSpecifier = "../dist/index.js" as string;
 
 async function loadFactory(): Promise<AppFactory> {
 	if (preferCompiledBundle) {
 		try {
-			const module = await import("../dist/index.js");
+			const module = (await import(compiledBundleSpecifier)) as Partial<{
+				createApp: AppFactory;
+			}>;
 			if (typeof module.createApp === "function") {
 				return module.createApp;
 			}
