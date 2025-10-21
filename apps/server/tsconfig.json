@@ -15,5 +15,6 @@
 		"composite": true,
 		"jsx": "react-jsx"
 	},
+	"include": ["src", "api", "test"],
 	"exclude": ["dist"]
 }
