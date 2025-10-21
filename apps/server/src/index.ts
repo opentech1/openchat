@@ -9,3 +9,5 @@ if (process.env.VERCEL !== "1" && process.env.VERCEL !== "true") {
 		console.log(`Server is running on http://localhost:${PORT}`);
 	});
 }
+
+export { createApp } from "./app";

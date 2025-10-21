@@ -1,22 +1,10 @@
-import { createApp } from "../src/app.js";
-
-let appInstance: ReturnType<typeof createApp> | null = null;
-
-function getApp() {
-	if (appInstance) return appInstance;
-	try {
-		appInstance = createApp();
-		return appInstance;
-	} catch (error) {
-		console.error("[server] Failed to initialise Elysia app", error);
-		throw error;
-	}
-}
+import { getAppInstance } from "./load-app";
 
 export const config = {
 	runtime: "nodejs",
 };
 
-export default function handler(request: Request) {
-	return getApp().fetch(request);
+export default async function handler(request: Request) {
+	const app = await getAppInstance();
+	return app.fetch(request);
 }
