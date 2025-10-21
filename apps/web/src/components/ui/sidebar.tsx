@@ -17,7 +17,7 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 	const hasPersistedRef = React.useRef(false);
 	React.useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (e.ctrlKey && (e.key === "b" || e.key === "B")) {
+			if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
 				e.preventDefault();
 				setCollapsed((v) => !v);
 			}
