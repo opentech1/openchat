@@ -14,5 +14,6 @@
 		"types": ["bun"],
 		"composite": true,
 		"jsx": "react-jsx"
-	}
+	},
+	"exclude": ["dist"]
 }
