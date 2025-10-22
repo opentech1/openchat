@@ -25,6 +25,9 @@ import { parseForwardedHeader } from "./lib/forwarded";
 
 const ORIGIN_ENV_KEYS = [
 	"CORS_ORIGIN",
+	"CORS_ORIGINS",
+	"ALLOWED_WEB_ORIGINS",
+	"SERVER_ALLOWED_ORIGINS",
 	"NEXT_PUBLIC_APP_URL",
 	"NEXT_PUBLIC_SITE_URL",
 	"NEXT_PUBLIC_WEB_URL",
@@ -39,8 +42,9 @@ function normalizeOriginValue(value: string | null | undefined) {
 	if (!value) return null;
 	const trimmed = value.trim();
 	if (!trimmed || trimmed === "*") return null;
+	const maybeWithScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
 	try {
-		return new URL(trimmed).origin;
+		return new URL(maybeWithScheme).origin;
 	} catch {
 		return null;
 	}
@@ -82,6 +86,8 @@ const ALLOWED_WEB_ORIGINS = (() => {
 	}
 	return origins;
 })();
+const ALLOW_REFLECTIVE_ORIGIN = ALLOWED_WEB_ORIGINS.size === 0;
+let reflectiveOriginWarningLogged = false;
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
@@ -206,20 +212,39 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 export function createApp() {
 	const app = new Elysia({
 		adapter: IS_BUN_RUNTIME ? undefined : node(),
-	}).use(
-		cors({
-			origin(request) {
-				const originHeader = request.headers.get("origin");
-				if (!originHeader) {
-					return !IS_PRODUCTION;
-				}
-				const normalized = normalizeOriginValue(originHeader);
-				if (normalized && ALLOWED_WEB_ORIGINS.has(normalized)) {
-					return true;
-				}
-				console.warn("[server] Blocked CORS request from origin", originHeader);
-				return false;
-			},
+		}).use(
+			cors({
+				origin(request) {
+					const originHeader = request.headers.get("origin");
+					if (!originHeader) {
+						return !IS_PRODUCTION || ALLOW_REFLECTIVE_ORIGIN;
+					}
+					const normalized = normalizeOriginValue(originHeader);
+					const requestOrigin = (() => {
+						try {
+							return new URL(request.url).origin;
+						} catch {
+							return null;
+						}
+					})();
+					if (normalized) {
+						if (ALLOWED_WEB_ORIGINS.has(normalized)) {
+							return true;
+						}
+						if (ALLOW_REFLECTIVE_ORIGIN) {
+							if (!reflectiveOriginWarningLogged && IS_PRODUCTION) {
+								console.warn("[server] No explicit CORS origins configured; reflecting request origins in production.");
+								reflectiveOriginWarningLogged = true;
+							}
+							return true;
+						}
+						if (requestOrigin && normalized === requestOrigin) {
+							return true;
+						}
+					}
+					console.warn("[server] Blocked CORS request from origin", originHeader);
+					return false;
+				},
 			methods: ["GET", "POST", "OPTIONS"],
 			allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
 			credentials: true,
