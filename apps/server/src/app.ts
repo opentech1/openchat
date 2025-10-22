@@ -23,6 +23,66 @@ import {
 } from "./lib/gatekeeper";
 import { parseForwardedHeader } from "./lib/forwarded";
 
+const ORIGIN_ENV_KEYS = [
+	"CORS_ORIGIN",
+	"NEXT_PUBLIC_APP_URL",
+	"NEXT_PUBLIC_SITE_URL",
+	"NEXT_PUBLIC_WEB_URL",
+	"NEXT_PUBLIC_BASE_URL",
+	"NEXT_PUBLIC_ORIGIN",
+	"NEXT_PUBLIC_SERVER_URL",
+];
+const DEFAULT_DEV_ORIGIN = "http://localhost:3001";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+function normalizeOriginValue(value: string | null | undefined) {
+	if (!value) return null;
+	const trimmed = value.trim();
+	if (!trimmed || trimmed === "*") return null;
+	try {
+		return new URL(trimmed).origin;
+	} catch {
+		return null;
+	}
+}
+
+function expandOrigins(value: string | string[] | null | undefined) {
+	if (!value) return [] as string[];
+	const parts = Array.isArray(value) ? value : value.split(",");
+	return parts
+		.map((part) => normalizeOriginValue(part))
+		.filter((origin): origin is string => Boolean(origin));
+}
+
+function resolveAllowedOrigins(extra?: string | string[]) {
+	const origins = new Set<string>();
+	for (const envKey of ORIGIN_ENV_KEYS) {
+		const envValue = process.env[envKey];
+		for (const origin of expandOrigins(envValue)) {
+			origins.add(origin);
+		}
+	}
+	for (const origin of expandOrigins(extra ?? null)) {
+		origins.add(origin);
+	}
+	for (const key of ["VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) {
+		const value = process.env[key];
+		if (!value) continue;
+		const withProtocol = value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
+		const normalized = normalizeOriginValue(withProtocol);
+		if (normalized) origins.add(normalized);
+	}
+	return origins;
+}
+
+const ALLOWED_WEB_ORIGINS = (() => {
+	const origins = resolveAllowedOrigins();
+	if (origins.size === 0 && !IS_PRODUCTION) {
+		origins.add(DEFAULT_DEV_ORIGIN);
+	}
+	return origins;
+})();
+
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
 
@@ -45,8 +105,6 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 		}),
 	],
 });
-
-const WEB_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:3001";
 
 const IS_BUN_RUNTIME = typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
 
@@ -150,7 +208,18 @@ export function createApp() {
 		adapter: IS_BUN_RUNTIME ? undefined : node(),
 	}).use(
 		cors({
-			origin: WEB_ORIGIN,
+			origin(request) {
+				const originHeader = request.headers.get("origin");
+				if (!originHeader) {
+					return !IS_PRODUCTION;
+				}
+				const normalized = normalizeOriginValue(originHeader);
+				if (normalized && ALLOWED_WEB_ORIGINS.has(normalized)) {
+					return true;
+				}
+				console.warn("[server] Blocked CORS request from origin", originHeader);
+				return false;
+			},
 			methods: ["GET", "POST", "OPTIONS"],
 			allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
 			credentials: true,
