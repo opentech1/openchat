@@ -1,7 +1,7 @@
 import type { createApp as CreateAppFactory } from "../src/app";
 
 type AppFactory = typeof CreateAppFactory;
-type AppInstance = ReturnType<AppFactory>;
+type AppInstance = Awaited<ReturnType<AppFactory>>;
 
 let appPromise: Promise<AppInstance> | null = null;
 
@@ -18,50 +18,26 @@ export const config = {
 
 export default {
 	async fetch(request: Request) {
-		let app: AppInstance;
-		try {
-			app = await getAppInstance();
-		} catch (error) {
-			console.error("[server] failed to load Elysia app", error);
-			return new Response("Internal Server Error", { status: 500 });
-		}
+		const app = await getAppInstance();
 
 		const originalUrl = new URL(request.url);
 		const targetPath = normalizeApiPath(originalUrl.pathname);
 		const targetUrl = new URL(targetPath + originalUrl.search, originalUrl.origin);
 
-		try {
-			const proxiedRequest = new Request(targetUrl.toString(), request);
-			return await app.fetch(proxiedRequest);
-		} catch (error) {
-			console.error("[server] request failed", {
-				url: request.url,
-				target: targetUrl.toString(),
-				error,
-			});
-			const message =
-				error instanceof Error
-					? error.stack || error.message
-					: typeof error === "string"
-					? error
-					: "Internal Server Error";
-			return new Response(message, { status: 500 });
-		}
+		const proxiedRequest = new Request(targetUrl.toString(), request);
+		return app.fetch(proxiedRequest);
 	},
 };
 
 function normalizeApiPath(pathname: string) {
-	const withLeadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
-	if (!withLeadingSlash.startsWith("/api")) {
-		return withLeadingSlash;
+	const leadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
+	if (!leadingSlash.startsWith("/api")) {
+		return leadingSlash;
 	}
-	const [, ...segments] = withLeadingSlash.split("/").filter(Boolean);
-	let firstNonApi = 0;
-	while (firstNonApi < segments.length && segments[firstNonApi] === "api") {
-		firstNonApi += 1;
-	}
-	const dedupedSegments = ["api", ...segments.slice(firstNonApi)];
-	return `/${dedupedSegments.join("/")}`;
+	const [, ...segments] = leadingSlash.split("/").filter(Boolean);
+	if (segments.length === 0) return "/api";
+	if (segments[0] !== "api") return leadingSlash;
+	return `/api/${segments.slice(1).join("/")}`;
 }
 
 async function loadFactory(): Promise<AppFactory> {
@@ -80,9 +56,7 @@ async function loadFactory(): Promise<AppFactory> {
 		}
 	}
 
-	if (!preferCompiledBundle) {
-		console.debug("[server] Using TypeScript source app module (development).");
-	}
+	console.debug("[server] Using TypeScript source app module (development).");
 	const module = await import("../src/app");
 	return module.createApp;
 }
