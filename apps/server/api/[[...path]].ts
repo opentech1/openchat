@@ -51,15 +51,17 @@ export default {
 };
 
 function normalizeApiPath(pathname: string) {
-	let normalized = pathname;
-	while (true) {
-		const next = normalized.replace(/^\/api(?:\/|$)/, "/");
-		if (next === normalized) break;
-		normalized = next;
+	const withLeadingSlash = pathname.startsWith("/") ? pathname : `/${pathname}`;
+	if (!withLeadingSlash.startsWith("/api")) {
+		return withLeadingSlash;
 	}
-	if (normalized === "") normalized = "/";
-	if (!normalized.startsWith("/")) normalized = `/${normalized}`;
-	return normalized;
+	const [, ...segments] = withLeadingSlash.split("/").filter(Boolean);
+	let firstNonApi = 0;
+	while (firstNonApi < segments.length && segments[firstNonApi] === "api") {
+		firstNonApi += 1;
+	}
+	const dedupedSegments = ["api", ...segments.slice(firstNonApi)];
+	return `/${dedupedSegments.join("/")}`;
 }
 
 async function loadFactory(): Promise<AppFactory> {
@@ -78,11 +80,7 @@ async function loadFactory(): Promise<AppFactory> {
 		}
 	}
 
-	if (preferCompiledBundle) {
-		console.warn(
-			"[server] Compiled bundle unavailable; falling back to TypeScript source app module."
-		);
-	} else {
+	if (!preferCompiledBundle) {
 		console.debug("[server] Using TypeScript source app module (development).");
 	}
 	const module = await import("../src/app");
