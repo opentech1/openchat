@@ -1,4 +1,4 @@
-import catchAll, { config } from "./[...path]";
+import catchAll, { config } from "./[...path].js";
 
 export { config };
 
