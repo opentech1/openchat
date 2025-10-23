@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useWorkspaceChats, type WorkspaceChatRow } from "@/lib/electric/workspace-db";
 import { client } from "@/utils/orpc";
-import { connect, subscribe, type Envelope } from "@/lib/sync";
 import { captureClientEvent, identifyClient, registerClientProperties } from "@/lib/posthog";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
@@ -248,49 +247,6 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 		},
 		[],
 	);
-
-	useEffect(() => {
-		if (!currentUserId) return undefined;
-		const topic = `chats:index:${currentUserId}`;
-		let active = true;
-		void connect();
-		const unsubscribe = subscribe(topic, (envelope: Envelope) => {
-			if (!active) return;
-			switch (envelope.type) {
-				case "chats.index.add": {
-					const payload = envelope.data as {
-						chatId: string;
-						title?: string | null;
-						updatedAt?: number | string | Date;
-						lastMessageAt?: number | string | Date | null;
-				};
-				const optimisticChat = normalizeChat({
-					id: payload.chatId,
-					title: payload.title ?? "New Chat",
-					updatedAt: payload.updatedAt ? new Date(payload.updatedAt) : new Date(),
-					lastMessageAt: payload.lastMessageAt ? new Date(payload.lastMessageAt) : null,
-				});
-				setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
-				setFallbackChats((prev) => upsertChat(prev, optimisticChat));
-				break;
-			}
-				case "chats.index.remove": {
-					const payload = envelope.data as { chatId: string };
-					setOptimisticChats((prev) => prev.filter((chat) => chat.id !== payload.chatId));
-					setFallbackChats((prev) => prev.filter((chat) => chat.id !== payload.chatId));
-					break;
-				}
-			}
-			});
-			return () => {
-				active = false;
-				try {
-					unsubscribe?.();
-				} catch (error) {
-					console.error("unsubscribe", error);
-				}
-			};
-		}, [currentUserId]);
 
 	const userInitials = useMemo(() => {
 		const label = session?.user?.name || session?.user?.email || "";

@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import { node } from "@elysiajs/node";
-import { cors } from "@elysiajs/cors";
 import { OpenAPIHandler } from "@orpc/openapi/fetch";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
@@ -9,7 +8,6 @@ import { onError } from "@orpc/server";
 import { auth } from "@openchat/auth";
 import { appRouter, inMemoryChatOwned } from "./routers";
 import { createContext } from "./lib/context";
-import { hub, makeEnvelope } from "./lib/sync-hub";
 import { db } from "./db";
 import { chat } from "./db/schema/chat";
 import { and, eq } from "drizzle-orm";
@@ -36,6 +34,7 @@ const ORIGIN_ENV_KEYS = [
 	"NEXT_PUBLIC_SERVER_URL",
 ];
 const DEFAULT_DEV_ORIGIN = "http://localhost:3001";
+const STATIC_ALLOWED_ORIGINS = ["https://osschat.dev", "https://www.osschat.dev"];
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 function normalizeOriginValue(value: string | null | undefined) {
@@ -60,6 +59,10 @@ function expandOrigins(value: string | string[] | null | undefined) {
 
 function resolveAllowedOrigins(extra?: string | string[]) {
 	const origins = new Set<string>();
+	for (const origin of STATIC_ALLOWED_ORIGINS) {
+		const normalized = normalizeOriginValue(origin);
+		if (normalized) origins.add(normalized);
+	}
 	for (const envKey of ORIGIN_ENV_KEYS) {
 		const envValue = process.env[envKey];
 		for (const origin of expandOrigins(envValue)) {
@@ -86,8 +89,62 @@ const ALLOWED_WEB_ORIGINS = (() => {
 	}
 	return origins;
 })();
-const ALLOW_REFLECTIVE_ORIGIN = ALLOWED_WEB_ORIGINS.size === 0;
-let reflectiveOriginWarningLogged = false;
+
+const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+const DEFAULT_ALLOWED_HEADERS = ["Content-Type", "Authorization", "X-Requested-With", "X-User-Id"];
+
+function appendVary(headers: Headers, value: string) {
+	const existing = headers.get("Vary");
+	if (!existing) {
+		headers.set("Vary", value);
+		return;
+	}
+	const parts = existing.split(",").map((part) => part.trim().toLowerCase());
+	if (!parts.includes(value.toLowerCase())) {
+		headers.set("Vary", `${existing}, ${value}`);
+	}
+}
+
+function resolveRequestOrigin(request: Request) {
+	const origin = request.headers.get("origin");
+	if (!origin) return null;
+	const normalized = normalizeOriginValue(origin);
+	if (!normalized) return null;
+	if (ALLOWED_WEB_ORIGINS.has(normalized)) return normalized;
+	return null;
+}
+
+function buildAllowedHeaders(request: Request) {
+	const requested = request.headers.get("access-control-request-headers");
+	if (!requested) return DEFAULT_ALLOWED_HEADERS.join(", ");
+	const headers = new Set(DEFAULT_ALLOWED_HEADERS);
+	for (const part of requested.split(",")) {
+		const trimmed = part.trim();
+		if (trimmed) headers.add(trimmed);
+	}
+	return Array.from(headers).join(", ");
+}
+
+function applyCorsHeaders(headers: Headers, request: Request, origin: string) {
+	headers.set("Access-Control-Allow-Origin", origin);
+	headers.set("Access-Control-Allow-Credentials", "true");
+	headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
+	headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
+	headers.set("Access-Control-Max-Age", "86400");
+	appendVary(headers, "Origin");
+}
+
+function handleCorsPreflight(request: Request) {
+	const origin = resolveRequestOrigin(request);
+	if (!origin) {
+		const headers = new Headers();
+		appendVary(headers, "Origin");
+		return withSecurityHeaders(new Response(null, { status: 403, headers }), request);
+	}
+	const headers = new Headers();
+	applyCorsHeaders(headers, request, origin);
+	return withSecurityHeaders(new Response(null, { status: 204, headers }), request);
+}
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
 const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
@@ -114,13 +171,6 @@ const apiHandler = new OpenAPIHandler(appRouter, {
 
 const IS_BUN_RUNTIME = typeof (globalThis as any).Bun !== "undefined" && (globalThis as any).Bun !== null;
 
-const ENABLE_WEBSOCKETS = (() => {
-	const explicit = process.env.SERVER_ENABLE_WEBSOCKETS?.trim().toLowerCase();
-	if (explicit === "1" || explicit === "true" || explicit === "yes" || explicit === "on") return true;
-	if (explicit === "0" || explicit === "false" || explicit === "no" || explicit === "off") return false;
-	return IS_BUN_RUNTIME;
-})();
-let websocketWarningLogged = false;
 let anonymousRateBucketWarningLogged = false;
 
 // Basic in-memory rate limiter (per-IP, 60 req/min)
@@ -188,7 +238,15 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 	headers.set("X-Content-Type-Options", "nosniff");
 	headers.set("X-Frame-Options", "SAMEORIGIN");
 	headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-	headers.append("Vary", "Accept-Encoding");
+	appendVary(headers, "Accept-Encoding");
+	if (request) {
+		const origin = resolveRequestOrigin(request);
+		if (origin) {
+			applyCorsHeaders(headers, request, origin);
+		} else if (request.headers.has("origin")) {
+			appendVary(headers, "Origin");
+		}
+	}
 	// Opportunistic gzip without external deps; preserves streaming
 	try {
 		const accept = request?.headers.get("accept-encoding") || "";
@@ -209,47 +267,195 @@ function withSecurityHeaders(resp: Response, request?: Request) {
 	return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
 }
 
+type ElectricShapeScope = "chats" | "messages";
+
+function deriveScopeFromQuery(url: URL): ElectricShapeScope | null {
+	const scopeParam = url.searchParams.get("scope");
+	if (scopeParam === "chats" || scopeParam === "messages") {
+		return scopeParam;
+	}
+	const table = url.searchParams.get("table");
+	if (table === "chat") return "chats";
+	if (table === "message") return "messages";
+	return null;
+}
+
+async function proxyElectricShape({
+	scope,
+	request,
+	userId,
+	url,
+}: {
+	scope: ElectricShapeScope;
+	request: Request;
+	userId: string;
+	url: URL;
+}) {
+	const passthroughParams = new URLSearchParams();
+	url.searchParams.forEach((value, key) => {
+		const lower = key.toLowerCase();
+		if (lower === "scope" || lower === "chatid" || lower === "where" || lower === "table") return;
+		if (lower.startsWith("params[")) return;
+		passthroughParams.append(key, value);
+	});
+
+	let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
+	let chatIdParam: string | null = null;
+	switch (scope) {
+		case "chats": {
+			allowTables = ["chat"];
+			break;
+		}
+		case "messages": {
+			chatIdParam = url.searchParams.get("chatId");
+			if (!chatIdParam) {
+				return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), request);
+			}
+			try {
+				const owned = await db
+					.select({ id: chat.id })
+					.from(chat)
+					.where(and(eq(chat.id, chatIdParam), eq(chat.userId, userId)));
+				if (owned.length === 0 && !inMemoryChatOwned(userId, chatIdParam)) {
+					return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
+				}
+			} catch (error) {
+				if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
+				if (!inMemoryChatOwned(userId, chatIdParam)) {
+					return withSecurityHeaders(new Response("Not Found", { status: 404 }), request);
+				}
+			}
+			allowTables = ["message"];
+			break;
+		}
+	}
+
+	const tokenInfo = makeGatekeeperToken({
+		userId,
+		workspaceId: userId,
+		tables: allowTables,
+	});
+
+	const upstreamHeaders = new Headers();
+	if (tokenInfo) {
+		upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
+	}
+	const ifNoneMatch = request.headers.get("if-none-match");
+	if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
+
+	let parsedBase: URL;
+	try {
+		parsedBase = new URL(ELECTRIC_BASE_URL);
+	} catch (error) {
+		console.error("electric.fetch invalid ELECTRIC_SERVICE_URL", ELECTRIC_BASE_URL, error);
+		return withSecurityHeaders(new Response("Electric service misconfigured", { status: 500 }), request);
+	}
+
+	const baseCandidates: string[] = [parsedBase.origin];
+	const fallbackPorts: string[] = [];
+	const fallbackPortEnv = process.env.ELECTRIC_FALLBACK_PORT?.trim();
+	if (fallbackPortEnv) {
+		fallbackPorts.push(fallbackPortEnv);
+	} else if (parsedBase.port === "3010") {
+		fallbackPorts.push("3000");
+	}
+
+	for (const port of fallbackPorts) {
+		try {
+			const candidate = new URL(parsedBase.toString());
+			candidate.port = port;
+			const origin = candidate.origin;
+			if (!baseCandidates.includes(origin)) {
+				baseCandidates.push(origin);
+			}
+		} catch (error) {
+			if (process.env.NODE_ENV !== "test") {
+				console.warn("electric.fetch fallback skipped", { port, error });
+			}
+		}
+	}
+
+	const fallbackDelayRaw = process.env.ELECTRIC_FALLBACK_DELAY_MS;
+	const fallbackDelayMs =
+		typeof fallbackDelayRaw === "string" && fallbackDelayRaw.trim().length > 0 ? Math.max(0, Number(fallbackDelayRaw)) : 150;
+
+	const buildTarget = (base: string) => {
+		const target = new URL(`${base}/v1/shape`);
+		passthroughParams.forEach((value, key) => {
+			target.searchParams.set(key, value);
+		});
+		switch (scope) {
+			case "chats":
+				target.searchParams.set("table", "chat");
+				target.searchParams.set("where", `"user_id" = $1`);
+				target.searchParams.set("params[1]", userId);
+				target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
+				break;
+			case "messages": {
+				target.searchParams.set("table", "message");
+				target.searchParams.set("where", `"chat_id" = $1`);
+				target.searchParams.set("params[1]", chatIdParam ?? "");
+				target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
+				break;
+			}
+		}
+		return target;
+	};
+
+	let upstreamResponse: Response | null = null;
+	let lastError: unknown = null;
+	for (const [candidateIndex, base] of baseCandidates.entries()) {
+		const target = buildTarget(base);
+		try {
+			const response = await fetch(target, {
+				method: "GET",
+				headers: upstreamHeaders,
+			});
+			if (response.status >= 400) {
+				lastError = new Error(`electric responded ${response.status} for ${base}`);
+				if (response.body) {
+					try {
+						await response.body.cancel();
+					} catch {}
+				}
+				if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
+					await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
+				}
+				continue;
+			}
+			upstreamResponse = response;
+			break;
+		} catch (error) {
+			lastError = error;
+			if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
+				await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
+			}
+		}
+	}
+
+	if (!upstreamResponse) {
+		console.error("electric.fetch", lastError);
+		return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), request);
+	}
+
+	const headers = new Headers(upstreamResponse.headers);
+	headers.delete("content-encoding");
+	headers.delete("content-length");
+
+	const proxied = new Response(upstreamResponse.body, {
+		status: upstreamResponse.status,
+		statusText: upstreamResponse.statusText,
+		headers,
+	});
+	return withSecurityHeaders(proxied, request);
+}
+
 export function createApp() {
 	const app = new Elysia({
 		adapter: IS_BUN_RUNTIME ? undefined : node(),
-		}).use(
-			cors({
-				origin(request) {
-					const originHeader = request.headers.get("origin");
-					if (!originHeader) {
-						return !IS_PRODUCTION || ALLOW_REFLECTIVE_ORIGIN;
-					}
-					const normalized = normalizeOriginValue(originHeader);
-					const requestOrigin = (() => {
-						try {
-							return new URL(request.url).origin;
-						} catch {
-							return null;
-						}
-					})();
-					if (normalized) {
-						if (ALLOWED_WEB_ORIGINS.has(normalized)) {
-							return true;
-						}
-						if (ALLOW_REFLECTIVE_ORIGIN) {
-							if (!reflectiveOriginWarningLogged && IS_PRODUCTION) {
-								console.warn("[server] No explicit CORS origins configured; reflecting request origins in production.");
-								reflectiveOriginWarningLogged = true;
-							}
-							return true;
-						}
-						if (requestOrigin && normalized === requestOrigin) {
-							return true;
-						}
-					}
-					console.warn("[server] Blocked CORS request from origin", originHeader);
-					return false;
-				},
-			methods: ["GET", "POST", "OPTIONS"],
-			allowedHeaders: ["Content-Type", "Authorization", "x-user-id"],
-			credentials: true,
-		}),
-	);
+	});
+
+	app.options("/*", ({ request }) => handleCorsPreflight(request));
 
 	app.all("/api/auth/*", async (context) => {
 		if (isRateLimited(context.request, context.server)) {
@@ -263,76 +469,6 @@ export function createApp() {
 			return withSecurityHeaders(new Response("Internal Server Error", { status: 500 }), context.request);
 		}
 	});
-
-	if (ENABLE_WEBSOCKETS) {
-		app.ws("/sync", {
-			// Authenticate and greet
-			open: async (ws) => {
-				const ctx = await createContext({ context: ws.data as any });
-				const userId = ctx.session?.user?.id;
-				if (!userId) {
-					try {
-						ws.send("unauthorized");
-					} catch {}
-					return ws.close(1008, "unauthorized");
-				}
-				// attach user & tab info
-				(ws as any).data.userId = userId;
-				try {
-					const url = new URL((ws as any).data.request.url);
-					const tabId = url.searchParams.get("tabId") || crypto.randomUUID?.() || String(Date.now());
-					(ws as any).data.tabId = tabId;
-				} catch {
-					(ws as any).data.tabId = crypto.randomUUID?.() || String(Date.now());
-				}
-				// hello event with envelope shape; use user's index topic for topic field
-				try {
-					const topic = `chats:index:${userId}`;
-					const hello = makeEnvelope(topic, "system.hello", { serverTime: Date.now() });
-					ws.send(JSON.stringify(hello));
-				} catch {}
-			},
-			// Handle client commands
-			message: async (ws, msg) => {
-				const userId: string | undefined = (ws as any).data?.userId;
-				if (!userId) return ws.close(1008, "unauthorized");
-
-				// message framing: accept string ops or JSON
-				try {
-					if (typeof msg === "string") {
-						if (msg === "ping") return void ws.send("pong");
-						// try parse json string
-						try {
-							msg = JSON.parse(msg);
-						} catch {
-							/* ignore */
-						}
-					}
-					// array form: [op, payload]
-					if (Array.isArray(msg) && msg.length > 0) {
-						const [op, payload] = msg as any[];
-						return handleOp(ws, userId, op, payload);
-					}
-					// object form: { op, topic }
-					if (msg && typeof msg === "object" && "op" in (msg as any)) {
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						const { op, ...rest } = msg as any;
-						return handleOp(ws, userId, op, rest);
-					}
-				} catch {
-					// ignore malformed messages
-				}
-			},
-			close: (ws) => {
-				try {
-					hub.unsubscribeAll(ws as any);
-				} catch {}
-			},
-		});
-	} else if (!websocketWarningLogged && process.env.VERCEL) {
-		console.warn("[server] WebSocket routes disabled on this runtime; set SERVER_ENABLE_WEBSOCKETS=1 to override.");
-		websocketWarningLogged = true;
-	}
 
 	app.post("/api/electric/gatekeeper", async (context) => {
 		if (isRateLimited(context.request, context.server)) {
@@ -394,10 +530,10 @@ export function createApp() {
 	});
 
 	app.all("/rpc*", async (context) => {
-		const method = context.request.method.toUpperCase();
-		if (method === "OPTIONS") {
-			return withSecurityHeaders(new Response(null, { status: 204 }), context.request);
+		if (context.request.method === "OPTIONS") {
+			return handleCorsPreflight(context.request);
 		}
+		const method = context.request.method.toUpperCase();
 		if (method !== "POST") {
 			return withSecurityHeaders(new Response("Method Not Allowed", { status: 405 }), context.request);
 		}
@@ -412,6 +548,57 @@ export function createApp() {
 		return withSecurityHeaders(res, context.request);
 	});
 
+	app.all("/api/electric/v1/shape", async (context) => {
+		if (!HAS_ELECTRIC) {
+			return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
+		}
+		if (context.request.method === "OPTIONS") {
+			return handleCorsPreflight(context.request);
+		}
+		if (context.request.method !== "GET") {
+			return withSecurityHeaders(new Response("Method Not Allowed", { status: 405 }), context.request);
+		}
+		const requestUrl = new URL(context.request.url);
+		const scope = deriveScopeFromQuery(requestUrl);
+		if (!scope) {
+			return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
+		}
+		const ctx = await createContext({ context });
+		const userId = ctx.session?.user?.id;
+		if (!userId) {
+			return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+		}
+		return proxyElectricShape({
+			scope,
+			request: context.request,
+			userId,
+			url: requestUrl,
+		});
+	});
+
+	app.get("/api/electric/shapes/:scope", async (context) => {
+		if (!HAS_ELECTRIC) {
+			return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
+		}
+		const params = context.params as { scope?: string };
+		const scopeParam = params.scope;
+		if (scopeParam !== "chats" && scopeParam !== "messages") {
+			return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
+		}
+		const requestUrl = new URL(context.request.url);
+		const ctx = await createContext({ context });
+		const userId = ctx.session?.user?.id;
+		if (!userId) {
+			return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
+		}
+		return proxyElectricShape({
+			scope: scopeParam,
+			request: context.request,
+			userId,
+			url: requestUrl,
+		});
+	});
+
 	app.all("/api*", async (context) => {
 		console.log(
 			JSON.stringify({
@@ -422,6 +609,9 @@ export function createApp() {
 				u: new URL(context.request.url).pathname,
 			}),
 		);
+		if (context.request.method === "OPTIONS") {
+			return handleCorsPreflight(context.request);
+		}
 		if (isRateLimited(context.request, context.server)) {
 			return withSecurityHeaders(new Response("Too Many Requests", { status: 429 }), context.request);
 		}
@@ -433,227 +623,8 @@ export function createApp() {
 		return withSecurityHeaders(res, context.request);
 	});
 
-	app.get("/api/electric/shapes/:scope", async (context) => {
-		if (!HAS_ELECTRIC) {
-			return withSecurityHeaders(new Response("Electric service not configured", { status: 501 }), context.request);
-		}
-		const { scope } = context.params as { scope?: string };
-		if (!scope) {
-			return withSecurityHeaders(new Response("Missing shape scope", { status: 400 }), context.request);
-		}
-		const ctx = await createContext({ context });
-		const userId = ctx.session?.user?.id;
-		if (!userId) {
-			return withSecurityHeaders(new Response("Unauthorized", { status: 401 }), context.request);
-		}
-
-		const url = new URL(context.request.url);
-		const passthroughParams = new URLSearchParams();
-		const allowed = ["offset", "handle", "cursor", "live", "replica", "columns"];
-		for (const key of allowed) {
-			const value = url.searchParams.get(key);
-			if (value !== null) passthroughParams.set(key, value);
-		}
-
-		let allowTables = DEFAULT_GATEKEEPER_TABLES.slice();
-		let chatIdParam: string | null = null;
-		switch (scope) {
-			case "chats": {
-				allowTables = ["chat"];
-				break;
-			}
-			case "messages": {
-				chatIdParam = url.searchParams.get("chatId");
-				if (!chatIdParam) {
-					return withSecurityHeaders(new Response("Missing chatId", { status: 400 }), context.request);
-				}
-				try {
-					const owned = await db
-						.select({ id: chat.id })
-						.from(chat)
-						.where(and(eq(chat.id, chatIdParam), eq(chat.userId, userId)));
-					if (owned.length === 0) {
-						if (!inMemoryChatOwned(userId, chatIdParam)) {
-							return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
-						}
-					}
-				} catch (error) {
-					if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
-					if (!inMemoryChatOwned(userId, chatIdParam)) {
-						return withSecurityHeaders(new Response("Not Found", { status: 404 }), context.request);
-					}
-				}
-				allowTables = ["message"];
-				break;
-			}
-			default:
-				return withSecurityHeaders(new Response("Unknown shape scope", { status: 404 }), context.request);
-		}
-
-		const tokenInfo = makeGatekeeperToken({
-			userId,
-			workspaceId: userId,
-			tables: allowTables,
-		});
-
-		const upstreamHeaders = new Headers();
-		if (tokenInfo) {
-			upstreamHeaders.set("authorization", `Bearer ${tokenInfo.token}`);
-		}
-		const ifNoneMatch = context.request.headers.get("if-none-match");
-		if (ifNoneMatch) upstreamHeaders.set("if-none-match", ifNoneMatch);
-
-		let parsedBase: URL;
-		try {
-			parsedBase = new URL(ELECTRIC_BASE_URL);
-		} catch (error) {
-			console.error("electric.fetch invalid ELECTRIC_SERVICE_URL", ELECTRIC_BASE_URL, error);
-			return withSecurityHeaders(new Response("Electric service misconfigured", { status: 500 }), context.request);
-		}
-
-		const baseCandidates: string[] = [parsedBase.origin];
-		const fallbackPorts: string[] = [];
-		const fallbackPortEnv = process.env.ELECTRIC_FALLBACK_PORT?.trim();
-		if (fallbackPortEnv) {
-			fallbackPorts.push(fallbackPortEnv);
-		} else if (parsedBase.port === "3010") {
-			fallbackPorts.push("3000");
-		}
-
-		for (const port of fallbackPorts) {
-			try {
-				const candidate = new URL(parsedBase.toString());
-				candidate.port = port;
-				const origin = candidate.origin;
-				if (!baseCandidates.includes(origin)) {
-					baseCandidates.push(origin);
-				}
-			} catch (error) {
-				if (process.env.NODE_ENV !== "test") {
-					console.warn("electric.fetch fallback skipped", { port, error });
-				}
-			}
-		}
-
-		const fallbackDelayRaw = process.env.ELECTRIC_FALLBACK_DELAY_MS;
-		const fallbackDelayMs =
-			typeof fallbackDelayRaw === "string" && fallbackDelayRaw.trim().length > 0 ? Math.max(0, Number(fallbackDelayRaw)) : 150;
-
-		const buildTarget = (base: string) => {
-			const target = new URL(`${base}/v1/shape`);
-			passthroughParams.forEach((value, key) => {
-				target.searchParams.set(key, value);
-			});
-			switch (scope) {
-				case "chats":
-					target.searchParams.set("table", "chat");
-					target.searchParams.set("where", `"user_id" = $1`);
-					target.searchParams.set("params[1]", userId);
-					target.searchParams.set("columns", "id,title,updated_at,last_message_at,user_id");
-					break;
-				case "messages": {
-					target.searchParams.set("table", "message");
-					target.searchParams.set("where", `"chat_id" = $1`);
-					target.searchParams.set("params[1]", chatIdParam ?? "");
-					target.searchParams.set("columns", "id,chat_id,role,content,created_at,updated_at");
-					break;
-				}
-			}
-			return target;
-		};
-
-		let upstreamResponse: Response | null = null;
-		let lastError: unknown = null;
-		for (const [candidateIndex, base] of baseCandidates.entries()) {
-			const target = buildTarget(base);
-			try {
-				const response = await fetch(target, {
-					method: "GET",
-					headers: upstreamHeaders,
-				});
-				if (response.status >= 400) {
-					lastError = new Error(`electric responded ${response.status} for ${base}`);
-					if (response.body) {
-						try {
-							await response.body.cancel();
-						} catch {}
-					}
-					if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
-						await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
-					}
-					continue;
-				}
-				upstreamResponse = response;
-				break;
-			} catch (error) {
-				lastError = error;
-				if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
-					await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
-				}
-			}
-		}
-
-		if (!upstreamResponse) {
-			console.error("electric.fetch", lastError);
-			return withSecurityHeaders(new Response("Electric service unreachable", { status: 504 }), context.request);
-		}
-
-		const headers = new Headers(upstreamResponse.headers);
-		headers.delete("content-encoding");
-		headers.delete("content-length");
-
-		const proxied = new Response(upstreamResponse.body, {
-			status: upstreamResponse.status,
-			statusText: upstreamResponse.statusText,
-			headers,
-		});
-		return withSecurityHeaders(proxied, context.request);
-	});
-
 	app.get("/", () => "OK");
 	app.get("/health", () => ({ ok: true }));
 
 	return app;
-}
-
-async function handleOp(ws: any, userId: string, op: string, payload?: any) {
-	if (op === "ping") return void ws.send("pong");
-	if (op === "sub") {
-		const topic: string | undefined = payload?.topic;
-		if (!topic) return;
-		// authorize topic
-		if (topic === `chats:index:${userId}`) {
-			const res = hub.subscribe(ws, topic);
-			if (!res.ok) ws.send(JSON.stringify({ op: "error", error: res.reason || "subscribe_failed" }));
-			return;
-		}
-		if (topic.startsWith("chat:")) {
-			const chatId = topic.slice("chat:".length);
-			if (!chatId) return;
-			try {
-				const rows = await db
-					.select({ id: chat.id })
-					.from(chat)
-					.where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
-				if (rows.length === 0 && !inMemoryChatOwned(userId, chatId)) return; // unauthorized
-			} catch (error) {
-				if (process.env.NODE_ENV !== "test") console.error("chat.verify", error);
-				// On db error, deny to be safe unless memory cache knows the chat
-				if (!inMemoryChatOwned(userId, chatId)) return;
-			}
-			const res = hub.subscribe(ws, topic);
-			if (!res.ok) ws.send(JSON.stringify({ op: "error", error: res.reason || "subscribe_failed" }));
-			return;
-		}
-		// Unknown topic family -> ignore
-		return;
-	}
-	if (op === "unsub") {
-		const topic: string | undefined = payload?.topic;
-		if (!topic) return;
-		try {
-			hub.unsubscribe(ws, topic);
-		} catch {}
-		return;
-	}
 }
