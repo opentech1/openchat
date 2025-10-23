@@ -147,8 +147,10 @@ function buildPreflightHeaders(origin: string | null, request: Request) {
 	headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
 	headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
 	headers.set("Access-Control-Max-Age", "86400");
-	if (origin) {
-		headers.set("Access-Control-Allow-Origin", origin);
+	const requestedOrigin = request.headers.get("origin");
+	const allowOrigin = origin ?? normalizeOriginValue(requestedOrigin) ?? requestedOrigin;
+	if (allowOrigin) {
+		headers.set("Access-Control-Allow-Origin", allowOrigin);
 		headers.set("Access-Control-Allow-Credentials", "true");
 	}
 	return headers;
@@ -166,8 +168,10 @@ function buildAllowedHeaders(request: Request) {
 }
 
 function applyCorsHeaders(headers: Headers, origin: string | null, request: Request) {
-	if (origin) {
-		headers.set("Access-Control-Allow-Origin", origin);
+	const requestedOrigin = request.headers.get("origin");
+	const allowOrigin = origin ?? normalizeOriginValue(requestedOrigin) ?? requestedOrigin;
+	if (allowOrigin) {
+		headers.set("Access-Control-Allow-Origin", allowOrigin);
 		headers.set("Access-Control-Allow-Credentials", "true");
 		headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
 		headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
