@@ -34,7 +34,11 @@ const ORIGIN_ENV_KEYS = [
 	"NEXT_PUBLIC_SERVER_URL",
 ];
 const DEFAULT_DEV_ORIGIN = "http://localhost:3001";
-const STATIC_ALLOWED_ORIGINS = ["https://osschat.dev", "https://www.osschat.dev"];
+const STATIC_ALLOWED_ORIGINS = [
+	"https://osschat.dev",
+	"https://www.osschat.dev",
+	"https://api.osschat.dev",
+];
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 function normalizeOriginValue(value: string | null | undefined) {
