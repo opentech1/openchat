@@ -5,7 +5,6 @@ import { db } from "../db";
 import { chat, message } from "../db/schema/chat";
 import { capturePosthogEvent } from "../lib/posthog";
 import { and, desc, eq, asc } from "drizzle-orm";
-import { publish } from "../lib/sync-hub";
 
 function cuid() {
   try {
@@ -605,3 +604,5 @@ export const appRouter = {
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
+// WebSocket broadcast removed; Electric HTTP shapes handle live updates.
+const publish = (..._args: unknown[]) => {};
