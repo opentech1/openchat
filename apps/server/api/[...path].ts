@@ -75,14 +75,6 @@ export default {
 
 		const normalizedRequest = new Request(targetUrl.toString(), request);
 		const origin = resolveRequestOrigin(request);
-		if (process.env.NODE_ENV !== "test") {
-			console.log("[server] CORS entry", {
-				method: normalizedRequest.method,
-				url: targetUrl.pathname,
-				originHeader: request.headers.get("origin"),
-				resolvedOrigin: origin,
-			});
-		}
 		if (normalizedRequest.method.toUpperCase() === "OPTIONS") {
 			return new Response(null, { status: 204, headers: buildPreflightHeaders(origin, request) });
 		}
@@ -138,9 +130,6 @@ function resolveRequestOrigin(request: Request) {
 	try {
 		const selfOrigin = new URL(request.url).origin;
 		if (normalized === selfOrigin) {
-			if (process.env.NODE_ENV !== "test") {
-				console.log("[server] CORS self-origin", normalized);
-			}
 			return normalized;
 		}
 	} catch {}
