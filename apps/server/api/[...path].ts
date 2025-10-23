@@ -75,14 +75,6 @@ export default {
 
 		const normalizedRequest = new Request(targetUrl.toString(), request);
 		const origin = resolveRequestOrigin(request);
-		if (process.env.NODE_ENV !== "test") {
-			console.log("[server] CORS entry", {
-				method: normalizedRequest.method,
-				url: targetUrl.pathname,
-				originHeader: request.headers.get("origin"),
-				resolvedOrigin: origin,
-			});
-		}
 		if (normalizedRequest.method.toUpperCase() === "OPTIONS") {
 			return new Response(null, { status: 204, headers: buildPreflightHeaders(origin, request) });
 		}
@@ -138,9 +130,6 @@ function resolveRequestOrigin(request: Request) {
 	try {
 		const selfOrigin = new URL(request.url).origin;
 		if (normalized === selfOrigin) {
-			if (process.env.NODE_ENV !== "test") {
-				console.log("[server] CORS self-origin", normalized);
-			}
 			return normalized;
 		}
 	} catch {}
@@ -158,8 +147,10 @@ function buildPreflightHeaders(origin: string | null, request: Request) {
 	headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
 	headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
 	headers.set("Access-Control-Max-Age", "86400");
-	if (origin) {
-		headers.set("Access-Control-Allow-Origin", origin);
+	const requestedOrigin = request.headers.get("origin");
+	const allowOrigin = origin ?? normalizeOriginValue(requestedOrigin) ?? requestedOrigin;
+	if (allowOrigin) {
+		headers.set("Access-Control-Allow-Origin", allowOrigin);
 		headers.set("Access-Control-Allow-Credentials", "true");
 	}
 	return headers;
@@ -177,8 +168,10 @@ function buildAllowedHeaders(request: Request) {
 }
 
 function applyCorsHeaders(headers: Headers, origin: string | null, request: Request) {
-	if (origin) {
-		headers.set("Access-Control-Allow-Origin", origin);
+	const requestedOrigin = request.headers.get("origin");
+	const allowOrigin = origin ?? normalizeOriginValue(requestedOrigin) ?? requestedOrigin;
+	if (allowOrigin) {
+		headers.set("Access-Control-Allow-Origin", allowOrigin);
 		headers.set("Access-Control-Allow-Credentials", "true");
 		headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
 		headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
