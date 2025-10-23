@@ -111,6 +111,13 @@ function resolveRequestOrigin(request: Request) {
 	const normalized = normalizeOriginValue(origin);
 	if (!normalized) return null;
 	if (ALLOWED_WEB_ORIGINS.has(normalized)) return normalized;
+	try {
+		const requestOrigin = new URL(request.url).origin;
+		if (normalized === requestOrigin) {
+			return normalized;
+		}
+	} catch {}
+	console.warn("[server] Blocked CORS origin", { origin: normalized });
 	return null;
 }
 
