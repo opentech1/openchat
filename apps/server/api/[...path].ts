@@ -12,6 +12,56 @@ const bundleMissingExportMessage =
 const bundleLoadFailureMessage =
 	"[server] Unable to load compiled app bundle from dist/index.js; rebuild the server package";
 
+const ORIGIN_ENV_KEYS = [
+	"CORS_ORIGIN",
+	"CORS_ORIGINS",
+	"ALLOWED_WEB_ORIGINS",
+	"SERVER_ALLOWED_ORIGINS",
+	"NEXT_PUBLIC_APP_URL",
+	"NEXT_PUBLIC_SITE_URL",
+	"NEXT_PUBLIC_WEB_URL",
+	"NEXT_PUBLIC_BASE_URL",
+	"NEXT_PUBLIC_ORIGIN",
+	"NEXT_PUBLIC_SERVER_URL",
+];
+const STATIC_ALLOWED_ORIGINS = [
+	"https://osschat.dev",
+	"https://www.osschat.dev",
+	"https://api.osschat.dev",
+];
+const DEFAULT_DEV_ORIGIN = "http://localhost:3001";
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+const DEFAULT_ALLOWED_HEADERS = ["Content-Type", "Authorization", "X-Requested-With", "X-User-Id"];
+
+const ALLOWED_WEB_ORIGINS = (() => {
+	const origins = new Set<string>();
+	for (const origin of STATIC_ALLOWED_ORIGINS) {
+		const normalized = normalizeOriginValue(origin);
+		if (normalized) origins.add(normalized);
+	}
+	for (const envKey of ORIGIN_ENV_KEYS) {
+		const value = process.env[envKey];
+		for (const expanded of expandOrigins(value)) {
+			origins.add(expanded);
+		}
+	}
+	for (const key of ["VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]) {
+		const value = process.env[key];
+		if (!value) continue;
+		const withProtocol = value.startsWith("http://") || value.startsWith("https://") ? value : `https://${value}`;
+		const normalized = normalizeOriginValue(withProtocol);
+		if (normalized) origins.add(normalized);
+	}
+	if (origins.size === 0 && !IS_PRODUCTION) {
+		origins.add(DEFAULT_DEV_ORIGIN);
+	}
+	if (process.env.NODE_ENV !== "test") {
+		console.log("[server] Allowed CORS origins (entry)", Array.from(origins));
+	}
+	return origins;
+})();
+
 export const config = {
 	runtime: "nodejs",
 };
@@ -19,13 +69,24 @@ export const config = {
 export default {
 	async fetch(request: Request) {
 		const app = await getAppInstance();
-
 		const originalUrl = new URL(request.url);
 		const targetPath = normalizeApiPath(originalUrl.pathname);
 		const targetUrl = new URL(targetPath + originalUrl.search, originalUrl.origin);
 
-		const proxiedRequest = new Request(targetUrl.toString(), request);
-		return app.fetch(proxiedRequest);
+		const normalizedRequest = new Request(targetUrl.toString(), request);
+		const origin = resolveRequestOrigin(request);
+		if (normalizedRequest.method.toUpperCase() === "OPTIONS") {
+			return new Response(null, { status: 204, headers: buildPreflightHeaders(origin, request) });
+		}
+
+		const upstreamResponse = await app.fetch(normalizedRequest);
+		const headers = new Headers(upstreamResponse.headers);
+		applyCorsHeaders(headers, origin, request);
+		return new Response(upstreamResponse.body, {
+			status: upstreamResponse.status,
+			statusText: upstreamResponse.statusText,
+			headers,
+		});
 	},
 };
 
@@ -38,6 +99,83 @@ function normalizeApiPath(pathname: string) {
 	if (segments.length === 0) return "/api";
 	if (segments[0] !== "api") return leadingSlash;
 	return `/api/${segments.slice(1).join("/")}`;
+}
+
+function normalizeOriginValue(value: string | null | undefined) {
+	if (!value) return null;
+	const trimmed = value.trim();
+	if (!trimmed || trimmed === "*") return null;
+	const maybeWithScheme = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+	try {
+		return new URL(maybeWithScheme).origin;
+	} catch {
+		return null;
+	}
+}
+
+function expandOrigins(value: string | string[] | null | undefined) {
+	if (!value) return [] as string[];
+	const parts = Array.isArray(value) ? value : value.split(",");
+	return parts
+		.map((part) => normalizeOriginValue(part))
+		.filter((origin): origin is string => Boolean(origin));
+}
+
+function resolveRequestOrigin(request: Request) {
+	const originHeader = request.headers.get("origin");
+	if (!originHeader) return null;
+	const normalized = normalizeOriginValue(originHeader);
+	if (!normalized) return null;
+	if (ALLOWED_WEB_ORIGINS.has(normalized)) return normalized;
+	try {
+		const selfOrigin = new URL(request.url).origin;
+		if (normalized === selfOrigin) {
+			return normalized;
+		}
+	} catch {}
+	if (process.env.NODE_ENV !== "test") {
+		console.warn("[server] Blocked CORS origin", { origin: normalized });
+	}
+	return null;
+}
+
+function buildPreflightHeaders(origin: string | null, request: Request) {
+	const headers = new Headers();
+	if (request.headers.has("origin")) {
+		headers.append("Vary", "Origin");
+	}
+	headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
+	headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
+	headers.set("Access-Control-Max-Age", "86400");
+	if (origin) {
+		headers.set("Access-Control-Allow-Origin", origin);
+		headers.set("Access-Control-Allow-Credentials", "true");
+	}
+	return headers;
+}
+
+function buildAllowedHeaders(request: Request) {
+	const requested = request.headers.get("access-control-request-headers");
+	if (!requested) return DEFAULT_ALLOWED_HEADERS.join(", ");
+	const headers = new Set(DEFAULT_ALLOWED_HEADERS);
+	for (const part of requested.split(",")) {
+		const trimmed = part.trim();
+		if (trimmed) headers.add(trimmed);
+	}
+	return Array.from(headers).join(", ");
+}
+
+function applyCorsHeaders(headers: Headers, origin: string | null, request: Request) {
+	if (origin) {
+		headers.set("Access-Control-Allow-Origin", origin);
+		headers.set("Access-Control-Allow-Credentials", "true");
+		headers.set("Access-Control-Allow-Methods", ALLOWED_METHODS);
+		headers.set("Access-Control-Allow-Headers", buildAllowedHeaders(request));
+		headers.set("Access-Control-Max-Age", "86400");
+	}
+	if (request.headers.has("origin")) {
+		headers.append("Vary", "Origin");
+	}
 }
 
 async function loadFactory(): Promise<AppFactory> {
