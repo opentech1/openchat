@@ -87,6 +87,9 @@ const ALLOWED_WEB_ORIGINS = (() => {
 	if (origins.size === 0 && !IS_PRODUCTION) {
 		origins.add(DEFAULT_DEV_ORIGIN);
 	}
+	if (process.env.NODE_ENV !== "test") {
+		console.log("[server] Allowed CORS origins", Array.from(origins));
+	}
 	return origins;
 })();
 
