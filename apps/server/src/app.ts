@@ -153,7 +153,7 @@ function handleCorsPreflight(request: Request) {
 	if (!origin) {
 		const headers = new Headers();
 		appendVary(headers, "Origin");
-		return withSecurityHeaders(new Response(null, { status: 403, headers }), request);
+		return withSecurityHeaders(new Response(null, { status: 204, headers }), request);
 	}
 	const headers = new Headers();
 	applyCorsHeaders(headers, request, origin);
