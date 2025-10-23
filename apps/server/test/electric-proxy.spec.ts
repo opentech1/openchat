@@ -58,12 +58,13 @@ describe("Electric shape proxy", () => {
 
 	it("proxies chat shapes via Electric", async () => {
 		requests.length = 0;
-		const res = await fetch(`${server!.baseURL}/api/electric/shapes/chats?offset=-1`, {
-			headers: { "x-user-id": "owner-user" },
+		const res = await fetch(`${server!.baseURL}/api/electric/v1/shape?scope=chats&offset=-1`, {
+			headers: { "x-user-id": "owner-user", Origin: "https://osschat.dev" },
 		});
 		expect(res.status).toBe(200);
 		const data = (await res.json()) as unknown;
 		expect(Array.isArray(data)).toBe(true);
+		expect(res.headers.get("access-control-allow-origin")).toBe("https://osschat.dev");
 
 		expect(requests.length).toBe(1);
 		const [req] = requests;
@@ -72,22 +73,39 @@ describe("Electric shape proxy", () => {
 		expect(req.headers.authorization).toMatch(/^Bearer /);
 	});
 
+	it("returns CORS headers for preflight requests", async () => {
+		const response = await fetch(`${server!.baseURL}/api/electric/v1/shape?scope=chats&offset=-1`, {
+			method: "OPTIONS",
+			headers: {
+				Origin: "https://osschat.dev",
+				"Access-Control-Request-Method": "GET",
+				"Access-Control-Request-Headers": "content-type, authorization",
+			},
+		});
+		expect(response.status).toBe(204);
+		expect(response.headers.get("access-control-allow-origin")).toBe("https://osschat.dev");
+		expect(response.headers.get("access-control-allow-methods")).toContain("GET");
+		const allowHeaders = response.headers.get("access-control-allow-headers") ?? "";
+		expect(allowHeaders.toLowerCase()).toContain("content-type");
+		expect(allowHeaders.toLowerCase()).toContain("authorization");
+		const vary = response.headers.get("vary") ?? "";
+		expect(vary.toLowerCase()).toContain("origin");
+	});
+
 	it("restricts message shapes to chats owned by the requester", async () => {
 		requests.length = 0;
 		const { id: chatId } = await client.chats.create({ title: "Owned" });
 
-		const ok = await fetch(
-			`${server!.baseURL}/api/electric/shapes/messages?offset=-1&chatId=${chatId}`,
-			{ headers: { "x-user-id": "owner-user" } },
-		);
+		const ok = await fetch(`${server!.baseURL}/api/electric/v1/shape?scope=messages&offset=-1&chatId=${chatId}`, {
+			headers: { "x-user-id": "owner-user" },
+		});
 		expect(ok.status).toBe(200);
 		expect(requests.at(-1)?.url.searchParams.get("params[1]")).toBe(chatId);
 		await ok.json();
 
-		const forbidden = await fetch(
-			`${server!.baseURL}/api/electric/shapes/messages?offset=-1&chatId=${chatId}`,
-			{ headers: { "x-user-id": "intruder" } },
-		);
+		const forbidden = await fetch(`${server!.baseURL}/api/electric/v1/shape?scope=messages&offset=-1&chatId=${chatId}`, {
+			headers: { "x-user-id": "intruder" },
+		});
 		expect(forbidden.status).toBe(404);
 		// Ensure no additional request hit Electric for the forbidden call
 		expect(requests.length).toBe(1);
@@ -147,7 +165,7 @@ describe("Electric shape proxy", () => {
 				DEV_ALLOW_HEADER_BYPASS: "1",
 			});
 
-			const response = await fetch(`${fallbackServer.baseURL}/api/electric/shapes/chats?offset=-1`, {
+			const response = await fetch(`${fallbackServer.baseURL}/api/electric/v1/shape?scope=chats&offset=-1`, {
 				headers: { "x-user-id": "fallback-user" },
 			});
 			expect(response.status).toBe(200);
