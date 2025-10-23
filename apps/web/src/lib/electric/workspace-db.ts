@@ -84,7 +84,7 @@ const workspaceCollections = new Map<string, WorkspaceCollections>();
 
 function buildShapeUrl(scope: "chats" | "messages") {
 	if (!ELECTRIC_ENABLED) return null;
-	return `${SERVER_URL}/api/electric/shapes/${scope}`;
+	return `${SERVER_URL}/api/electric/v1/shape?scope=${encodeURIComponent(scope)}`;
 }
 
 function createChatsCollection(workspaceId: string, shapeUrl: string) {
