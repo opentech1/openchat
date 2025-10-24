@@ -76,14 +76,29 @@ export async function handleApiRequest(request: Request) {
 	if (normalizedRequest.method.toUpperCase() === "OPTIONS") {
 		return new Response(null, { status: 204, headers: buildPreflightHeaders(origin, request) });
 	}
-	const upstreamResponse = await app.fetch(normalizedRequest);
-	const headers = new Headers(upstreamResponse.headers);
-	applyCorsHeaders(headers, origin, request);
-	return new Response(upstreamResponse.body, {
-		status: upstreamResponse.status,
-		statusText: upstreamResponse.statusText,
-		headers,
-	});
+	try {
+		const upstreamResponse = await app.fetch(normalizedRequest);
+		const headers = new Headers(upstreamResponse.headers);
+		applyCorsHeaders(headers, origin, request);
+		return new Response(upstreamResponse.body, {
+			status: upstreamResponse.status,
+			statusText: upstreamResponse.statusText,
+			headers,
+		});
+	} catch (error) {
+		console.error("[server] API handler error", {
+			method: normalizedRequest.method,
+			path: targetUrl.pathname,
+			originHeader: request.headers.get("origin"),
+			error,
+		});
+		const headers = buildPreflightHeaders(origin, request);
+		headers.set("content-type", "text/plain; charset=utf-8");
+		return new Response("internal server error", {
+			status: 500,
+			headers,
+		});
+	}
 }
 
 function normalizeApiPath(pathname: string) {
