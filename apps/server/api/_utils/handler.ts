@@ -11,6 +11,9 @@ const bundleMissingExportMessage =
 	"[server] Compiled bundle missing createApp export; ensure dist/index.js re-exports createApp";
 const bundleLoadFailureMessage =
 	"[server] Unable to load compiled app bundle from dist/index.js; rebuild the server package";
+const sourceLoadFailureMessage =
+	"[server] Unable to load source app bundle from src/app; verify build inputs are present";
+const bundleFallbackMessage = "[server] Falling back to source app bundle after compiled import failure";
 
 const ORIGIN_ENV_KEYS = [
 	"CORS_ORIGIN",
@@ -194,20 +197,37 @@ function applyCorsHeaders(headers: Headers, origin: string | null, request: Requ
 async function loadFactory(): Promise<AppFactory> {
 	if (preferCompiledBundle) {
 		try {
-			const module = await import(compiledBundleSpecifier);
-			const createApp = (module as { createApp?: AppFactory }).createApp;
-			if (typeof createApp === "function") {
-				return createApp;
-			}
-			throw new Error(bundleMissingExportMessage);
+			return await importCompiledBundle();
 		} catch (error) {
-			console.error("[server] Failed to load compiled app bundle", error);
-			const cause = error instanceof Error ? error : undefined;
-			throw cause ? new Error(bundleLoadFailureMessage, { cause }) : new Error(bundleLoadFailureMessage);
+			console.error(bundleLoadFailureMessage, error);
+			console.warn(bundleFallbackMessage);
 		}
 	}
-	const module = await import("../../src/app");
-	return module.createApp;
+	return importSourceBundle();
+}
+
+async function importCompiledBundle(): Promise<AppFactory> {
+	const specifier = new URL(compiledBundleSpecifier, import.meta.url).href;
+	const module = await import(specifier);
+	const createApp = (module as { createApp?: AppFactory }).createApp;
+	if (typeof createApp === "function") {
+		return createApp;
+	}
+	throw new Error(bundleMissingExportMessage);
+}
+
+async function importSourceBundle(): Promise<AppFactory> {
+	try {
+		const module = await import("../../src/app");
+		const createApp = (module as { createApp?: AppFactory }).createApp;
+		if (typeof createApp === "function") {
+			return createApp;
+		}
+		throw new Error("[server] Source bundle missing createApp export; ensure src/app.ts exports createApp");
+	} catch (error) {
+		const cause = error instanceof Error ? error : undefined;
+		throw cause ? new Error(sourceLoadFailureMessage, { cause }) : new Error(sourceLoadFailureMessage);
+	}
 }
 
 async function getAppInstance(): Promise<AppInstance> {
