@@ -126,6 +126,7 @@
       },
       "devDependencies": {
         "@types/pg": "^8.11.11",
+        "typescript": "^5.9.2",
       },
     },
   },

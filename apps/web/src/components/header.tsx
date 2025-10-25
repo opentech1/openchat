@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Github, Menu, X } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,11 +11,13 @@ import { authClient } from "@openchat/auth/client";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 
 const menuItems = [
-	{ name: "Features", href: "#link" },
-	{ name: "Solution", href: "#link" },
-	{ name: "Pricing", href: "#link" },
-	{ name: "About", href: "#link" },
+	{ name: "Features", href: "#features" },
+	{ name: "Workflow", href: "#workflow" },
+	{ name: "Self-host", href: "#self-host" },
+	{ name: "Pricing", href: "#pricing" },
 ];
+
+const githubRepoUrl = "https://github.com/opentech1/openchat";
 
 export const HeroHeader = () => {
 	const [menuState, setMenuState] = useState(false);
@@ -88,6 +90,16 @@ export const HeroHeader = () => {
 								</ul>
 							</div>
 							<div className="flex w-full items-center justify-end gap-3 md:w-fit">
+								<Link
+									href={githubRepoUrl}
+									target="_blank"
+									rel="noreferrer"
+									className="text-muted-foreground hover:text-accent-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors"
+									aria-label="View OpenChat on GitHub"
+								>
+									<Github className="size-4" />
+									<span className="hidden sm:inline">GitHub</span>
+								</Link>
 								{session?.user ? (
 									<>
 										<Link href="/dashboard" className="text-sm">
