@@ -7,6 +7,10 @@
 		{
 			"source": "/:path((?!api(?:/|$)).*)",
 			"destination": "/api/:path"
+		},
+		{
+			"source": "/rpc/:path*",
+			"destination": "/api/rpc/:path*"
 		}
 	]
 }
