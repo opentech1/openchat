@@ -3,6 +3,8 @@ const PROD_WEB_ORIGIN = process.env.PROD_WEB_ORIGIN ?? "https://osschat.dev";
 const REQUEST_TIMEOUT_MS = Number(process.env.CANARY_TIMEOUT_MS ?? 15000);
 const MAX_RETRIES = Math.max(1, Number(process.env.CANARY_MAX_RETRIES ?? 3));
 const RETRY_DELAY_MS = Number(process.env.CANARY_RETRY_DELAY_MS ?? 5000);
+const CANARY_SECRET = process.env.CANARY_SECRET ?? "";
+const CANARY_USER_ID = process.env.CANARY_USER_ID ?? "";
 
 type TestCase = {
 	name: string;
@@ -50,13 +52,27 @@ async function checkHealthEndpoint() {
 	console.log(`   ↳ /health responded in ${durationMs}ms`);
 }
 
+const ACCESS_CONTROL_HEADERS = (() => {
+	const headers = ["content-type"];
+	if (CANARY_USER_ID) headers.push("x-user-id");
+	if (CANARY_SECRET) headers.push("x-canary-secret");
+	return headers.join(", ");
+})();
+
+function buildCanaryHeaders(init?: HeadersInit) {
+	const headers = new Headers(init);
+	if (CANARY_USER_ID) headers.set("X-User-Id", CANARY_USER_ID);
+	if (CANARY_SECRET) headers.set("X-Canary-Secret", CANARY_SECRET);
+	return headers;
+}
+
 async function checkShapePreflight() {
 	const { response, durationMs } = await fetchWithTimeout(targetShapeUrl, {
 		method: "OPTIONS",
 		headers: {
 			Origin: PROD_WEB_ORIGIN,
 			"Access-Control-Request-Method": "GET",
-			"Access-Control-Request-Headers": "content-type",
+			"Access-Control-Request-Headers": ACCESS_CONTROL_HEADERS,
 		},
 	});
 	if (response.status !== 204) {
@@ -73,9 +89,9 @@ async function checkShapePreflight() {
 
 async function checkShapeRequest() {
 	const { response, durationMs } = await fetchWithTimeout(targetShapeUrl, {
-		headers: {
+		headers: buildCanaryHeaders({
 			Origin: PROD_WEB_ORIGIN,
-		},
+		}),
 	});
 	if (response.status >= 500) {
 		throw new Error(`Shape endpoint returned ${response.status} ${response.statusText}`);
