@@ -1,0 +1,26 @@
+name: Production Canary
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  prod-canary:
+    name: Run production canary checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.2.21"
+
+      - name: Run canary tests
+        env:
+          PROD_SERVER_URL: https://api.osschat.dev
+          PROD_WEB_ORIGIN: https://osschat.dev
+          CANARY_TIMEOUT_MS: "15000"
+        run: bun ./scripts/prod-canary.ts
