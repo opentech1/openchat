@@ -80,7 +80,9 @@ if (logDetails && resolvedDatabase.appliedOverrides.length > 0) {
 const dbResources = connectionString ? getPool(connectionString) : null;
 
 const allowMemoryFallback = parseBoolean(process.env.AUTH_ALLOW_MEMORY_FALLBACK);
-const memoryFallbackEnabled = allowMemoryFallback ?? process.env.NODE_ENV !== "production";
+const memoryFallbackEnabled =
+	allowMemoryFallback ??
+	(connectionString ? process.env.NODE_ENV !== "production" : true);
 
 if (!dbResources && !memoryFallbackEnabled) {
 	throw new Error(

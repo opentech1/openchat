@@ -6,6 +6,7 @@ type AppInstance = Awaited<ReturnType<AppFactory>>;
 let appPromise: Promise<AppInstance> | null = null;
 
 const preferCompiledBundle = process.env.VERCEL === "1" || process.env.VERCEL === "true";
+const runningOnVercel = preferCompiledBundle;
 const compiledBundleSpecifier = "../../dist/index.js";
 const bundleMissingExportMessage =
 	"[server] Compiled bundle missing createApp export; ensure dist/index.js re-exports createApp";
@@ -200,7 +201,12 @@ async function loadFactory(): Promise<AppFactory> {
 			return await importCompiledBundle();
 		} catch (error) {
 			console.error(bundleLoadFailureMessage, error);
-			console.warn(bundleFallbackMessage);
+			if (!runningOnVercel) {
+				console.warn(bundleFallbackMessage);
+			} else {
+				const cause = error instanceof Error ? error : undefined;
+				throw cause ? new Error(bundleLoadFailureMessage, { cause }) : new Error(bundleLoadFailureMessage);
+			}
 		}
 	}
 	return importSourceBundle();
