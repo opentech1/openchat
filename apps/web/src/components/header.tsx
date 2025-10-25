@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Github, Menu, X } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,10 +11,11 @@ import { authClient } from "@openchat/auth/client";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 
 const menuItems = [
-	{ name: "Features", href: "#link" },
-	{ name: "Solution", href: "#link" },
-	{ name: "Pricing", href: "#link" },
-	{ name: "About", href: "#link" },
+	{ name: "Features", href: "#features" },
+	{ name: "How it works", href: "#how-it-works" },
+	{ name: "Pricing", href: "#pricing" },
+	{ name: "Self‑host", href: "#self-hosting" },
+	{ name: "About", href: "#about" },
 ];
 
 export const HeroHeader = () => {
@@ -88,6 +89,15 @@ export const HeroHeader = () => {
 								</ul>
 							</div>
 							<div className="flex w-full items-center justify-end gap-3 md:w-fit">
+								<Link
+									href="https://github.com/opentech1/openchat"
+									target="_blank"
+									rel="noopener noreferrer"
+									aria-label="GitHub"
+									className="text-muted-foreground hover:text-accent-foreground inline-flex items-center justify-center rounded-md p-2 hover:bg-accent"
+								>
+									<Github className="size-5" />
+								</Link>
 								{session?.user ? (
 									<>
 										<Link href="/dashboard" className="text-sm">

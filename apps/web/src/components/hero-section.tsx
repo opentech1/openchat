@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronRight } from 'lucide-react'
+import { ArrowRight, CheckCircle2, Database, Factory, Globe, HardDrive, Lock, PlugZap, Server, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TextEffect } from '@/components/ui/text-effect'
 import { AnimatedGroup } from '@/components/ui/animated-group'
@@ -330,6 +330,196 @@ export default function HeroSection() {
                     </div>
                 </section>
             </main>
+            {/* Features */}
+            <section id="features" className="bg-background py-20 md:py-28 scroll-mt-24">
+                <div className="mx-auto max-w-6xl px-6">
+                    <div className="mx-auto max-w-2xl text-center">
+                        <h2 className="text-3xl font-semibold md:text-4xl">Everything you need to ship chat</h2>
+                        <p className="text-muted-foreground mt-4">OpenChat ships a full stack: typed APIs, auth, real‑time sync, and a modern UI. Bring your own model or provider.</p>
+                    </div>
+                    <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><PlugZap className="size-5" /></div>
+                            <h3 className="font-medium">Typed oRPC API</h3>
+                            <p className="text-muted-foreground mt-2">End‑to‑end types with oRPC + TanStack Query for effortless data fetching.</p>
+                        </div>
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><Lock className="size-5" /></div>
+                            <h3 className="font-medium">Batteries‑included auth</h3>
+                            <p className="text-muted-foreground mt-2">Better‑Auth with secure sessions and user management out of the box.</p>
+                        </div>
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><Database className="size-5" /></div>
+                            <h3 className="font-medium">Real‑time + offline</h3>
+                            <p className="text-muted-foreground mt-2">Electric SQL keeps your UI in sync and resilient, even on flaky networks.</p>
+                        </div>
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><Server className="size-5" /></div>
+                            <h3 className="font-medium">Bun + Elysia server</h3>
+                            <p className="text-muted-foreground mt-2">Fast API runtime with Elysia on Bun, tuned for low latency streaming.</p>
+                        </div>
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><Globe className="size-5" /></div>
+                            <h3 className="font-medium">Bring your own LLM</h3>
+                            <p className="text-muted-foreground mt-2">Use the AI SDK and OpenRouter to connect to the models you prefer.</p>
+                        </div>
+                        <div className="rounded-xl border p-6">
+                            <div className="text-primary mb-3 inline-flex rounded-md bg-primary/10 p-2"><Factory className="size-5" /></div>
+                            <h3 className="font-medium">Team features</h3>
+                            <p className="text-muted-foreground mt-2">Admin controls, roles, and audit trails designed for product teams.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* How it works */}
+            <section id="how-it-works" className="bg-muted/50 py-20 md:py-28 scroll-mt-24">
+                <div className="mx-auto max-w-6xl px-6">
+                    <div className="mx-auto max-w-2xl text-center">
+                        <h2 className="text-3xl font-semibold md:text-4xl">How it works</h2>
+                        <p className="text-muted-foreground mt-4">A simple, reliable pipeline from UI to model.</p>
+                    </div>
+                    <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-xl border bg-background p-6">
+                            <span className="text-xs text-muted-foreground">01</span>
+                            <h3 className="mt-2 font-medium">Next.js 15 UI</h3>
+                            <p className="text-muted-foreground mt-2">Modern React 19 UI with shadcn components and streaming UX.</p>
+                        </div>
+                        <div className="rounded-xl border bg-background p-6">
+                            <span className="text-xs text-muted-foreground">02</span>
+                            <h3 className="mt-2 font-medium">oRPC client</h3>
+                            <p className="text-muted-foreground mt-2">Type‑safe calls from the web to your Bun + Elysia API.</p>
+                        </div>
+                        <div className="rounded-xl border bg-background p-6">
+                            <span className="text-xs text-muted-foreground">03</span>
+                            <h3 className="mt-2 font-medium">Electric + Postgres</h3>
+                            <p className="text-muted-foreground mt-2">Data syncs in real time, with local reads and optimistic updates.</p>
+                        </div>
+                        <div className="rounded-xl border bg-background p-6">
+                            <span className="text-xs text-muted-foreground">04</span>
+                            <h3 className="mt-2 font-medium">AI SDK providers</h3>
+                            <p className="text-muted-foreground mt-2">Connect to OpenRouter or your own models with a small config.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Pricing overview */}
+            <section id="pricing" className="bg-background py-20 md:py-28 scroll-mt-24">
+                <div className="mx-auto max-w-4xl px-6 text-center">
+                    <h2 className="text-3xl font-semibold md:text-4xl">Simple pricing</h2>
+                    <p className="text-muted-foreground mx-auto mt-4 max-w-2xl">
+                        It’s free for individuals and small teams. Companies can pay for advanced team management, SSO, and enterprise controls. Prefer control? You can also self‑host.
+                    </p>
+                    <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                        <Link href="/dashboard" className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium hover:bg-primary/90">
+                            Get started free
+                            <ArrowRight className="size-4" />
+                        </Link>
+                        <Link
+                            href="https://github.com/opentech1/openchat/tree/main/docs/deployment"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm hover:text-foreground hover:bg-accent"
+                        >
+                            Self‑host guide
+                        </Link>
+                    </div>
+                    <div className="mx-auto mt-8 max-w-md text-left">
+                        <div className="grid gap-2">
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground"><CheckCircle2 className="mt-0.5 size-4 text-primary" /> Unlimited messages for personal use</div>
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground"><CheckCircle2 className="mt-0.5 size-4 text-primary" /> Team workspaces and roles</div>
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground"><CheckCircle2 className="mt-0.5 size-4 text-primary" /> BYO LLM provider and keys</div>
+                            <div className="flex items-start gap-2 text-sm text-muted-foreground"><CheckCircle2 className="mt-0.5 size-4 text-primary" /> Self‑host with Docker Compose</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Self hosting */}
+            <section id="self-hosting" className="bg-muted/50 py-20 md:py-28 scroll-mt-24">
+                <div className="mx-auto max-w-6xl px-6">
+                    <div className="grid items-center gap-8 md:grid-cols-2">
+                        <div>
+                            <h2 className="text-3xl font-semibold md:text-4xl">Self‑host in minutes</h2>
+                            <p className="text-muted-foreground mt-4">Use the included Docker Compose and deployment guides. Point to your Postgres, set `CORS_ORIGIN`, and you’re off.</p>
+                            <div className="mt-6 space-y-2 text-sm text-muted-foreground">
+                                <div className="flex items-start gap-2"><HardDrive className="mt-0.5 size-4 text-primary" /> Works behind load balancers with <code className="rounded bg-accent px-1">ELECTRIC_SERVICE_URL</code></div>
+                                <div className="flex items-start gap-2"><Server className="mt-0.5 size-4 text-primary" /> Bun + Elysia API with oRPC</div>
+                                <div className="flex items-start gap-2"><Database className="mt-0.5 size-4 text-primary" /> Postgres + Electric SQL sync</div>
+                            </div>
+                            <div className="mt-6 flex gap-3">
+                                <Link
+                                    href="https://github.com/opentech1/openchat"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium hover:bg-primary/90"
+                                >
+                                    View repository
+                                </Link>
+                                <Link
+                                    href="https://github.com/opentech1/openchat/blob/main/docker-compose.yml"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-muted-foreground inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm hover:text-foreground hover:bg-accent"
+                                >
+                                    docker-compose.yml
+                                </Link>
+                            </div>
+                        </div>
+                        <div className="bg-background rounded-xl border p-4">
+                            <pre className="overflow-auto rounded-lg bg-black/90 p-4 text-left text-xs text-white">
+                                <code>{`git clone https://github.com/opentech1/openchat
+cd openchat
+cp .env.example .env && cp apps/server/.env.example apps/server/.env
+# edit env files for DB + origins
+docker compose up --build`}</code>
+                            </pre>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Demo anchor */}
+            <section id="demo" className="bg-background py-16 scroll-mt-24">
+                <div className="mx-auto max-w-6xl px-6">
+                    <div className="rounded-xl border bg-muted/40 p-8 text-center">
+                        <h3 className="text-xl font-medium">Want a walkthrough?</h3>
+                        <p className="text-muted-foreground mt-2">Open the dashboard and start a new chat to see the streaming UX.</p>
+                        <div className="mt-4">
+                            <Link href="/dashboard" className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium hover:bg-primary/90">
+                                Open dashboard
+                                <ArrowRight className="size-4" />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* About + Footer */}
+            <section id="about" className="bg-muted/50 py-16 scroll-mt-24">
+                <div className="mx-auto max-w-6xl px-6">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <div>
+                            <h3 className="text-xl font-semibold">About OpenChat</h3>
+                            <p className="text-muted-foreground mt-2">OpenChat is an open‑source AI chat platform. It’s built with Next.js 15, Bun + Elysia, oRPC, and Electric SQL. Use it as a product‑ready template or as a reference for your own stack.</p>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-semibold">License</h3>
+                            <p className="text-muted-foreground mt-2">AGPL‑3.0 © 2025 OpenChat. You can self‑host and modify under the terms of the license.</p>
+                        </div>
+                    </div>
+                    <hr className="my-8 border-border/60" />
+                    <footer className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+                        <p className="text-muted-foreground text-sm">© 2025 OpenChat. All rights reserved.</p>
+                        <div className="flex items-center gap-4 text-sm">
+                            <Link href="https://github.com/opentech1/openchat" target="_blank" rel="noopener noreferrer" className="hover:text-accent-foreground">GitHub</Link>
+                            <Link href="#pricing" className="hover:text-accent-foreground">Pricing</Link>
+                            <Link href="#self-hosting" className="hover:text-accent-foreground">Self‑host</Link>
+                        </div>
+                    </footer>
+                </div>
+            </section>
         </>
     )
 }

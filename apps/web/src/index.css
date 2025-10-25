@@ -313,8 +313,9 @@ body {
 }
 
 html, body {
-  overflow: hidden;
-  height: 100%;
+  /* Allow normal page scrolling; prevent only horizontal overflow */
+  min-height: 100%;
+  overflow-x: clip;
 }
 
 @layer base {
