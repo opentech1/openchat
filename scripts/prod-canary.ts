@@ -1,6 +1,8 @@
 const PROD_SERVER_URL = (process.env.PROD_SERVER_URL ?? "https://api.osschat.dev").replace(/\/$/, "");
 const PROD_WEB_ORIGIN = process.env.PROD_WEB_ORIGIN ?? "https://osschat.dev";
 const REQUEST_TIMEOUT_MS = Number(process.env.CANARY_TIMEOUT_MS ?? 15000);
+const MAX_RETRIES = Math.max(1, Number(process.env.CANARY_MAX_RETRIES ?? 3));
+const RETRY_DELAY_MS = Number(process.env.CANARY_RETRY_DELAY_MS ?? 5000);
 
 type TestCase = {
 	name: string;
@@ -94,6 +96,10 @@ async function checkShapeRequest() {
 	}
 }
 
+function sleep(ms: number) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function run() {
 	const tests: TestCase[] = [
 		{ name: "Health endpoint", run: checkHealthEndpoint },
@@ -103,18 +109,33 @@ async function run() {
 
 	const failures: Array<{ name: string; message: string }> = [];
 
-	for (const test of tests) {
-		process.stdout.write(`• ${test.name}... `);
-		try {
-			await test.run();
-			console.log("OK");
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			failures.push({ name: test.name, message });
-			console.log("FAILED");
-			console.error(`   ↳ ${message}`);
+		for (const test of tests) {
+			let attempt = 0;
+			let lastError: unknown;
+			while (attempt < MAX_RETRIES) {
+				attempt += 1;
+				process.stdout.write(`• ${test.name} (attempt ${attempt}/${MAX_RETRIES})... `);
+				try {
+					await test.run();
+					console.log("OK");
+					lastError = null;
+					break;
+				} catch (error) {
+					lastError = error;
+					const message = error instanceof Error ? error.message : String(error);
+					console.log("FAILED");
+					console.error(`   ↳ ${message}`);
+					if (attempt < MAX_RETRIES) {
+						console.log(`   ↳ retrying in ${RETRY_DELAY_MS}ms...`);
+						await sleep(RETRY_DELAY_MS);
+					}
+				}
+			}
+			if (lastError) {
+				const message = lastError instanceof Error ? lastError.message : String(lastError);
+				failures.push({ name: test.name, message });
+			}
 		}
-	}
 
 	if (failures.length > 0) {
 		console.error("\nProduction canary detected failures:");
