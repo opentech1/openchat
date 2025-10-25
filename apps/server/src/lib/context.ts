@@ -1,5 +1,6 @@
 import type { Context as ElysiaContext } from "elysia";
 import { getSessionFromRequest } from "@openchat/auth";
+import { timingSafeEqual } from "node:crypto";
 
 export type CreateContextOptions = {
 	context: ElysiaContext;
@@ -18,9 +19,19 @@ type MinimalSession = {
 
 export async function createContext({ context }: CreateContextOptions) {
 	let session: MinimalSession | null = null;
+	const isProduction = process.env.NODE_ENV === "production";
 	const devBypassEnabled =
-		process.env.NODE_ENV !== "production" &&
+		!isProduction &&
 		(process.env.DEV_ALLOW_HEADER_BYPASS ?? process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH ?? "1") !== "0";
+	const envForceBypass = process.env.SERVER_ALLOW_HEADER_BYPASS === "1";
+	const headerBypassSecret = process.env.SERVER_HEADER_BYPASS_SECRET ?? "";
+	const requestBypassSecret = context.request.headers.get("x-canary-secret") ?? "";
+	const secretMatches =
+		Boolean(headerBypassSecret) &&
+		headerBypassSecret.length === requestBypassSecret.length &&
+		headerBypassSecret.length > 0 &&
+		timingSafeEqual(Buffer.from(headerBypassSecret), Buffer.from(requestBypassSecret));
+	const headerBypassEnabled = devBypassEnabled || envForceBypass || secretMatches;
 
 	try {
 		const authSession = await getSessionFromRequest(context.request);
@@ -36,7 +47,7 @@ export async function createContext({ context }: CreateContextOptions) {
 		}
 	}
 
-	if (!session) {
+	if (!session && headerBypassEnabled) {
 		let uid = context.request.headers.get("x-user-id") || null;
 		if (!uid) {
 			try {
