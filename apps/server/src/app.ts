@@ -426,12 +426,19 @@ async function proxyElectricShape({
 				headers: upstreamHeaders,
 			});
 			if (response.status >= 400) {
+				let errorBody: string | null = null;
+				try {
+					errorBody = await response.text();
+				} catch {}
+				const logPayload = {
+					status: response.status,
+					base,
+					scope,
+					target: target.toString(),
+					message: errorBody?.slice(0, 500) ?? null,
+				};
 				lastError = new Error(`electric responded ${response.status} for ${base}`);
-				if (response.body) {
-					try {
-						await response.body.cancel();
-					} catch {}
-				}
+				console.error("electric.fetch", logPayload);
 				if (candidateIndex < baseCandidates.length - 1 && fallbackDelayMs > 0) {
 					await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
 				}
