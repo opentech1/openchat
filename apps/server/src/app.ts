@@ -161,7 +161,8 @@ function handleCorsPreflight(request: Request) {
 }
 
 const ELECTRIC_BASE_URL = (process.env.ELECTRIC_SERVICE_URL || process.env.NEXT_PUBLIC_ELECTRIC_URL || "").replace(/\/$/, "");
-const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL);
+const ELECTRIC_SOURCE_ID = process.env.ELECTRIC_SOURCE_ID?.trim();
+const HAS_ELECTRIC = Boolean(ELECTRIC_BASE_URL && ELECTRIC_SOURCE_ID);
 
 const rpcHandler = new RPCHandler(appRouter, {
 	interceptors: [
@@ -308,7 +309,7 @@ async function proxyElectricShape({
 	const passthroughParams = new URLSearchParams();
 	url.searchParams.forEach((value, key) => {
 		const lower = key.toLowerCase();
-		if (lower === "scope" || lower === "chatid" || lower === "where" || lower === "table") return;
+		if (lower === "scope" || lower === "chatid" || lower === "where" || lower === "table" || lower === "source_id") return;
 		if (lower.startsWith("params[")) return;
 		passthroughParams.append(key, value);
 	});
@@ -398,6 +399,9 @@ async function proxyElectricShape({
 		passthroughParams.forEach((value, key) => {
 			target.searchParams.set(key, value);
 		});
+		if (ELECTRIC_SOURCE_ID) {
+			target.searchParams.set("source_id", ELECTRIC_SOURCE_ID);
+		}
 		switch (scope) {
 			case "chats":
 				target.searchParams.set("table", "chat");
