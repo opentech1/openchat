@@ -45,6 +45,7 @@ export async function startTestServer(env?: Record<string, string>): Promise<Run
 						env?.DATABASE_URL || process.env.DATABASE_URL || "postgres://postgres:postgres@localhost:5432/openchat_test",
 					ELECTRIC_GATEKEEPER_SECRET: env?.ELECTRIC_GATEKEEPER_SECRET || process.env.ELECTRIC_GATEKEEPER_SECRET,
 					ELECTRIC_SERVICE_URL: env?.ELECTRIC_SERVICE_URL || process.env.ELECTRIC_SERVICE_URL,
+					ELECTRIC_SOURCE_ID: env?.ELECTRIC_SOURCE_ID || process.env.ELECTRIC_SOURCE_ID || "test-source",
 					ELECTRIC_FALLBACK_PORT: env?.ELECTRIC_FALLBACK_PORT || process.env.ELECTRIC_FALLBACK_PORT,
 					DEV_ALLOW_HEADER_BYPASS: env?.DEV_ALLOW_HEADER_BYPASS || process.env.DEV_ALLOW_HEADER_BYPASS,
 				},
