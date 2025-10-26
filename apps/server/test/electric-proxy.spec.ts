@@ -43,6 +43,7 @@ describe("Electric shape proxy", () => {
 		server = await startTestServer({
 			ELECTRIC_GATEKEEPER_SECRET: "test-secret",
 			ELECTRIC_SERVICE_URL: electricBase,
+			ELECTRIC_SOURCE_ID: "test-source",
 			DEV_ALLOW_HEADER_BYPASS: "1",
 		});
 		const link = new RPCLink({ url: `${server.baseURL}/rpc`, headers: async () => ({ "x-user-id": "owner-user" }) });
@@ -70,6 +71,7 @@ describe("Electric shape proxy", () => {
 		const [req] = requests;
 		expect(req.url.searchParams.get("table")).toBe("chat");
 		expect(req.url.searchParams.get("params[1]")).toBe("owner-user");
+		expect(req.url.searchParams.get("source_id")).toBe("test-source");
 		expect(req.headers.authorization).toMatch(/^Bearer /);
 	});
 
@@ -101,6 +103,7 @@ describe("Electric shape proxy", () => {
 		});
 		expect(ok.status).toBe(200);
 		expect(requests.at(-1)?.url.searchParams.get("params[1]")).toBe(chatId);
+		expect(requests.at(-1)?.url.searchParams.get("source_id")).toBe("test-source");
 		await ok.json();
 
 		const forbidden = await fetch(`${server!.baseURL}/api/electric/v1/shape?scope=messages&offset=-1&chatId=${chatId}`, {
@@ -161,6 +164,7 @@ describe("Electric shape proxy", () => {
 			fallbackServer = await startTestServer({
 				ELECTRIC_GATEKEEPER_SECRET: "test-secret",
 				ELECTRIC_SERVICE_URL: unreachableElectric,
+				ELECTRIC_SOURCE_ID: "test-source",
 				ELECTRIC_FALLBACK_PORT: String(fallbackPort),
 				DEV_ALLOW_HEADER_BYPASS: "1",
 			});
@@ -171,6 +175,7 @@ describe("Electric shape proxy", () => {
 			expect(response.status).toBe(200);
 			await response.json();
 			expect(fallbackRequests.length).toBeGreaterThan(0);
+			expect(fallbackRequests.at(-1)?.url.searchParams.get("source_id")).toBe("test-source");
 		} finally {
 			await fallbackServer?.close();
 			if (originalPortEnv !== undefined) {
