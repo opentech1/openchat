@@ -30,6 +30,7 @@ deployment to fail fast.
 | `PG_PROXY_PASSWORD` | electric | output of `openssl rand -base64 48 | tr -d '\n'` | Shared with Electric clients. |
 | `ELECTRIC_GATEKEEPER_SECRET` | server, electric | `openssl rand -base64 48 | tr -d '\n'` | Must be identical on both services. |
 | `ELECTRIC_SECRET` | electric | `openssl rand -base64 48 | tr -d '\n'` | Private key for Electric SQL. |
+| `ELECTRIC_SOURCE_ID` | server | `00d41ecf-3020-4ff6-8139-634e7bd44c50` | Copy the Source ID from Electric Cloud (required for `/v1/shape`). |
 | `ELECTRIC_SERVICE_URL` | server, web | `http://openchat-electric:3000` | Internal URL the API/client use. Point to the Traefik HTTPS origin when you enable TLS. |
 | `ELECTRIC_INSECURE` | electric, server | `false` | Set `true` only when the service is reachable **only** via plain HTTP inside the Docker network. |
 | `BETTER_AUTH_SECRET` | server | `openssl rand -base64 48 | tr -d '\n'` | Session encryption key. |
