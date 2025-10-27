@@ -1,46 +1,75 @@
-"use client";
+'use client';
 
 import React, { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { TextEffect } from '@/components/ui/text-effect'
-import { AnimatedGroup } from '@/components/ui/animated-group'
-import { HeroHeader } from './header'
-import type { Variants } from 'motion/react'
-import { authClient } from '@openchat/auth/client'
-import { captureClientEvent } from '@/lib/posthog'
+import Image from 'next/image'
+import { useAuth } from '@workos-inc/authkit-nextjs/components'
 
-const transitionVariants = {
-    item: {
-        hidden: {
-            opacity: 0,
-            filter: 'blur(12px)',
-            y: 12,
-        },
-        visible: {
-            opacity: 1,
-            filter: 'blur(0px)',
-            y: 0,
-            transition: {
-                type: 'spring',
-                bounce: 0.3,
-                duration: 1.5,
-            },
-        },
-    },
-} satisfies { item: Variants }
+import { Button } from '@/components/ui/button'
+import { HeroHeader } from './header'
+import Features from '@/components/features-1'
+import { InfiniteSlider } from '@/components/ui/infinite-slider'
+import { ProgressiveBlur } from '@/components/ui/progressive-blur'
+import { captureClientEvent } from '@/lib/posthog'
+import { cn } from '@/lib/utils'
+
+const TRUSTED_BRANDS = [
+	"Nvidia",
+	"Column",
+	"GitHub",
+	"Nike",
+	"Lemon Squeezy",
+	"Laravel",
+	"Eli Lilly",
+	"OpenAI",
+];
+
+const INTEGRATIONS = [
+	{
+		title: "Authentication",
+		description: "WorkOS AuthKit powers SSO, magic links, and workspace roles from day one.",
+		tag: "WorkOS",
+	},
+	{
+		title: "Models & Routing",
+		description: "OpenRouter keeps you model agnostic with per-user keys, rate limits, and smart fallbacks.",
+		tag: "OpenRouter",
+	},
+	{
+		title: "Realtime Data",
+		description: "Convex stores chats, handles optimistic updates, and fan-outs sidebar changes instantly.",
+		tag: "Convex",
+	},
+];
+
+const PRICING_PLANS = [
+	{
+		tier: "Self-host",
+		price: "$0",
+		description: "MIT core. Deploy with Docker Compose, Fly, or Vercel. Bring your own OpenRouter key.",
+		ctaLabel: "Read docs",
+		ctaHref: "/docs",
+	},
+	{
+		tier: "OpenChat Cloud",
+		price: "Starting at $29/mo",
+		description: "Managed hosting with analytics, alerts, and concierge onboarding. Cancel anytime.",
+		ctaLabel: "Join waitlist",
+		ctaHref: "mailto:hello@openchat.dev?subject=OpenChat%20Cloud%20waitlist",
+		highlight: true,
+	},
+];
 
 function screenWidthBucket(width: number) {
-    if (width < 640) return 'xs'
-    if (width < 768) return 'sm'
-    if (width < 1024) return 'md'
-    if (width < 1280) return 'lg'
-    return 'xl'
+	if (width < 640) return 'xs'
+	if (width < 768) return 'sm'
+	if (width < 1024) return 'md'
+	if (width < 1280) return 'lg'
+	return 'xl'
 }
 
 export default function HeroSection() {
-	const { data: session } = authClient.useSession()
+	const { user } = useAuth()
 	const visitTrackedRef = useRef(false)
 
 	const handleCtaClick = useCallback((ctaId: string, ctaCopy: string, section: string) => {
@@ -57,7 +86,7 @@ export default function HeroSection() {
 
 	useEffect(() => {
 		if (visitTrackedRef.current) return
-		if (typeof session === 'undefined') return
+		if (typeof user === 'undefined') return
 		visitTrackedRef.current = true
 		const referrerUrl = document.referrer && document.referrer.length > 0 ? document.referrer : 'direct'
 		let referrerDomain = 'direct'
@@ -84,248 +113,181 @@ export default function HeroSection() {
 			referrer_domain: referrerDomain,
 			utm_source: utmSource ?? undefined,
 			entry_path: entryPath,
-			session_is_guest: !session?.user,
+			session_is_guest: !user,
 		})
-	}, [session])
+	}, [user])
 
     return (
         <>
             <HeroHeader />
-            <main className="overflow-hidden">
+            <main className="relative overflow-hidden">
                 <div
                     aria-hidden
-                    className="absolute inset-0 isolate hidden opacity-65 contain-strict lg:block">
-                    <div className="w-140 h-320 -translate-y-87.5 absolute left-0 top-0 -rotate-45 rounded-full bg-[radial-gradient(68.54%_68.72%_at_55.02%_31.46%,hsla(0,0%,85%,.08)_0,hsla(0,0%,55%,.02)_50%,hsla(0,0%,45%,0)_80%)]" />
-                    <div className="h-320 absolute left-0 top-0 w-60 -rotate-45 rounded-full bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.06)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)] [translate:5%_-50%]" />
-                    <div className="h-320 -translate-y-87.5 absolute left-0 top-0 w-60 -rotate-45 bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.04)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)]" />
+                    className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+                    <div className="absolute left-1/2 top-[-20%] h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,theme(colors.primary/30%)0%,transparent70%)] [filter:blur(140px)]" />
+                    <div className="absolute -right-40 top-1/3 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle_at_center,theme(colors.accent/25%)0%,transparent70%)] [filter:blur(140px)]" />
+                    <div className="absolute -left-32 bottom-[-10%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle_at_center,theme(colors.primary/25%)0%,transparent70%)] [filter:blur(140px)]" />
+                    <div className="absolute inset-x-0 bottom-[-35%] h-[40rem] bg-[radial-gradient(60%_50%_at_50%_50%,theme(colors.background/0%)0%,theme(colors.background)70%)]" />
                 </div>
                 <section>
-                    <div className="relative pt-24 md:pt-36">
-                        <AnimatedGroup
-                            variants={{
-                                container: {
-                                    visible: {
-                                        transition: {
-                                            delayChildren: 1,
-                                        },
-                                    },
-                                },
-                                item: {
-                                    hidden: {
-                                        opacity: 0,
-                                        y: 20,
-                                    },
-                                    visible: {
-                                        opacity: 1,
-                                        y: 0,
-                                        transition: {
-                                            type: 'spring',
-                                            bounce: 0.3,
-                                            duration: 2,
-                                        },
-                                    },
-                                },
-                            }}
-                            className="mask-b-from-35% mask-b-to-90% absolute inset-0 top-56 -z-20 lg:top-32">
-                            <div
-                                aria-hidden
-                                className="hidden size-full dark:block [background:radial-gradient(80%_80%_at_50%_0%,hsl(0_0%_100%/0.04)_0%,transparent_60%),linear-gradient(180deg,transparent_0%,hsl(0_0%_0%/0.35)_100%)]"
-                            />
-                        </AnimatedGroup>
+                    <div className="pb-24 pt-12 md:pb-32 lg:pb-56 lg:pt-44">
+                        <div className="relative mx-auto flex max-w-6xl flex-col px-6 lg:block">
+                            <div className="mx-auto max-w-xl text-center lg:ml-0 lg:w-1/2 lg:text-left">
+                                <Link
+                                    href="/dashboard"
+                                    className="hover:bg-background group mx-auto flex w-fit items-center gap-3 rounded-full border px-4 py-1 text-[0.65rem] font-medium uppercase tracking-[0.35em] text-muted-foreground transition-colors duration-300 lg:mx-0"
+                                    onClick={handleCtaClick('hero_try_openchat_badge', 'Try OpenChat', 'hero')}>
+                                    <span>Lightning fast • Fully yours • Community built</span>
+                                    <span className="inline-flex h-2 w-2 rounded-full bg-primary group-hover:scale-110 transition-transform" />
+                                </Link>
+                                <h1 className="mt-8 max-w-3xl text-balance text-5xl font-semibold md:text-6xl lg:mt-16 xl:text-[4.5rem]">
+                                    Fast, flexible AI chat for everyone
+                                </h1>
+                                <p className="mt-6 max-w-3xl text-balance text-lg text-muted-foreground">
+                                    OpenChat blends a sub-second streaming interface with Tailwind + shadcn customization and a community shipping fresh
+                                    building blocks every week. Self-host it or flip the switch on OpenChat Cloud—either way you stay in control.
+                                </p>
+                                <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground lg:justify-start">
+                                    <span className="rounded-full border px-4 py-2">Sub-second streaming interface</span>
+                                    <span className="rounded-full border px-4 py-2">Tailwind v4 + shadcn styling</span>
+                                    <span className="rounded-full border px-4 py-2">Self-host or OpenChat Cloud</span>
+                                    <span className="rounded-full border px-4 py-2">Weekly community feature drops</span>
+                                </div>
 
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--color-background)_75%)]"
-                        />
-
-                        <div className="mx-auto max-w-7xl px-6">
-                            <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-                                <AnimatedGroup variants={transitionVariants}>
-                                    <Link
-                                        href="/dashboard"
-                                        className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-zinc-950/5 transition-colors duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
-                                        <span className="text-foreground text-sm">Open‑source • Privacy‑first • TypeScript</span>
-                                        <span className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
-
-                                        <div className="bg-background group-hover:bg-muted size-6 overflow-hidden rounded-full duration-500">
-                                            <div className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
-                                                <span className="flex size-6">
-                                                    <ArrowRight className="m-auto size-3" />
-                                                </span>
-                                                <span className="flex size-6">
-                                                    <ArrowRight className="m-auto size-3" />
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                </AnimatedGroup>
-
-                                <TextEffect
-                                    preset="fade-in-blur"
-                                    speedSegment={0.3}
-                                    as="h1"
-                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                    OpenChat — Open‑source AI chat platform
-                                </TextEffect>
-                                <TextEffect
-                                    per="line"
-                                    preset="fade-in-blur"
-                                    speedSegment={0.3}
-                                    delay={0.5}
-                                    as="p"
-                                    className="mx-auto mt-8 max-w-2xl text-balance text-lg">
-                                    Embed a fast, secure, and fully customizable AI chat into your product. Batteries‑included auth, oRPC, and a Bun + Elysia API.
-                                </TextEffect>
-
-                                <AnimatedGroup
-                                    variants={{
-                                        container: {
-                                            visible: {
-                                                transition: {
-                                                    staggerChildren: 0.05,
-                                                    delayChildren: 0.75,
-                                                },
-                                            },
-                                        },
-                                        ...transitionVariants,
-                                    }}
-                                    className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
-                                    <div
-                                        key={1}
-                                        className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5">
-                                        <Button
-                                            asChild
-                                            size="lg"
-                                            className="rounded-xl px-5 text-base">
-                                            <Link
-                                                href="/dashboard"
-                                                onClick={handleCtaClick('hero_try_openchat', 'Try OpenChat', 'hero')}>
-                                                <span className="text-nowrap">Try OpenChat</span>
-                                            </Link>
-                                        </Button>
-                                    </div>
+                                <div className="mt-12 flex flex-col items-center justify-center gap-2 sm:flex-row lg:justify-start">
+                                    <Button
+                                        asChild
+                                        size="lg"
+                                        className="px-5 text-base">
+                                        <Link
+                                            href="/dashboard"
+                                            onClick={handleCtaClick('hero_try_openchat', 'Try OpenChat', 'hero')}>
+                                            <span className="text-nowrap">Try OpenChat</span>
+                                        </Link>
+                                    </Button>
                                     <Button
                                         key={2}
                                         asChild
                                         size="lg"
                                         variant="ghost"
-                                        className="h-10.5 rounded-xl px-5">
+                                        className="px-5 text-base">
                                         <Link
-                                            href="/#demo"
+                                            href="#pricing"
                                             onClick={handleCtaClick('hero_request_demo', 'Request a demo', 'hero')}>
                                             <span className="text-nowrap">Request a demo</span>
                                         </Link>
                                     </Button>
-                                </AnimatedGroup>
-                            </div>
-                        </div>
-
-                        <AnimatedGroup
-                            variants={{
-                                container: {
-                                    visible: {
-                                        transition: {
-                                            staggerChildren: 0.05,
-                                            delayChildren: 0.75,
-                                        },
-                                    },
-                                },
-                                ...transitionVariants,
-                            }}>
-                            <div className="mask-b-from-55% relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-                                <div className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
-                                    <div className="aspect-15/8 relative rounded-2xl border border-border/25 bg-[linear-gradient(135deg,theme(colors.primary)_0%,theme(colors.primary/30%)_40%,transparent_100%),radial-gradient(120%_120%_at_70%_0%,theme(colors.accent/30%)_0%,transparent_70%)]" />
                                 </div>
                             </div>
-                        </AnimatedGroup>
+                            <div className="-z-10 order-first ml-auto mt-12 flex w-full max-w-3xl justify-center lg:absolute lg:bottom-[-6rem] lg:right-[-4rem] lg:top-auto lg:order-last lg:w-1/2 lg:max-w-none lg:justify-end">
+                                <Image
+                                    className="hidden h-auto w-full max-w-2xl drop-shadow-2xl dark:block"
+                                    src="/hero-preview-dark.svg"
+                                    alt="OpenChat product overview in dark mode"
+                                    height={900}
+                                    width={1600}
+                                    priority
+                                    sizes="(min-width: 1280px) 640px, (min-width: 768px) 50vw, 90vw"
+                                />
+                                <Image
+                                    className="block h-auto w-full max-w-2xl drop-shadow-xl dark:hidden"
+                                    src="/hero-preview-light.svg"
+                                    alt="OpenChat product overview in light mode"
+                                    height={900}
+                                    width={1600}
+                                    priority
+                                    sizes="(min-width: 1280px) 640px, (min-width: 768px) 50vw, 90vw"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </section>
-                <section className="bg-background pb-16 pt-16 md:pb-32">
-                    <div className="group relative m-auto max-w-5xl px-6">
-                        <div className="absolute inset-0 z-10 flex scale-95 items-center justify-center opacity-0 duration-500 group-hover:scale-100 group-hover:opacity-100">
-                            <Link
-                                href="/"
-                                className="block text-sm duration-150 hover:opacity-75">
-                                <span> Meet Our Customers</span>
+                <section className="bg-background pb-16 md:pb-32">
+                    <div className="group relative m-auto max-w-6xl px-6">
+                        <div className="flex flex-col items-center md:flex-row">
+                            <div className="md:max-w-44 md:border-r md:pr-6">
+                                <p className="text-end text-sm text-muted-foreground">Trusted by teams shipping with OpenChat</p>
+                            </div>
+                            <div className="relative py-6 md:w-[calc(100%-11rem)]">
+                                <InfiniteSlider
+                                    speedOnHover={26}
+                                    speed={32}
+                                    gap={96}
+                                    className="pl-8 pr-8">
+                                    {TRUSTED_BRANDS.map((brand) => (
+                                        <div key={brand} className="flex">
+                                            <span className="mx-auto whitespace-nowrap rounded-full border border-border/60 px-4 py-2 text-xs font-medium text-muted-foreground">
+                                                {brand}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </InfiniteSlider>
 
-                                <ChevronRight className="ml-1 inline-block size-3" />
-                            </Link>
+                                <div className="pointer-events-none absolute inset-y-0 left-0 w-20 bg-linear-to-r from-background" />
+                                <div className="pointer-events-none absolute inset-y-0 right-0 w-20 bg-linear-to-l from-background" />
+                                <ProgressiveBlur
+                                    className="pointer-events-none absolute left-0 top-0 h-full w-20"
+                                    direction="left"
+                                    blurIntensity={1}
+                                />
+                                <ProgressiveBlur
+                                    className="pointer-events-none absolute right-0 top-0 h-full w-20"
+                                    direction="right"
+                                    blurIntensity={1}
+                                />
+                            </div>
                         </div>
-                        <div className="group-hover:blur-xs mx-auto mt-12 grid max-w-2xl grid-cols-4 gap-x-12 gap-y-8 transition-all duration-500 group-hover:opacity-50 sm:gap-x-16 sm:gap-y-14">
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/nvidia.svg"
-                                    alt="Nvidia Logo"
-                                    height="20"
-                                    width="auto"
-                                />
-                            </div>
-
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/column.svg"
-                                    alt="Column Logo"
-                                    height="16"
-                                    width="auto"
-                                />
-                            </div>
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/github.svg"
-                                    alt="GitHub Logo"
-                                    height="16"
-                                    width="auto"
-                                />
-                            </div>
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/nike.svg"
-                                    alt="Nike Logo"
-                                    height="20"
-                                    width="auto"
-                                />
-                            </div>
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-5 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/lemonsqueezy.svg"
-                                    alt="Lemon Squeezy Logo"
-                                    height="20"
-                                    width="auto"
-                                />
-                            </div>
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-4 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/laravel.svg"
-                                    alt="Laravel Logo"
-                                    height="16"
-                                    width="auto"
-                                />
-                            </div>
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-7 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/lilly.svg"
-                                    alt="Lilly Logo"
-                                    height="28"
-                                    width="auto"
-                                />
-                            </div>
-
-                            <div className="flex">
-                                <img
-                                    className="mx-auto h-6 w-fit dark:invert"
-                                    src="https://html.tailus.io/blocks/customers/openai.svg"
-                                    alt="OpenAI Logo"
-                                    height="24"
-                                    width="auto"
-                                />
-                            </div>
+                    </div>
+                </section>
+                <Features />
+                <section id="integrations" className="bg-muted/30 py-20 md:py-28">
+                    <div className="mx-auto max-w-5xl px-6">
+                        <div className="text-center">
+                            <h2 className="text-balance text-3xl font-semibold md:text-4xl">Integrations that ship with you</h2>
+                            <p className="mt-4 text-balance text-muted-foreground">
+                                OpenChat bundles the production stack we use ourselves so you can focus on product, not plumbing.
+                            </p>
+                        </div>
+                        <div className="mt-12 grid gap-6 md:grid-cols-3">
+                            {INTEGRATIONS.map((item) => (
+                                <div key={item.title} className="border-border/60 bg-card/90 rounded-2xl border p-5 shadow-sm backdrop-blur">
+                                    <span className="text-primary/80 inline-flex items-center rounded-full border border-primary/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+                                        {item.tag}
+                                    </span>
+                                    <h3 className="mt-5 text-lg font-semibold">{item.title}</h3>
+                                    <p className="mt-2 text-sm text-muted-foreground">{item.description}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+                <section id="pricing" className="py-20 md:py-32">
+                    <div className="mx-auto max-w-5xl px-6">
+                        <div className="text-center">
+                            <h2 className="text-balance text-3xl font-semibold md:text-4xl">Choose how you run OpenChat</h2>
+                            <p className="mt-4 text-balance text-muted-foreground">
+                                Self-host for free or let us run the infrastructure. Either way you stay in control of your data.
+                            </p>
+                        </div>
+                        <div className="mt-12 grid gap-6 md:grid-cols-2">
+                            {PRICING_PLANS.map((plan) => (
+                                <div
+                                    key={plan.tier}
+                                    className={cn(
+                                        "border-border/60 bg-card/80 flex flex-col rounded-2xl border p-6 text-left shadow-sm backdrop-blur",
+                                        plan.highlight && "border-primary/60 shadow-primary/10"
+                                    )}
+                                >
+                                    <div className="flex items-baseline justify-between gap-4">
+                                        <h3 className="text-xl font-semibold">{plan.tier}</h3>
+                                        <span className="text-primary text-sm font-semibold uppercase tracking-wide">{plan.price}</span>
+                                    </div>
+                                    <p className="mt-3 flex-1 text-sm text-muted-foreground">{plan.description}</p>
+                                    <Button asChild size="sm" className="mt-6 w-full justify-center">
+                                        <Link href={plan.ctaHref}>{plan.ctaLabel}</Link>
+                                    </Button>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </section>

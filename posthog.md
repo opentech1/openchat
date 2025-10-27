@@ -28,10 +28,9 @@ These 14 events cover the highest-leverage insights without burning volume on lo
 | `marketing.cta_clicked` | Primary CTAs (`hero-section`, header CTA) | `cta_id` (`hero_try_openchat`, `hero_request_demo`), `cta_copy`, `section`, `screen_width_bucket` | Shows which CTAs turn visitors into users. |
 | `dashboard.entered` | `dashboard/layout.tsx` after chat list load | `chat_total`, `has_api_key`, `entry_path`, `brand_theme` | Baseline active sessions and personalization adoption. |
 | `chat.created` *(front + server)* | Sidebar “New Chat” + router success | `chat_id`, `source` (`sidebar_button`), `storage_backend` (`postgres`, `memory_fallback`), `title_length` | Tracks creation intent and fallback usage. |
-| `chat_message_submitted` *(existing)* | `chat-room.tsx` send handler | `chat_id`, `model_id`, `characters`, `attachment_count`, `has_api_key` | Core usage + cost proxy by model and content length. |
+| `chat_message_submitted` *(existing)* | `chat-room.tsx` send handler | `chat_id`, `model_id`, `characters`, `has_api_key` | Core usage + cost proxy by model and content length. |
 | `chat_message_stream` *(existing server)* | `/api/chat` handler completion | `chat_id`, `model_id`, `status` (`completed`, `error`, `aborted`), `duration_ms`, `characters`, `openrouter_status`, `rate_limit_bucket` | Single source of truth for streaming health. |
 | `chat.rate_limited` | 429 branch in `createChatHandler` | `chat_id`, `limit`, `window_ms`, `client_ip_hash_trunc` | Detect traffic spikes or abuse without extra server logs. |
-| `chat.attachment_event` | `handleFileSelection` success/failure | `chat_id`, `result` (`accepted`, `rejected`), `file_mime`, `file_size_bytes`, `limit_bytes` | One event that captures attachment demand and guardrail friction. |
 | `openrouter.key_prompt_shown` | `OpenRouterLinkModal` open | `reason` (`missing`, `error`), `has_api_key` | Measures API-key onboarding friction. |
 | `openrouter.key_saved` | Successful save (modal or settings) | `source` (`modal`, `settings`), `masked_tail`, `scope` | Activation milestone toward usable chats. |
 | `openrouter.key_removed` | `handleRemoveApiKey` | `source`, `had_models_cached` | Detects churn risk for paid usage. |
@@ -76,8 +75,6 @@ For server-side events, add:
 3. **Reliability Board**
 	- Track `chat.rate_limited`, `openrouter.models_fetch_failed`, `sync.connection_state` (`state = failed`), and `workspace.fallback_storage_used`.
 	- Alert when fallback usage > 5% or rate limits spike.
-4. **Attachment Demand**
-	- Segment `chat.attachment_event` by `result`, `file_mime`, and `file_size_bytes` to justify storage roadmap.
 5. **Model Performance Report**
 	- Compare `chat_message_stream` success rate, median `duration_ms`, and characters by `model_id`.
 	- Flag models with >5% `status = error` to trigger provider follow-up.
