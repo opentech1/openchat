@@ -1,6 +1,17 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+const userDoc = v.object({
+	_id: v.id("users"),
+	_creationTime: v.number(),
+	externalId: v.string(),
+	email: v.optional(v.string()),
+	name: v.optional(v.string()),
+	avatarUrl: v.optional(v.string()),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+});
+
 export const ensure = mutation({
 	args: {
 		externalId: v.string(),
@@ -8,6 +19,7 @@ export const ensure = mutation({
 		name: v.optional(v.string()),
 		avatarUrl: v.optional(v.string()),
 	},
+	returns: v.object({ userId: v.id("users") }),
 	handler: async (ctx, args) => {
 		const existing = await ctx.db
 			.query("users")
@@ -45,6 +57,7 @@ export const getByExternalId = query({
 	args: {
 		externalId: v.string(),
 	},
+	returns: v.union(userDoc, v.null()),
 	handler: async (ctx, args) => {
 		const existing = await ctx.db
 			.query("users")

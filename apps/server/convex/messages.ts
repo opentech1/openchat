@@ -4,11 +4,23 @@ import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+const messageDoc = v.object({
+	_id: v.id("messages"),
+	_creationTime: v.number(),
+	chatId: v.id("chats"),
+	clientMessageId: v.optional(v.string()),
+	role: v.string(),
+	content: v.string(),
+	createdAt: v.number(),
+	status: v.optional(v.string()),
+});
+
 export const list = query({
 	args: {
 		chatId: v.id("chats"),
 		userId: v.id("users"),
 	},
+	returns: v.array(messageDoc),
 	handler: async (ctx, args) => {
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
 		if (!chat) return [];
@@ -37,9 +49,16 @@ export const send = mutation({
 			}),
 		),
 	},
+	returns: v.object({
+		ok: v.boolean(),
+		userMessageId: v.optional(v.id("messages")),
+		assistantMessageId: v.optional(v.id("messages")),
+	}),
 	handler: async (ctx, args) => {
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
-		if (!chat) return { ok: false as const };
+		if (!chat) {
+			return { ok: false as const, userMessageId: undefined, assistantMessageId: undefined };
+		}
 
 		const userCreatedAt = args.userMessage.createdAt ?? Date.now();
 		const userMessageId = await insertOrUpdateMessage(ctx, {
@@ -73,7 +92,7 @@ export const send = mutation({
 		return {
 			ok: true as const,
 			userMessageId,
-			assistantMessageId,
+			assistantMessageId: assistantMessageId ?? undefined,
 		};
 	},
 });
@@ -89,9 +108,15 @@ export const streamUpsert = mutation({
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
 	},
+	returns: v.object({
+		ok: v.boolean(),
+		messageId: v.optional(v.id("messages")),
+	}),
 	handler: async (ctx, args) => {
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
-		if (!chat) return { ok: false as const };
+		if (!chat) {
+			return { ok: false as const, messageId: undefined };
+		}
 		const timestamp = args.createdAt ?? Date.now();
 		const messageId = await insertOrUpdateMessage(ctx, {
 			chatId: args.chatId,

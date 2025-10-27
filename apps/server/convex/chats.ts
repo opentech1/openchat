@@ -3,10 +3,21 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+const chatDoc = v.object({
+	_id: v.id("chats"),
+	_creationTime: v.number(),
+	userId: v.id("users"),
+	title: v.string(),
+	createdAt: v.number(),
+	updatedAt: v.number(),
+	lastMessageAt: v.optional(v.number()),
+});
+
 export const list = query({
 	args: {
 		userId: v.id("users"),
 	},
+	returns: v.array(chatDoc),
 	handler: async (ctx, args) => {
 		return await ctx.db
 			.query("chats")
@@ -21,6 +32,7 @@ export const get = query({
 		chatId: v.id("chats"),
 		userId: v.id("users"),
 	},
+	returns: v.union(chatDoc, v.null()),
 	handler: async (ctx, args) => {
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId) return null;
@@ -33,6 +45,7 @@ export const create = mutation({
 		userId: v.id("users"),
 		title: v.string(),
 	},
+	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
 		const now = Date.now();
 		const chatId = await ctx.db.insert("chats", {
@@ -51,6 +64,7 @@ export const remove = mutation({
 		chatId: v.id("chats"),
 		userId: v.id("users"),
 	},
+	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId) {
