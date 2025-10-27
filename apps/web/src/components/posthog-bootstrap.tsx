@@ -2,51 +2,39 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
-import { authClient } from "@openchat/auth/client";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { identifyClient, registerClientProperties } from "@/lib/posthog";
-import { ensureGuestIdClient, resolveClientUserId } from "@/lib/guest.client";
 
 export function PosthogBootstrap() {
 	const { theme, resolvedTheme } = useTheme();
 	const { theme: brandTheme } = useBrandTheme();
-	const { data: session } = authClient.useSession();
+	const { user, loading } = useAuth();
 	const identifyRef = useRef<string | null>(null);
 
-	useEffect(() => {
-		ensureGuestIdClient();
-	}, []);
-
-	const resolvedWorkspaceId = useMemo(() => {
-		if (session?.user?.id) return session.user.id;
-		try {
-			return resolveClientUserId();
-		} catch {
-			return null;
-		}
-	}, [session?.user?.id]);
+	const resolvedWorkspaceId = useMemo(() => user?.id ?? null, [user?.id]);
 
 	useEffect(() => {
-		if (!resolvedWorkspaceId) return;
-		if (identifyRef.current === resolvedWorkspaceId && session?.user) return;
+		if (loading || !resolvedWorkspaceId) return;
+		if (identifyRef.current === resolvedWorkspaceId) return;
 		identifyRef.current = resolvedWorkspaceId;
 		identifyClient(resolvedWorkspaceId, {
 			workspaceId: resolvedWorkspaceId,
 			properties: {
-				auth_state: session?.user ? "member" : "guest",
+				auth_state: user ? "member" : "anonymous",
 			},
 		});
-	}, [resolvedWorkspaceId, session?.user]);
+	}, [loading, resolvedWorkspaceId, user]);
 
 	useEffect(() => {
 		if (!resolvedWorkspaceId) return;
 		registerClientProperties({
-			auth_state: session?.user ? "member" : "guest",
 			workspace_id: resolvedWorkspaceId,
+			auth_state: user ? "member" : "anonymous",
 		});
-	}, [resolvedWorkspaceId, session?.user]);
+	}, [resolvedWorkspaceId, user]);
 
 	useEffect(() => {
 		const preferred =

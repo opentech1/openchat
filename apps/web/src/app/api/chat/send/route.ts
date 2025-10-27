@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { serverClient } from "@/utils/orpc-server";
+import type { Id } from "@server/convex/_generated/dataModel";
+import { getUserContext } from "@/lib/auth-server";
+import { ensureConvexUser, sendMessagePair } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 import { z } from "zod";
 
@@ -31,7 +33,31 @@ export async function POST(req: Request) {
 
 	try {
 		const payload = payloadSchema.parse(await req.json());
-		const result = await serverClient.messages.send(payload);
+		const session = await getUserContext();
+		const convexUserId = await ensureConvexUser({
+			id: session.userId,
+			email: session.email,
+			name: session.name,
+			image: session.image,
+		});
+		const result = await sendMessagePair({
+			userId: convexUserId,
+			chatId: payload.chatId as Id<"chats">,
+			user: {
+				content: payload.userMessage.content,
+				createdAt: payload.userMessage.createdAt ? new Date(payload.userMessage.createdAt).getTime() : undefined,
+				clientMessageId: payload.userMessage.id,
+			},
+			assistant: payload.assistantMessage
+				? {
+					content: payload.assistantMessage.content,
+					createdAt: payload.assistantMessage.createdAt
+						? new Date(payload.assistantMessage.createdAt).getTime()
+						: undefined,
+					clientMessageId: payload.assistantMessage.id,
+				}
+				: undefined,
+		});
 		return NextResponse.json(result, { headers: corsHeaders });
 	} catch (error) {
 		if (error instanceof z.ZodError) {

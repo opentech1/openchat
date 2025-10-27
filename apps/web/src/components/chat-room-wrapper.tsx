@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
 import ChatRoom from "@/components/chat-room";
+import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 
 function ChatRoomSkeleton() {
 	return (
@@ -16,11 +18,29 @@ function ChatRoomSkeleton() {
 
 export default function ChatRoomWrapper(props: ComponentProps<typeof ChatRoom>) {
 	const [mounted, setMounted] = useState(false);
+	const initialUiMessages = useMemo(
+		() =>
+			props.initialMessages.map((message) =>
+				toUiMessage(
+					normalizeMessage({
+						id: message.id,
+						role: message.role,
+						content: message.content,
+						created_at: message.createdAt,
+					}),
+				),
+			),
+		[props.initialMessages],
+	);
 
 	useEffect(() => {
 		setMounted(true);
 	}, []);
 
 	if (!mounted) return <ChatRoomSkeleton />;
-	return <ChatRoom {...props} />;
+	return (
+		<ChatStoreProvider initialMessages={initialUiMessages}>
+			<ChatRoom {...props} />
+		</ChatStoreProvider>
+	);
 }

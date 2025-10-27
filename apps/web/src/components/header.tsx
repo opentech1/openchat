@@ -1,123 +1,170 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Menu, X } from "lucide-react";
-import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { authClient } from "@openchat/auth/client";
-import { AccountSettingsModal } from "@/components/account-settings-modal";
+import Link from 'next/link'
+import { Logo } from '@/components/logo'
+import { Menu, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import React, { useCallback, useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
+import { useAuth } from '@workos-inc/authkit-nextjs/components'
+import { captureClientEvent } from '@/lib/posthog'
 
 const menuItems = [
-	{ name: "Features", href: "#link" },
-	{ name: "Solution", href: "#link" },
-	{ name: "Pricing", href: "#link" },
-	{ name: "About", href: "#link" },
-];
+    { name: 'Features', href: '#features' },
+    { name: 'Integrations', href: '#integrations' },
+    { name: 'Pricing', href: '#pricing' },
+    { name: 'Docs', href: '/docs' },
+]
 
 export const HeroHeader = () => {
-	const [menuState, setMenuState] = useState(false);
-	const [isScrolled, setIsScrolled] = useState(false);
-	const [accountOpen, setAccountOpen] = useState(false);
-	const { data: session } = authClient.useSession();
+    const [menuState, setMenuState] = useState(false)
+    const [isScrolled, setIsScrolled] = useState(false)
+    const { user } = useAuth()
 
-	useEffect(() => {
-		const handleScroll = () => {
-			setIsScrolled(window.scrollY > 50);
-		};
-		window.addEventListener("scroll", handleScroll, { passive: true });
-		return () => window.removeEventListener("scroll", handleScroll);
-	}, []);
+    const handleHeaderCtaClick = useCallback(() => {
+        const width = typeof window !== 'undefined' ? window.innerWidth : 0
+        captureClientEvent('marketing.cta_clicked', {
+            cta_id: 'header_try_openchat',
+            cta_copy: 'Try OpenChat',
+            section: 'header',
+            screen_width_bucket: width < 640 ? 'xs' : width < 768 ? 'sm' : width < 1024 ? 'md' : width < 1280 ? 'lg' : 'xl',
+        })
+    }, [])
 
-	const userInitials = useMemo(() => {
-		const name = session?.user?.name || session?.user?.email || "";
-		if (!name) return "";
-		const parts = name.trim().split(/\s+/);
-		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
-	}, [session?.user?.email, session?.user?.name]);
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 48)
+        }
+        handleScroll()
+        window.addEventListener('scroll', handleScroll, { passive: true })
+        return () => window.removeEventListener('scroll', handleScroll)
+    }, [])
 
-	return (
-		<header>
-			<nav data-state={menuState && "active"} className="fixed z-20 w-full px-2">
-				<div
-					className={cn(
-						"mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
-						isScrolled && "bg-background/50 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5",
-					)}
-				>
-					<div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
-						<div className="flex w-full justify-between lg:w-auto">
-							<Link href="/" aria-label="home" className="flex items-center space-x-2">
-								<Logo />
-							</Link>
+    const closeMenu = () => setMenuState(false)
 
-							<button
-								onClick={() => setMenuState((value) => !value)}
-								aria-label={menuState ? "Close Menu" : "Open Menu"}
-								className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden"
-							>
-								<Menu className="in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto size-6 duration-200" />
-								<X className="in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200" />
-							</button>
-						</div>
+    return (
+        <header>
+            <nav
+                data-state={menuState ? 'active' : 'inactive'}
+                className={cn(
+                    'fixed z-20 w-full border-b border-border/50 transition-all duration-300',
+                    isScrolled ? 'bg-background/80 backdrop-blur-2xl shadow-md' : 'bg-background/30 backdrop-blur-sm',
+                )}>
+                <div className="mx-auto max-w-6xl px-6 transition-all duration-300">
+                    <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
+                        <div className="flex w-full items-center justify-between gap-12 lg:w-auto">
+                            <Link
+                                href="/"
+                                aria-label="home"
+                                className="flex items-center space-x-2">
+                                <Logo />
+                            </Link>
 
-						<div className="absolute inset-0 m-auto hidden size-fit lg:block">
-							<ul className="flex gap-8 text-sm">
-								{menuItems.map((item) => (
-									<li key={item.name}>
-										<a href={item.href} className="text-muted-foreground hover:text-accent-foreground block duration-150">
-											<span>{item.name}</span>
-										</a>
-									</li>
-								))}
-							</ul>
-						</div>
+                            <button
+                                data-state={menuState ? 'active' : 'inactive'}
+                                onClick={() => setMenuState(!menuState)}
+                                aria-label={menuState == true ? 'Close Menu' : 'Open Menu'}
+                                className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden">
+                                <Menu
+                                    data-state={menuState ? 'active' : 'inactive'}
+                                    className="in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto size-6 duration-200"
+                                />
+                                <X
+                                    data-state={menuState ? 'active' : 'inactive'}
+                                    className="in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200"
+                                />
+                            </button>
 
-						<div className="bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent">
-							<div className="lg:hidden">
-								<ul className="space-y-6 text-base">
+                            <div className="hidden lg:block">
+                                <ul className="flex gap-8 text-sm">
 									{menuItems.map((item) => (
 										<li key={item.name}>
-											<a href={item.href} className="text-muted-foreground hover:text-accent-foreground block duration-150">
+											<a
+												href={item.href}
+												onClick={(event) => {
+													closeMenu();
+													if (item.href.startsWith("#")) {
+														event.preventDefault();
+														const target = document.querySelector(item.href);
+														target?.scrollIntoView({ behavior: "smooth", block: "start" });
+														window.history.replaceState(null, "", item.href);
+													}
+												}}
+												className="text-muted-foreground hover:text-accent-foreground block duration-150"
+											>
 												<span>{item.name}</span>
 											</a>
 										</li>
 									))}
-								</ul>
-							</div>
-							<div className="flex w-full items-center justify-end gap-3 md:w-fit">
-								{session?.user ? (
-									<>
-										<Link href="/dashboard" className="text-sm">
-											Dashboard
-										</Link>
-										<button
-											type="button"
-											className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent"
-											onClick={() => setAccountOpen(true)}
-										>
-											<Avatar className="size-8">
-												{session.user.image ? (
-													<AvatarImage src={session.user.image} alt={session.user.name ?? session.user.email ?? "User"} />
-												) : null}
-												<AvatarFallback>{userInitials || "U"}</AvatarFallback>
-											</Avatar>
-											<span className="hidden text-sm font-medium lg:inline">{session.user.name || session.user.email}</span>
-										</button>
-									</>
-								) : (
-									<Button size="sm" asChild>
-										<Link href="/dashboard">Try OpenChat</Link>
-									</Button>
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
-			</nav>
-			<AccountSettingsModal open={accountOpen} onClose={() => setAccountOpen(false)} />
-		</header>
-	);
-};
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div
+                            data-state={menuState ? 'active' : 'inactive'}
+                            className="bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent">
+                            <div className="lg:hidden">
+                                <ul className="space-y-6 text-base">
+									{menuItems.map((item) => (
+										<li key={item.name}>
+											<a
+												href={item.href}
+												onClick={(event) => {
+													closeMenu();
+													if (item.href.startsWith("#")) {
+														event.preventDefault();
+														const target = document.querySelector(item.href);
+														target?.scrollIntoView({ behavior: "smooth", block: "start" });
+														window.history.replaceState(null, "", item.href);
+													}
+												}}
+												className="text-muted-foreground hover:text-accent-foreground block duration-150"
+											>
+												<span>{item.name}</span>
+											</a>
+										</li>
+									))}
+                                </ul>
+                            </div>
+                            <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
+                                {user ? (
+                                    <Link
+                                        href="/dashboard"
+                                        onClick={closeMenu}
+                                        className="text-sm font-medium">
+                                        Dashboard
+                                    </Link>
+                                ) : (
+                                    <>
+                                        <Button
+                                            asChild
+                                            variant="outline"
+                                            size="sm">
+                                            <Link
+                                                href="/auth/sign-in"
+                                                onClick={closeMenu}>
+                                                <span>Log in</span>
+                                            </Link>
+                                        </Button>
+                                        <Button
+                                            asChild
+                                            size="sm">
+                                            <Link
+                                                href="/dashboard"
+                                                onClick={() => {
+                                                    handleHeaderCtaClick()
+                                                    closeMenu()
+                                                }}>
+                                                <span>Try OpenChat</span>
+                                            </Link>
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        </header>
+    )
+}
