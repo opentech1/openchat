@@ -332,15 +332,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		const assistantCreatedAtIso = new Date().toISOString();
 
 		try {
-		const userResult = await persistMessageImpl({
-			userId: convexUserId,
-			chatId,
-			clientMessageId: rawUserMessage.id,
-			role: "user",
-			content: userContent,
-			createdAt: userCreatedAtIso,
-			status: "completed",
-		});
+			const userResult = await persistMessageImpl({
+				userId: convexUserId,
+				chatId,
+				clientMessageId: userMessageId,
+				role: "user",
+				content: userContent,
+				createdAt: userCreatedAtIso,
+				status: "completed",
+			});
 			if (!userResult.ok) {
 				throw new Error("user streamUpsert rejected");
 			}
@@ -351,15 +351,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		try {
-		const assistantBootstrap = await persistMessageImpl({
-			userId: convexUserId,
-			chatId,
-			clientMessageId: assistantMessageId,
-			role: "assistant",
-			content: "",
-			createdAt: assistantCreatedAtIso,
-			status: "streaming",
-		});
+			const assistantBootstrap = await persistMessageImpl({
+				userId: convexUserId,
+				chatId,
+				clientMessageId: assistantMessageId,
+				role: "assistant",
+				content: "",
+				createdAt: assistantCreatedAtIso,
+				status: "streaming",
+			});
 			if (!assistantBootstrap.ok) {
 				throw new Error("assistant streamUpsert rejected");
 			}
@@ -530,7 +530,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			});
 		} catch (error) {
 			console.error("/api/chat", error);
-			await finalize();
+			try {
+				await finalize();
+			} catch (finalizeError) {
+				console.error("/api/chat finalize", finalizeError);
+				if (!persistenceError) {
+					persistenceError =
+						finalizeError instanceof Error
+							? finalizeError
+							: new Error(String(finalizeError));
+				}
+			}
 			const duration = Date.now() - startedAt;
 			captureServerEvent("chat_message_stream", distinctId, {
 				chat_id: chatId,

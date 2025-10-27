@@ -128,10 +128,11 @@ export const streamUpsert = mutation({
 			overrideId: args.messageId ?? undefined,
 		});
 
-		if (args.role === "assistant" && args.status === "completed") {
+		if (args.status === "completed" && (args.role === "assistant" || args.role === "user")) {
+			const patchTimestamp = args.role === "assistant" ? Date.now() : timestamp;
 			await ctx.db.patch(args.chatId, {
-				lastMessageAt: Date.now(),
-				updatedAt: Date.now(),
+				lastMessageAt: patchTimestamp,
+				updatedAt: patchTimestamp,
 			});
 		}
 
