@@ -1,75 +1,46 @@
 import type { ReactNode } from "react";
-import { getUserContext } from "@/lib/auth-server";
-import AppSidebar from "@/components/app-sidebar-wrapper";
-import ThemeToggle from "@/components/theme-toggle";
 import Link from "next/link";
 import { Settings } from "lucide-react";
-import { serverClient } from "@/utils/orpc-server";
-import Script from "next/script";
-import type { ChatSummary } from "@/types/server-router";
+
+import { getUserContext } from "@/lib/auth-server";
+import { ensureConvexUser, listChats } from "@/lib/convex-server";
+import AppSidebar from "@/components/app-sidebar-wrapper";
+import MobileDashboardNav from "@/components/mobile-dashboard-nav";
+import ThemeToggle from "@/components/theme-toggle";
+
 export const dynamic = "force-dynamic";
 
-const charMap: Record<string, string> = {
-	"<": "\\u003C",
-	">": "\\u003E",
-	"/": "\\u002F",
-	"\\": "\\\\",
-	"\u0008": "\\b",
-	"\u000c": "\\f",
-	"\u000a": "\\n",
-	"\u000d": "\\r",
-	"\u0009": "\\t",
-	"\u0000": "\\0",
-	"\u2028": "\\u2028",
-	"\u2029": "\\u2029",
-};
-
-function escapeRegexChar(char: string): string {
-	const code = char.charCodeAt(0);
-	if (char === "\\" || char === "]" || char === "^" || char === "-") {
-		return `\\${char}`;
-	}
-	if (char === "/") return "\\/";
-	if (code < 0x20 || char === "\u2028" || char === "\u2029") {
-		return `\\u${code.toString(16).padStart(4, "0")}`;
-	}
-	return char;
-}
-
-const UNSAFE_PATTERN = new RegExp(`[${Object.keys(charMap).map(escapeRegexChar).join("")}]`, "g");
-
-function escapeUnsafeChars(str: string): string {
-	return str.replace(UNSAFE_PATTERN, (char) => charMap[char] ?? char);
-}
-
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-	const { userId } = await getUserContext();
-
-	const rawChats: ChatSummary[] = await serverClient.chats.list().catch(() => [] as ChatSummary[]);
-	const chats = rawChats.map((chat: ChatSummary) => ({
-		id: chat.id,
+	const session = await getUserContext();
+	const convexUserId = await ensureConvexUser({
+		id: session.userId,
+		email: session.email,
+		name: session.name,
+		image: session.image,
+	});
+	const rawChats = await listChats(convexUserId);
+	const chats = rawChats.map((chat) => ({
+		id: chat._id,
 		title: chat.title,
-		updatedAt: chat.updatedAt ?? undefined,
-		lastMessageAt: chat.lastMessageAt ?? null,
+		updatedAt: new Date(chat.updatedAt).toISOString(),
+		lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt).toISOString() : null,
 	}));
 
 	return (
 		<div className="relative flex h-svh overflow-hidden">
 			<div className="hidden md:block">
 				<div className="fixed inset-y-0 left-0">
-					<AppSidebar initialChats={chats} currentUserId={userId} />
+					<AppSidebar initialChats={chats} currentUserId={session.userId} />
 				</div>
 			</div>
-			<main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
-				<Script id="oc-user-bootstrap" strategy="afterInteractive">
-					{`(() => { const u = ${escapeUnsafeChars(JSON.stringify(userId))}; window.__DEV_USER_ID__ = u; window.__OC_GUEST_ID__ = u; })();`}
-				</Script>
-				<div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-1 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
-					<Link
-						href="/dashboard/settings"
-						className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
-						aria-label="Settings"
-					>
+            <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
+                <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
+                    <MobileDashboardNav initialChats={chats} currentUserId={session.userId} />
+                    <Link
+                        href="/dashboard/settings"
+                        className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+                        aria-label="Settings"
+                    >
 						<Settings className="size-4" />
 					</Link>
 					<ThemeToggle />

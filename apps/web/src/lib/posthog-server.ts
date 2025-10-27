@@ -1,5 +1,4 @@
 import { PostHog } from "posthog-node";
-import { withTracing } from "@posthog/ai";
 
 let serverClient: PostHog | null = null;
 
@@ -37,7 +36,6 @@ function ensureServerClient() {
 		flushAt: 1,
 		flushInterval: 5_000,
 	});
-	serverClient.register(BASE_SUPER_PROPERTIES);
 	return serverClient;
 }
 
@@ -48,7 +46,7 @@ export function captureServerEvent(
 ) {
 	const client = ensureServerClient();
 	if (!client || !distinctId) return;
-	const sanitized: Record<string, unknown> = {};
+	const sanitized: Record<string, unknown> = { ...BASE_SUPER_PROPERTIES };
 	if (properties) {
 		for (const [key, value] of Object.entries(properties)) {
 			if (value === undefined) continue;
@@ -60,15 +58,6 @@ export function captureServerEvent(
 		.catch((error) => {
 			console.error("[posthog] capture failed", error);
 		});
-}
-
-export function withServerTracing<Model extends (...args: any[]) => any>(
-	model: Model,
-	options?: Parameters<typeof withTracing<Model>>[2],
-) {
-	const client = ensureServerClient();
-	if (!client) return model;
-	return withTracing(model, client, options ?? {});
 }
 
 export async function shutdownServerPosthog() {

@@ -1,10 +1,11 @@
-import { streamText, convertToCoreMessages, type UIMessage } from "ai";
+import { convertToCoreMessages, smoothStream, streamText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createHash } from "crypto";
+import type { Id } from "@server/convex/_generated/dataModel";
 
 import { captureServerEvent } from "@/lib/posthog-server";
-
-import { serverClient } from "@/utils/orpc-server";
+import { getUserContext } from "@/lib/auth-server";
+import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 
 type AnyUIMessage = UIMessage<Record<string, unknown>>;
@@ -21,22 +22,31 @@ const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) &
 	? RAW_MAX_TRACKED_RATE_BUCKETS
 	: null;
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
-const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 250);
+const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 80);
 const STREAM_FLUSH_INTERVAL_MS =
 	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
 		? STREAM_FLUSH_INTERVAL_RAW
-		: 250;
+		: 80;
 const STREAM_MIN_CHARS_PER_FLUSH_RAW = Number(
-	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? 120,
+	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? 24,
 );
 const STREAM_MIN_CHARS_PER_FLUSH =
 	Number.isFinite(STREAM_MIN_CHARS_PER_FLUSH_RAW) && STREAM_MIN_CHARS_PER_FLUSH_RAW > 0
 		? STREAM_MIN_CHARS_PER_FLUSH_RAW
-		: 120;
+		: 24;
+const STREAM_SMOOTH_DELAY_MS = (() => {
+	const raw = process.env.OPENROUTER_STREAM_DELAY_MS;
+	if (raw === undefined || raw === null || raw.trim() === "") return 12;
+	if (raw.trim().toLowerCase() === "null") return null;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed)) return 12;
+	return parsed < 0 ? 0 : parsed;
+})();
 
 type StreamPersistRequest = {
+	userId: string;
 	chatId: string;
-	messageId: string;
+	clientMessageId?: string | null;
 	role: "user" | "assistant";
 	content: string;
 	createdAt: string;
@@ -116,6 +126,7 @@ function buildCorsHeaders(request: Request, allowedOrigin?: string | null) {
 	}
 	headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 	headers.set("Access-Control-Allow-Methods", "POST,OPTIONS");
+	headers.set("Access-Control-Allow-Credentials", "true");
 	headers.set("Vary", "Origin");
 	return headers;
 }
@@ -144,7 +155,18 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
 	const allowedOrigins = resolveAllowedOrigins(corsOrigin);
 
-	const persistMessageImpl = options.persistMessage ?? ((input: StreamPersistRequest) => serverClient.messages.streamUpsert(input));
+	const persistMessageImpl =
+		options.persistMessage ??
+		((input: StreamPersistRequest) =>
+			streamUpsertMessage({
+				userId: input.userId as Id<"users">,
+				chatId: input.chatId as Id<"chats">,
+				clientMessageId: input.clientMessageId ?? undefined,
+				role: input.role,
+				content: input.content,
+				status: input.status,
+				createdAt: new Date(input.createdAt).getTime(),
+			}));
 
 	const buckets = new Map<string, RateBucket>();
 	let lastBucketCleanup = 0;
@@ -195,7 +217,14 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Invalid request origin", { status: 403 });
 		}
 		const allowOrigin = originResult.origin ?? corsOrigin ?? null;
-		const distinctIdHeader = request.headers.get("x-user-id")?.trim() || null;
+		const session = await getUserContext();
+		const convexUserId = await ensureConvexUser({
+			id: session.userId,
+			email: session.email,
+			name: session.name,
+			image: session.image,
+		});
+		const distinctId = session.userId;
 		const clientIp = pickClientIp(request);
 		const ipHash = hashClientIp(clientIp);
 		const requestOriginValue = originResult.origin ?? request.headers.get("origin") ?? allowOrigin ?? null;
@@ -205,7 +234,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			headers.set("Retry-After", Math.ceil(bucketWindowMs / 1000).toString());
 			headers.set("X-RateLimit-Limit", rateLimit.limit.toString());
 			headers.set("X-RateLimit-Window", bucketWindowMs.toString());
-			captureServerEvent("chat.rate_limited", distinctIdHeader, {
+			captureServerEvent("chat.rate_limited", distinctId, {
 				chat_id: null,
 				limit: rateLimit.limit,
 				window_ms: bucketWindowMs,
@@ -267,7 +296,6 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response(responseMessage, { status, headers });
 		}
 
-		const distinctId = distinctIdHeader;
 		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
 		if (!chatId) {
 			const headers = buildCorsHeaders(request, allowOrigin);
@@ -304,14 +332,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		const assistantCreatedAtIso = new Date().toISOString();
 
 		try {
-			const userResult = await persistMessageImpl({
-				chatId,
-				messageId: userMessageId,
-				role: "user",
-				content: userContent,
-				createdAt: userCreatedAtIso,
-				status: "completed",
-			});
+		const userResult = await persistMessageImpl({
+			userId: convexUserId,
+			chatId,
+			clientMessageId: rawUserMessage.id,
+			role: "user",
+			content: userContent,
+			createdAt: userCreatedAtIso,
+			status: "completed",
+		});
 			if (!userResult.ok) {
 				throw new Error("user streamUpsert rejected");
 			}
@@ -322,14 +351,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		try {
-			const assistantBootstrap = await persistMessageImpl({
-				chatId,
-				messageId: assistantMessageId,
-				role: "assistant",
-				content: "",
-				createdAt: assistantCreatedAtIso,
-				status: "streaming",
-			});
+		const assistantBootstrap = await persistMessageImpl({
+			userId: convexUserId,
+			chatId,
+			clientMessageId: assistantMessageId,
+			role: "assistant",
+			content: "",
+			createdAt: assistantCreatedAtIso,
+			status: "streaming",
+		});
 			if (!assistantBootstrap.ok) {
 				throw new Error("assistant streamUpsert rejected");
 			}
@@ -361,8 +391,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 			lastPersistedLength = pendingLength;
 			const response = await persistMessageImpl({
+				userId: convexUserId,
 				chatId,
-				messageId: assistantMessageId,
+				clientMessageId: assistantMessageId,
 				role: "assistant",
 				content: assistantText,
 				createdAt: assistantCreatedAtIso,
@@ -435,6 +466,10 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
+				experimental_transform: smoothStream({
+					delayInMs: STREAM_SMOOTH_DELAY_MS,
+					chunking: "word",
+				}),
 				onChunk: async ({ chunk }) => {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
 						assistantText += chunk.text;
@@ -512,6 +547,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				rate_limit_bucket: rateLimitBucketLabel,
 			});
 			const headers = buildCorsHeaders(request, allowOrigin);
+			const upstreamStatus =
+				typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : undefined;
+			if (upstreamStatus === 401) {
+				return new Response("OpenRouter API key invalid", { status: 401, headers });
+			}
 			return new Response("Upstream error", { status: 502, headers });
 		}
 	};
