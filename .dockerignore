@@ -1,17 +1,21 @@
+# General
 .git
+.gitignore
 node_modules
-apps/*/node_modules
-.turbo
-.next
-coverage
-infra/dev.docker-compose.yml
-bun.lockb
-*.log
+.bun
 .tmp
-.DS_Store
-.idea
-.vscode
-.env*
-# keep dist artifacts from local builds out of image context
-apps/server/dist
+Dockerfile*
+docker-compose.yml
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js build output
 apps/web/.next
+apps/web/out
+
+# Convex local artifacts
+apps/server/.convex
+
+# Misc
+.env.local

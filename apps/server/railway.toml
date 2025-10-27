@@ -1,8 +1,0 @@
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "docker/server.Dockerfile"
-
-[deploy]
-# Railway sets PORT automatically; Docker CMD handles startup.
-sleepApplication = false
-restartPolicyType = "ALWAYS"

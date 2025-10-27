@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
+import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import { cn } from "@/lib/utils";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 
@@ -71,11 +75,17 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" suppressHydrationWarning data-brand-theme="blue">
-			<body className="font-sans">
-				<Providers>
-					{children}
-				</Providers>
+		<html
+			lang="en"
+			suppressHydrationWarning
+			data-brand-theme="blue"
+			className={`${GeistSans.variable} ${GeistMono.variable}`}>
+			<body className={cn("font-sans antialiased", GeistSans.className)}>
+				<AuthKitProvider>
+					<Providers>
+						{children}
+					</Providers>
+				</AuthKitProvider>
 			</body>
 		</html>
 	);
