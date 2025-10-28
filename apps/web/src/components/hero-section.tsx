@@ -1,5 +1,6 @@
 'use client';
 
+import type { Route } from 'next';
 import React, { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -42,6 +43,15 @@ const INTEGRATIONS = [
 	},
 ];
 
+type PricingPlan = {
+	tier: string;
+	price: string;
+	description: string;
+	ctaLabel: string;
+	ctaHref: string;
+	highlight?: boolean;
+};
+
 const PRICING_PLANS = [
 	{
 		tier: "Self-host",
@@ -58,7 +68,11 @@ const PRICING_PLANS = [
 		ctaHref: "mailto:hello@openchat.dev?subject=OpenChat%20Cloud%20waitlist",
 		highlight: true,
 	},
-];
+] satisfies PricingPlan[];
+
+function isInternalHref(href: PricingPlan['ctaHref']): href is Route {
+	return href.startsWith('/');
+}
 
 function screenWidthBucket(width: number) {
 	if (width < 640) return 'xs'
@@ -269,26 +283,41 @@ export default function HeroSection() {
                                 Self-host for free or let us run the infrastructure. Either way you stay in control of your data.
                             </p>
                         </div>
-                        <div className="mt-12 grid gap-6 md:grid-cols-2">
-                            {PRICING_PLANS.map((plan) => (
-                                <div
-                                    key={plan.tier}
-                                    className={cn(
-                                        "border-border/60 bg-card/80 flex flex-col rounded-2xl border p-6 text-left shadow-sm backdrop-blur",
-                                        plan.highlight && "border-primary/60 shadow-primary/10"
-                                    )}
-                                >
-                                    <div className="flex items-baseline justify-between gap-4">
-                                        <h3 className="text-xl font-semibold">{plan.tier}</h3>
-                                        <span className="text-primary text-sm font-semibold uppercase tracking-wide">{plan.price}</span>
-                                    </div>
-                                    <p className="mt-3 flex-1 text-sm text-muted-foreground">{plan.description}</p>
-                                    <Button asChild size="sm" className="mt-6 w-full justify-center">
-                                        <Link href={plan.ctaHref}>{plan.ctaLabel}</Link>
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
+						<div className="mt-12 grid gap-6 md:grid-cols-2">
+							{PRICING_PLANS.map((plan) => {
+								const isInternal = isInternalHref(plan.ctaHref)
+								const isMailto = plan.ctaHref.startsWith('mailto:')
+
+								return (
+									<div
+										key={plan.tier}
+										className={cn(
+											"border-border/60 bg-card/80 flex flex-col rounded-2xl border p-6 text-left shadow-sm backdrop-blur",
+											plan.highlight && "border-primary/60 shadow-primary/10"
+										)}
+									>
+										<div className="flex items-baseline justify-between gap-4">
+											<h3 className="text-xl font-semibold">{plan.tier}</h3>
+											<span className="text-primary text-sm font-semibold uppercase tracking-wide">{plan.price}</span>
+										</div>
+										<p className="mt-3 flex-1 text-sm text-muted-foreground">{plan.description}</p>
+										<Button asChild size="sm" className="mt-6 w-full justify-center">
+											{isInternal ? (
+												<Link href={plan.ctaHref}>{plan.ctaLabel}</Link>
+											) : (
+												<a
+													href={plan.ctaHref}
+													target={isMailto ? undefined : '_blank'}
+													rel={isMailto ? undefined : 'noreferrer'}
+												>
+													{plan.ctaLabel}
+												</a>
+											)}
+										</Button>
+									</div>
+								)
+							})}
+						</div>
                     </div>
                 </section>
             </main>
