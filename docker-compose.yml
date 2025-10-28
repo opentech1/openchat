@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  convex:
+  server:
     build:
       context: .
       dockerfile: docker/convex.Dockerfile
@@ -14,6 +14,10 @@ services:
       - ./apps/server:/app/apps/server:rw
       - ./convex.json:/app/convex.json:ro
       - ./convex-rules.txt:/app/convex-rules.txt:ro
+    networks:
+      default:
+        aliases:
+          - convex
     restart: unless-stopped
 
   web:
@@ -29,5 +33,5 @@ services:
     ports:
       - "3001:3001"
     depends_on:
-      - convex
+      - server
     restart: unless-stopped
