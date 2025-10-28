@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
-import { queryClient } from "@/utils/orpc";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ThemeProvider } from "./theme-provider";
 import { BrandThemeProvider } from "./brand-theme-provider";
 import { Toaster } from "sonner";
@@ -11,31 +11,41 @@ import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-	const [posthogClient, setPosthogClient] = useState<ReturnType<typeof initPosthog>>(null);
+	const queryClient = useMemo(() => new QueryClient(), []);
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const posthogClient = useMemo(() => initPosthog(), []);
+	const entryReferrer = useMemo(() => {
+		if (typeof document === "undefined") return "direct";
+		return document.referrer && document.referrer.length > 0 ? document.referrer : "direct";
+	}, []);
+	const previousPathRef = useRef<string | null>(null);
 
 	useEffect(() => {
-		const client = initPosthog();
-		if (client) {
-			setPosthogClient(client);
-			const referrerUrl = document.referrer && document.referrer.length > 0 ? document.referrer : "direct";
-			let referrerDomain = "direct";
-			if (referrerUrl !== "direct") {
-				try {
-					referrerDomain = new URL(referrerUrl).hostname;
-				} catch {
-					referrerDomain = "direct";
-				}
+		if (!posthogClient) return;
+		if (typeof window === "undefined") return;
+		const currentPath = pathname ?? window.location.pathname;
+		const search = searchParams?.toString() ?? window.location.search.replace(/^\?/, "");
+		const referrerUrl =
+			previousPathRef.current != null
+				? `${window.location.origin}${previousPathRef.current}`
+				: entryReferrer;
+		let referrerDomain = "direct";
+		if (referrerUrl !== "direct") {
+			try {
+				referrerDomain = new URL(referrerUrl).hostname;
+			} catch {
+				referrerDomain = "direct";
 			}
-			const entryPath = window.location.pathname || "/";
-			const entryQuery = window.location.search || "";
-			client.capture("$pageview", {
-				referrer_url: referrerUrl,
-				referrer_domain: referrerDomain,
-				entry_path: entryPath,
-				entry_query: entryQuery,
-			});
 		}
-	}, []);
+		posthogClient.capture("$pageview", {
+			referrer_url: referrerUrl,
+			referrer_domain: referrerDomain,
+			entry_path: currentPath || "/",
+			entry_query: search.length > 0 ? `?${search}` : "",
+		});
+		previousPathRef.current = `${currentPath || "/"}${search.length > 0 ? `?${search}` : ""}`;
+	}, [entryReferrer, pathname, posthogClient, searchParams]);
 
 	const appTree = (
 		<ThemeProvider

@@ -36,12 +36,25 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
+function formatCost(cost: number | null) {
+	if (cost == null || !Number.isFinite(cost)) return "–"
+	const abs = Math.abs(cost)
+	let fractionDigits = 3
+	if (abs >= 1) fractionDigits = 2
+	else if (abs >= 0.1) fractionDigits = 3
+	else if (abs >= 0.01) fractionDigits = 4
+	else if (abs >= 0.001) fractionDigits = 5
+	else fractionDigits = 6
+	return new Intl.NumberFormat("en-US", {
+		style: "currency",
+		currency: "USD",
+		minimumFractionDigits: fractionDigits,
+		maximumFractionDigits: fractionDigits,
+	}).format(cost)
+}
+
 function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	const format = (cost: number | null) => {
-		if (cost == null) return "–"
-		return `$${cost.toFixed(3)}`
-	}
-	return `In: ${format(pricing.prompt)} · Out: ${format(pricing.completion)} per 1M tokens`
+	return `In: ${formatCost(pricing.prompt)} · Out: ${formatCost(pricing.completion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {
@@ -105,7 +118,6 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 	const triggerTitle = React.useMemo(() => {
 		if (!selectedOption) return undefined
 		const parts: string[] = []
-		if (selectedOption.description) parts.push(selectedOption.description)
 		if (selectedOption.context) parts.push(`Context: ${Intl.NumberFormat().format(selectedOption.context)} tokens`)
 		if (selectedOption.pricing) parts.push(formatPricing(selectedOption.pricing))
 		return parts.length > 0 ? parts.join(" • ") : undefined
@@ -140,20 +152,19 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 							{loading ? "Loading models..." : "No models found."}
 						</CommandEmpty>
 						<CommandGroup className="flex flex-col gap-1 p-2">
-							{options.map((option) => {
-								const isSelected = option.value === selectedValue
-								return (
-									<CommandItem
-										key={option.value}
-										value={option.value}
-										onSelect={(currentValue) => {
-											if (value === undefined) {
-												setInternalValue(currentValue)
-											}
-											onChange?.(currentValue)
-											registerClientProperties({ model_id: currentValue })
-											setOpen(false)
-										}}
+						{options.map((option) => {
+							const isSelected = option.value === selectedValue
+							return (
+								<CommandItem
+									key={option.value}
+									value={option.value}
+									onSelect={(currentValue) => {
+										if (value === undefined) {
+											setInternalValue(currentValue)
+										}
+										onChange?.(currentValue)
+										setOpen(false)
+									}}
 										className={cn(
 											"flex items-center justify-between gap-2 rounded-lg px-3 py-2",
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
@@ -167,11 +178,6 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 											<span className="text-sm font-medium leading-tight text-left whitespace-normal">
 												{option.label}
 											</span>
-											{option.description ? (
-												<span className="text-muted-foreground text-[11px] leading-tight text-left whitespace-normal">
-													{option.description}
-												</span>
-											) : null}
 											{option.pricing ? (
 												<span className="text-muted-foreground text-[11px] leading-tight">
 													{formatPricing(option.pricing)}

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { authClient } from "@openchat/auth/client";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
+import { signOutAction } from "@/actions/sign-out";
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
@@ -24,7 +25,7 @@ function getFocusableElements(container: HTMLElement | null) {
 
 export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 	const router = useRouter();
-	const { data: session } = authClient.useSession();
+	const { user } = useAuth();
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
 	const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -120,13 +121,12 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 		};
 	}, [open]);
 
-	const user = session?.user;
 	if (!open || !user) return null;
 
+	const nameParts = [user.firstName, user.lastName].filter((part): part is string => Boolean(part?.trim()));
+	const displayName = nameParts.join(" ").trim() || user.email || "Unnamed user";
 	const initials = (() => {
-		const label = user.name || user.email || "";
-		if (!label) return "U";
-		const parts = label.trim().split(/\s+/);
+		const parts = displayName.trim().split(/\s+/);
 		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "U";
 	})();
 
@@ -188,11 +188,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 	async function handleSignOut() {
 		try {
 			setSigningOut(true);
-			const { error } = await authClient.signOut();
-			if (error) {
-				toast.error(error.message ?? "Unable to sign out");
-				return;
-			}
+			await signOutAction();
 			onClose();
 			toast.success("Signed out");
 			router.push("/");
@@ -206,10 +202,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 	}
 
 	async function handleCopyUserId() {
-		if (!user) {
-			toast.error("No user session available");
-			return;
-		}
+		if (!user) return;
 		try {
 			await navigator.clipboard.writeText(user.id);
 			toast.success("User ID copied to clipboard");
@@ -243,11 +236,13 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 					<div className="max-h-[80svh] overflow-auto p-4 space-y-6">
 						<div className="flex items-center gap-3">
 							<Avatar className="size-14">
-								{user.image ? <AvatarImage src={user.image} alt={user.name ?? user.email ?? "User"} /> : null}
+								{user.profilePictureUrl ? (
+									<AvatarImage src={user.profilePictureUrl} alt={displayName || "User"} />
+								) : null}
 								<AvatarFallback className="text-lg font-semibold">{initials}</AvatarFallback>
 							</Avatar>
 							<div>
-								<p className="text-sm font-medium">{user.name || "Unnamed user"}</p>
+								<p className="text-sm font-medium">{displayName}</p>
 								<p className="text-muted-foreground text-sm">{user.email}</p>
 							</div>
 						</div>
@@ -301,7 +296,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 
 
 					<div className="space-y-2 text-sm text-muted-foreground">
-							<p>You are signed in with Better Auth. Use the button below to sign out from all tabs.</p>
+							<p>You are signed in with WorkOS AuthKit. Use the button below to sign out from all tabs.</p>
 						</div>
 						<Button variant="destructive" className="w-full" onClick={handleSignOut} disabled={signingOut}>
 							{signingOut ? "Signing out…" : "Sign out"}

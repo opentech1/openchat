@@ -5,8 +5,9 @@ import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { authClient } from "@openchat/auth/client";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import {
 	Sidebar,
 	SidebarContent,
@@ -16,12 +17,11 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useWorkspaceChats, type WorkspaceChatRow } from "@/lib/electric/workspace-db";
-import { client } from "@/utils/orpc";
 import { captureClientEvent, identifyClient, registerClientProperties } from "@/lib/posthog";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { useBrandTheme } from "@/components/brand-theme-provider";
+import { prefetchChat } from "@/lib/chat-prefetch-cache";
 
 export type ChatListItem = {
 	id: string;
@@ -65,13 +65,6 @@ function normalizeChat(chat: ChatListItem): ChatListItem {
 
 function ensureNormalizedChat(chat: ChatListItem): ChatListItem {
 	return chat.lastActivityMs != null ? chat : normalizeChat(chat);
-}
-
-function dateToIso(value: string | Date | null | undefined) {
-	if (!value) return undefined;
-	const date = typeof value === "string" ? new Date(value) : value;
-	if (Number.isNaN(date.getTime())) return undefined;
-	return date.toISOString();
 }
 
 function mergeChat(existing: ChatListItem | undefined, incoming: ChatListItem): ChatListItem {
@@ -122,125 +115,79 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 	return dedupeChats(list.concat([chat]));
 }
 
-function mapLiveChat(row: WorkspaceChatRow): ChatListItem {
-	return normalizeChat({
-		id: row.id,
-		title: row.title,
-		updatedAt: row.updated_at ? new Date(row.updated_at) : undefined,
-		lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
-	});
-}
-
 export default function AppSidebar({ initialChats = [], currentUserId, ...sidebarProps }: AppSidebarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
-	const { data: session } = authClient.useSession();
+	const { user } = useAuth();
 	const { theme: brandTheme } = useBrandTheme();
 	const [accountOpen, setAccountOpen] = useState(false);
-	const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 	const [isCreating, setIsCreating] = useState(false);
-	const [optimisticChats, setOptimisticChats] = useState<ChatListItem[]>([]);
+	const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+	const [chats, setChats] = useState<ChatListItem[]>(() => dedupeChats(initialChats));
 
 	useEffect(() => {
-		if (typeof window === "undefined") return;
-		if (!currentUserId) return;
-		(window as any).__DEV_USER_ID__ = currentUserId;
-		(window as any).__OC_USER_ID__ = currentUserId;
-		identifyClient(currentUserId, {
-			workspaceId: currentUserId,
-			properties: { auth_state: session?.user ? "member" : "guest" },
+		setChats(dedupeChats(initialChats));
+	}, [initialChats]);
+
+	useEffect(() => {
+		if (!user?.id) return;
+		identifyClient(user.id, {
+			workspaceId: user.id,
+			properties: { auth_state: "member" },
 		});
-		registerClientProperties({
-			auth_state: session?.user ? "member" : "guest",
-			workspace_id: currentUserId,
-		});
-	}, [currentUserId, session?.user]);
-
-	const normalizedInitial = useMemo(() => initialChats.map(normalizeChat), [initialChats]);
-	const [fallbackChats, setFallbackChats] = useState<ChatListItem[]>(() => dedupeChats(normalizedInitial));
-	useEffect(() => {
-		setFallbackChats(dedupeChats(normalizedInitial));
-	}, [normalizedInitial]);
-	const serializedFallback = useMemo<WorkspaceChatRow[]>(
-		() =>
-			normalizedInitial.map((chat) => ({
-				id: chat.id,
-				title: chat.title,
-				user_id: currentUserId,
-				updated_at: dateToIso(chat.updatedAt) ?? null,
-				last_message_at: dateToIso(chat.lastMessageAt) ?? null,
-			})),
-		[normalizedInitial, currentUserId],
-	);
-
-	const chatQuery = useWorkspaceChats(currentUserId, serializedFallback);
-	const electricChats = useMemo(() => {
-		if (!currentUserId) return null;
-		if (!chatQuery.enabled) return null;
-		const rows = chatQuery.data?.map(mapLiveChat);
-		if (!rows) return null;
-		return dedupeChats(rows);
-	}, [chatQuery.data, chatQuery.enabled, currentUserId]);
-
-	useEffect(() => {
-		if (electricChats) setFallbackChats(dedupeChats(electricChats));
-	}, [electricChats]);
-
-	const baseChats = fallbackChats;
-	const isLoading = chatQuery.enabled && !chatQuery.isReady && fallbackChats.length === 0;
-
-	const chats = useMemo(() => {
-		if (optimisticChats.length === 0) return baseChats;
-		const baseIds = new Set(baseChats.map((chat) => chat.id));
-		const supplemental = optimisticChats.filter((chat) => !baseIds.has(chat.id));
-		return sortChats(baseChats.concat(supplemental));
-	}, [baseChats, optimisticChats]);
-
-	useEffect(() => {
-		if (baseChats.length === 0) return;
-		const baseIds = new Set(baseChats.map((chat) => chat.id));
-		setOptimisticChats((prev) => {
-			if (prev.length === 0) return prev;
-			const filtered = prev.filter((chat) => !baseIds.has(chat.id));
-			return filtered.length === prev.length ? prev : filtered;
-		});
-	}, [baseChats]);
+		registerClientProperties({ auth_state: "member", workspace_id: user.id });
+	}, [user?.id]);
 
 	const handleCreateChat = useCallback(async () => {
-		if (!currentUserId || isCreating) {
-			if (!currentUserId) router.push("/auth/sign-in");
-			return;
+		if (isCreating) return;
+		setIsCreating(true);
+		try {
+			const response = await fetch("/api/chats", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				credentials: "include",
+				body: JSON.stringify({ title: "New Chat" }),
+			});
+			const payload = (await response.json()) as { chat?: ChatListItem; error?: string };
+			if (!response.ok || !payload.chat) {
+				throw new Error(payload.error || "Failed to create chat");
+			}
+			setChats((prev) => upsertChat(prev, payload.chat!));
+			captureClientEvent("chat.created", {
+				chat_id: payload.chat.id,
+				title_length: payload.chat.title?.length ?? 0,
+				source: "sidebar_button",
+				storage_backend: "convex",
+			});
+			await router.push(`/dashboard/chat/${payload.chat.id}`);
+		} catch (error) {
+			console.error("create chat", error);
+			toast.error("Unable to create chat", {
+				description: error instanceof Error ? error.message : "Try again in a moment",
+			});
+		} finally {
+			setIsCreating(false);
 		}
-	setIsCreating(true);
-	try {
-		const now = new Date();
-		const { id, storageBackend = "postgres" } = await client.chats.create({ title: "New Chat" });
-		const optimisticChat = normalizeChat({ id, title: "New Chat", updatedAt: now, lastMessageAt: now });
-		setOptimisticChats((prev) => upsertChat(prev, optimisticChat));
-		setFallbackChats((prev) => upsertChat(prev, optimisticChat));
-		captureClientEvent("chat.created", {
-			chat_id: id,
-			source: "sidebar_button",
-			storage_backend: storageBackend,
-			title_length: optimisticChat.title?.length ?? 0,
-		});
-		await router.push(`/dashboard/chat/${id}`);
-	} catch (error) {
-		console.error("create chat", error);
-	} finally {
-		setIsCreating(false);
-	}
-	}, [currentUserId, isCreating, router]);
+	}, [isCreating, router]);
 
 	const handleDelete = useCallback(
 		async (chatId: string) => {
 			setDeletingChatId(chatId);
 			try {
-				await client.chats.delete({ chatId });
-				setOptimisticChats((prev) => prev.filter((chat) => chat.id !== chatId));
-				setFallbackChats((prev) => prev.filter((chat) => chat.id !== chatId));
+				const response = await fetch(`/api/chats/${chatId}`, {
+					method: "DELETE",
+					credentials: "include",
+				});
+				if (!response.ok) {
+					const payload = await response.json().catch(() => ({}));
+					throw new Error((payload as { error?: string }).error || "Failed to delete chat");
+				}
+				setChats((prev) => sortChats(prev.filter((chat) => chat.id !== chatId)));
 			} catch (error) {
 				console.error("delete chat", error);
+				toast.error("Unable to delete chat", {
+					description: error instanceof Error ? error.message : "Please retry",
+				});
 			} finally {
 				setDeletingChatId(null);
 			}
@@ -248,17 +195,22 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 		[],
 	);
 
+	const userDisplayLabel = useMemo(() => {
+		if (!user) return "";
+		const parts = [user.firstName, user.lastName].filter((part): part is string => Boolean(part?.trim()));
+		return parts.join(" ").trim() || user.email || user.id || "";
+	}, [user]);
+
 	const userInitials = useMemo(() => {
-		const label = session?.user?.name || session?.user?.email || "";
-		if (!label) return "";
-		const parts = label.trim().split(/\s+/);
+		if (!userDisplayLabel) return "";
+		const parts = userDisplayLabel.trim().split(/\s+/);
 		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
-	}, [session?.user?.email, session?.user?.name]);
+	}, [userDisplayLabel]);
 
 	const dashboardTrackedRef = useRef(false);
 	useEffect(() => {
 		if (dashboardTrackedRef.current) return;
-		if (isLoading) return;
+		if (!user?.id) return;
 		dashboardTrackedRef.current = true;
 		void (async () => {
 			let hasKey = false;
@@ -271,13 +223,13 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 			}
 			const entryPath = typeof window !== "undefined" ? window.location.pathname || "/dashboard" : "/dashboard";
 			captureClientEvent("dashboard.entered", {
-				chat_total: baseChats.length,
+				chat_total: chats.length,
 				has_api_key: hasKey,
 				entry_path: entryPath,
 				brand_theme: brandTheme,
 			});
 		})();
-	}, [baseChats.length, brandTheme, isLoading]);
+	}, [brandTheme, chats.length, user?.id]);
 
 	return (
 		<Sidebar defaultCollapsed {...sidebarProps}>
@@ -306,7 +258,16 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 					<div className="flex items-center justify-between px-2 py-1.5">
 						<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chats</h3>
 					</div>
-					<ChatList chats={chats} isLoading={isLoading} activePath={pathname} onDelete={handleDelete} deletingId={deletingChatId} />
+					<ChatList
+						chats={chats}
+						activePath={pathname}
+						onDelete={handleDelete}
+						deletingId={deletingChatId}
+						onHoverChat={(chatId) => {
+							router.prefetch(`/dashboard/chat/${chatId}`);
+							void prefetchChat(chatId);
+						}}
+					/>
 				</SidebarGroup>
 			</SidebarContent>
 			<div className="mt-auto w-full px-2 pb-3 pt-2">
@@ -316,64 +277,53 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 					className="hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition"
 				>
 					<span className="text-xs text-muted-foreground">Account</span>
-					{session?.user ? (
-						<Avatar className="size-8">
-							{session.user.image ? (
-								<AvatarImage src={session.user.image} alt={session.user.name ?? session.user.email ?? "User"} />
-							) : null}
-							<AvatarFallback>{userInitials || "U"}</AvatarFallback>
-						</Avatar>
-					) : (
-						<Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-							<Link href="/auth/sign-in">Sign in</Link>
-						</Button>
-					)}
+	{user ? (
+		<Avatar className="size-8">
+			{user.profilePictureUrl ? (
+				<AvatarImage src={user.profilePictureUrl} alt={userDisplayLabel || "User"} />
+			) : null}
+			<AvatarFallback>{userInitials || "U"}</AvatarFallback>
+		</Avatar>
+	) : null}
 				</button>
 			</div>
 			<SidebarRail />
-			<AccountSettingsModal open={accountOpen && Boolean(session?.user)} onClose={() => setAccountOpen(false)} />
+	<AccountSettingsModal open={accountOpen && Boolean(user)} onClose={() => setAccountOpen(false)} />
 		</Sidebar>
 	);
 }
 
 function ChatList({
 	chats,
-	isLoading,
 	activePath,
 	onDelete,
 	deletingId,
+	onHoverChat,
 }: {
 	chats: ChatListItem[];
-	isLoading?: boolean;
 	activePath?: string | null;
 	onDelete: (chatId: string) => void | Promise<void>;
 	deletingId: string | null;
+	onHoverChat?: (chatId: string) => void;
 }) {
-	if (isLoading && chats.length === 0) {
-		return (
-			<div className="mx-2 rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-				Syncing chats… If this message sticks around, Electric SQL may be offline. New conversations will still appear here
-				while we fall back to local storage.
-			</div>
-		);
-	}
 	if (chats.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
 	return (
 		<ul className="px-1 space-y-1" data-ph-no-capture>
 			{chats.map((c) => {
 				const hrefPath = `/dashboard/chat/${c.id}`;
-				const href = { pathname: "/dashboard/chat/[id]" as const, query: { id: c.id } };
 				const isActive = activePath === hrefPath;
 				return (
 					<li key={c.id} className="group relative">
 						<Link
-							href={href}
+							href={`/dashboard/chat/${c.id}`}
 							prefetch
 							className={cn(
 								"block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
 								isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
 							)}
 							aria-current={isActive ? "page" : undefined}
+							onMouseEnter={() => onHoverChat?.(c.id)}
+							onFocus={() => onHoverChat?.(c.id)}
 						>
 							{c.title || "Untitled"}
 						</Link>

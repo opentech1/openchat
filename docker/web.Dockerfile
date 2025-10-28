@@ -1,41 +1,21 @@
-FROM oven/bun:1.3 AS deps
+# syntax=docker/dockerfile:1
+FROM oven/bun:1.3.0 AS deps
 WORKDIR /app
-ENV BUN_INSTALL_CACHE=/tmp/.bun-cache
-
-# Build-time configuration
-ARG NEXT_PUBLIC_APP_URL=http://localhost:3001
-ARG NEXT_PUBLIC_SERVER_URL=http://localhost:3000
-ARG NEXT_PUBLIC_ELECTRIC_URL=http://localhost:3010
-ARG BETTER_AUTH_URL=http://localhost:3000
-
-ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL} \
-    NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL} \
-    NEXT_PUBLIC_ELECTRIC_URL=${NEXT_PUBLIC_ELECTRIC_URL} \
-    BETTER_AUTH_URL=${BETTER_AUTH_URL} \
-    NEXT_TELEMETRY_DISABLED=1
-
-COPY bun.lock bunfig.toml package.json turbo.json ./
-COPY apps/web/package.json apps/web/package.json
-COPY apps/server/package.json apps/server/package.json
-COPY apps/extension/package.json apps/extension/package.json
-COPY packages/auth/package.json packages/auth/package.json
-COPY apps/extension/wxt.config.ts apps/extension/wxt.config.ts
-COPY apps/extension/tsconfig.json apps/extension/tsconfig.json
-COPY apps/extension/entrypoints apps/extension/entrypoints
-RUN bun install
-
 COPY . .
-RUN bunx turbo run build --filter=web
+RUN bun install --filter openchat --filter web
 
-FROM node:20-slim AS runtime
+FROM deps AS builder
+RUN bun run --cwd apps/web build
+
+FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-
-# Copy standalone Next.js server output (includes node_modules)
-COPY --from=deps /app/apps/web/.next/standalone ./
-COPY --from=deps /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=deps /app/apps/web/public ./apps/web/public
-
+ENV PORT=3001
+ENV HOST=0.0.0.0
+# Copy the standalone server output
+COPY --from=builder /app/apps/web/.next/standalone ./ 
+# Static assets and public directory
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 EXPOSE 3001
-WORKDIR /app/apps/web
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

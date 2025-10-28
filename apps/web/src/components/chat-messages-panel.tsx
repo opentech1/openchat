@@ -17,7 +17,7 @@ import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Streamdown } from "streamdown";
+import { SafeStreamdown } from "@/components/safe-streamdown";
 
 type ChatMessage = {
 	id: string;
@@ -94,9 +94,21 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 			setIsAtBottom(atBottom);
 			shouldStickRef.current = atBottom;
 		};
+	const handlePointerDown = () => {
+		shouldStickRef.current = false;
+	};
+	const handleWheel = () => {
+		shouldStickRef.current = false;
+	};
 		handleScroll();
 		node.addEventListener("scroll", handleScroll, { passive: true });
-		return () => node.removeEventListener("scroll", handleScroll);
+		node.addEventListener("pointerdown", handlePointerDown, { passive: true });
+		node.addEventListener("wheel", handleWheel, { passive: true });
+		return () => {
+			node.removeEventListener("scroll", handleScroll);
+			node.removeEventListener("pointerdown", handlePointerDown);
+			node.removeEventListener("wheel", handleWheel);
+		};
 	}, [computeIsAtBottom]);
 
 	useEffect(() => {
@@ -128,41 +140,36 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 
 	return (
 		<div className={cn("relative flex flex-1 min-h-0 flex-col", className)}>
-			<ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
-				<ScrollAreaPrimitive.Viewport
-					ref={(node) => {
-						viewportRef.current = node;
-					}}
-					className="size-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+		<ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
+			<ScrollAreaPrimitive.Viewport
+				ref={(node) => {
+					viewportRef.current = node;
+				}}
+				className="size-full"
+				aria-label="Conversation messages"
+			>
+				<div
+					ref={contentRef}
+					className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
+					role="log"
+					aria-live="polite"
+					aria-relevant="additions"
+					tabIndex={0}
+					data-ph-no-capture
+					style={{ paddingBottom }}
 				>
-					<div
-						ref={contentRef}
-						className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
-						data-ph-no-capture
-						style={{ paddingBottom }}
-					>
 						{hasMessages ? (
 							messages.map((msg) => (
-								<Message key={msg.id} from={msg.role} className={msg.role === "assistant" ? "justify-start flex-row" : undefined}>
-									{msg.role === "assistant" ? (
-										<Streamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap" data-ph-no-capture>
-											{msg.content}
-										</Streamdown>
-									) : (
-										<div className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap" data-ph-no-capture>
-											{msg.content}
-										</div>
-									)}
-								</Message>
+								<ChatMessageBubble key={msg.id} message={msg} />
 							))
 						) : (
 							<p className="text-muted-foreground text-sm" data-ph-no-capture>No messages yet. Say hi!</p>
 						)}
 					</div>
-				</ScrollAreaPrimitive.Viewport>
-				<ScrollBar orientation="vertical" className="hidden" />
-				<ScrollAreaPrimitive.Corner className="hidden" />
-			</ScrollAreaPrimitive.Root>
+			</ScrollAreaPrimitive.Viewport>
+			<ScrollBar orientation="vertical" className="bg-muted/40 hover:bg-muted/60" />
+			<ScrollAreaPrimitive.Corner className="bg-muted/40" />
+		</ScrollAreaPrimitive.Root>
 			{autoStick && !isAtBottom ? (
 				<Button
 					type="button"
@@ -183,3 +190,30 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 
 export const ChatMessagesPanel = memo(ChatMessagesPanelComponent);
 ChatMessagesPanel.displayName = "ChatMessagesPanel";
+
+type ChatMessageBubbleProps = {
+	message: ChatMessage;
+};
+
+const ChatMessageBubble = memo(
+	({ message }: ChatMessageBubbleProps) => {
+		return (
+			<Message from={message.role} className={message.role === "assistant" ? "justify-start flex-row" : undefined}>
+				{message.role === "assistant" ? (
+					<SafeStreamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap" data-ph-no-capture>
+						{message.content}
+					</SafeStreamdown>
+				) : (
+					<div className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap" data-ph-no-capture>
+						{message.content}
+					</div>
+				)}
+			</Message>
+		);
+	},
+	(prev, next) =>
+		prev.message.id === next.message.id &&
+		prev.message.role === next.message.role &&
+		prev.message.content === next.message.content,
+);
+ChatMessageBubble.displayName = "ChatMessageBubble";

@@ -7,13 +7,8 @@ import ThemeSelector from "@/components/settings/theme-selector";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type SettingsPageClientProps = {
-	isGuest?: boolean;
-};
-
-export default function SettingsPageClient({ isGuest }: SettingsPageClientProps) {
+export default function SettingsPageClient() {
   const [open, setOpen] = useState(false);
-  const accountDisabled = Boolean(isGuest);
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
@@ -22,27 +17,14 @@ export default function SettingsPageClient({ isGuest }: SettingsPageClientProps)
         <p className="text-muted-foreground mt-2">Manage your application preferences and account.</p>
       </div>
 
-      {accountDisabled ? (
-        <div className="border-l-4 border-amber-500 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:border-amber-400 dark:bg-amber-400/10 dark:text-amber-200">
-          You&apos;re exploring OpenChat in guest mode. Saved account settings and team sharing require signing in, but you can still
-          store an OpenRouter API key in your browser for testing.
-        </div>
-      ) : null}
-
       <div className="grid gap-6">
         <section className="rounded-xl border p-4">
           <h2 className="text-sm font-medium">Account</h2>
           <p className="text-muted-foreground mt-1 text-sm">Update your profile, emails, and security.</p>
           <div className="mt-3">
-            {accountDisabled ? (
-              <Button variant="outline" asChild>
-                <Link href="/auth/sign-in">Sign in to manage your account</Link>
-              </Button>
-            ) : (
-              <Button variant="outline" onClick={() => setOpen(true)}>
-                Manage account
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => setOpen(true)}>
+              Manage account
+            </Button>
           </div>
         </section>
 
@@ -62,7 +44,7 @@ export default function SettingsPageClient({ isGuest }: SettingsPageClientProps)
             {" "}
             and save it when prompted in the chat composer. Keys are stored locally in your browser.
           </p>
-          <p className={cn("text-xs text-muted-foreground mt-2", accountDisabled && "italic")}>We&apos;ll keep asking until a key is added.</p>
+          <p className="text-xs text-muted-foreground mt-2">We&apos;ll keep asking until a key is added.</p>
         </section>
 
         <section className="rounded-xl border p-4">
@@ -72,7 +54,7 @@ export default function SettingsPageClient({ isGuest }: SettingsPageClientProps)
         </section>
       </div>
 
-      <AccountSettingsModal open={open && !accountDisabled} onClose={() => setOpen(false)} />
+      <AccountSettingsModal open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

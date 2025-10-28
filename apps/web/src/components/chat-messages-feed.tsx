@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { UIMessage } from "ai";
 
 import { ChatMessagesPanel } from "@/components/chat-messages-panel";
@@ -9,66 +9,51 @@ import {
 	mergeNormalizedMessages,
 	normalizeMessage,
 	normalizeUiMessage,
-	toElectricMessageRecord,
 } from "@/lib/chat-message-utils";
-import { useChatMessages } from "@/lib/electric/workspace-db";
 
-type ElectricMessageRecord = {
-	id: string;
-	role: string;
-	content: string;
-	created_at?: string | null;
-	updated_at?: string | null;
-	createdAt?: string | null;
-	updatedAt?: string | null;
-};
-
-type ChatMessagesFeedProps = {
-	chatId: string;
-	workspaceId: string | null;
+export type ChatMessagesFeedProps = {
 	initialMessages: NormalizedMessage[];
-	optimisticMessages: UIMessage<{ createdAt?: string }>[];
+	optimisticMessages: UIMessage<{ createdAt?: string }> [];
 	paddingBottom: number;
 	className?: string;
 };
 
-function normalizeElectricMessages(rows: ElectricMessageRecord[]): NormalizedMessage[] {
-	return rows.map((row) =>
-		normalizeMessage({
-			id: row.id,
-			role: row.role,
-			content: row.content,
-			created_at: row.created_at ?? row.createdAt,
-			updated_at: row.updated_at ?? row.updatedAt,
-		}),
-	);
-}
-
 export function ChatMessagesFeed({
-	chatId,
-	workspaceId,
 	initialMessages,
 	optimisticMessages,
 	paddingBottom,
 	className,
 }: ChatMessagesFeedProps) {
-	const fallback = useMemo(() => initialMessages.map(toElectricMessageRecord), [initialMessages]);
-	const liveMessages = useChatMessages(workspaceId, chatId, fallback);
-
-	const baseMessages = useMemo(() => {
-		if (!liveMessages.enabled) return initialMessages;
-		const source = liveMessages.data ?? fallback;
-		return normalizeElectricMessages(source as ElectricMessageRecord[]);
-	}, [fallback, initialMessages, liveMessages.data, liveMessages.enabled]);
-
 	const optimisticNormalized = useMemo(
 		() => optimisticMessages.map(normalizeUiMessage),
 		[optimisticMessages],
 	);
 
+	const lastMergedRef = useRef<NormalizedMessage[] | null>(null);
 	const merged = useMemo(() => {
-		return mergeNormalizedMessages(baseMessages, optimisticNormalized);
-	}, [baseMessages, optimisticNormalized]);
+		const next = mergeNormalizedMessages(initialMessages, optimisticNormalized);
+		const prev = lastMergedRef.current;
+		if (!prev) {
+			lastMergedRef.current = next;
+			return next;
+		}
+		const prevById = new Map(prev.map((msg) => [msg.id, msg]));
+		const stabilized = next.map((msg) => {
+			const previous = prevById.get(msg.id);
+			if (!previous) return msg;
+			const sameRole = previous.role === msg.role;
+			const sameContent = previous.content === msg.content;
+			const sameCreated = previous.createdAt.getTime() === msg.createdAt.getTime();
+			const prevUpdated = previous.updatedAt?.getTime() ?? null;
+			const nextUpdated = msg.updatedAt?.getTime() ?? null;
+			if (sameRole && sameContent && sameCreated && prevUpdated === nextUpdated) {
+				return previous;
+			}
+			return msg;
+		});
+		lastMergedRef.current = stabilized;
+		return stabilized;
+	}, [initialMessages, optimisticNormalized]);
 
 	return (
 		<ChatMessagesPanel

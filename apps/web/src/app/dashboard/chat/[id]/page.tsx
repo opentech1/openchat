@@ -1,27 +1,29 @@
-import { getUserId } from "@/lib/auth-server";
-import { serverClient } from "@/utils/orpc-server";
-import type { MessageRow } from "@/types/server-router";
+import type { Id } from "@server/convex/_generated/dataModel";
 import ChatRoomClient from "@/components/chat-room-wrapper";
+import { getUserContext } from "@/lib/auth-server";
+import { ensureConvexUser, listMessagesForChat } from "@/lib/convex-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-	await getUserId();
-	const { id: chatId } = await params;
-	// Preload initial messages on the server for faster first paint
-	const fetchedMessages: MessageRow[] = await serverClient.messages
-		.list({ chatId })
-		.catch(() => [] as MessageRow[]);
-	const initialMessages = fetchedMessages.map((message: MessageRow) => ({
-		id: message.id,
+	const [{ id: chatIdParam }, session] = await Promise.all([params, getUserContext()]);
+	const convexUserId = await ensureConvexUser({
+		id: session.userId,
+		email: session.email,
+		name: session.name,
+		image: session.image,
+	});
+	const messages = await listMessagesForChat(convexUserId, chatIdParam as Id<"chats">);
+	const initialMessages = messages.map((message) => ({
+		id: message._id,
 		role: message.role,
 		content: message.content,
-		createdAt: message.createdAt ?? new Date().toISOString(),
+		createdAt: new Date(message.createdAt).toISOString(),
 	}));
 
 	return (
 		<div className="mx-auto flex h-full w-full max-w-3xl flex-1 flex-col gap-0 overflow-hidden min-h-0 p-4 md:p-6">
-			<ChatRoomClient chatId={chatId} initialMessages={initialMessages} />
+			<ChatRoomClient chatId={chatIdParam} initialMessages={initialMessages} />
 		</div>
 	);
 }
