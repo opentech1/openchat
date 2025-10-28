@@ -1,13 +1,14 @@
-import { NextResponse } from "next/server";
+import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 
-export default function middleware() {
-  // No-op middleware during tests and local dev runs in CI-friendly mode.
-  return NextResponse.next();
-}
+export default authkitMiddleware({
+	middlewareAuth: {
+		enabled: true,
+		unauthenticatedPaths: ["/", "/auth/:path*", "/api/public/:path*"],
+	},
+	signUpPaths: ["/auth/sign-up"],
+	debug: process.env.NODE_ENV !== "production",
+});
 
 export const config = {
-  matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
-  ],
+	matcher: ["/((?!_next/|_static/|favicon\\.ico|.*\\.(?:png|jpg|svg|ico)).*)"],
 };

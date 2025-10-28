@@ -1,6 +1,21 @@
 const STORAGE_KEY = "openchat.openrouter.apiKey";
 const MASTER_KEY_STORAGE_KEY = "openchat.openrouter.masterKey";
 
+function getStorage() {
+	if (typeof window === "undefined") return null;
+	try {
+		if (window.localStorage) return window.localStorage;
+	} catch {
+		// ignore
+	}
+	try {
+		if (window.sessionStorage) return window.sessionStorage;
+	} catch {
+		// ignore
+	}
+	return null;
+}
+
 function arrayBufferToBase64(buffer: ArrayBuffer) {
 	return btoa(String.fromCharCode(...new Uint8Array(buffer)));
 }
@@ -22,11 +37,14 @@ async function getCryptoKey() {
 	}
 	if (!masterKeyPromise) {
 		masterKeyPromise = (async () => {
+			const storage = getStorage();
 			let storedKey: string | null = null;
-			try {
-				storedKey = window.sessionStorage?.getItem(MASTER_KEY_STORAGE_KEY) ?? null;
-			} catch {
-				storedKey = null;
+			if (storage) {
+				try {
+					storedKey = storage.getItem(MASTER_KEY_STORAGE_KEY);
+				} catch {
+					storedKey = null;
+				}
 			}
 
 			if (storedKey) {
@@ -34,10 +52,12 @@ async function getCryptoKey() {
 					const rawKey = base64ToArrayBuffer(storedKey);
 					return await crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 				} catch {
-					try {
-						window.sessionStorage?.removeItem(MASTER_KEY_STORAGE_KEY);
-					} catch {
-						// ignore inability to clear corrupted key material
+					if (storage) {
+						try {
+							storage.removeItem(MASTER_KEY_STORAGE_KEY);
+						} catch {
+							// ignore inability to clear corrupted key material
+						}
 					}
 				}
 			}
@@ -47,10 +67,12 @@ async function getCryptoKey() {
 			let key = await crypto.subtle.importKey("raw", random.buffer, { name: "AES-GCM" }, true, ["encrypt", "decrypt"]);
 			try {
 				const exported = await crypto.subtle.exportKey("raw", key);
-				window.sessionStorage?.setItem(MASTER_KEY_STORAGE_KEY, arrayBufferToBase64(exported));
+				if (storage) {
+					storage.setItem(MASTER_KEY_STORAGE_KEY, arrayBufferToBase64(exported));
+				}
 				key = await crypto.subtle.importKey("raw", exported, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 			} catch {
-				// ignore storage/export failures; key will live only in-memory this session
+				// ignore storage/export failures; key will live only in-memory until tab reload
 			}
 			return key;
 		})();
@@ -60,8 +82,9 @@ async function getCryptoKey() {
 
 export async function saveOpenRouterKey(apiKey: string) {
 	if (typeof window === "undefined") return;
-	if (!window.sessionStorage) {
-		throw new Error("Session storage unavailable");
+	const storage = getStorage();
+	if (!storage) {
+		throw new Error("Storage unavailable");
 	}
 	const cryptoKey = await getCryptoKey();
 	const iv = new Uint8Array(12);
@@ -72,13 +95,14 @@ export async function saveOpenRouterKey(apiKey: string) {
 		iv: arrayBufferToBase64(iv.buffer),
 		data: arrayBufferToBase64(ciphertext),
 	};
-	sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+	storage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 export async function loadOpenRouterKey() {
 	if (typeof window === "undefined") return null;
-	if (!window.sessionStorage) return null;
-	const stored = sessionStorage.getItem(STORAGE_KEY);
+	const storage = getStorage();
+	if (!storage) return null;
+	const stored = storage.getItem(STORAGE_KEY);
 	if (!stored) return null;
 	try {
 		const parsed = JSON.parse(stored) as { iv: string; data: string };
@@ -89,9 +113,9 @@ export async function loadOpenRouterKey() {
 		return new TextDecoder().decode(decrypted);
 	} catch (error) {
 		console.error("Failed to decrypt stored OpenRouter API key", error);
-		sessionStorage.removeItem(STORAGE_KEY);
 		try {
-			sessionStorage.removeItem(MASTER_KEY_STORAGE_KEY);
+			getStorage()?.removeItem(STORAGE_KEY);
+			getStorage()?.removeItem(MASTER_KEY_STORAGE_KEY);
 		} catch {
 			// ignore storage errors
 		}
@@ -101,12 +125,14 @@ export async function loadOpenRouterKey() {
 
 export function removeOpenRouterKey() {
 	if (typeof window === "undefined") return;
-	if (!window.sessionStorage) return;
-	sessionStorage.removeItem(STORAGE_KEY);
+	const storage = getStorage();
+	if (!storage) return;
+	storage.removeItem(STORAGE_KEY);
 }
 
 export function hasStoredOpenRouterKey() {
 	if (typeof window === "undefined") return false;
-	if (!window.sessionStorage) return false;
-	return sessionStorage.getItem(STORAGE_KEY) != null;
+	const storage = getStorage();
+	if (!storage) return false;
+	return storage.getItem(STORAGE_KEY) != null;
 }

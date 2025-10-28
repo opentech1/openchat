@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { resolveServerBaseUrls } from "../src/utils/server-url";
 
 const ORIGINAL_ENV = { ...process.env };

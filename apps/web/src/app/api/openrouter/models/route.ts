@@ -13,6 +13,19 @@ type OpenRouterModelOption = {
 	};
 };
 
+const parseNumericField = (candidate: unknown): number | null => {
+	if (typeof candidate === "number" && Number.isFinite(candidate)) {
+		return candidate;
+	}
+	if (typeof candidate === "string") {
+		const sanitized = candidate.trim().replace(/^\$/, "");
+		if (!sanitized) return null;
+		const parsed = Number(sanitized);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+	return null;
+};
+
 export async function POST(request: Request) {
 	try {
 		const body = (await request.json().catch(() => ({}))) as { apiKey?: unknown };
@@ -47,14 +60,20 @@ export async function POST(request: Request) {
 				const description = typeof candidate?.description === "string" && candidate.description.length > 0
 					? candidate.description
 					: undefined;
-				const contextLength = typeof candidate?.context_length === "number" ? candidate.context_length : undefined;
+				const contextLengthCandidate = candidate?.context_length;
+				const contextLength =
+					typeof contextLengthCandidate === "number"
+						? contextLengthCandidate
+						: parseNumericField(contextLengthCandidate);
 				const pricingCandidate = candidate?.pricing as Record<string, unknown> | undefined;
-				const pricing = pricingCandidate && typeof pricingCandidate === "object"
-					? {
-						prompt: typeof pricingCandidate?.prompt === "number" ? pricingCandidate.prompt : null,
-						completion: typeof pricingCandidate?.completion === "number" ? pricingCandidate.completion : null,
+				let pricing: OpenRouterModelOption["pricing"] | undefined;
+				if (pricingCandidate && typeof pricingCandidate === "object") {
+					const promptCost = parseNumericField(pricingCandidate?.prompt);
+					const completionCost = parseNumericField(pricingCandidate?.completion);
+					if (promptCost !== null || completionCost !== null) {
+						pricing = { prompt: promptCost, completion: completionCost };
 					}
-					: undefined;
+				}
 				return {
 					value: id,
 					label: name,

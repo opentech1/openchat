@@ -18,19 +18,3 @@ declare module "posthog-node" {
 		register(properties: Record<string, unknown>): void
 	}
 }
-
-declare module "@posthog/ai" {
-	type TracingOptions = {
-		posthogDistinctId?: string
-		posthogTraceId?: string
-		posthogProperties?: Record<string, unknown>
-		posthogGroups?: Record<string, unknown>
-		posthogPrivacyMode?: boolean
-	}
-
-	export function withTracing<Model extends (...args: any[]) => any>(
-		model: Model,
-		client: unknown,
-		options?: TracingOptions,
-	): Model
-}

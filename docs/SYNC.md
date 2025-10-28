@@ -1,118 +1,39 @@
-# Sync over WebSocket (/sync)
+# Convex sync
 
-This document describes v1 of the in-memory sync system.
+This document tracks how chat data moves through the system after the migration from the bespoke `/sync` WebSocket hub to Convex. The legacy Elysia socket service no longer ships with the app; Convex now owns persistence and realtime behaviour for chats and messages.
 
-## Endpoint
+## Data model
+- `users` – mirrors the WorkOS session. Populated by `users.ensure` and indexed by `externalId` so every auth event can upsert quickly.
+- `chats` – one row per user conversation. Indexed by `(userId, updatedAt)` to support dashboard ordering and bulk fetches.
+- `messages` – user/assistant entries keyed by chat. Indexed by `(chatId, createdAt)` for timeline reads and `(chatId, clientMessageId)` so streaming upserts remain idempotent.
 
-- URL: `wss://<server>/sync` (served by Elysia in `apps/server`)
-- One connection per tab.
-- Auth on connect: Better Auth session cookies (same as `/rpc`) or the dev `x-user-id` override.
-  - Browsers send the existing session cookie; no query token is required.
-  - Dev fallback accepts `?x-user-id=...` when the bypass flags are enabled.
+The schema lives in `apps/server/convex/schema.ts` and is generated into `@server/convex/_generated` for type-safe usage inside the Next.js app.
 
-## Topics
+## Read path
+1. **Session bootstrap** – all server requests call `ensureConvexUser` from `apps/web/src/lib/convex-server.ts`. This mutation either returns the existing Convex user id or inserts a new one with synced profile metadata.
+2. **Dashboard layout** – `apps/web/src/app/dashboard/layout.tsx` loads the sidebar chats via `chats.list`, serialises them with `serializeChat`, and passes them to the client component.
+3. **Chat pages** – `apps/web/src/app/dashboard/chat/[id]/page.tsx` fetches messages with `messages.list` and normalises them for the feed. The same list endpoint powers the `/api/chats/[id]/prefetch` route, which hydrates `chat-prefetch-cache.ts` for hover previews.
 
-- `chats:index:{userId}` — user’s chat list updates (sidebar)
-- `chat:{chatId}` — a single chat’s message feed
+All reads use the `ConvexHttpClient`, which respects `CONVEX_URL`/`NEXT_PUBLIC_CONVEX_URL` so both server and browser requests point at the active deployment.
 
-## Events
+## Write path & streaming
+1. **Chat creation / deletion** – `/api/chats` and `/api/chats/[id]` call the `chats.create` and `chats.remove` mutations. Both re-check ownership server-side before mutating state.
+2. **Message send** – `/api/chat/send` forwards the user and assistant payloads to `messages.send`, which records the pair in a single mutation so sidebar ordering can update deterministically.
+3. **Streaming updates** – the `createChatHandler` in `apps/web/src/app/api/chat/chat-handler.ts` streams OpenRouter responses. Each delta calls `messages.streamUpsert` with either a Convex `messageId` or a client-generated id, guaranteeing that retries and reconnects merge instead of duplicating rows. When the assistant finishes, the mutation patches the parent chat’s timestamps.
+4. **Client transport** – on the browser we use `DefaultChatTransport` from the `ai` SDK. It listens to the SSE stream exposed by the handler and reflects persisted message ids back into the store so optimistic UI and Convex stay aligned.
 
-- `system.hello`                 `{ serverTime }`
-- `chats.index.add`              `{ chatId, title, updatedAt, lastMessageAt }`
-- `chats.index.update`           `{ chatId, updatedAt, lastMessageAt, title? }`
-- `chat.new`                     `{ chatId, messageId, role, content, createdAt }`
+## Client caching & revalidation
+- `chat-prefetch-cache.ts` keeps a sessionStorage-backed cache keyed by chat id with a tunable TTL (`NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS`).
+- `prefetchChat` warms this cache by calling the Next.js prefetch route and is triggered on sidebar hover.
+- When navigating, the chat room reads from the cache first and falls back to the server-rendered payload, minimising Convex reads during fast tab switching.
 
-Notes:
+## Realtime considerations
+Convex watches give us live updates out of the box, but the current Next.js surface still relies on request/response patterns. When we adopt Convex subscriptions on the client, the existing mutations already emit consistent timestamps and ids, so the change will be additive: wire `convex/react` hooks in the chat room and sidebar, and rely on the same queries used for SSR.
 
-- `messages.send` writes two rows (user then assistant "test"). The server emits two `chat.new` events in order (ascending by `createdAt`).
-- When a message is written, the server also emits `chats.index.update` so the sidebar can reorder by `lastMessageAt`.
+## Operational notes
+- `convex/http.ts` exposes `/health`, which docker-compose and Dokploy use for readiness checks.
+- `convex-rules.txt` documents the “new function syntax” expectations. Keep new work aligned so codegen remains stable across the monorepo.
 
-## Envelope
-
-All WS messages use this shape:
-
-```
-{ id, ts, topic, type, data }
-```
-
-- `id`: unique per event
-- `ts`: server timestamp (ms)
-- `topic`: one of the topics above
-- `type`: one of the event types above
-- `data`: event payload
-
-## Server
-
-1) Sync Hub (in-memory)
-
-- `Map<topic, Set<WebSocket>>` plus `WeakMap<WebSocket, Set<topic>>` for cleanup.
-- API:
-  - `subscribe(ws, topic)`
-  - `unsubscribe(ws, topic)`
-  - `publish(topic, type, data)` → fan-out envelope to sockets subscribed to topic
-  - Enforces per-socket subscription cap (≤ 50) and per-event payload size (≤ 8 KB).
-
-2) `/sync` route (Elysia)
-
-- Upgrades to WebSocket.
-- On connect: verifies token like `createContext` does for `/rpc`. If unauthenticated, closes with code 1008.
-- Receives messages:
-  - `{"op":"sub", topic}` → subscribe the socket (authorization enforced)
-  - `{"op":"unsub", topic}` → unsubscribe
-  - `"ping"` or `{"op":"ping"}` → replies `"pong"`
-- On open: sends `system.hello` envelope.
-
-3) Emit on write (after DB commit)
-
-- `chats.create()` → `publish("chats:index:{userId}", "chats.index.add", ...)`
-- `messages.send()` →
-  - After user message insert → `publish("chat:{chatId}", "chat.new", ...)`
-  - After assistant message insert → `publish("chat:{chatId}", "chat.new", ...)`
-  - After updating chat timestamps → `publish("chats:index:{userId}", "chats.index.update", ...)`
-
-4) Security & limits
-
-- Reject unauthenticated connections.
-- Reject subscriptions to topics that don’t belong to the authenticated user.
-- Cap per-socket subscriptions (≤ 50 topics) and per-event payload size (≤ 8 KB).
-- Cleanup subscriptions on socket close to avoid memory growth.
-
-## Web
-
-1) Sync client (one socket per tab)
-
-- `src/lib/sync.ts` with:
-  - `connect()` → opens `wss://<server>/sync`
-  - `subscribe(topic, handler)` / `unsubscribe(topic, handler)`
-  - Internally keeps a single WS; multiplexes topics; reconnects on drop; resubscribes on reconnect.
-  - Uses the Better Auth client to derive the current session (or falls back to the dev `__DEV_USER_ID__`).
-
-2) Sidebar live updates
-
-- `AppSidebar` uses local state initialized from SSR `initialChats`.
-- On mount subscribes to `chats:index:{me}`.
-  - On `chats.index.add`: appends chat if missing.
-  - On `chats.index.update`: updates timestamps/title and re-sorts by `lastMessageAt` then `updatedAt` (desc).
-
-3) Chat view live updates
-
-- `ChatRoom` keeps SSR `initialMessages` for first paint.
-- On mount subscribes to `chat:{chatId}`.
-  - On `chat.new`: appends if not already present (id de-dupe); list stays sorted by `createdAt` ascending.
-- Keeps existing optimistic UI and POST `/api/chat/send`.
-
-## ENV / Config
-
-- Uses `NEXT_PUBLIC_SERVER_URL` for WS base.
-- CSP already allows `ws:` and `wss:`.
-
-## Acceptance tests (manual, v1)
-
-- Open Tab A and Tab B (same account). Create a new chat on A → it appears in B’s sidebar within < 200 ms.
-- In that chat on A, send a message → B sees both user and assistant messages appear, and the chat bumps to top of sidebar.
-- Open the same account on a second device → create/send there, both tabs on the first device update too.
-
-## Out of scope
-
-- Presence/typing, AI streaming over WS, file uploads, Redis/Valkey, outbox/WAL, multi-tenant topics, moderation, notifications.
-
+## Open questions
+- Should we surface Convex mutations to the browser for real-time optimistic updates, or continue routing through Next’s API for policy enforcement?
+- When introducing subscriptions, decide whether to keep the session storage prefetch layer or replace it with live query caches.

@@ -19,6 +19,18 @@ function normalizeThemeId(value: string | null | undefined): BrandThemeId | null
 	return BRAND_THEME_IDS.has(mapped) ? (mapped as BrandThemeId) : null;
 }
 
+function resolveInitialTheme(): BrandThemeId {
+	if (typeof window === "undefined") {
+		return DEFAULT_BRAND_THEME;
+	}
+	try {
+		const stored = normalizeThemeId(window.localStorage.getItem(BRAND_THEME_STORAGE_KEY));
+		if (stored) return stored;
+	} catch {}
+	const attr = normalizeThemeId(window.document.documentElement.dataset.brandTheme);
+	return attr ?? DEFAULT_BRAND_THEME;
+}
+
 type BrandThemeContextValue = {
 	readonly theme: BrandThemeId;
 	readonly themes: readonly BrandThemeDefinition[];
@@ -28,34 +40,20 @@ type BrandThemeContextValue = {
 const BrandThemeContext = React.createContext<BrandThemeContextValue | null>(null);
 
 export function BrandThemeProvider({ children }: { children: React.ReactNode }) {
-	const [theme, setTheme] = React.useState<BrandThemeId>(DEFAULT_BRAND_THEME);
-	const hasLoadedRef = React.useRef(false);
+	const [theme, setTheme] = React.useState<BrandThemeId>(() => resolveInitialTheme());
+	const hasLoadedRef = React.useRef(typeof window === "undefined");
 	const hasPersistedRef = React.useRef(false);
 
-	React.useEffect(() => {
-		let resolved: BrandThemeId | null = null;
-		try {
-			const stored = normalizeThemeId(window.localStorage.getItem(BRAND_THEME_STORAGE_KEY));
-			if (stored) {
-				resolved = stored;
-			}
-		} catch {}
-		if (!resolved) {
-			const attr = normalizeThemeId(window.document.documentElement.dataset.brandTheme);
-			if (attr) {
-				resolved = attr;
-			}
-		}
-		if (resolved) {
-			setTheme(resolved);
-		}
+	React.useLayoutEffect(() => {
+		if (typeof document === "undefined") return;
+		const resolved = resolveInitialTheme();
 		hasLoadedRef.current = true;
+		setTheme((current) => (current === resolved ? current : resolved));
 	}, []);
 
-	React.useEffect(() => {
-		if (typeof document !== "undefined") {
-			document.documentElement.dataset.brandTheme = theme;
-		}
+	React.useLayoutEffect(() => {
+		if (typeof document === "undefined") return;
+		document.documentElement.dataset.brandTheme = theme;
 	}, [theme]);
 
 	React.useEffect(() => {

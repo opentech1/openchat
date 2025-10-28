@@ -1,8 +1,16 @@
 "use client";
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { authClient } from "@openchat/auth/client";
-import { useChat } from "@ai-sdk/react";
+import React, {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
+import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { toast } from "sonner";
@@ -13,6 +21,10 @@ import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib
 import { OpenRouterLinkModal } from "@/components/openrouter-link-modal";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { captureClientEvent, identifyClient, registerClientProperties } from "@/lib/posthog";
+import { readCachedModels, writeCachedModels } from "@/lib/openrouter-model-cache";
+import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
+import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
+import type { ModelSelectorOption } from "@/components/model-selector";
 
 type ChatRoomProps = {
   chatId: string;
@@ -24,45 +36,96 @@ type ChatRoomProps = {
   }>;
 };
 
+const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
+const MESSAGE_THROTTLE_MS = Number(process.env.NEXT_PUBLIC_CHAT_THROTTLE_MS ?? 80);
+
 export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
-  const { data: session } = authClient.useSession();
-  const devBypassEnabled = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH !== "0";
-  const memoDevUser =
-    typeof window !== "undefined" ? ((window as any).__DEV_USER_ID__ as string | undefined) : undefined;
-  const workspaceId =
-    session?.user?.id || memoDevUser || (devBypassEnabled ? process.env.NEXT_PUBLIC_DEV_USER_ID || "dev-user" : null);
-
-  useEffect(() => {
-    const identifier = session?.user?.id || memoDevUser;
-    if (!identifier) return;
-    identifyClient(identifier, {
-      workspaceId: workspaceId ?? identifier,
-      properties: { auth_state: session?.user ? "member" : "guest" },
-    });
-    registerClientProperties({
-      auth_state: session?.user ? "member" : "guest",
-      workspace_id: workspaceId ?? identifier,
-    });
-  }, [memoDevUser, session?.user, session?.user?.id, workspaceId]);
-
+  const { user } = useAuth();
+  const workspaceId = user?.id ?? null;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() ?? "";
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    identifyClient(workspaceId, {
+      workspaceId,
+      properties: { auth_state: "member" },
+    });
+    registerClientProperties({
+      auth_state: "member",
+      workspace_id: workspaceId,
+    });
+  }, [workspaceId]);
+
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelOptions, setModelOptions] = useState<{ value: string; label: string; description?: string }[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [modelOptions, setModelOptions] = useState<ModelSelectorOption[]>([]);
+  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
   const [checkedApiKey, setCheckedApiKey] = useState(false);
+  const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
   const missingKeyToastRef = useRef<string | number | null>(null);
+  const storedModelIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     registerClientProperties({ has_openrouter_key: Boolean(apiKey) });
   }, [apiKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const cached = readCachedModels();
+    if (cached && cached.length > 0) {
+      setModelOptions(cached);
+      setSelectedModelState((prev) => {
+        if (prev) return prev;
+        const stored = storedModelIdRef.current;
+        if (stored && cached.some((option) => option.value === stored)) {
+          return stored;
+        }
+        return cached[0]?.value ?? null;
+      });
+    }
+  }, []);
+
+  const persistSelectedModel = useCallback((next: string | null) => {
+    if (typeof window !== "undefined") {
+      try {
+        if (next) {
+          window.localStorage.setItem(LAST_MODEL_STORAGE_KEY, next);
+        } else {
+          window.localStorage.removeItem(LAST_MODEL_STORAGE_KEY);
+        }
+      } catch {
+        // ignore storage failures
+      }
+    }
+    storedModelIdRef.current = next;
+  }, []);
+
+  const applySelectedModel = useCallback(
+    (next: string | null) => {
+      setSelectedModelState((prev) => {
+        if (prev === next) return prev;
+        persistSelectedModel(next);
+        return next;
+      });
+    },
+    [persistSelectedModel],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(LAST_MODEL_STORAGE_KEY);
+    storedModelIdRef.current = stored;
+    if (stored) {
+      setSelectedModelState((prev) => prev ?? stored);
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -115,11 +178,20 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             providerUrl: response.url,
           });
         }
-        setModelOptions(data.models);
-        const fallback = data.models[0]?.value ?? null;
-        setSelectedModel((previous) => {
-          if (!previous) return fallback;
-          return data.models.some((model: any) => model.value === previous) ? previous : fallback;
+        const parsedModels = data.models as ModelSelectorOption[];
+        setModelOptions(parsedModels);
+        writeCachedModels(parsedModels);
+        const fallback = parsedModels[0]?.value ?? null;
+        setSelectedModelState((previous) => {
+          const storedPreferred = storedModelIdRef.current;
+          let next: string | null = previous;
+          if (storedPreferred && parsedModels.some((model) => model.value === storedPreferred)) {
+            next = storedPreferred;
+          } else if (!previous || !parsedModels.some((model) => model.value === previous)) {
+            next = fallback;
+          }
+          if (next !== previous) persistSelectedModel(next ?? null);
+          return next ?? null;
         });
       } catch (error) {
         console.error("Failed to load OpenRouter models", error);
@@ -143,13 +215,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           });
         }
         setModelOptions([]);
-        setSelectedModel(null);
+        applySelectedModel(null);
         setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
       } finally {
         setModelsLoading(false);
       }
     },
-    [],
+    [persistSelectedModel],
   );
 
   useEffect(() => {
@@ -172,6 +244,18 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   }, [fetchModels]);
 
   useEffect(() => {
+    if (modelOptions.length === 0) return;
+    const stored = storedModelIdRef.current;
+    if (!stored) return;
+    setSelectedModelState((previous) => {
+      if (previous) return previous;
+      const exists = modelOptions.some((option) => option.value === stored);
+      if (!exists) return previous;
+      return stored;
+    });
+  }, [modelOptions]);
+
+  useEffect(() => {
     if (!checkedApiKey) return;
     if (!apiKey) {
       if (missingKeyToastRef.current == null) {
@@ -190,6 +274,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     }
   }, [apiKey, router, checkedApiKey]);
 
+  useEffect(() => {
+    if (!apiKey) return;
+    setKeyPromptDismissed(false);
+  }, [apiKey]);
+
   const handleSaveApiKey = useCallback(
     async (key: string) => {
       setApiKeyError(null);
@@ -197,6 +286,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       try {
         await saveOpenRouterKey(key);
         setApiKey(key);
+        setKeyPromptDismissed(false);
         registerClientProperties({ has_openrouter_key: true });
         captureClientEvent("openrouter.key_saved", {
           source: "modal",
@@ -219,35 +309,46 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     [initialMessages],
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const payload = normalizedInitial.map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      createdAt: message.createdAt.toISOString(),
+    }));
+    storeChatPrefetch(chatId, payload);
+  }, [chatId, normalizedInitial]);
+
   const composerRef = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(320);
 
   const handleMissingRequirement = useCallback((reason: "apiKey" | "model") => {
     if (reason === "apiKey") {
+      setKeyPromptDismissed(false);
+      setModelsError(null);
       setApiKeyError("Add your OpenRouter API key to start chatting.");
       toast.error("OpenRouter API key required", { description: "Add your API key to start chatting with OpenChat." });
     } else {
       toast.error("Select an OpenRouter model to continue.");
     }
-  }, [setApiKeyError]);
+  }, []);
 
   const chatTransport = useMemo(
     () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        credentials: "include",
-        body: { chatId },
-        headers: workspaceId
-          ? async () => ({ "x-user-id": workspaceId })
-          : undefined,
-      }),
-    [chatId, workspaceId],
+		new DefaultChatTransport({
+			api: "/api/chat",
+			credentials: "include",
+			body: { chatId },
+		}),
+    [chatId],
   );
 
   const { messages, setMessages, sendMessage, status, stop } = useChat({
     id: chatId,
     messages: normalizedInitial.map(toUiMessage),
     transport: chatTransport,
+    experimental_throttle: Number.isFinite(MESSAGE_THROTTLE_MS) && MESSAGE_THROTTLE_MS > 0 ? MESSAGE_THROTTLE_MS : undefined,
     onFinish: async ({ message, isAbort, isError }) => {
       if (isAbort || isError) return;
       const assistantCreatedAt = new Date().toISOString();
@@ -289,27 +390,58 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-  const fileToDataUrl = useCallback(
-    (file: File) =>
-      new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result;
-          if (typeof result === "string") {
-            resolve(result);
-            return;
-          }
-          reject(new Error("Failed to read attachment"));
-        };
-        reader.onerror = () => {
-          reject(reader.error ?? new Error("Failed to read attachment"));
-        };
-        reader.readAsDataURL(file);
-      }),
-    [],
-  );
+	const [visibleMessages, setVisibleMessages] = useState(messages);
+	const [isPending, startTransition] = useTransition();
 
-  const handleSend = async ({ text, modelId, apiKey: requestApiKey, attachments }: { text: string; modelId: string; apiKey: string; attachments: File[] }) => {
+	useEffect(() => {
+		startTransition(() => {
+			setVisibleMessages(messages);
+		});
+	}, [messages, startTransition]);
+
+	useEffect(() => {
+		const entry = readChatPrefetch(chatId);
+		if (!entry) return;
+		const normalized = entry.messages.map((message) =>
+			normalizeMessage({
+				id: message.id,
+				role: message.role,
+				content: message.content,
+				createdAt: message.createdAt,
+			}),
+		);
+		const uiMessages = normalized.map(toUiMessage);
+		startTransition(() => {
+			setMessages(uiMessages);
+		});
+	}, [chatId, setMessages, startTransition]);
+
+  useEffect(() => {
+    if (status !== "ready") return;
+    if (!messages.length) return;
+	const payload = messages
+		.map((message) => {
+			const textPart = message.parts.find(
+				(part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string",
+			);
+			const role = message.role === "assistant" ? "assistant" : message.role === "user" ? "user" : null;
+			if (!role) return null;
+			return {
+				id: message.id,
+				role,
+				content: textPart?.text ?? "",
+				createdAt:
+					(message.metadata?.createdAt && new Date(message.metadata.createdAt).toISOString()) ||
+					new Date().toISOString(),
+			};
+		})
+		.filter((message): message is PrefetchMessage => Boolean(message));
+	if (payload.length > 0) {
+		storeChatPrefetch(chatId, payload);
+	}
+}, [chatId, messages, status]);
+
+  const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
     const content = text.trim();
     if (!content) return;
     if (!modelId) {
@@ -323,19 +455,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     const id = crypto.randomUUID?.() ?? `${Date.now()}`;
     const createdAt = new Date().toISOString();
     try {
-      const uploadedParts = await Promise.all(
-        attachments.map(async (file) => ({
-          type: "file" as const,
-          url: await fileToDataUrl(file),
-          mediaType: file.type || "application/octet-stream",
-          filename: file.name || undefined,
-        })),
-      );
       await sendMessage(
         {
           id,
           role: "user",
-          parts: [...uploadedParts, { type: "text", text: content }],
+          parts: [{ type: "text", text: content }],
           metadata: { createdAt },
         },
         {
@@ -350,7 +474,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         chat_id: chatId,
         model_id: modelId,
         characters: content.length,
-        attachment_count: attachments.length,
         has_api_key: Boolean(requestApiKey),
       });
     } catch (error) {
@@ -378,21 +501,48 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           limit: limitHeader,
           window_ms: windowHeader,
         });
+      } else if (status === 401) {
+        await removeOpenRouterKey();
+        setApiKey(null);
+        setModelsError("OpenRouter rejected your API key. Re-enter it to continue.");
+        toast.error("OpenRouter API key invalid", {
+          description: "We cleared the saved key. Add a valid key to keep chatting.",
+        });
+        handleMissingRequirement("apiKey");
+        return;
       }
       console.error("Failed to send message", error);
     }
   };
 
+  const handleModelSelection = useCallback(
+    (next: string) => {
+      applySelectedModel(next);
+    },
+    [applySelectedModel],
+  );
+
   const busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
-  const composerDisabled = busy || modelsLoading || !isLinked || !selectedModel;
+  const shouldPromptForKey = !isLinked;
+  const shouldForceModal = Boolean(modelsError);
+  const showKeyModal = checkedApiKey && (shouldForceModal || (shouldPromptForKey && !keyPromptDismissed));
+  const composerDisabled = busy || modelsLoading || shouldPromptForKey || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
+
+  if (!workspaceId) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading workspace…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <OpenRouterLinkModal
-        open={!isLinked || Boolean(modelsError)}
+        open={showKeyModal}
         saving={savingApiKey || modelsLoading}
         errorMessage={apiKeyError ?? modelsError}
         onSubmit={handleSaveApiKey}
@@ -401,33 +551,34 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           setModelsError(null);
           if (apiKey) void fetchModels(apiKey);
         }}
+        onClose={() => {
+          if (shouldForceModal) return;
+          setKeyPromptDismissed(true);
+        }}
         hasApiKey={Boolean(apiKey)}
       />
       <ChatMessagesFeed
-        chatId={chatId}
-        workspaceId={workspaceId}
         initialMessages={normalizedInitial}
-        optimisticMessages={messages}
+        optimisticMessages={visibleMessages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
-          <ChatComposer
-            placeholder="Ask OpenChat a question..."
-            disabled={composerDisabled}
-            onSend={handleSend}
-            modelOptions={modelOptions}
-            modelValue={selectedModel}
-            onModelChange={setSelectedModel}
-            modelsLoading={modelsLoading}
-            apiKey={apiKey}
-            chatId={chatId}
-            isStreaming={status === "streaming"}
-            onStop={() => stop()}
-            onMissingRequirement={handleMissingRequirement}
-          />
+			<ChatComposer
+				placeholder="Ask OpenChat a question..."
+				disabled={composerDisabled}
+				onSend={handleSend}
+				modelOptions={modelOptions}
+				modelValue={selectedModel}
+				onModelChange={handleModelSelection}
+				modelsLoading={modelsLoading}
+				apiKey={apiKey}
+				isStreaming={status === "streaming"}
+				onStop={() => stop()}
+				onMissingRequirement={handleMissingRequirement}
+			/>
         </div>
       </div>
     </div>
