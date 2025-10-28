@@ -1,12 +1,17 @@
-version: "3.9"
-
 services:
   server:
     build:
       context: .
       dockerfile: docker/convex.Dockerfile
-    env_file:
-      - apps/server/.env.local
+    environment:
+      CONVEX_DEPLOYMENT: ${CONVEX_DEPLOYMENT:-}
+      CONVEX_ADMIN_URL: ${CONVEX_ADMIN_URL:-}
+      CONVEX_URL: ${CONVEX_URL:-}
+      NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-}
+      OPENROUTER_API_KEY_SECRET: ${OPENROUTER_API_KEY_SECRET:-}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY:-}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
     ports:
       - "3210:3210"
       - "6790:6790"
@@ -24,12 +29,26 @@ services:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
-    env_file:
-      - apps/web/.env.local
     environment:
-      - CONVEX_URL=http://convex:3210
-      - NEXT_PUBLIC_CONVEX_URL=http://localhost:3210
-      - PORT=3001
+      WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
+      WORKOS_API_KEY: ${WORKOS_API_KEY:-}
+      WORKOS_COOKIE_PASSWORD: ${WORKOS_COOKIE_PASSWORD:-}
+      NEXT_PUBLIC_WORKOS_REDIRECT_URI: ${NEXT_PUBLIC_WORKOS_REDIRECT_URI:-}
+      CONVEX_URL: ${CONVEX_URL:-http://convex:3210}
+      NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
+      NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-}
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-}
+      NEXT_PUBLIC_ORIGIN: ${NEXT_PUBLIC_ORIGIN:-}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-}
+      NEXT_PUBLIC_APP_VERSION: ${NEXT_PUBLIC_APP_VERSION:-}
+      NEXT_PUBLIC_DEPLOYMENT: ${NEXT_PUBLIC_DEPLOYMENT:-}
+      NEXT_PUBLIC_DEV_BYPASS_AUTH: ${NEXT_PUBLIC_DEV_BYPASS_AUTH:-}
+      NEXT_PUBLIC_DEV_USER_ID: ${NEXT_PUBLIC_DEV_USER_ID:-}
+      NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+      NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-}
+      PORT: 3001
     ports:
       - "3001:3001"
     depends_on:
