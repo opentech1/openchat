@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -10,8 +10,7 @@ import { Toaster } from "sonner";
 import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 
-export default function Providers({ children }: { children: React.ReactNode }) {
-	const queryClient = useMemo(() => new QueryClient(), []);
+function PosthogPageViewTracker() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const posthogClient = useMemo(() => initPosthog(), []);
@@ -47,6 +46,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 		previousPathRef.current = `${currentPath || "/"}${search.length > 0 ? `?${search}` : ""}`;
 	}, [entryReferrer, pathname, posthogClient, searchParams]);
 
+	return null;
+}
+
+export default function Providers({ children }: { children: React.ReactNode }) {
+	const queryClient = useMemo(() => new QueryClient(), []);
+	const posthogClient = useMemo(() => initPosthog(), []);
+
 	const appTree = (
 		<ThemeProvider
 			attribute="class"
@@ -57,6 +63,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 			<BrandThemeProvider>
 				<QueryClientProvider client={queryClient}>
 					<PosthogBootstrap />
+					<Suspense fallback={null}>
+						<PosthogPageViewTracker />
+					</Suspense>
 					{children}
 					<Toaster richColors position="bottom-right" />
 				</QueryClientProvider>
