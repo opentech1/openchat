@@ -303,7 +303,7 @@ export default function HeroSection() {
 										<p className="mt-3 flex-1 text-sm text-muted-foreground">{plan.description}</p>
 										<Button asChild size="sm" className="mt-6 w-full justify-center">
 											{isInternal ? (
-												<Link href={plan.ctaHref}>{plan.ctaLabel}</Link>
+												<Link href={plan.ctaHref as Route}>{plan.ctaLabel}</Link>
 											) : (
 												<a
 													href={plan.ctaHref}
