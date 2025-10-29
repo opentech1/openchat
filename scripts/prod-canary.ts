@@ -1,10 +1,7 @@
-const PROD_SERVER_URL = (process.env.PROD_SERVER_URL ?? "https://api.osschat.dev").replace(/\/$/, "");
-const PROD_WEB_ORIGIN = process.env.PROD_WEB_ORIGIN ?? "https://osschat.dev";
+const PROD_CONVEX_URL = (process.env.PROD_CONVEX_URL ?? "").replace(/\/$/, "");
 const REQUEST_TIMEOUT_MS = Number(process.env.CANARY_TIMEOUT_MS ?? 15000);
 const MAX_RETRIES = Math.max(1, Number(process.env.CANARY_MAX_RETRIES ?? 3));
 const RETRY_DELAY_MS = Number(process.env.CANARY_RETRY_DELAY_MS ?? 5000);
-const CANARY_SECRET = process.env.CANARY_SECRET ?? "";
-const CANARY_USER_ID = process.env.CANARY_USER_ID ?? "";
 
 type TestCase = {
 	name: string;
@@ -16,8 +13,6 @@ type TimedResponse = {
 	durationMs: number;
 };
 
-const targetShapeUrl = `${PROD_SERVER_URL}/api/electric/v1/shape?scope=chats&offset=-1&table=chat`;
-
 async function fetchWithTimeout(url: string, init?: RequestInit): Promise<TimedResponse> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -27,7 +22,7 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<TimedR
 			...init,
 			signal: controller.signal,
 			headers: {
-				"User-Agent": "openchat-prod-canary/1.0",
+				"User-Agent": "openchat-prod-canary/2.0",
 				...(init?.headers ?? {}),
 			},
 		});
@@ -37,79 +32,75 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<TimedR
 	}
 }
 
-async function checkHealthEndpoint() {
-	const { response, durationMs } = await fetchWithTimeout(`${PROD_SERVER_URL}/health`);
+async function checkConvexHealthEndpoint() {
+	if (!PROD_CONVEX_URL) {
+		throw new Error("PROD_CONVEX_URL environment variable is not set");
+	}
+	const { response, durationMs } = await fetchWithTimeout(`${PROD_CONVEX_URL}/health`);
 	if (!response.ok) {
-		throw new Error(`Expected 200 OK from /health but received ${response.status} ${response.statusText}`);
+		const body = await response.text();
+		throw new Error(`Expected 200 OK from Convex /health but received ${response.status} ${response.statusText}. Body: ${body.substring(0, 200)}`);
 	}
 	const body = await response
 		.json()
 		.catch(() => null)
 		.then((value) => value ?? {});
 	if (!body?.ok) {
-		throw new Error(`Health endpoint responded without { ok: true } payload (received: ${JSON.stringify(body)})`);
+		throw new Error(`Convex health endpoint responded without { ok: true } payload (received: ${JSON.stringify(body)})`);
 	}
-	console.log(`   ↳ /health responded in ${durationMs}ms`);
+	console.log(`   ↳ Convex /health responded in ${durationMs}ms`);
 }
 
-const ACCESS_CONTROL_HEADERS = (() => {
-	const headers = ["content-type"];
-	if (CANARY_USER_ID) headers.push("x-user-id");
-	if (CANARY_SECRET) headers.push("x-canary-secret");
-	return headers.join(", ");
-})();
+async function checkConvexQueryEndpoint() {
+	if (!PROD_CONVEX_URL) {
+		throw new Error("PROD_CONVEX_URL environment variable is not set");
+	}
 
-function buildCanaryHeaders(init?: HeadersInit) {
-	const headers = new Headers(init);
-	if (CANARY_USER_ID) headers.set("X-User-Id", CANARY_USER_ID);
-	if (CANARY_SECRET) headers.set("X-Canary-Secret", CANARY_SECRET);
-	return headers;
-}
-
-async function checkShapePreflight() {
-	const { response, durationMs } = await fetchWithTimeout(targetShapeUrl, {
-		method: "OPTIONS",
+	// Test a simple query endpoint - Convex should at least respond
+	const { response, durationMs } = await fetchWithTimeout(`${PROD_CONVEX_URL}/api/query`, {
+		method: "POST",
 		headers: {
-			Origin: PROD_WEB_ORIGIN,
-			"Access-Control-Request-Method": "GET",
-			"Access-Control-Request-Headers": ACCESS_CONTROL_HEADERS,
+			"Content-Type": "application/json",
 		},
-	});
-	if (response.status !== 204) {
-		throw new Error(`Expected 204 from OPTIONS shape preflight, received ${response.status}`);
-	}
-	const allowOrigin = response.headers.get("access-control-allow-origin");
-	if (allowOrigin !== PROD_WEB_ORIGIN) {
-		throw new Error(
-			`Expected Access-Control-Allow-Origin "${PROD_WEB_ORIGIN}" but received "${allowOrigin ?? "missing"}"`,
-		);
-	}
-	console.log(`   ↳ Shape preflight responded in ${durationMs}ms with Access-Control-Allow-Origin ${allowOrigin}`);
-}
-
-async function checkShapeRequest() {
-	const { response, durationMs } = await fetchWithTimeout(targetShapeUrl, {
-		headers: buildCanaryHeaders({
-			Origin: PROD_WEB_ORIGIN,
+		body: JSON.stringify({
+			path: "chats:list",
+			format: "json",
+			args: {},
 		}),
 	});
+
+	// Accept 200, 400, or 401 - just verify Convex is responding
 	if (response.status >= 500) {
-		throw new Error(`Shape endpoint returned ${response.status} ${response.statusText}`);
+		const body = await response.text();
+		throw new Error(`Convex API returned server error ${response.status}. Body: ${body.substring(0, 200)}`);
 	}
-	const acceptableStatuses = new Set([200, 401, 403]);
-	if (!acceptableStatuses.has(response.status)) {
-		throw new Error(`Unexpected shape status ${response.status}; expected one of ${Array.from(acceptableStatuses)}`);
+
+	const body = await response.json().catch(() => null);
+	if (!body) {
+		throw new Error("Convex API returned non-JSON response");
 	}
-	if (response.status === 200) {
-		const electricHandle = response.headers.get("electric-handle");
-		if (!electricHandle) {
-			throw new Error("Shape request succeeded (200) but Electric handle header is missing");
-		}
-		await response.arrayBuffer(); // drain body to keep connection clean
-		console.log(`   ↳ Shape request succeeded in ${durationMs}ms (handle=${electricHandle})`);
-	} else {
-		console.log(`   ↳ Shape request returned ${response.status} in ${durationMs}ms (auth likely required)`);
+
+	console.log(`   ↳ Convex API responded in ${durationMs}ms (status: ${response.status})`);
+}
+
+async function checkConvexDashboard() {
+	if (!PROD_CONVEX_URL) {
+		throw new Error("PROD_CONVEX_URL environment variable is not set");
 	}
+
+	// Check that the Convex dashboard/admin interface is accessible
+	const { response, durationMs } = await fetchWithTimeout(PROD_CONVEX_URL);
+
+	// Dashboard should return HTML or redirect, not 404/500
+	if (response.status >= 500) {
+		throw new Error(`Convex dashboard returned server error ${response.status}`);
+	}
+
+	if (response.status === 404) {
+		throw new Error("Convex dashboard returned 404 - service may not be running");
+	}
+
+	console.log(`   ↳ Convex dashboard responded in ${durationMs}ms (status: ${response.status})`);
 }
 
 function sleep(ms: number) {
@@ -117,10 +108,12 @@ function sleep(ms: number) {
 }
 
 async function run() {
+	console.log(`Testing Convex backend at: ${PROD_CONVEX_URL || "(not set)"}\n`);
+
 	const tests: TestCase[] = [
-		{ name: "Health endpoint", run: checkHealthEndpoint },
-		{ name: "Electric shape preflight", run: checkShapePreflight },
-		{ name: "Electric shape request", run: checkShapeRequest },
+		{ name: "Convex dashboard", run: checkConvexDashboard },
+		{ name: "Convex health endpoint", run: checkConvexHealthEndpoint },
+		{ name: "Convex query endpoint", run: checkConvexQueryEndpoint },
 	];
 
 	const failures: Array<{ name: string; message: string }> = [];
