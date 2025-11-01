@@ -1,16 +1,10 @@
-import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
+import { type NextRequest, NextResponse } from "next/server";
 
-export default authkitMiddleware({
-	redirectUri: process.env.NEXT_PUBLIC_APP_URL
-		? `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
-		: `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001"}/auth/callback`,
-	middlewareAuth: {
-		enabled: true,
-		unauthenticatedPaths: ["/", "/auth/:path*", "/api/public/:path*"],
-	},
-	signUpPaths: ["/auth/sign-up"],
-	debug: process.env.NODE_ENV !== "production",
-});
+export function middleware(request: NextRequest) {
+	// better-auth handles authentication via API routes
+	// No middleware authentication needed - sessions are cookie-based
+	return NextResponse.next();
+}
 
 export const config = {
 	matcher: ["/((?!_next/|_static/|favicon\\.ico|.*\\.(?:png|jpg|svg|ico)).*)"],
