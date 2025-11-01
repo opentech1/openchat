@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { withAuth } from "@workos-inc/authkit-nextjs";
+import { createAuth } from "@/convex/auth";
+import { getToken as getTokenNextjs } from "@convex-dev/better-auth/nextjs";
 
 export type UserContext = {
 	userId: string;
@@ -9,18 +10,24 @@ export type UserContext = {
 	image?: string | null;
 };
 
+export const getToken = () => {
+	return getTokenNextjs(createAuth);
+};
+
 const resolveUserContext = cache(async (): Promise<UserContext> => {
-	const { user } = await withAuth();
-	if (!user) {
+	const { auth, headers } = await getToken();
+	const session = await auth.api.getSession({ headers });
+
+	if (!session?.user) {
 		redirect("/auth/sign-in");
 	}
-	const nameParts = [user.firstName, user.lastName].filter((part): part is string => Boolean(part?.trim()));
-	const displayName = nameParts.join(" ").trim() || user.email || null;
+
+	const user = session.user;
 	return {
 		userId: user.id,
-		email: user.email,
-		name: displayName,
-		image: user.profilePictureUrl ?? null,
+		email: user.email ?? null,
+		name: user.name ?? null,
+		image: user.image ?? null,
 	};
 });
 
