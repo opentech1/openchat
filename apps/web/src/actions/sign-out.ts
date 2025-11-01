@@ -1,7 +1,16 @@
 "use server";
 
-import { signOut } from "@workos-inc/authkit-nextjs";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 
 export async function signOutAction() {
-	await signOut();
+	// Clear auth cookies
+	const cookieStore = await cookies();
+	const cookieNames = ["openchat-session-token", "openchat.session-token"];
+
+	for (const name of cookieNames) {
+		cookieStore.delete(name);
+	}
+
+	redirect("/");
 }

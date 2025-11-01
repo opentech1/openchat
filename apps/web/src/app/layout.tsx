@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
-import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
@@ -81,11 +80,9 @@ export default function RootLayout({
 			data-brand-theme="blue"
 			className={`${GeistSans.variable} ${GeistMono.variable}`}>
 			<body className={cn("font-sans antialiased", GeistSans.className)}>
-				<AuthKitProvider>
-					<Providers>
-						{children}
-					</Providers>
-				</AuthKitProvider>
+				<Providers>
+					{children}
+				</Providers>
 			</body>
 		</html>
 	);

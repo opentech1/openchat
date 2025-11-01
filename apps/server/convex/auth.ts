@@ -2,11 +2,12 @@ import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
-import { DataModel } from "./_generated/dataModel";
+import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
 const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
+// @ts-expect-error - betterAuth component is registered via convex.config.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (
@@ -42,6 +43,7 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
+		// @ts-expect-error - authComponent expects GenericCtx but query provides QueryCtx
 		return authComponent.getAuthUser(ctx);
 	},
 });

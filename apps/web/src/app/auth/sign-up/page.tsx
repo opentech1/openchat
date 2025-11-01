@@ -1,9 +1,38 @@
+"use client";
+
+import { useState } from "react";
 import { GalleryVerticalEnd } from "lucide-react";
 import Link from "next/link";
-import { getSignInUrl, getSignUpUrl } from "@workos-inc/authkit-nextjs";
+import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
-export default async function RegisterPage() {
-	const [signUpUrl, signInUrl] = await Promise.all([getSignUpUrl(), getSignInUrl()]);
+export default function SignUpPage() {
+	const router = useRouter();
+	const [email, setEmail] = useState("");
+	const [password, setPassword] = useState("");
+	const [name, setName] = useState("");
+	const [error, setError] = useState("");
+	const [loading, setLoading] = useState(false);
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setError("");
+		setLoading(true);
+
+		try {
+			await authClient.signUp.email({
+				email,
+				password,
+				name,
+			});
+			router.push("/dashboard");
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to sign up");
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	return (
 		<div className="grid min-h-svh lg:grid-cols-2">
 			<div className="flex flex-col gap-4 p-6 md:p-10">
@@ -18,20 +47,71 @@ export default async function RegisterPage() {
 				<div className="flex flex-1 items-center justify-center">
 					<div className="w-full max-w-xs space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Create your account</h1>
-							<p className="text-muted-foreground text-sm">Launch AI copilots your customers will trust.</p>
+							<h1 className="text-xl font-semibold tracking-tight">Create an account</h1>
+							<p className="text-muted-foreground text-sm">Enter your details to get started.</p>
 						</div>
-						<a
-							href={signUpUrl}
-							className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex w-full items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition"
-						>
-							Continue with WorkOS
-						</a>
+						<form onSubmit={handleSubmit} className="space-y-4">
+							{error && (
+								<div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+									{error}
+								</div>
+							)}
+							<div className="space-y-2">
+								<label htmlFor="name" className="text-sm font-medium">
+									Name
+								</label>
+								<input
+									id="name"
+									type="text"
+									value={name}
+									onChange={(e) => setName(e.target.value)}
+									required
+									className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+									placeholder="John Doe"
+								/>
+							</div>
+							<div className="space-y-2">
+								<label htmlFor="email" className="text-sm font-medium">
+									Email
+								</label>
+								<input
+									id="email"
+									type="email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									required
+									className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+									placeholder="name@example.com"
+								/>
+							</div>
+							<div className="space-y-2">
+								<label htmlFor="password" className="text-sm font-medium">
+									Password
+								</label>
+								<input
+									id="password"
+									type="password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									required
+									minLength={8}
+									className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+								/>
+								<p className="text-xs text-muted-foreground">Minimum 8 characters</p>
+							</div>
+							<button
+								type="submit"
+								disabled={loading}
+								className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex w-full items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition disabled:opacity-50"
+							>
+								{loading ? "Creating account..." : "Sign up"}
+							</button>
+						</form>
 						<p className="text-center text-sm text-muted-foreground">
 							Already have an account?{" "}
-							<a href={signInUrl} className="text-primary underline-offset-4 hover:underline">
+							<Link href="/auth/sign-in" className="text-primary underline-offset-4 hover:underline">
 								Sign in
-							</a>
+							</Link>
 						</p>
 					</div>
 				</div>
@@ -46,5 +126,3 @@ export default async function RegisterPage() {
 		</div>
 	);
 }
-
-export const dynamic = "force-dynamic";
