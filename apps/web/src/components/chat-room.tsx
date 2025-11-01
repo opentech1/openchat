@@ -9,7 +9,7 @@ import React, {
 	useState,
 	useTransition,
 } from "react";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
+import { authClient } from '@/lib/auth-client';
 import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
@@ -40,7 +40,7 @@ const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 const MESSAGE_THROTTLE_MS = Number(process.env.NEXT_PUBLIC_CHAT_THROTTLE_MS ?? 80);
 
 export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
-  const { user } = useAuth();
+  const { data: session } = authClient.useSession(); const user = session?.user;
   const workspaceId = user?.id ?? null;
   const router = useRouter();
   const pathname = usePathname();

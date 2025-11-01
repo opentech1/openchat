@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
+import { authClient } from '@/lib/auth-client';
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ function getFocusableElements(container: HTMLElement | null) {
 
 export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 	const router = useRouter();
-	const { user } = useAuth();
+	const { data: session } = authClient.useSession(); const user = session?.user;
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
 	const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -123,8 +123,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 
 	if (!open || !user) return null;
 
-	const nameParts = [user.firstName, user.lastName].filter((part): part is string => Boolean(part?.trim()));
-	const displayName = nameParts.join(" ").trim() || user.email || "Unnamed user";
+	const displayName = user.name || user.email || "Unnamed user";
 	const initials = (() => {
 		const parts = displayName.trim().split(/\s+/);
 		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "U";
@@ -236,8 +235,8 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 					<div className="max-h-[80svh] overflow-auto p-4 space-y-6">
 						<div className="flex items-center gap-3">
 							<Avatar className="size-14">
-								{user.profilePictureUrl ? (
-									<AvatarImage src={user.profilePictureUrl} alt={displayName || "User"} />
+								{user.image ? (
+									<AvatarImage src={user.image} alt={displayName || "User"} />
 								) : null}
 								<AvatarFallback className="text-lg font-semibold">{initials}</AvatarFallback>
 							</Avatar>

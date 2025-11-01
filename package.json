@@ -35,6 +35,7 @@
     "@ai-sdk/provider-utils": "^3.0.13",
     "@convex-dev/better-auth": "^0.9.6",
     "@emotion/react": "^11.14.0",
+    "better-auth": "^1.3.34",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

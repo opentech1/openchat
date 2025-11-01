@@ -58,6 +58,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 	const convexClient = useMemo(() => {
 		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
 		if (!url) {
+			// During build time, use a placeholder URL
+			if (typeof window === "undefined") {
+				return new ConvexReactClient("http://localhost:3210");
+			}
 			throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
 		}
 		return new ConvexReactClient(url);
