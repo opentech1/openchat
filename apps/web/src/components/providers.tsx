@@ -4,6 +4,9 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { ConvexReactClient } from "convex/react";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { authClient } from "@/lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { BrandThemeProvider } from "./brand-theme-provider";
 import { Toaster } from "sonner";
@@ -52,25 +55,34 @@ function PosthogPageViewTracker() {
 export default function Providers({ children }: { children: React.ReactNode }) {
 	const queryClient = useMemo(() => new QueryClient(), []);
 	const posthogClient = useMemo(() => initPosthog(), []);
+	const convexClient = useMemo(() => {
+		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+		if (!url) {
+			throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
+		}
+		return new ConvexReactClient(url);
+	}, []);
 
 	const appTree = (
-		<ThemeProvider
-			attribute="class"
-			defaultTheme="system"
-			enableSystem
-			disableTransitionOnChange
-		>
-			<BrandThemeProvider>
-				<QueryClientProvider client={queryClient}>
-					<PosthogBootstrap />
-					<Suspense fallback={null}>
-						<PosthogPageViewTracker />
-					</Suspense>
-					{children}
-					<Toaster richColors position="bottom-right" />
-				</QueryClientProvider>
-			</BrandThemeProvider>
-		</ThemeProvider>
+		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+			<ThemeProvider
+				attribute="class"
+				defaultTheme="system"
+				enableSystem
+				disableTransitionOnChange
+			>
+				<BrandThemeProvider>
+					<QueryClientProvider client={queryClient}>
+						<PosthogBootstrap />
+						<Suspense fallback={null}>
+							<PosthogPageViewTracker />
+						</Suspense>
+						{children}
+						<Toaster richColors position="bottom-right" />
+					</QueryClientProvider>
+				</BrandThemeProvider>
+			</ThemeProvider>
+		</ConvexBetterAuthProvider>
 	);
 
 	if (posthogClient) {
