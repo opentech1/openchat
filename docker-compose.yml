@@ -30,10 +30,8 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
     environment:
-      WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID:-}
-      WORKOS_API_KEY: ${WORKOS_API_KEY:-}
-      WORKOS_COOKIE_PASSWORD: ${WORKOS_COOKIE_PASSWORD:-}
-      NEXT_PUBLIC_WORKOS_REDIRECT_URI: ${NEXT_PUBLIC_WORKOS_REDIRECT_URI:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      DATABASE_URL: ${DATABASE_URL:-}
       CONVEX_URL: ${CONVEX_URL:-http://convex:3210}
       NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
