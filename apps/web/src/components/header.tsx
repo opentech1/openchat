@@ -6,7 +6,7 @@ import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React, { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@workos-inc/authkit-nextjs/components'
+import { authClient } from '@/lib/auth-client'
 import { captureClientEvent } from '@/lib/posthog'
 
 const menuItems = [
@@ -19,7 +19,7 @@ const menuItems = [
 export const HeroHeader = () => {
     const [menuState, setMenuState] = useState(false)
     const [isScrolled, setIsScrolled] = useState(false)
-    const { user } = useAuth()
+    const { data: session } = authClient.useSession(); const user = session?.user
 
     const handleHeaderCtaClick = useCallback(() => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 0

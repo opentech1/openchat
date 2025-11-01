@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@workos-inc/authkit-nextjs/components";
+import { authClient } from '@/lib/auth-client';
 import {
 	Sidebar,
 	SidebarContent,
@@ -118,7 +118,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 export default function AppSidebar({ initialChats = [], currentUserId, ...sidebarProps }: AppSidebarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
-	const { user } = useAuth();
+	const { data: session } = authClient.useSession(); const user = session?.user;
 	const { theme: brandTheme } = useBrandTheme();
 	const [accountOpen, setAccountOpen] = useState(false);
 	const [isCreating, setIsCreating] = useState(false);
@@ -197,8 +197,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 
 	const userDisplayLabel = useMemo(() => {
 		if (!user) return "";
-		const parts = [user.firstName, user.lastName].filter((part): part is string => Boolean(part?.trim()));
-		return parts.join(" ").trim() || user.email || user.id || "";
+		return user.name || user.email || user.id || "";
 	}, [user]);
 
 	const userInitials = useMemo(() => {
@@ -279,8 +278,8 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 					<span className="text-xs text-muted-foreground">Account</span>
 	{user ? (
 		<Avatar className="size-8">
-			{user.profilePictureUrl ? (
-				<AvatarImage src={user.profilePictureUrl} alt={userDisplayLabel || "User"} />
+			{user.image ? (
+				<AvatarImage src={user.image} alt={userDisplayLabel || "User"} />
 			) : null}
 			<AvatarFallback>{userInitials || "U"}</AvatarFallback>
 		</Avatar>

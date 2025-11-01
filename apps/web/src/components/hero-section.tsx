@@ -4,7 +4,7 @@ import type { Route } from 'next';
 import React, { useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useAuth } from '@workos-inc/authkit-nextjs/components'
+import { authClient } from '@/lib/auth-client'
 
 import { Button } from '@/components/ui/button'
 import { HeroHeader } from './header'
@@ -83,7 +83,8 @@ function screenWidthBucket(width: number) {
 }
 
 export default function HeroSection() {
-	const { user } = useAuth()
+	const { data: session } = authClient.useSession()
+	const user = session?.user
 	const visitTrackedRef = useRef(false)
 
 	const handleCtaClick = useCallback((ctaId: string, ctaCopy: string, section: string) => {
