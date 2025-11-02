@@ -92,13 +92,23 @@ SITE_URL=https://osschat.dev
 
 ### Reverse Proxy Configuration
 
-You need to configure reverse proxies in Dokploy for:
+**IMPORTANT**: Convex self-hosted uses TWO separate ports that both need public URLs:
+- **Port 3210**: Database/WebSocket
+- **Port 3211**: HTTP API (auth routes)
 
-1. **Backend API** (`api.osschat.dev` → port 3210)
-2. **Dashboard** (`dash.osschat.dev` → port 6790)
-3. **Web App** (`osschat.dev` → port 3001)
+Configure these domains in Dokploy:
 
-In Dokploy, go to your service settings and add these domains with their corresponding ports.
+1. **Backend Database** (`api.osschat.dev` → port 3210)
+2. **Backend HTTP/Auth** (`site.osschat.dev` → port 3211) ⚠️ **REQUIRED for auth!**
+3. **Dashboard** (`dash.osschat.dev` → port 6790)
+4. **Web App** (`osschat.dev` → port 3001)
+
+In Dokploy:
+1. Go to your backend service → Domains section
+2. Add TWO domains:
+   - `api.osschat.dev` with target port `3210`
+   - `site.osschat.dev` with target port `3211`
+3. Add dashboard and web domains to their respective services
 
 ### Deployment Steps
 
