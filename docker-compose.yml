@@ -1,66 +1,15 @@
+# Using Convex Cloud - no self-hosted backend needed!
+# Backend is managed at https://outgoing-setter-201.convex.cloud
+# Dashboard is available at https://dashboard.convex.dev
+
 services:
-  backend:
-    image: ghcr.io/get-convex/convex-backend:latest
-    ports:
-      - "3210:3210"
-      - "3211:3211"
-    volumes:
-      - convex-data:/convex/data
-    environment:
-      INSTANCE_NAME: ${INSTANCE_NAME:-openchat-backend}
-      # Public URL for database/WebSocket (port 3210)
-      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
-      # Public URL for HTTP API (port 3211) - REQUIRED for HTTP actions!
-      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://localhost:3211}
-    networks:
-      default:
-        aliases:
-          - convex
-    restart: unless-stopped
-    stop_grace_period: 10s
-    stop_signal: SIGINT
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3210/version"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-  dashboard:
-    image: ghcr.io/get-convex/convex-dashboard:latest
-    ports:
-      - "6790:6791"
-    environment:
-      # Dashboard needs database URL (port 3210), not HTTP URL
-      NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
-    depends_on:
-      backend:
-        condition: service_healthy
-    restart: unless-stopped
-
-  deploy:
-    image: oven/bun:1.3.0
-    working_dir: /app/apps/server
-    volumes:
-      - ./apps/server:/app/apps/server:rw
-      - ./convex.json:/app/convex.json:ro
-    environment:
-      CONVEX_SELF_HOSTED_URL: ${CONVEX_SELF_HOSTED_URL:-http://backend:3210}
-      CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:-}
-    command: ["sh", "-c", "bun install && bun x convex deploy --yes"]
-    depends_on:
-      backend:
-        condition: service_healthy
-    profiles:
-      - tools
-
   web:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
       args:
-        NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
-        NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-http://localhost:3211}
+        NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-https://outgoing-setter-201.convex.cloud}
+        NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-https://outgoing-setter-201.convex.site}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
         NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
@@ -69,9 +18,9 @@ services:
     environment:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       SITE_URL: ${SITE_URL:-http://localhost:3001}
-      CONVEX_URL: ${CONVEX_URL:-http://backend:3210}
-      NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
-      NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-http://localhost:3211}
+      CONVEX_URL: ${CONVEX_URL:-https://outgoing-setter-201.convex.cloud}
+      NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-https://outgoing-setter-201.convex.cloud}
+      NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-https://outgoing-setter-201.convex.site}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-}
@@ -87,10 +36,4 @@ services:
       PORT: 3001
     ports:
       - "3001:3001"
-    depends_on:
-      backend:
-        condition: service_started
     restart: unless-stopped
-
-volumes:
-  convex-data:
