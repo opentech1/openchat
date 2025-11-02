@@ -8,7 +8,9 @@ services:
       - convex-data:/convex/data
     environment:
       INSTANCE_NAME: ${INSTANCE_NAME:-openchat-backend}
+      # Public URL for database/WebSocket (port 3210)
       CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
+      # Public URL for HTTP API (port 3211) - REQUIRED for HTTP actions!
       CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-http://localhost:3211}
     networks:
       default:
@@ -29,7 +31,8 @@ services:
     ports:
       - "6790:6791"
     environment:
-      NEXT_PUBLIC_DEPLOYMENT_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
+      # Dashboard needs database URL (port 3210), not HTTP URL
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${CONVEX_CLOUD_ORIGIN:-http://localhost:3210}
     depends_on:
       backend:
         condition: service_healthy
@@ -57,7 +60,7 @@ services:
       dockerfile: docker/web.Dockerfile
       args:
         NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
-        NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
+        NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-http://localhost:3211}
         NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
         NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
@@ -68,7 +71,7 @@ services:
       SITE_URL: ${SITE_URL:-http://localhost:3001}
       CONVEX_URL: ${CONVEX_URL:-http://backend:3210}
       NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
-      NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
+      NEXT_PUBLIC_CONVEX_SITE_URL: ${NEXT_PUBLIC_CONVEX_SITE_URL:-http://localhost:3211}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
       NEXT_PUBLIC_WEB_URL: ${NEXT_PUBLIC_WEB_URL:-}
