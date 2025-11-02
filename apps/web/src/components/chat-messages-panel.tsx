@@ -179,6 +179,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 						shouldStickRef.current = true;
 						scrollToBottom("smooth");
 					}}
+					aria-label="Scroll to bottom of conversation"
 					className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 shadow-sm"
 				>
 					<ArrowDownIcon className="size-4" />
@@ -197,8 +198,14 @@ type ChatMessageBubbleProps = {
 
 const ChatMessageBubble = memo(
 	({ message }: ChatMessageBubbleProps) => {
+		const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
 		return (
-			<Message from={message.role} className={message.role === "assistant" ? "justify-start flex-row" : undefined}>
+			<Message 
+				from={message.role} 
+				className={message.role === "assistant" ? "justify-start flex-row" : undefined}
+				aria-label={ariaLabel}
+				role="article"
+			>
 				{message.role === "assistant" ? (
 					<SafeStreamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap" data-ph-no-capture>
 						{message.content}
