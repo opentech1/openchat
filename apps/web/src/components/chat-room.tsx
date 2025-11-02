@@ -7,7 +7,6 @@ import React, {
 	useMemo,
 	useRef,
 	useState,
-	useTransition,
 } from "react";
 import { authClient } from '@/lib/auth-client';
 import { useChat } from "@ai-sdk-tools/store";
@@ -317,7 +316,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       content: message.content,
       createdAt: message.createdAt.toISOString(),
     }));
-    storeChatPrefetch(chatId, payload);
+    const timeoutId = setTimeout(() => {
+      storeChatPrefetch(chatId, payload);
+    }, 500);
+    return () => clearTimeout(timeoutId);
   }, [chatId, normalizedInitial]);
 
   const composerRef = useRef<HTMLDivElement>(null);
@@ -390,15 +392,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-	const [visibleMessages, setVisibleMessages] = useState(messages);
-	const [isPending, startTransition] = useTransition();
-
-	useEffect(() => {
-		startTransition(() => {
-			setVisibleMessages(messages);
-		});
-	}, [messages, startTransition]);
-
 	useEffect(() => {
 		const entry = readChatPrefetch(chatId);
 		if (!entry) return;
@@ -411,10 +404,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			}),
 		);
 		const uiMessages = normalized.map(toUiMessage);
-		startTransition(() => {
-			setMessages(uiMessages);
-		});
-	}, [chatId, setMessages, startTransition]);
+		setMessages(uiMessages);
+	}, [chatId, setMessages]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -437,7 +428,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 		})
 		.filter((message): message is PrefetchMessage => Boolean(message));
 	if (payload.length > 0) {
-		storeChatPrefetch(chatId, payload);
+		const timeoutId = setTimeout(() => {
+			storeChatPrefetch(chatId, payload);
+		}, 500);
+		return () => clearTimeout(timeoutId);
 	}
 }, [chatId, messages, status]);
 
@@ -559,7 +553,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       />
       <ChatMessagesFeed
         initialMessages={normalizedInitial}
-        optimisticMessages={visibleMessages}
+        optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
       />

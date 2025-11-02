@@ -7,7 +7,6 @@ import { ChatMessagesPanel } from "@/components/chat-messages-panel";
 import type { NormalizedMessage } from "@/lib/chat-message-utils";
 import {
 	mergeNormalizedMessages,
-	normalizeMessage,
 	normalizeUiMessage,
 } from "@/lib/chat-message-utils";
 
@@ -30,28 +29,34 @@ export function ChatMessagesFeed({
 	);
 
 	const lastMergedRef = useRef<NormalizedMessage[] | null>(null);
+	const prevByIdRef = useRef<Map<string, NormalizedMessage>>(new Map());
+	
 	const merged = useMemo(() => {
 		const next = mergeNormalizedMessages(initialMessages, optimisticNormalized);
 		const prev = lastMergedRef.current;
-		if (!prev) {
+		if (!prev || prev.length !== next.length) {
 			lastMergedRef.current = next;
+			prevByIdRef.current = new Map(next.map((msg) => [msg.id, msg]));
 			return next;
 		}
-		const prevById = new Map(prev.map((msg) => [msg.id, msg]));
+		
+		const prevById = prevByIdRef.current;
 		const stabilized = next.map((msg) => {
 			const previous = prevById.get(msg.id);
 			if (!previous) return msg;
-			const sameRole = previous.role === msg.role;
-			const sameContent = previous.content === msg.content;
-			const sameCreated = previous.createdAt.getTime() === msg.createdAt.getTime();
-			const prevUpdated = previous.updatedAt?.getTime() ?? null;
-			const nextUpdated = msg.updatedAt?.getTime() ?? null;
-			if (sameRole && sameContent && sameCreated && prevUpdated === nextUpdated) {
+			if (
+				previous.role === msg.role &&
+				previous.content === msg.content &&
+				previous.createdAt.getTime() === msg.createdAt.getTime() &&
+				(previous.updatedAt?.getTime() ?? null) === (msg.updatedAt?.getTime() ?? null)
+			) {
 				return previous;
 			}
 			return msg;
 		});
+		
 		lastMergedRef.current = stabilized;
+		prevByIdRef.current = new Map(stabilized.map((msg) => [msg.id, msg]));
 		return stabilized;
 	}, [initialMessages, optimisticNormalized]);
 
