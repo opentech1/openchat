@@ -71,6 +71,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
   const missingKeyToastRef = useRef<string | number | null>(null);
   const storedModelIdRef = useRef<string | null>(null);
+  const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     registerClientProperties({ has_openrouter_key: Boolean(apiKey) });
@@ -142,6 +143,14 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const fetchModels = useCallback(
     async (key: string) => {
+      // Cancel any in-flight request to prevent race conditions
+      if (fetchModelsAbortControllerRef.current) {
+        fetchModelsAbortControllerRef.current.abort();
+      }
+
+      const abortController = new AbortController();
+      fetchModelsAbortControllerRef.current = abortController;
+
       setModelsLoading(true);
       setModelsError(null);
       try {
@@ -149,6 +158,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ apiKey: key }),
+          signal: abortController.signal,
         });
         const data = await response.json();
         if (!response.ok || !data?.ok) {
@@ -194,6 +204,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           return next ?? null;
         });
       } catch (error) {
+        // Ignore abort errors (request was cancelled)
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
         console.error("Failed to load OpenRouter models", error);
         if (!(error as any)?.__posthogTracked) {
           const status = typeof (error as any)?.status === "number" ? (error as any).status : 0;
@@ -218,7 +233,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         applySelectedModel(null);
         setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
       } finally {
-        setModelsLoading(false);
+        // Only clear loading if this is still the active request
+        if (fetchModelsAbortControllerRef.current === abortController) {
+          setModelsLoading(false);
+          fetchModelsAbortControllerRef.current = null;
+        }
       }
     },
     [persistSelectedModel],
