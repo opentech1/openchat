@@ -17,7 +17,10 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
 	const initialMessages = messages.map((message) => ({
 		id: message._id,
 		role: message.role,
-		content: message.content,
+		content: message.content ?? "", // Legacy plaintext
+		encryptedContent: message.encryptedContent,
+		contentIv: message.contentIv,
+		contentEncryptionVersion: message.contentEncryptionVersion,
 		createdAt: new Date(message.createdAt).toISOString(),
 	}));
 

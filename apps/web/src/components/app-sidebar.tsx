@@ -22,10 +22,15 @@ import { AccountSettingsModal } from "@/components/account-settings-modal";
 import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
+import { decryptTitleForDisplay } from "@/lib/chat-encryption-helpers";
+import { initializeEncryption } from "@/lib/chat-encryption";
 
 export type ChatListItem = {
 	id: string;
 	title: string | null;
+	encryptedTitle?: string;
+	titleIv?: string;
+	titleEncryptionVersion?: string;
 	updatedAt?: string | Date;
 	lastMessageAt?: string | Date | null;
 	updatedAtMs?: number | null;
@@ -124,6 +129,46 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	const [isCreating, setIsCreating] = useState(false);
 	const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 	const [chats, setChats] = useState<ChatListItem[]>(() => dedupeChats(initialChats));
+	const [decryptedChats, setDecryptedChats] = useState<ChatListItem[]>([]);
+
+	// Initialize encryption on mount
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		initializeEncryption().catch((error) => {
+			console.error("Failed to initialize encryption in sidebar:", error);
+		});
+	}, []);
+
+	// Decrypt chat titles
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+
+		const decryptTitles = async () => {
+			const decrypted = await Promise.all(
+				chats.map(async (chat) => {
+					const decryptedTitle = await decryptTitleForDisplay({
+						encryptedTitle: chat.encryptedTitle,
+						titleIv: chat.titleIv,
+						titleEncryptionVersion: chat.titleEncryptionVersion,
+						title: chat.title,
+					});
+
+					return {
+						...chat,
+						title: decryptedTitle,
+					};
+				})
+			);
+
+			setDecryptedChats(decrypted);
+		};
+
+		decryptTitles().catch((error) => {
+			console.error("Failed to decrypt chat titles:", error);
+			// Fall back to original chats if decryption fails
+			setDecryptedChats(chats);
+		});
+	}, [chats]);
 
 	useEffect(() => {
 		setChats(dedupeChats(initialChats));
@@ -258,7 +303,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 						<h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Chats</h3>
 					</div>
 					<ChatList
-						chats={chats}
+						chats={decryptedChats.length > 0 ? decryptedChats : chats}
 						activePath={pathname}
 						onDelete={handleDelete}
 						deletingId={deletingChatId}

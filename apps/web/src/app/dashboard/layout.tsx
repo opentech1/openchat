@@ -21,7 +21,10 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 	const rawChats = await listChats(convexUserId);
 	const chats = rawChats.map((chat) => ({
 		id: chat._id,
-		title: chat.title,
+		title: chat.title ?? "New Chat", // Legacy plaintext
+		encryptedTitle: chat.encryptedTitle,
+		titleIv: chat.titleIv,
+		titleEncryptionVersion: chat.titleEncryptionVersion,
 		updatedAt: new Date(chat.updatedAt).toISOString(),
 		lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt).toISOString() : null,
 	}));

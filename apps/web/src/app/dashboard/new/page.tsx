@@ -10,6 +10,8 @@ export default async function NewChatPage() {
 		name: session.name,
 		image: session.image,
 	});
-	const chat = await createChatForUser(convexUserId, "New Chat");
+	// Note: Default chat title is not encrypted since this runs server-side
+	// Future enhancement: Move chat creation to client-side for E2E encrypted titles
+	const chat = await createChatForUser(convexUserId, { title: "New Chat" });
 	redirect(`/dashboard/chat/${chat._id}`);
 }

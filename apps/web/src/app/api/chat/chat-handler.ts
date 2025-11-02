@@ -48,7 +48,10 @@ type StreamPersistRequest = {
 	chatId: string;
 	clientMessageId?: string | null;
 	role: "user" | "assistant";
-	content: string;
+	content?: string; // Legacy plaintext
+	encryptedContent?: string; // Encrypted content for storage
+	contentIv?: string;
+	contentEncryptionVersion?: string;
 	createdAt: string;
 	status: "streaming" | "completed";
 };
@@ -164,6 +167,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				clientMessageId: input.clientMessageId ?? undefined,
 				role: input.role,
 				content: input.content,
+				encryptedContent: input.encryptedContent,
+				contentIv: input.contentIv,
+				contentEncryptionVersion: input.contentEncryptionVersion,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
 			}));
@@ -326,6 +332,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			(safeUserMessage as any).id = userMessageId;
 		}
 
+		// Extract encrypted content from payload (E2E encryption)
+		const userEncryptedContent = typeof (rawUserMessage as any)?.metadata?.encryptedContent === "string"
+			? (rawUserMessage as any).metadata.encryptedContent
+			: undefined;
+		const userContentIv = typeof (rawUserMessage as any)?.metadata?.contentIv === "string"
+			? (rawUserMessage as any).metadata.contentIv
+			: undefined;
+		const userContentEncryptionVersion = typeof (rawUserMessage as any)?.metadata?.contentEncryptionVersion === "string"
+			? (rawUserMessage as any).metadata.contentEncryptionVersion
+			: undefined;
+
 		const assistantMessageId = typeof payload?.assistantMessageId === "string" && payload.assistantMessageId.length > 0
 			? payload.assistantMessageId
 			: (crypto.randomUUID?.() ?? `assistant-${Date.now()}`);
@@ -337,7 +354,10 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				chatId,
 				clientMessageId: userMessageId,
 				role: "user",
-				content: userContent,
+				content: userEncryptedContent ? undefined : userContent, // Only store plaintext if not encrypted
+				encryptedContent: userEncryptedContent,
+				contentIv: userContentIv,
+				contentEncryptionVersion: userContentEncryptionVersion,
 				createdAt: userCreatedAtIso,
 				status: "completed",
 			});
@@ -351,6 +371,10 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		try {
+			// TODO: Assistant messages are not yet encrypted with client-side E2E encryption
+			// because they're streamed from OpenRouter. To implement full E2E for assistant messages,
+			// we would need to stream to client first, then have client encrypt and send back.
+			// For now, user messages have true E2E encryption, assistant messages are stored as plaintext.
 			const assistantBootstrap = await persistMessageImpl({
 				userId: convexUserId,
 				chatId,

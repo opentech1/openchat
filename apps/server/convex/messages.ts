@@ -10,7 +10,12 @@ const messageDoc = v.object({
 	chatId: v.id("chats"),
 	clientMessageId: v.optional(v.string()),
 	role: v.string(),
-	content: v.string(),
+	// Legacy plain text (backwards compatibility)
+	content: v.optional(v.string()),
+	// Encrypted content fields
+	encryptedContent: v.optional(v.string()),
+	contentIv: v.optional(v.string()),
+	contentEncryptionVersion: v.optional(v.string()),
 	createdAt: v.number(),
 	status: v.optional(v.string()),
 });
@@ -37,13 +42,23 @@ export const send = mutation({
 		chatId: v.id("chats"),
 		userId: v.id("users"),
 		userMessage: v.object({
-			content: v.string(),
+			// Legacy plain text
+			content: v.optional(v.string()),
+			// Encrypted content
+			encryptedContent: v.optional(v.string()),
+			contentIv: v.optional(v.string()),
+			contentEncryptionVersion: v.optional(v.string()),
 			createdAt: v.optional(v.number()),
 			clientMessageId: v.optional(v.string()),
 		}),
 		assistantMessage: v.optional(
 			v.object({
-				content: v.string(),
+				// Legacy plain text
+				content: v.optional(v.string()),
+				// Encrypted content
+				encryptedContent: v.optional(v.string()),
+				contentIv: v.optional(v.string()),
+				contentEncryptionVersion: v.optional(v.string()),
 				createdAt: v.optional(v.number()),
 				clientMessageId: v.optional(v.string()),
 			}),
@@ -64,7 +79,10 @@ export const send = mutation({
 		const userMessageId = await insertOrUpdateMessage(ctx, {
 			chatId: args.chatId,
 			role: "user",
-			content: args.userMessage.content,
+			content: args.userMessage.content ?? undefined,
+			encryptedContent: args.userMessage.encryptedContent ?? undefined,
+			contentIv: args.userMessage.contentIv ?? undefined,
+			contentEncryptionVersion: args.userMessage.contentEncryptionVersion ?? undefined,
 			createdAt: userCreatedAt,
 			clientMessageId: args.userMessage.clientMessageId,
 			status: "completed",
@@ -77,7 +95,10 @@ export const send = mutation({
 			assistantMessageId = await insertOrUpdateMessage(ctx, {
 				chatId: args.chatId,
 				role: "assistant",
-				content: args.assistantMessage.content,
+				content: args.assistantMessage.content ?? undefined,
+				encryptedContent: args.assistantMessage.encryptedContent ?? undefined,
+				contentIv: args.assistantMessage.contentIv ?? undefined,
+				contentEncryptionVersion: args.assistantMessage.contentEncryptionVersion ?? undefined,
 				createdAt: assistantCreatedAt,
 				clientMessageId: args.assistantMessage.clientMessageId,
 				status: "completed",
@@ -104,7 +125,12 @@ export const streamUpsert = mutation({
 		messageId: v.optional(v.id("messages")),
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
-		content: v.string(),
+		// Legacy plain text
+		content: v.optional(v.string()),
+		// Encrypted content
+		encryptedContent: v.optional(v.string()),
+		contentIv: v.optional(v.string()),
+		contentEncryptionVersion: v.optional(v.string()),
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
 	},
@@ -121,7 +147,10 @@ export const streamUpsert = mutation({
 		const messageId = await insertOrUpdateMessage(ctx, {
 			chatId: args.chatId,
 			role: args.role,
-			content: args.content,
+			content: args.content ?? undefined,
+			encryptedContent: args.encryptedContent ?? undefined,
+			contentIv: args.contentIv ?? undefined,
+			contentEncryptionVersion: args.contentEncryptionVersion ?? undefined,
 			createdAt: timestamp,
 			status: args.status ?? "streaming",
 			clientMessageId: args.clientMessageId,
@@ -145,7 +174,10 @@ async function insertOrUpdateMessage(
 	args: {
 		chatId: Id<"chats">;
 		role: string;
-		content: string;
+		content?: string;
+		encryptedContent?: string;
+		contentIv?: string;
+		contentEncryptionVersion?: string;
 		createdAt: number;
 		status: string;
 		clientMessageId?: string | null;
@@ -170,6 +202,9 @@ async function insertOrUpdateMessage(
 			clientMessageId: args.clientMessageId ?? undefined,
 			role: args.role,
 			content: args.content,
+			encryptedContent: args.encryptedContent,
+			contentIv: args.contentIv,
+			contentEncryptionVersion: args.contentEncryptionVersion,
 			createdAt: args.createdAt,
 			status: args.status,
 		});
@@ -178,6 +213,9 @@ async function insertOrUpdateMessage(
 			clientMessageId: args.clientMessageId ?? undefined,
 			role: args.role,
 			content: args.content,
+			encryptedContent: args.encryptedContent,
+			contentIv: args.contentIv,
+			contentEncryptionVersion: args.contentEncryptionVersion,
 			createdAt: args.createdAt,
 			status: args.status,
 		});

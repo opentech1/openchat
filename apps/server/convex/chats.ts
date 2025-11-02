@@ -7,7 +7,12 @@ const chatDoc = v.object({
 	_id: v.id("chats"),
 	_creationTime: v.number(),
 	userId: v.id("users"),
-	title: v.string(),
+	// Legacy plain text (backwards compatibility)
+	title: v.optional(v.string()),
+	// Encrypted title fields
+	encryptedTitle: v.optional(v.string()),
+	titleIv: v.optional(v.string()),
+	titleEncryptionVersion: v.optional(v.string()),
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	lastMessageAt: v.optional(v.number()),
@@ -43,7 +48,12 @@ export const get = query({
 export const create = mutation({
 	args: {
 		userId: v.id("users"),
-		title: v.string(),
+		// Legacy plain text
+		title: v.optional(v.string()),
+		// Encrypted title
+		encryptedTitle: v.optional(v.string()),
+		titleIv: v.optional(v.string()),
+		titleEncryptionVersion: v.optional(v.string()),
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
@@ -51,6 +61,9 @@ export const create = mutation({
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
 			title: args.title,
+			encryptedTitle: args.encryptedTitle,
+			titleIv: args.titleIv,
+			titleEncryptionVersion: args.titleEncryptionVersion,
 			createdAt: now,
 			updatedAt: now,
 			lastMessageAt: now,

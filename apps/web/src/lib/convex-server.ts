@@ -42,9 +42,23 @@ export async function listChats(userId: Id<"users">) {
 	return client.query(api.chats.list, { userId });
 }
 
-export async function createChatForUser(userId: Id<"users">, title: string) {
+export async function createChatForUser(
+	userId: Id<"users">,
+	titleData: {
+		title?: string;
+		encryptedTitle?: string;
+		titleIv?: string;
+		titleEncryptionVersion?: string;
+	}
+) {
 	const client = getClient();
-	const { chatId } = await client.mutation(api.chats.create, { userId, title });
+	const { chatId } = await client.mutation(api.chats.create, {
+		userId,
+		title: titleData.title,
+		encryptedTitle: titleData.encryptedTitle,
+		titleIv: titleData.titleIv,
+		titleEncryptionVersion: titleData.titleEncryptionVersion,
+	});
 	const chat = await client.query(api.chats.get, { chatId, userId });
 	if (!chat) throw new Error("Chat not found after creation");
 	return chat;
@@ -63,8 +77,22 @@ export async function listMessagesForChat(userId: Id<"users">, chatId: Id<"chats
 export async function sendMessagePair(args: {
 	userId: Id<"users">;
 	chatId: Id<"chats">;
-	user: { content: string; createdAt?: number; clientMessageId?: string };
-	assistant?: { content: string; createdAt?: number; clientMessageId?: string };
+	user: {
+		content?: string;
+		encryptedContent?: string;
+		contentIv?: string;
+		contentEncryptionVersion?: string;
+		createdAt?: number;
+		clientMessageId?: string;
+	};
+	assistant?: {
+		content?: string;
+		encryptedContent?: string;
+		contentIv?: string;
+		contentEncryptionVersion?: string;
+		createdAt?: number;
+		clientMessageId?: string;
+	};
 }) {
 	const client = getClient();
 	return client.mutation(api.messages.send, {
@@ -72,12 +100,18 @@ export async function sendMessagePair(args: {
 		chatId: args.chatId,
 		userMessage: {
 			content: args.user.content,
+			encryptedContent: args.user.encryptedContent,
+			contentIv: args.user.contentIv,
+			contentEncryptionVersion: args.user.contentEncryptionVersion,
 			createdAt: args.user.createdAt,
 			clientMessageId: args.user.clientMessageId,
 		},
 		assistantMessage: args.assistant
 			? {
 					content: args.assistant.content,
+					encryptedContent: args.assistant.encryptedContent,
+					contentIv: args.assistant.contentIv,
+					contentEncryptionVersion: args.assistant.contentEncryptionVersion,
 					createdAt: args.assistant.createdAt,
 					clientMessageId: args.assistant.clientMessageId,
 			  }
@@ -91,7 +125,10 @@ export async function streamUpsertMessage(args: {
 	messageId?: Id<"messages">;
 	clientMessageId?: string;
 	role: "user" | "assistant";
-	content: string;
+	content?: string;
+	encryptedContent?: string;
+	contentIv?: string;
+	contentEncryptionVersion?: string;
 	status?: "streaming" | "completed";
 	createdAt?: number;
 }) {
@@ -103,6 +140,9 @@ export async function streamUpsertMessage(args: {
 		clientMessageId: args.clientMessageId,
 		role: args.role,
 		content: args.content,
+		encryptedContent: args.encryptedContent,
+		contentIv: args.contentIv,
+		contentEncryptionVersion: args.contentEncryptionVersion,
 		status: args.status,
 		createdAt: args.createdAt,
 	});

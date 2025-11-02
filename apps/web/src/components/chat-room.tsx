@@ -25,6 +25,8 @@ import { readCachedModels, writeCachedModels } from "@/lib/openrouter-model-cach
 import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
 import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
 import type { ModelSelectorOption } from "@/components/model-selector";
+import { prepareMessageForSending, decryptMessageForDisplay } from "@/lib/chat-encryption-helpers";
+import { initializeEncryption } from "@/lib/chat-encryption";
 
 type ChatRoomProps = {
   chatId: string;
@@ -32,6 +34,9 @@ type ChatRoomProps = {
     id: string;
     role: string;
     content: string;
+    encryptedContent?: string;
+    contentIv?: string;
+    contentEncryptionVersion?: string;
     createdAt: string | Date;
   }>;
 };
@@ -59,6 +64,44 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     });
   }, [workspaceId]);
 
+  // Initialize E2E encryption on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    initializeEncryption().catch((error) => {
+      console.error("Failed to initialize encryption:", error);
+    });
+  }, []);
+
+  // Decrypt initial messages
+  const [decryptedInitialMessages, setDecryptedInitialMessages] = useState(initialMessages);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const decryptMessages = async () => {
+      const decrypted = await Promise.all(
+        initialMessages.map(async (message) => {
+          const decryptedContent = await decryptMessageForDisplay({
+            encryptedContent: message.encryptedContent,
+            contentIv: message.contentIv,
+            contentEncryptionVersion: message.contentEncryptionVersion,
+            content: message.content,
+          });
+
+          return {
+            ...message,
+            content: decryptedContent,
+          };
+        })
+      );
+
+      setDecryptedInitialMessages(decrypted);
+    };
+
+    decryptMessages().catch((error) => {
+      console.error("Failed to decrypt initial messages:", error);
+    });
+  }, [initialMessages]);
 
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
@@ -305,8 +348,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   );
 
   const normalizedInitial = useMemo(
-    () => initialMessages.map(normalizeMessage),
-    [initialMessages],
+    () => decryptedInitialMessages.map(normalizeMessage),
+    [decryptedInitialMessages],
   );
 
   useEffect(() => {
@@ -454,13 +497,32 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     }
     const id = crypto.randomUUID?.() ?? `${Date.now()}`;
     const createdAt = new Date().toISOString();
+
+    // Encrypt message content for E2E encryption
+    let encryptedData;
+    try {
+      encryptedData = await prepareMessageForSending(content);
+    } catch (error) {
+      console.error("Failed to encrypt message:", error);
+      toast.error("Failed to encrypt message", {
+        description: "Could not encrypt your message. Please try again.",
+      });
+      return;
+    }
+
     try {
       await sendMessage(
         {
           id,
           role: "user",
           parts: [{ type: "text", text: content }],
-          metadata: { createdAt },
+          metadata: {
+            createdAt,
+            // Include encrypted content for storage
+            encryptedContent: encryptedData.encryptedContent,
+            contentIv: encryptedData.contentIv,
+            contentEncryptionVersion: encryptedData.contentEncryptionVersion,
+          },
         },
         {
           body: {

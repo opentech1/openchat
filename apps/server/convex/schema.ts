@@ -12,7 +12,12 @@ export default defineSchema({
 	}).index("by_external_id", ["externalId"]),
 	chats: defineTable({
 		userId: v.id("users"),
-		title: v.string(),
+		// Plain text title (deprecated - for backwards compatibility)
+		title: v.optional(v.string()),
+		// Encrypted title fields (E2E encryption)
+		encryptedTitle: v.optional(v.string()),
+		titleIv: v.optional(v.string()),
+		titleEncryptionVersion: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
@@ -21,7 +26,12 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
-		content: v.string(),
+		// Plain text content (deprecated - for backwards compatibility)
+		content: v.optional(v.string()),
+		// Encrypted content fields (E2E encryption)
+		encryptedContent: v.optional(v.string()),
+		contentIv: v.optional(v.string()),
+		contentEncryptionVersion: v.optional(v.string()),
 		createdAt: v.number(),
 		status: v.optional(v.string()),
 	})
