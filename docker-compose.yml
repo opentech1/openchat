@@ -40,6 +40,7 @@ services:
     working_dir: /app/apps/server
     volumes:
       - ./apps/server:/app/apps/server:ro
+      - ./convex.json:/app/convex.json:ro
     environment:
       CONVEX_SELF_HOSTED_URL: ${CONVEX_SELF_HOSTED_URL:-http://backend:3210}
       CONVEX_SELF_HOSTED_ADMIN_KEY: ${CONVEX_SELF_HOSTED_ADMIN_KEY:?CONVEX_SELF_HOSTED_ADMIN_KEY is required}
@@ -64,7 +65,7 @@ services:
     environment:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       SITE_URL: ${SITE_URL:-http://localhost:3001}
-      CONVEX_URL: ${CONVEX_URL:-http://convex:3210}
+      CONVEX_URL: ${CONVEX_URL:-http://backend:3210}
       NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL:-http://localhost:3210}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
       NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-}
