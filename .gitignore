@@ -3,6 +3,7 @@ node_modules
 .alchemy
 .env
 .env.local
+envs.txt
 deploy/.env
 docker/secrets/
 coverage/

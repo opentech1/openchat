@@ -15,10 +15,8 @@ const nextConfig = {
 				source: "/rpc/:path*",
 				destination: `${server}/rpc/:path*`,
 			},
-			{
-				source: "/api/auth/:path*",
-				destination: `${server}/api/auth/:path*`,
-			},
+			// Note: /api/auth routes are handled by this Next.js app directly
+			// at src/app/api/auth/[...all]/route.ts - no proxy needed
 		];
 	},
 	async headers() {
