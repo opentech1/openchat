@@ -34,7 +34,8 @@ const convexClient = getConvexClient();
 function PosthogPageViewTracker() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
-	const posthogClient = useMemo(() => initPosthog(), []);
+	// Use module-scoped singleton instead of creating new instance
+	const localPosthogClient = posthogClient;
 	const entryReferrer = useMemo(() => {
 		if (typeof document === "undefined") return "direct";
 		return document.referrer && document.referrer.length > 0 ? document.referrer : "direct";
@@ -42,7 +43,7 @@ function PosthogPageViewTracker() {
 	const previousPathRef = useRef<string | null>(null);
 
 	useEffect(() => {
-		if (!posthogClient) return;
+		if (!localPosthogClient) return;
 		if (typeof window === "undefined") return;
 		const currentPath = pathname ?? window.location.pathname;
 		const search = searchParams?.toString() ?? window.location.search.replace(/^\?/, "");
@@ -58,14 +59,14 @@ function PosthogPageViewTracker() {
 				referrerDomain = "direct";
 			}
 		}
-		posthogClient.capture("$pageview", {
+		localPosthogClient.capture("$pageview", {
 			referrer_url: referrerUrl,
 			referrer_domain: referrerDomain,
 			entry_path: currentPath || "/",
 			entry_query: search.length > 0 ? `?${search}` : "",
 		});
 		previousPathRef.current = `${currentPath || "/"}${search.length > 0 ? `?${search}` : ""}`;
-	}, [entryReferrer, pathname, posthogClient, searchParams]);
+	}, [entryReferrer, pathname, localPosthogClient, searchParams]);
 
 	return null;
 }
