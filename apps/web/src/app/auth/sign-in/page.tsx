@@ -19,14 +19,21 @@ export default function LoginPage() {
 		setLoading(true);
 
 		try {
-			await authClient.signIn.email({
+			const result = await authClient.signIn.email({
 				email,
 				password,
 			});
-			router.push("/dashboard");
+
+			if (result.error) {
+				setError(result.error.message || "Failed to sign in");
+				setLoading(false);
+				return;
+			}
+
+			// Force reload to clear any cached auth state
+			window.location.href = "/dashboard";
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in");
-		} finally {
 			setLoading(false);
 		}
 	};
