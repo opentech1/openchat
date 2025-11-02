@@ -4,6 +4,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig = {
 	experimental: {
 		externalDir: true,
+		instrumentationHook: true,
 	},
 	typedRoutes: true,
 	output: "standalone",
@@ -28,6 +29,7 @@ const nextConfig = {
 		const authUrl = process.env.BETTER_AUTH_URL;
 		const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
 		const posthogAssetsHost = "https://us-assets.i.posthog.com";
+		const sentryIngest = "https://*.ingest.sentry.io";
 		const additionalConnectSet = new Set(
 			[serverUrl, electricUrl, authUrl, posthogHost]
 			.filter(Boolean)
@@ -41,6 +43,7 @@ const nextConfig = {
 			.filter(Boolean),
 		);
 		additionalConnectSet.add(posthogAssetsHost);
+		additionalConnectSet.add(sentryIngest);
 		const additionalConnect = Array.from(additionalConnectSet);
 		const scriptSrcSet = new Set(["'self'", "'unsafe-inline'", "'unsafe-eval'"]);
 		for (const origin of additionalConnect) {
