@@ -11,26 +11,27 @@ type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const adjustHeight = useCallback(
-    (reset?: boolean) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+	const adjustHeight = useCallback(
+		(reset?: boolean) => {
+			const textarea = textareaRef.current;
+			if (!textarea) return;
 
-      if (reset) {
-        textarea.style.height = `${minHeight}px`;
-        return;
-      }
+			if (reset) {
+				textarea.style.height = `${minHeight}px`;
+				return;
+			}
 
-      textarea.style.height = `${minHeight}px`;
-      const newHeight = Math.max(
-        minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
-      );
+			// Calculate new height without resetting first to prevent flash
+			const currentHeight = textarea.scrollHeight;
+			const newHeight = Math.max(
+				minHeight,
+				Math.min(currentHeight, maxHeight ?? Number.POSITIVE_INFINITY),
+			);
 
-      textarea.style.height = `${newHeight}px`;
-    },
-    [minHeight, maxHeight],
-  );
+			textarea.style.height = `${newHeight}px`;
+		},
+		[minHeight, maxHeight],
+	);
 
   useEffect(() => {
     const textarea = textareaRef.current;

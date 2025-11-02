@@ -564,7 +564,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
       />
 
-      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
+      <div className="pointer-events-none fixed bottom-4 left-6 right-6 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
 			<ChatComposer
 				placeholder="Ask OpenChat a question..."
