@@ -72,7 +72,7 @@ CONVEX_SELF_HOSTED_ADMIN_KEY=<from_generate_admin_key.sh>
 NEXT_PUBLIC_CONVEX_URL=https://api.osschat.dev
 NEXT_PUBLIC_APP_URL=https://osschat.dev
 NEXT_PUBLIC_SITE_URL=https://osschat.dev
-NEXT_PUBLIC_SERVER_URL=https://api.osschat.dev
+NEXT_PUBLIC_SERVER_URL=https://osschat.dev
 SITE_URL=https://osschat.dev
 
 # Convex Backend URLs
