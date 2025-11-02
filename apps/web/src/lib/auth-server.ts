@@ -9,24 +9,48 @@ export type UserContext = {
 	image?: string | null;
 };
 
-// Simple session parsing from cookies
-// In production, this should validate the JWT/session token properly
+// Get session from better-auth API
 const resolveUserContext = cache(async (): Promise<UserContext> => {
 	const cookieStore = await cookies();
-	const sessionCookie = cookieStore.get("openchat.session-token") || cookieStore.get("openchat-session-token");
 
-	if (!sessionCookie) {
+	// better-auth stores session token with the cookiePrefix from convex/auth.ts
+	// Default is "openchat" so cookie is "openchat.session-token"
+	const sessionToken = cookieStore.get("openchat.session-token")?.value;
+
+	if (!sessionToken) {
 		redirect("/auth/sign-in");
 	}
 
-	// For now, return a placeholder
-	// TODO: Properly decode and validate the session token
-	return {
-		userId: "placeholder-id",
-		email: "user@example.com",
-		name: "User",
-		image: null,
-	};
+	// Call better-auth API to get session
+	try {
+		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3001";
+		const response = await fetch(`${baseUrl}/api/auth/session`, {
+			headers: {
+				Cookie: `openchat.session-token=${sessionToken}`,
+			},
+			cache: "no-store",
+		});
+
+		if (!response.ok) {
+			redirect("/auth/sign-in");
+		}
+
+		const data = await response.json();
+
+		if (!data.user) {
+			redirect("/auth/sign-in");
+		}
+
+		return {
+			userId: data.user.id,
+			email: data.user.email,
+			name: data.user.name,
+			image: data.user.image,
+		};
+	} catch (error) {
+		console.error("Failed to get session:", error);
+		redirect("/auth/sign-in");
+	}
 });
 
 export async function getUserContext(): Promise<UserContext> {
