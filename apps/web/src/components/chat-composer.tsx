@@ -21,11 +21,11 @@ function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaPr
 				return;
 			}
 
-			// Calculate new height without resetting first to prevent flash
-			const currentHeight = textarea.scrollHeight;
+			// Set height to 'auto' temporarily to get accurate scrollHeight without visual flash
+			textarea.style.height = 'auto';
 			const newHeight = Math.max(
 				minHeight,
-				Math.min(currentHeight, maxHeight ?? Number.POSITIVE_INFINITY),
+				Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
 			);
 
 			textarea.style.height = `${newHeight}px`;
