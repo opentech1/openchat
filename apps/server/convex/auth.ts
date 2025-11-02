@@ -7,6 +7,7 @@ import { query } from "./_generated/server";
 
 const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 
+// @ts-ignore - betterAuth component is registered via convex.config.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (
@@ -42,6 +43,7 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
+		// @ts-ignore - authComponent expects GenericCtx but query provides QueryCtx
 		return authComponent.getAuthUser(ctx);
 	},
 });
