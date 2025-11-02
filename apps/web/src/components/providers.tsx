@@ -13,6 +13,24 @@ import { Toaster } from "sonner";
 import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 
+// Create singleton clients at module scope to prevent recreation on re-renders
+const queryClient = new QueryClient();
+const posthogClient = initPosthog();
+
+function getConvexClient() {
+	const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+	if (!url) {
+		// During build time, use a placeholder URL
+		if (typeof window === "undefined") {
+			return new ConvexReactClient("http://localhost:3210");
+		}
+		throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
+	}
+	return new ConvexReactClient(url);
+}
+
+const convexClient = getConvexClient();
+
 function PosthogPageViewTracker() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -53,19 +71,7 @@ function PosthogPageViewTracker() {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-	const queryClient = useMemo(() => new QueryClient(), []);
-	const posthogClient = useMemo(() => initPosthog(), []);
-	const convexClient = useMemo(() => {
-		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-		if (!url) {
-			// During build time, use a placeholder URL
-			if (typeof window === "undefined") {
-				return new ConvexReactClient("http://localhost:3210");
-			}
-			throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
-		}
-		return new ConvexReactClient(url);
-	}, []);
+	// Use module-scoped singleton clients instead of creating new instances on each render
 
 	const appTree = (
 		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
