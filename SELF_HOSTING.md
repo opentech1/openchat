@@ -73,15 +73,19 @@ CONVEX_SELF_HOSTED_ADMIN_KEY=<from_generate_admin_key.sh>
 # CONVEX_URL: Used by Next.js server to reach backend (Docker internal network)
 #   - Must be http://backend:3210 (NOT https://, backend is the service name)
 #
-# NEXT_PUBLIC_CONVEX_URL: Used by browser to reach backend (public internet)
-#   - Must be https://api.yourdomain.com (your public backend URL with reverse proxy)
+# NEXT_PUBLIC_CONVEX_URL: Used by browser for database/WebSocket (port 3210)
+#   - Must be https://api.yourdomain.com (your public backend URL)
+#
+# NEXT_PUBLIC_CONVEX_SITE_URL: Used by browser for HTTP API/auth (port 3211)
+#   - Must be https://site.yourdomain.com (your public HTTP API URL)
 
 # Convex Backend URLs
 CONVEX_URL=http://backend:3210
 NEXT_PUBLIC_CONVEX_URL=https://api.osschat.dev
+NEXT_PUBLIC_CONVEX_SITE_URL=https://site.osschat.dev
 CONVEX_SELF_HOSTED_URL=http://backend:3210
 CONVEX_CLOUD_ORIGIN=https://api.osschat.dev
-CONVEX_SITE_ORIGIN=https://api.osschat.dev
+CONVEX_SITE_ORIGIN=https://site.osschat.dev
 
 # Public URLs (replace with your domains)
 NEXT_PUBLIC_APP_URL=https://osschat.dev
