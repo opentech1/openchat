@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
+import { lastLoginMethod } from "better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
@@ -19,12 +20,22 @@ export const createAuth = (
 		baseURL: siteUrl,
 		database: authComponent.adapter(ctx),
 		secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
-		emailAndPassword: {
-			enabled: true,
-			autoSignIn: true,
-			requireEmailVerification: false,
+		socialProviders: {
+			github: {
+				clientId: process.env.GITHUB_CLIENT_ID as string,
+				clientSecret: process.env.GITHUB_CLIENT_SECRET as string,
+			},
+			google: {
+				clientId: process.env.GOOGLE_CLIENT_ID as string,
+				clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+			},
 		},
-		plugins: [convex()],
+		plugins: [
+			convex(),
+			lastLoginMethod({
+				storeInDatabase: true,
+			}),
+		],
 		advanced: {
 			useSecureCookies: process.env.NODE_ENV === "production",
 			cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
