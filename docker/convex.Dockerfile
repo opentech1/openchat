@@ -7,4 +7,4 @@ COPY apps/server ./apps/server
 WORKDIR /app/apps/server
 RUN bun install --production
 EXPOSE 3210 6790
-CMD ["bun", "x", "convex", "dev", "--port", "3210", "--tail-logs", "disable"]
+CMD ["bun", "x", "convex", "dev"]
