@@ -427,12 +427,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			};
 		})
 		.filter((message): message is PrefetchMessage => Boolean(message));
-	if (payload.length > 0) {
-		const timeoutId = setTimeout(() => {
-			storeChatPrefetch(chatId, payload);
-		}, 500);
-		return () => clearTimeout(timeoutId);
-	}
+	
+	if (payload.length === 0) return;
+	
+	const timeoutId = setTimeout(() => {
+		storeChatPrefetch(chatId, payload);
+	}, 500);
+	return () => clearTimeout(timeoutId);
 }, [chatId, messages, status]);
 
   const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
