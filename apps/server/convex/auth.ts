@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
+import { lastLoginMethod } from "better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
@@ -14,17 +15,37 @@ export const createAuth = (
 	ctx: GenericCtx<DataModel>,
 	{ optionsOnly } = { optionsOnly: false },
 ) => {
+	// Build socialProviders object dynamically based on available credentials
+	const socialProviders: Record<string, any> = {};
+
+	// GitHub (primary OAuth provider)
+	if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+		socialProviders.github = {
+			clientId: process.env.GITHUB_CLIENT_ID,
+			clientSecret: process.env.GITHUB_CLIENT_SECRET,
+		};
+	}
+
+	// Google (optional - only if credentials provided)
+	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+		socialProviders.google = {
+			clientId: process.env.GOOGLE_CLIENT_ID,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+		};
+	}
+
 	return betterAuth({
 		logger: { disabled: optionsOnly },
 		baseURL: siteUrl,
 		database: authComponent.adapter(ctx),
 		secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
-		emailAndPassword: {
-			enabled: true,
-			autoSignIn: true,
-			requireEmailVerification: false,
-		},
-		plugins: [convex()],
+		socialProviders,
+		plugins: [
+			convex(),
+			lastLoginMethod({
+				storeInDatabase: true,
+			}),
+		],
 		advanced: {
 			useSecureCookies: process.env.NODE_ENV === "production",
 			cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
