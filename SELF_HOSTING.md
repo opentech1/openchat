@@ -68,19 +68,37 @@ Set these in Dokploy:
 BETTER_AUTH_SECRET=<generate_with_openssl_rand_-base64_32>
 CONVEX_SELF_HOSTED_ADMIN_KEY=<from_generate_admin_key.sh>
 
-# Public URLs (replace with your domains)
+# IMPORTANT: Understand the difference between these URLs:
+#
+# CONVEX_URL: Used by Next.js server to reach backend (Docker internal network)
+#   - Must be http://backend:3210 (NOT https://, backend is the service name)
+#
+# NEXT_PUBLIC_CONVEX_URL: Used by browser to reach backend (public internet)
+#   - Must be https://api.yourdomain.com (your public backend URL with reverse proxy)
+
+# Convex Backend URLs
+CONVEX_URL=http://backend:3210
 NEXT_PUBLIC_CONVEX_URL=https://api.osschat.dev
+CONVEX_SELF_HOSTED_URL=http://backend:3210
+CONVEX_CLOUD_ORIGIN=https://api.osschat.dev
+CONVEX_SITE_ORIGIN=https://api.osschat.dev
+
+# Public URLs (replace with your domains)
 NEXT_PUBLIC_APP_URL=https://osschat.dev
 NEXT_PUBLIC_SITE_URL=https://osschat.dev
 NEXT_PUBLIC_SERVER_URL=https://osschat.dev
 SITE_URL=https://osschat.dev
-
-# Convex Backend URLs
-CONVEX_URL=http://backend:3210
-CONVEX_SELF_HOSTED_URL=https://api.osschat.dev
-CONVEX_CLOUD_ORIGIN=https://api.osschat.dev
-CONVEX_SITE_ORIGIN=https://api.osschat.dev
 ```
+
+### Reverse Proxy Configuration
+
+You need to configure reverse proxies in Dokploy for:
+
+1. **Backend API** (`api.osschat.dev` → port 3210)
+2. **Dashboard** (`dash.osschat.dev` → port 6790)
+3. **Web App** (`osschat.dev` → port 3001)
+
+In Dokploy, go to your service settings and add these domains with their corresponding ports.
 
 ### Deployment Steps
 
@@ -103,6 +121,34 @@ This means the Convex CLI is trying to ask for login. Make sure you've:
 Make sure you:
 1. Set `NEXT_PUBLIC_CONVEX_URL` as an environment variable **AND** as a build arg
 2. Rebuild the web container: `docker compose build web`
+
+### Getting 403 errors on auth endpoints
+
+This usually means one of two issues:
+
+1. **Wrong CONVEX_URL** (most common):
+   - ❌ `CONVEX_URL=https://backend:3210` (WRONG - using HTTPS on internal network)
+   - ✅ `CONVEX_URL=http://backend:3210` (CORRECT - HTTP for Docker internal network)
+
+   To fix:
+   ```bash
+   # Update CONVEX_URL in Dokploy environment variables
+   # Then restart containers (faster than full redeploy):
+   docker compose -p <project-name> restart
+   ```
+
+2. **Functions not deployed**:
+   - Run the deploy service to push your Convex functions:
+   ```bash
+   docker compose -p <project-name> run --rm deploy
+   ```
+
+   You should see output like:
+   ```
+   ✔ Added table indexes
+   ✔ Installed component betterAuth
+   ✔ Deployed Convex functions to http://backend:3210
+   ```
 
 ### Dashboard not accessible
 
