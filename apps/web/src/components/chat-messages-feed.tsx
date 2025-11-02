@@ -16,6 +16,7 @@ export type ChatMessagesFeedProps = {
 	optimisticMessages: UIMessage<{ createdAt?: string }> [];
 	paddingBottom: number;
 	className?: string;
+	loading?: boolean;
 };
 
 export function ChatMessagesFeed({
@@ -23,6 +24,7 @@ export function ChatMessagesFeed({
 	optimisticMessages,
 	paddingBottom,
 	className,
+	loading = false,
 }: ChatMessagesFeedProps) {
 	const optimisticNormalized = useMemo(
 		() => optimisticMessages.map(normalizeUiMessage),
@@ -60,6 +62,7 @@ export function ChatMessagesFeed({
 			messages={merged.map((msg) => ({ id: msg.id, role: msg.role, content: msg.content }))}
 			paddingBottom={paddingBottom}
 			className={className}
+			loading={loading}
 		/>
 	);
 }
