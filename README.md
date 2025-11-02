@@ -2,6 +2,20 @@
 
 OpenChat is an open-source AI chat workspace that you can self-host or run on OpenChat Cloud. It pairs a streaming Next.js 15 frontend with Convex for persistence and live sync, and ships with WorkOS AuthKit, OpenRouter integration, and a Tailwind v4 + shadcn design system. The monorepo is managed with Turborepo and Bun so the web app, Convex functions, shared packages, and browser extension stay in lockstep.
 
+## Table of Contents
+
+- [Highlights](#highlights)
+- [Repository Layout](#repository-layout)
+- [Technology Stack](#technology-stack)
+- [Quick Start](#quick-start)
+- [Common Tasks](#common-tasks)
+- [Environment Notes](#environment-notes)
+- [Deployment](#deployment)
+- [Additional Documentation](#additional-documentation)
+- [Contributing & Support](#contributing--support)
+- [Sponsors](#sponsors)
+- [License](#license)
+
 ## Highlights
 - Streaming chat UI with optimistic updates, sidebar sync, and attachment awareness backed by Convex message storage.
 - WorkOS AuthKit sign-in flow plus helpers for guest fallbacks and session-aware analytics.
@@ -72,6 +86,11 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
 ## Contributing & Support
 - Read `CONTRIBUTING.md` for coding standards, testing expectations, and PR etiquette.
 - Security or conduct issues should follow the guidelines in `CODE_OF_CONDUCT.md`.
+
+## Sponsors
+
+- [Greptile AI](https://app.greptile.com/signup?ref=NTE2NTItMzUzNTg=) - AI-powered code understanding and search
+- [GitBook](https://www.gitbook.com) - Modern documentation platform for technical teams
 
 ## License
 
