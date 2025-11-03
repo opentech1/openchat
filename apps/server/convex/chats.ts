@@ -7,13 +7,11 @@ import { v } from "convex/values";
 const MAX_TITLE_LENGTH = 200;
 
 function sanitizeTitle(title: string): string {
-	// Remove any null bytes
-	let sanitized = title.replace(/\0/g, "");
-	
 	// Trim whitespace
-	sanitized = sanitized.trim();
+	let sanitized = title.trim();
 	
-	// Replace control characters (except newlines and tabs which we'll convert to spaces)
+	// Replace control characters including null bytes ([\x00-\x1F\x7F])
+	// except newlines and tabs which we'll convert to spaces
 	sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 	
 	// Convert newlines and tabs to single spaces
