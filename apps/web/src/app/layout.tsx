@@ -4,6 +4,7 @@ import Providers from "@/components/providers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
+import { RouteFocusManager } from "@/components/route-focus-manager";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 
@@ -81,6 +82,7 @@ export default function RootLayout({
 			className={`${GeistSans.variable} ${GeistMono.variable}`}>
 			<body className={cn("font-sans antialiased", GeistSans.className)}>
 				<Providers>
+					<RouteFocusManager />
 					{children}
 				</Providers>
 			</body>
