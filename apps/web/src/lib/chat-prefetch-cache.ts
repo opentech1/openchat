@@ -70,22 +70,24 @@ export function readChatPrefetch(chatId: string): PrefetchEntry | null {
 
 export function storeChatPrefetch(chatId: string, messages: PrefetchMessage[]) {
 	const state = getGlobalState();
-	state.entries[chatId] = {
-		messages,
-		fetchedAt: Date.now(),
-	};
 	
-	// Enforce size limit by removing oldest entries
-	const entries = Object.entries(state.entries);
-	if (entries.length > MAX_CACHE_SIZE) {
+	// Enforce size limit before insertion to prevent overflow
+	const currentEntries = Object.entries(state.entries);
+	if (currentEntries.length >= MAX_CACHE_SIZE) {
 		// Sort by fetchedAt ascending (oldest first)
-		entries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+		currentEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
 		// Remove oldest entries to stay within limit
-		const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+		const toRemove = currentEntries.slice(0, currentEntries.length - MAX_CACHE_SIZE + 1);
 		for (const [id] of toRemove) {
 			delete state.entries[id];
 		}
 	}
+	
+	// Now insert the new entry
+	state.entries[chatId] = {
+		messages,
+		fetchedAt: Date.now(),
+	};
 	
 	persistEntries(state.entries);
 }

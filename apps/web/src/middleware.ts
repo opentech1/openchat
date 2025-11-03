@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { fetchSession } from "@/lib/auth-server";
 
 export async function middleware(request: NextRequest) {
 	const { pathname } = request.nextUrl;
@@ -10,18 +9,34 @@ export async function middleware(request: NextRequest) {
 
 	// Get session token from cookie
 	const sessionToken = request.cookies.get("openchat.session-token")?.value;
-	
-	// Check session using the shared cached function
-	// This ensures we don't duplicate the fetch when server components also check
-	const sessionValid = sessionToken ? !!(await fetchSession(sessionToken))?.user : false;
+	const hasSessionToken = !!sessionToken;
 
-	// If user is on sign-in page and has valid session, redirect to dashboard
-	if (pathname === "/auth/sign-in" && sessionValid) {
-		return NextResponse.redirect(new URL("/dashboard", request.url));
+	// For sign-in page: if user has a session token, they might be logged in
+	// We'll let the page itself validate and redirect if needed
+	if (pathname === "/auth/sign-in" && hasSessionToken) {
+		// Validate session to avoid unnecessary redirects
+		try {
+			const baseUrl = request.nextUrl.origin;
+			const response = await fetch(`${baseUrl}/api/auth/session`, {
+				headers: {
+					cookie: request.headers.get("cookie") || "",
+				},
+				cache: "no-store",
+			});
+			if (response.ok) {
+				const data = await response.json();
+				if (data.user) {
+					return NextResponse.redirect(new URL("/dashboard", request.url));
+				}
+			}
+		} catch {
+			// If validation fails, let them proceed to sign-in
+		}
 	}
 
-	// If user is trying to access protected route without valid session, redirect to sign-in
-	if (!isPublicRoute && !sessionValid) {
+	// If user is trying to access protected route without session token, redirect to sign-in
+	// Server components will do the full validation
+	if (!isPublicRoute && !hasSessionToken) {
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
