@@ -16,8 +16,8 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
-	// Only validate session when needed: sign-in page or protected routes with cookies
-	if (pathname === "/auth/sign-in" || (!isPublicRoute && hasCookies)) {
+	// Only validate session when we have cookies
+	if (hasCookies) {
 		const sessionValid = await checkSession(request);
 
 		// If on sign-in page with valid session, redirect to dashboard
