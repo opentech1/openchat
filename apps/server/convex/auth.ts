@@ -7,10 +7,14 @@ import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { getEnv, isProduction, validateConvexEnv } from "./env";
 
-// Validate environment variables on module load
-validateConvexEnv();
-
-const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
+// Lazy validation - only validate when auth is actually created
+let validated = false;
+function ensureValidated() {
+	if (!validated) {
+		validateConvexEnv();
+		validated = true;
+	}
+}
 
 // @ts-ignore - betterAuth component is registered via convex.config.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
@@ -19,6 +23,11 @@ export const createAuth = (
 	ctx: GenericCtx<DataModel>,
 	{ optionsOnly } = { optionsOnly: false },
 ) => {
+	// Validate environment variables on first auth creation
+	ensureValidated();
+	
+	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
+	
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
