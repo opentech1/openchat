@@ -353,7 +353,17 @@ function ChatList({
 	);
 }
 
+// Memoization cache for sortChats
+const sortChatsCache = new WeakMap<ChatListItem[], ChatListItem[]>();
+let sortChatsCacheKey: ChatListItem[] | null = null;
+let sortChatsCacheResult: ChatListItem[] | null = null;
+
 function sortChats(list: ChatListItem[]) {
+	// Check if we have a cached result for this exact array reference
+	if (sortChatsCacheKey === list && sortChatsCacheResult) {
+		return sortChatsCacheResult;
+	}
+	
 	const copy = list.map(ensureNormalizedChat);
 	copy.sort((a, b) => {
 		const aLast = a.lastActivityMs ?? 0;
@@ -364,5 +374,10 @@ function sortChats(list: ChatListItem[]) {
 		if (bUp !== aUp) return bUp - aUp;
 		return a.id.localeCompare(b.id);
 	});
+	
+	// Cache the result
+	sortChatsCacheKey = list;
+	sortChatsCacheResult = copy;
+	
 	return copy;
 }

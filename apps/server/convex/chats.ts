@@ -16,14 +16,29 @@ const chatDoc = v.object({
 export const list = query({
 	args: {
 		userId: v.id("users"),
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
 	},
-	returns: v.array(chatDoc),
+	returns: v.object({
+		chats: v.array(chatDoc),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
-		return await ctx.db
+		const limit = args.limit ?? 50;
+		const query = ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
-			.order("desc")
-			.take(200);
+			.order("desc");
+		
+		const results = await query.paginate({
+			cursor: args.cursor ?? null,
+			numItems: limit,
+		});
+		
+		return {
+			chats: results.page,
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 
