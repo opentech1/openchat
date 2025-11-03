@@ -5,15 +5,22 @@ import { z } from "zod";
  * Validates required and optional environment variables on startup
  */
 
+// Check if we're in production
+const isProdEnv = process.env.NODE_ENV === "production";
+
 // Server-side environment variables
 const serverEnvSchema = z.object({
-	// Required
-	BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required for production"),
+	// Required - with stricter validation in production
+	BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required")
+		.refine(
+			(val) => !isProdEnv || val !== "dev-secret",
+			"BETTER_AUTH_SECRET must not be 'dev-secret' in production. Generate a secure secret with: openssl rand -base64 32"
+		),
 	
-	// Required with defaults
-	NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3001"),
-	NEXT_PUBLIC_SERVER_URL: z.string().url().default("http://localhost:3000"),
-	NEXT_PUBLIC_CONVEX_URL: z.string().url(),
+	// Required - URLs should be explicitly set in production
+	NEXT_PUBLIC_APP_URL: z.string().url("NEXT_PUBLIC_APP_URL must be a valid URL"),
+	NEXT_PUBLIC_SERVER_URL: z.string().url("NEXT_PUBLIC_SERVER_URL must be a valid URL"),
+	NEXT_PUBLIC_CONVEX_URL: z.string().url("NEXT_PUBLIC_CONVEX_URL must be a valid URL"),
 	
 	// Optional
 	CONVEX_URL: z.string().url().optional(),
@@ -66,8 +73,16 @@ export type ClientEnv = z.infer<typeof clientEnvSchema>;
  * Call this during server startup or in server-side code
  */
 export function validateServerEnv(): ServerEnv {
+	// Apply defaults only in development
+	const envWithDefaults = isProdEnv ? process.env : {
+		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
+		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
+		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "dev-secret",
+		...process.env,
+	};
+	
 	try {
-		return serverEnvSchema.parse(process.env);
+		return serverEnvSchema.parse(envWithDefaults);
 	} catch (error) {
 		if (error instanceof z.ZodError) {
 			const issues = error.issues.map((issue) => {

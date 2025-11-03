@@ -198,13 +198,16 @@ environment:
 - [ ] Configure at least one OAuth provider (GitHub/Google)
 - [ ] Set `NODE_ENV=production`
 - [ ] Remove or set `NEXT_PUBLIC_DEV_BYPASS_AUTH=0`
-- [ ] Test environment validation on startup
+- [ ] Verify environment validation runs on startup (app will fail to start if invalid)
+- [ ] Remove any deprecated environment variables (NEXT_PUBLIC_SITE_URL, etc.)
 
 ## Troubleshooting
 
 ### "Environment validation failed" error
 
-This means required variables are missing or invalid. Check the error message for details:
+This means required variables are missing or invalid. The app will fail to start with validation errors.
+
+Check the error message for details:
 
 ```
 ❌ Invalid environment variables:
@@ -213,6 +216,10 @@ This means required variables are missing or invalid. Check the error message fo
 ```
 
 Fix by setting the missing variables in your `.env.local` file.
+
+**Note:** In production, validation is stricter:
+- `BETTER_AUTH_SECRET` cannot be "dev-secret"
+- All URL variables must be explicitly set (no defaults)
 
 ### OAuth not working
 

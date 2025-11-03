@@ -3,14 +3,10 @@ import * as Sentry from "@sentry/nextjs";
 export async function register() {
 	if (process.env.NEXT_RUNTIME === "nodejs") {
 		// Validate environment variables on server startup
-		try {
-			const { validateServerEnv } = await import("./lib/env");
-			validateServerEnv();
-			console.log("✅ Environment variables validated successfully");
-		} catch (error) {
-			// Log error but don't crash - let the app start and show user-friendly errors
-			console.error("Environment validation failed:", error);
-		}
+		// This will throw and prevent app startup if validation fails
+		const { validateServerEnv } = await import("./lib/env");
+		validateServerEnv();
+		console.log("✅ Environment variables validated successfully");
 		
 		await import("./sentry.server.config");
 	}
