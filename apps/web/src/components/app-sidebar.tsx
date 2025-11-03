@@ -375,7 +375,8 @@ function sortChats(list: ChatListItem[]) {
 	// Check if we have a cached result for this content
 	const cached = sortChatsCache.get(cacheKey);
 	if (cached) {
-		return cached;
+		// Return a shallow copy to prevent mutation of cached data
+		return [...cached];
 	}
 	
 	const copy = list.map(ensureNormalizedChat);
