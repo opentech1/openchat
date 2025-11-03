@@ -7,8 +7,9 @@ import { serializeChat } from "@/lib/chat-serializers";
 // Rate limiting for chat creation
 // NOTE: This in-memory implementation is suitable for single-instance deployments.
 // For production multi-instance/serverless deployments, use Redis or a distributed rate limiter.
-const CHAT_CREATE_LIMIT = parseInt(process.env.CHAT_CREATE_RATE_LIMIT ?? "10", 10) || 10;
-const CHAT_CREATE_WINDOW_MS = parseInt(process.env.CHAT_CREATE_WINDOW_MS ?? "60000", 10) || 60_000; // 1 minute
+const MIN_RATE_LIMIT = 1; // Minimum rate limit to prevent bypass via misconfiguration
+const CHAT_CREATE_LIMIT = Math.max(MIN_RATE_LIMIT, parseInt(process.env.CHAT_CREATE_RATE_LIMIT ?? "10", 10) || 10);
+const CHAT_CREATE_WINDOW_MS = Math.max(1000, parseInt(process.env.CHAT_CREATE_WINDOW_MS ?? "60000", 10) || 60_000); // 1 minute minimum
 const MAX_BUCKETS = 10000; // Prevent memory leaks
 
 type RateBucket = {
@@ -40,8 +41,6 @@ function cleanupExpiredBuckets(now: number) {
 }
 
 function isRateLimited(identifier: string): { limited: boolean; retryAfter?: number } {
-	if (CHAT_CREATE_LIMIT <= 0) return { limited: false };
-	
 	const now = Date.now();
 	cleanupExpiredBuckets(now);
 	
