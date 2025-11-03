@@ -1,37 +1,26 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect } from "react";
 import { GalleryVerticalEnd, Github } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 
-function LoginPageContent() {
+export default function LoginPage() {
 	const router = useRouter();
-	const searchParams = useSearchParams();
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState<string | null>(null);
 	const [lastMethod, setLastMethod] = useState<string | null>(null);
 
-	// Check if we're in the middle of an OAuth flow
-	// Better Auth uses these params during OAuth callbacks
-	const isOAuthFlow = searchParams.has("error") || searchParams.has("state") || searchParams.has("code");
-
 	// Check if user is already signed in
-	// Skip session check during OAuth flow to prevent race conditions
 	const { data: session, isPending } = authClient.useSession();
 
 	useEffect(() => {
-		// Don't redirect during OAuth flow - let Better Auth handle it
-		if (isOAuthFlow) {
-			return;
-		}
-
 		// Redirect to dashboard if already signed in
 		if (!isPending && session) {
 			router.push("/dashboard");
 		}
-	}, [session, isPending, router, isOAuthFlow]);
+	}, [session, isPending, router]);
 
 	useEffect(() => {
 		// Get last login method on mount
@@ -67,8 +56,8 @@ function LoginPageContent() {
 		}
 	};
 
-	// Show loading state while checking session (but not during OAuth flow)
-	if (isPending && !isOAuthFlow) {
+	// Show loading state while checking session
+	if (isPending) {
 		return (
 			<div className="flex min-h-svh items-center justify-center">
 				<div className="text-muted-foreground">Loading...</div>
@@ -76,8 +65,8 @@ function LoginPageContent() {
 		);
 	}
 
-	// Don't render login page if already signed in (but allow OAuth flow to complete)
-	if (session && !isOAuthFlow) {
+	// Don't render login page if already signed in
+	if (session) {
 		return null;
 	}
 
@@ -183,17 +172,5 @@ function LoginPageContent() {
 				/>
 			</div>
 		</div>
-	);
-}
-
-export default function LoginPage() {
-	return (
-		<Suspense fallback={
-			<div className="flex min-h-svh items-center justify-center">
-				<div className="text-muted-foreground">Loading...</div>
-			</div>
-		}>
-			<LoginPageContent />
-		</Suspense>
 	);
 }
