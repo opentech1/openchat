@@ -73,14 +73,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
 	const session = await getUserContext();
-	const userId = await ensureConvexUser({
-		id: session.userId,
-		email: session.email,
-		name: session.name,
-		image: session.image,
-	});
 	
-	// Check rate limit
+	// Check rate limit BEFORE user validation to prevent timing attacks
+	// This prevents attackers from enumerating valid users by measuring response times
 	const rateLimitResult = isRateLimited(session.userId);
 	if (rateLimitResult.limited) {
 		return NextResponse.json(
@@ -95,6 +90,13 @@ export async function POST(request: Request) {
 			}
 		);
 	}
+	
+	const userId = await ensureConvexUser({
+		id: session.userId,
+		email: session.email,
+		name: session.name,
+		image: session.image,
+	});
 	
 	const body = await request.json().catch(() => ({}));
 	const title = typeof body?.title === "string" && body.title.trim().length > 0 ? body.title.trim() : "New Chat";
