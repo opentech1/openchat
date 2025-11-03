@@ -96,6 +96,7 @@ Textarea.displayName = "Textarea";
 export type ChatComposerProps = {
 	onSend: (payload: { text: string; modelId: string; apiKey: string }) => void | Promise<void>;
 	disabled?: boolean;
+	sendDisabled?: boolean;
 	placeholder?: string;
 	modelOptions?: ModelSelectorOption[];
 	modelValue?: string | null;
@@ -110,6 +111,7 @@ export type ChatComposerProps = {
 export default function ChatComposer({
 	onSend,
 	disabled,
+	sendDisabled,
 	placeholder = "Ask OpenChat a question...",
 	modelOptions = [],
 	modelValue,
@@ -147,7 +149,7 @@ export default function ChatComposer({
 
 	const send = useCallback(async () => {
 		const trimmed = value.trim();
-		if (!trimmed || disabled || isSending) return;
+		if (!trimmed || sendDisabled || isSending) return;
 		if (!activeModelId) {
 			onMissingRequirement?.("model");
 			return;
@@ -168,7 +170,7 @@ export default function ChatComposer({
 		} finally {
 			setIsSending(false);
 		}
-	}, [activeModelId, adjustHeight, apiKey, disabled, isSending, onMissingRequirement, onSend, value]);
+	}, [activeModelId, adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -248,7 +250,7 @@ export default function ChatComposer({
 				}}
 				whileHover={{ scale: 1.01 }}
 				whileTap={{ scale: 0.98 }}
-				disabled={isStreaming ? disabled : (disabled || isSending || !value.trim() || !activeModelId || !apiKey)}
+				disabled={isStreaming ? sendDisabled : (sendDisabled || isSending || !value.trim() || !activeModelId || !apiKey)}
 				className={cn(
 					'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
 					isStreaming
