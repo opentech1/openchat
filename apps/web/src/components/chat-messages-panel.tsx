@@ -29,12 +29,13 @@ type ChatMessagesPanelProps = {
 	messages: ChatMessage[];
 	paddingBottom: number;
 	className?: string;
+	loading?: boolean;
 	autoStick?: boolean;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
 
-function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true }: ChatMessagesPanelProps) {
+function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true, loading = false }: ChatMessagesPanelProps) {
 	const viewportRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const [isAtBottom, setIsAtBottom] = useState(true);
@@ -132,7 +133,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 		const observer = new ResizeObserver(() => {
 			if (!initialSyncDoneRef.current) return;
 			if (!shouldStickRef.current) return;
-			scrollToBottom("auto");
+			scrollToBottom("smooth");
 		});
 		observer.observe(contentNode);
 		return () => observer.disconnect();
@@ -162,6 +163,24 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 							messages.map((msg) => (
 								<ChatMessageBubble key={msg.id} message={msg} />
 							))
+						) : loading ? (
+							<div className="flex flex-col gap-4" data-ph-no-capture>
+								<div className="flex gap-3 animate-pulse">
+									<div className="h-8 w-8 rounded-full bg-muted" />
+									<div className="flex-1 space-y-2">
+										<div className="h-4 w-3/4 rounded bg-muted" />
+										<div className="h-4 w-1/2 rounded bg-muted" />
+									</div>
+								</div>
+								<div className="flex gap-3 animate-pulse">
+									<div className="h-8 w-8 rounded-full bg-muted" />
+									<div className="flex-1 space-y-2">
+										<div className="h-4 w-2/3 rounded bg-muted" />
+										<div className="h-4 w-4/5 rounded bg-muted" />
+										<div className="h-4 w-1/3 rounded bg-muted" />
+									</div>
+								</div>
+							</div>
 						) : (
 							<p className="text-muted-foreground text-sm" data-ph-no-capture>No messages yet. Say hi!</p>
 						)}

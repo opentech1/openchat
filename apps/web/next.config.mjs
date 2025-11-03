@@ -85,15 +85,31 @@ const nextConfig = {
 			},
 		];
 	},
-	webpack(config, { dev }) {
+	webpack(config, { dev, isServer }) {
 		if (dev) {
 			config.cache = { type: "memory" };
+		}
+		// Reduce memory usage in production builds
+		if (!dev) {
+			config.optimization = {
+				...config.optimization,
+				moduleIds: 'deterministic',
+				// Use less memory-intensive minimizer settings
+				minimize: true,
+			};
+			// Disable source maps if GENERATE_SOURCEMAP is false
+			if (process.env.GENERATE_SOURCEMAP === 'false') {
+				config.devtool = false;
+			}
 		}
 		return config;
 	},
 };
 
-export default withSentryConfig(nextConfig, {
+// Skip Sentry entirely if DSN is not configured (saves build memory)
+const shouldUseSentry = process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN.length > 0;
+
+const finalConfig = shouldUseSentry ? withSentryConfig(nextConfig, {
 	// For all available options, see:
 	// https://github.com/getsentry/sentry-webpack-plugin#options
 
@@ -131,4 +147,6 @@ export default withSentryConfig(nextConfig, {
 	// https://docs.sentry.io/product/crons/
 	// https://vercel.com/docs/cron-jobs
 	automaticVercelMonitors: true,
-});
+}) : nextConfig;
+
+export default finalConfig;
