@@ -7,7 +7,6 @@ import React, {
 	useMemo,
 	useRef,
 	useState,
-	useTransition,
 } from "react";
 import { authClient } from '@/lib/auth-client';
 import { useChat } from "@ai-sdk-tools/store";
@@ -390,15 +389,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-	const [visibleMessages, setVisibleMessages] = useState(messages);
-	const [isPending, startTransition] = useTransition();
-
-	useEffect(() => {
-		startTransition(() => {
-			setVisibleMessages(messages);
-		});
-	}, [messages, startTransition]);
-
 	useEffect(() => {
 		const entry = readChatPrefetch(chatId);
 		if (!entry) return;
@@ -411,10 +401,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			}),
 		);
 		const uiMessages = normalized.map(toUiMessage);
-		startTransition(() => {
-			setMessages(uiMessages);
-		});
-	}, [chatId, setMessages, startTransition]);
+		setMessages(uiMessages);
+	}, [chatId, setMessages]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -436,9 +424,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			};
 		})
 		.filter((message): message is PrefetchMessage => Boolean(message));
-	if (payload.length > 0) {
+	
+	if (payload.length === 0) return;
+	
+	const timeoutId = setTimeout(() => {
 		storeChatPrefetch(chatId, payload);
-	}
+	}, 500);
+	return () => clearTimeout(timeoutId);
 }, [chatId, messages, status]);
 
   const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
@@ -560,10 +552,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       />
       <ChatMessagesFeed
         initialMessages={normalizedInitial}
-        optimisticMessages={visibleMessages}
+        optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
-        loading={isPending && visibleMessages.length === 0}
+        loading={!messages.length}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-6 right-6 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
