@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, createChatForUser, listChats } from "@/lib/convex-server";
 import { serializeChat } from "@/lib/chat-serializers";
@@ -6,8 +7,8 @@ import { serializeChat } from "@/lib/chat-serializers";
 // Rate limiting for chat creation
 // NOTE: This in-memory implementation is suitable for single-instance deployments.
 // For production multi-instance/serverless deployments, use Redis or a distributed rate limiter.
-const CHAT_CREATE_LIMIT = Number(process.env.CHAT_CREATE_RATE_LIMIT ?? 10);
-const CHAT_CREATE_WINDOW_MS = Number(process.env.CHAT_CREATE_WINDOW_MS ?? 60_000); // 1 minute
+const CHAT_CREATE_LIMIT = parseInt(process.env.CHAT_CREATE_RATE_LIMIT ?? "10", 10) || 10;
+const CHAT_CREATE_WINDOW_MS = parseInt(process.env.CHAT_CREATE_WINDOW_MS ?? "60000", 10) || 60_000; // 1 minute
 const MAX_BUCKETS = 10000; // Prevent memory leaks
 
 type RateBucket = {
@@ -38,16 +39,16 @@ function cleanupExpiredBuckets(now: number) {
 	}
 }
 
-function isRateLimited(userId: string): { limited: boolean; retryAfter?: number } {
+function isRateLimited(identifier: string): { limited: boolean; retryAfter?: number } {
 	if (CHAT_CREATE_LIMIT <= 0) return { limited: false };
 	
 	const now = Date.now();
 	cleanupExpiredBuckets(now);
 	
-	const bucket = rateBuckets.get(userId);
+	const bucket = rateBuckets.get(identifier);
 	
 	if (!bucket || now > bucket.resetAt) {
-		rateBuckets.set(userId, { count: 1, resetAt: now + CHAT_CREATE_WINDOW_MS });
+		rateBuckets.set(identifier, { count: 1, resetAt: now + CHAT_CREATE_WINDOW_MS });
 		return { limited: false };
 	}
 	
@@ -72,11 +73,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-	const session = await getUserContext();
+	// Get session token BEFORE getUserContext to prevent timing attacks
+	// This allows rate limiting based on session token, avoiding user enumeration
+	const cookieStore = await cookies();
+	const sessionToken = cookieStore.get("openchat.session-token")?.value ?? "anonymous";
 	
 	// Check rate limit BEFORE user validation to prevent timing attacks
-	// This prevents attackers from enumerating valid users by measuring response times
-	const rateLimitResult = isRateLimited(session.userId);
+	// Using session token as identifier prevents user enumeration through timing analysis
+	const rateLimitResult = isRateLimited(sessionToken);
 	if (rateLimitResult.limited) {
 		return NextResponse.json(
 			{ error: "Too many chat creation requests. Please try again later." },
@@ -91,6 +95,7 @@ export async function POST(request: Request) {
 		);
 	}
 	
+	const session = await getUserContext();
 	const userId = await ensureConvexUser({
 		id: session.userId,
 		email: session.email,
@@ -99,7 +104,7 @@ export async function POST(request: Request) {
 	});
 	
 	const body = await request.json().catch(() => ({}));
-	const title = typeof body?.title === "string" && body.title.trim().length > 0 ? body.title.trim() : "New Chat";
+	const title = typeof body?.title === "string" ? body.title : "New Chat";
 	const chat = await createChatForUser(userId, title);
 	return NextResponse.json({ chat: serializeChat(chat) });
 }
