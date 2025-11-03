@@ -46,6 +46,19 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() ?? "";
 
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelOptions, setModelOptions] = useState<ModelSelectorOption[]>([]);
+  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
+  const [checkedApiKey, setCheckedApiKey] = useState(false);
+  const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
+  const missingKeyToastRef = useRef<string | number | null>(null);
+  const storedModelIdRef = useRef<string | null>(null);
+  const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
+
   // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
     if (!workspaceId) return;
@@ -59,20 +72,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       has_openrouter_key: Boolean(apiKey),
     });
   }, [workspaceId, apiKey]);
-
-
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [savingApiKey, setSavingApiKey] = useState(false);
-  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [modelsError, setModelsError] = useState<string | null>(null);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [modelOptions, setModelOptions] = useState<ModelSelectorOption[]>([]);
-  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
-  const [checkedApiKey, setCheckedApiKey] = useState(false);
-  const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
-  const missingKeyToastRef = useRef<string | number | null>(null);
-  const storedModelIdRef = useRef<string | null>(null);
-  const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
