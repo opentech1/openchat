@@ -16,17 +16,19 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
-	// For all other cases, validate session via API
-	const sessionValid = await checkSession(request);
+	// Only validate session when needed: sign-in page or protected routes with cookies
+	if (pathname === "/auth/sign-in" || (!isPublicRoute && hasCookies)) {
+		const sessionValid = await checkSession(request);
 
-	// If on sign-in page with valid session, redirect to dashboard
-	if (pathname === "/auth/sign-in" && sessionValid) {
-		return NextResponse.redirect(new URL("/dashboard", request.url));
-	}
+		// If on sign-in page with valid session, redirect to dashboard
+		if (pathname === "/auth/sign-in" && sessionValid) {
+			return NextResponse.redirect(new URL("/dashboard", request.url));
+		}
 
-	// If on protected route with invalid session, redirect to sign-in
-	if (!isPublicRoute && !sessionValid) {
-		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
+		// If on protected route with invalid session, redirect to sign-in
+		if (!isPublicRoute && !sessionValid) {
+			return NextResponse.redirect(new URL("/auth/sign-in", request.url));
+		}
 	}
 
 	return NextResponse.next();
