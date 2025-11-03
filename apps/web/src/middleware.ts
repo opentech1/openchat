@@ -12,9 +12,13 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	// Allow OAuth callback redirects - Better Auth redirects with error or state params
-	// This prevents middleware from interrupting the OAuth flow
-	if (searchParams.has("error") || searchParams.has("state") || searchParams.has("code")) {
+	// Allow OAuth callback redirects only on sign-in or dashboard routes
+	// Better Auth redirects with error or state params after OAuth
+	// SECURITY: Restrict to specific routes to prevent auth bypass via fake params
+	const isOAuthCallback = (pathname === "/auth/sign-in" || pathname === "/dashboard") &&
+		(searchParams.has("error") || searchParams.has("state") || searchParams.has("code"));
+
+	if (isOAuthCallback) {
 		return NextResponse.next();
 	}
 
