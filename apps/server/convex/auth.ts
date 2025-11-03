@@ -68,3 +68,4 @@ export const getCurrentUser = query({
 		return authComponent.getAuthUser(ctx as GenericCtx<DataModel>);
 	},
 });
+
