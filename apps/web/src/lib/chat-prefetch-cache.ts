@@ -76,8 +76,9 @@ export function storeChatPrefetch(chatId: string, messages: PrefetchMessage[]) {
 	if (currentEntries.length >= MAX_CACHE_SIZE) {
 		// Sort by fetchedAt ascending (oldest first)
 		currentEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
-		// Remove oldest entries to stay within limit
-		const toRemove = currentEntries.slice(0, currentEntries.length - MAX_CACHE_SIZE + 1);
+		// Remove oldest entries to make room for the new entry
+		const numToRemove = currentEntries.length - MAX_CACHE_SIZE + 1;
+		const toRemove = currentEntries.slice(0, numToRemove);
 		for (const [id] of toRemove) {
 			delete state.entries[id];
 		}
