@@ -132,14 +132,14 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					disabled={disabled || loading || options.length === 0}
 					role="combobox"
 					aria-expanded={open}
-					title={triggerTitle}
+					title={triggerTitle ?? triggerLabel}
 					className="flex h-10 min-w-[220px] max-w-[360px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-left text-foreground"
 				>
 					<span className="flex min-w-0 items-center gap-2">
 						<span className="bg-muted text-muted-foreground/90 flex size-8 items-center justify-center rounded-lg">
 							<OptionGlyph option={selectedOption} />
 						</span>
-						<span className="text-sm font-medium leading-tight text-left whitespace-normal">{triggerLabel}</span>
+						<span className="truncate text-sm font-medium leading-tight text-left">{triggerLabel}</span>
 					</span>
 					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
 				</Button>
