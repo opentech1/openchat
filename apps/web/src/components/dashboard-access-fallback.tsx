@@ -21,28 +21,22 @@ export default function DashboardAccessFallback({
 					{description}
 				</p>
 			</div>
-			<div className="flex flex-wrap items-center justify-center gap-3">
+		<div className="flex flex-wrap items-center justify-center gap-3">
+			<Link
+				href="/auth/sign-in"
+				className={cn(buttonVariants({ variant: "default", size: "lg" }))}
+			>
+				Sign in
+			</Link>
+			{showHomeLink ? (
 				<Link
-					href="/auth/sign-in"
-					className={cn(buttonVariants({ variant: "default", size: "lg" }))}
+					href="/"
+					className={cn(buttonVariants({ variant: "ghost", size: "lg" }))}
 				>
-					Sign in
+					Back to home
 				</Link>
-				<Link
-					href="/auth/sign-up"
-					className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-				>
-					Create account
-				</Link>
-				{showHomeLink ? (
-					<Link
-						href="/"
-						className={cn(buttonVariants({ variant: "ghost", size: "lg" }))}
-					>
-						Back to home
-					</Link>
-				) : null}
-			</div>
+			) : null}
+		</div>
 		</div>
 	);
 }
