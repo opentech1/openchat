@@ -261,7 +261,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       if (missingKeyToastRef.current == null) {
         missingKeyToastRef.current = toast.warning("Add your OpenRouter API key", {
           description: "Open settings to paste your key and start chatting.",
-          duration: Infinity,
+          duration: 8000,
           action: {
             label: "Settings",
             onClick: () => router.push("/dashboard/settings"),
@@ -527,7 +527,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const shouldPromptForKey = !isLinked;
   const shouldForceModal = Boolean(modelsError);
   const showKeyModal = checkedApiKey && (shouldForceModal || (shouldPromptForKey && !keyPromptDismissed));
-  const composerDisabled = busy || modelsLoading || shouldPromptForKey || !selectedModel;
+  const composerDisabled = shouldPromptForKey;
+  const sendDisabled = busy || modelsLoading || shouldPromptForKey || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -562,12 +563,14 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         optimisticMessages={visibleMessages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
+        loading={isPending && visibleMessages.length === 0}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
 			<ChatComposer
 				placeholder="Ask OpenChat a question..."
+				sendDisabled={sendDisabled}
 				disabled={composerDisabled}
 				onSend={handleSend}
 				modelOptions={modelOptions}
