@@ -14,6 +14,7 @@ export type PrefetchEntry = {
 
 const STORAGE_KEY = "openchat.chat-prefetch";
 const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
+const MAX_CACHE_SIZE = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
 
 declare global {
 	// eslint-disable-next-line no-var, vars-on-top
@@ -73,6 +74,19 @@ export function storeChatPrefetch(chatId: string, messages: PrefetchMessage[]) {
 		messages,
 		fetchedAt: Date.now(),
 	};
+	
+	// Enforce size limit by removing oldest entries
+	const entries = Object.entries(state.entries);
+	if (entries.length > MAX_CACHE_SIZE) {
+		// Sort by fetchedAt ascending (oldest first)
+		entries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+		// Remove oldest entries to stay within limit
+		const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+		for (const [id] of toRemove) {
+			delete state.entries[id];
+		}
+	}
+	
 	persistEntries(state.entries);
 }
 

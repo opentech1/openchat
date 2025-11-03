@@ -18,7 +18,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 		name: session.name,
 		image: session.image,
 	});
-	const rawChats = await listChats(convexUserId);
+	const { chats: rawChats } = await listChats(convexUserId);
 	const chats = rawChats.map((chat) => ({
 		id: chat._id,
 		title: chat.title,
