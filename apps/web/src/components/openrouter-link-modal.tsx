@@ -58,12 +58,19 @@ export function OpenRouterLinkModal({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur" />
-        <Dialog.Content className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <Dialog.Content 
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          onOpenAutoFocus={(e) => {
+            // Prevent default to allow Input autoFocus to work properly
+            e.preventDefault();
+          }}
+          aria-describedby="openrouter-modal-description"
+        >
           <div className="pointer-events-auto w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <Dialog.Title className="text-lg font-semibold">Add your OpenRouter API key</Dialog.Title>
-                <Dialog.Description className="text-muted-foreground mt-1 text-sm">
+                <Dialog.Description id="openrouter-modal-description" className="text-muted-foreground mt-1 text-sm">
                   Paste a personal API key so OpenChat can stream responses using your OpenRouter account. Keys stay encrypted in your browser and are only sent to your server when you request a completion.
                 </Dialog.Description>
               </div>
@@ -96,6 +103,9 @@ export function OpenRouterLinkModal({
                   autoFocus
                   required
                   className="font-mono"
+                  aria-required="true"
+                  aria-invalid={!!errorMessage}
+                  aria-describedby={errorMessage ? "api-key-error" : undefined}
                 />
                 <p className="text-muted-foreground text-xs">
                   Create a key under
@@ -113,7 +123,11 @@ export function OpenRouterLinkModal({
                 </p>
               </div>
               {errorMessage ? (
-                <div className="bg-destructive/10 text-destructive w-full rounded-lg px-3 py-2 text-xs font-medium">
+                <div 
+                  id="api-key-error"
+                  role="alert"
+                  className="bg-destructive/10 text-destructive w-full rounded-lg px-3 py-2 text-xs font-medium"
+                >
                   {errorMessage}
                 </div>
               ) : null}
@@ -122,6 +136,7 @@ export function OpenRouterLinkModal({
                   type="submit"
                   disabled={saving || apiKey.trim().length < 10}
                   className={cn("h-9 w-full justify-center text-sm font-semibold")}
+                  aria-busy={saving}
                 >
                   {saving ? <LoaderIcon className="h-4 w-4 animate-spin" /> : "Save and continue"}
                 </Button>

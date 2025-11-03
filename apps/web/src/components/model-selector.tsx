@@ -132,7 +132,9 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					disabled={disabled || loading || options.length === 0}
 					role="combobox"
 					aria-expanded={open}
-					title={triggerTitle ?? triggerLabel}
+					aria-haspopup="listbox"
+					aria-label={`Select AI model. Current selection: ${triggerLabel}`}
+					title={triggerTitle}
 					className="flex h-10 min-w-[220px] max-w-[360px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-left text-foreground"
 				>
 					<span className="flex min-w-0 items-center gap-2">
@@ -145,13 +147,17 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent align="end" className="w-[320px] max-w-[90vw] border-none bg-popover/95 p-0 shadow-xl">
-				<Command className="border-none bg-transparent shadow-none">
-					<CommandInput placeholder="Search models" className="h-9 px-3 text-sm" />
-					<CommandList className="max-h-60 overflow-y-auto">
-						<CommandEmpty className="py-6 text-sm text-muted-foreground">
+				<Command className="border-none bg-transparent shadow-none" loop>
+					<CommandInput 
+						placeholder="Search models" 
+						className="h-9 px-3 text-sm"
+						aria-label="Search AI models"
+					/>
+					<CommandList className="max-h-60 overflow-y-auto" role="listbox">
+						<CommandEmpty className="py-6 text-sm text-muted-foreground" role="status">
 							{loading ? "Loading models..." : "No models found."}
 						</CommandEmpty>
-						<CommandGroup className="flex flex-col gap-1 p-2">
+						<CommandGroup className="flex flex-col gap-1 p-2" aria-label="Available models">
 						{options.map((option) => {
 							const isSelected = option.value === selectedValue
 							return (
@@ -165,6 +171,9 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 										onChange?.(currentValue)
 										setOpen(false)
 									}}
+									role="option"
+									aria-selected={isSelected}
+									aria-label={option.label}
 										className={cn(
 											"flex items-center justify-between gap-2 rounded-lg px-3 py-2",
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
