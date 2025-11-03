@@ -13,6 +13,7 @@ const messageDoc = v.object({
 	content: v.string(),
 	createdAt: v.number(),
 	status: v.optional(v.string()),
+	userId: v.optional(v.id("users")),
 });
 
 export const list = query({
@@ -140,6 +141,8 @@ export const streamUpsert = mutation({
 	},
 });
 
+const MAX_MESSAGE_CONTENT_LENGTH = 100 * 1024; // 100KB
+
 async function insertOrUpdateMessage(
 	ctx: MutationCtx,
 	args: {
@@ -152,6 +155,12 @@ async function insertOrUpdateMessage(
 		overrideId?: Id<"messages">;
 	},
 ) {
+	// Validate message content length (100KB max)
+	if (args.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
+		throw new Error(
+			`Message content exceeds maximum length of ${MAX_MESSAGE_CONTENT_LENGTH} bytes`,
+		);
+	}
 	let targetId = args.overrideId;
 	if (!targetId && args.clientMessageId) {
 		const existing = await ctx.db
