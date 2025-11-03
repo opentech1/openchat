@@ -1,9 +1,11 @@
+// Primary environment variable for the web app URL
+// Legacy variables are still checked for backwards compatibility
 const POSSIBLE_ORIGIN_ENVS = [
-	"NEXT_PUBLIC_APP_URL",
-	"NEXT_PUBLIC_SITE_URL",
-	"NEXT_PUBLIC_WEB_URL",
-	"NEXT_PUBLIC_BASE_URL",
-	"NEXT_PUBLIC_ORIGIN",
+	"NEXT_PUBLIC_APP_URL", // Primary
+	"NEXT_PUBLIC_SITE_URL", // Deprecated - use NEXT_PUBLIC_APP_URL
+	"NEXT_PUBLIC_WEB_URL", // Deprecated - use NEXT_PUBLIC_APP_URL
+	"NEXT_PUBLIC_BASE_URL", // Deprecated - use NEXT_PUBLIC_APP_URL
+	"NEXT_PUBLIC_ORIGIN", // Deprecated - use NEXT_PUBLIC_APP_URL
 	"CORS_ORIGIN",
 ];
 
