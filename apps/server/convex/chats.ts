@@ -132,3 +132,4 @@ export async function assertOwnsChat(
 	}
 	return chat;
 }
+
