@@ -23,7 +23,7 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 
 	// Call better-auth API to get session
 	try {
-		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3001";
+		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 		const response = await fetch(`${baseUrl}/api/auth/session`, {
 			headers: {
 				Cookie: `openchat.session-token=${sessionToken}`,

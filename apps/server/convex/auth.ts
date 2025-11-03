@@ -5,8 +5,9 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
+import { getEnv, isProduction } from "./env";
 
-const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
 
 // @ts-ignore - betterAuth component is registered via convex.config.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
@@ -34,11 +35,18 @@ export const createAuth = (
 		};
 	}
 
+	const authSecret = getEnv("BETTER_AUTH_SECRET", "dev-secret");
+	
+	// Warn if using dev-secret in production
+	if (authSecret === "dev-secret" && isProduction()) {
+		console.error("⚠️  WARNING: Using dev-secret in production! Generate a secure secret with: openssl rand -base64 32");
+	}
+	
 	return betterAuth({
 		logger: { disabled: optionsOnly },
 		baseURL: siteUrl,
 		database: authComponent.adapter(ctx),
-		secret: process.env.BETTER_AUTH_SECRET || "dev-secret",
+		secret: authSecret,
 		socialProviders,
 		plugins: [
 			convex(),
@@ -47,8 +55,8 @@ export const createAuth = (
 			}),
 		],
 		advanced: {
-			useSecureCookies: process.env.NODE_ENV === "production",
-			cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
+			useSecureCookies: isProduction(),
+			cookiePrefix: getEnv("AUTH_COOKIE_PREFIX", "openchat"),
 		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days

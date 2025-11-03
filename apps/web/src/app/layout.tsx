@@ -5,7 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
 export const metadata: Metadata = {
 	title: {
