@@ -262,11 +262,27 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		let payload: any;
+		let rawBody: string;
 		try {
-			payload = await request.json();
-		} catch {
+			rawBody = await request.text();
+
+			// Validate request body size
+			const bodySize = new TextEncoder().encode(rawBody).length;
+			if (bodySize > MAX_REQUEST_BODY_SIZE) {
+				const headers = buildCorsHeaders(request, allowOrigin);
+				return new Response(
+					`Request body too large: ${bodySize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
+					{ status: 413, headers }
+				);
+			}
+
+			payload = JSON.parse(rawBody);
+		} catch (error) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Invalid JSON payload", { status: 400, headers });
+			if (error instanceof SyntaxError) {
+				return new Response("Invalid JSON payload", { status: 400, headers });
+			}
+			throw error;
 		}
 
 		const modelIdFromPayload = typeof payload?.modelId === "string" && payload.modelId.trim().length > 0
@@ -322,6 +338,65 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		if (rawMessages.length === 0) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Missing chat messages", { status: 400, headers });
+		}
+
+		// Validate messages array length
+		if (rawMessages.length > MAX_MESSAGES_PER_REQUEST) {
+			const headers = buildCorsHeaders(request, allowOrigin);
+			return new Response(
+				`Too many messages: ${rawMessages.length} (max: ${MAX_MESSAGES_PER_REQUEST})`,
+				{ status: 413, headers }
+			);
+		}
+
+		// Validate message content length and attachment sizes
+		for (let i = 0; i < rawMessages.length; i++) {
+			const message = rawMessages[i];
+			if (!message) continue;
+
+			// Check each part of the message
+			for (const part of message.parts ?? []) {
+				if (!part) continue;
+
+				// Validate text content length
+				if ((part as any).type === "text" && typeof (part as any).text === "string") {
+					const textLength = (part as any).text.length;
+					if (textLength > MAX_MESSAGE_CONTENT_LENGTH) {
+						const headers = buildCorsHeaders(request, allowOrigin);
+						return new Response(
+							`Message content too long: ${textLength} characters (max: ${MAX_MESSAGE_CONTENT_LENGTH})`,
+							{ status: 413, headers }
+						);
+					}
+				}
+
+				// Validate attachment size
+				if ((part as any).type === "file") {
+					const filePart = part as any;
+					// Check data URL size if present
+					if (typeof filePart.data === "string") {
+						const dataSize = new TextEncoder().encode(filePart.data).length;
+						if (dataSize > MAX_ATTACHMENT_SIZE) {
+							const headers = buildCorsHeaders(request, allowOrigin);
+							return new Response(
+								`Attachment too large: ${dataSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
+								{ status: 413, headers }
+							);
+						}
+					}
+					// Check url content if it's a data URL
+					if (typeof filePart.url === "string" && filePart.url.startsWith("data:")) {
+						const urlSize = new TextEncoder().encode(filePart.url).length;
+						if (urlSize > MAX_ATTACHMENT_SIZE) {
+							const headers = buildCorsHeaders(request, allowOrigin);
+							return new Response(
+								`Attachment too large: ${urlSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
+								{ status: 413, headers }
+							);
+						}
+					}
+				}
+			}
 		}
 
 		const safeMessages = rawMessages.map(clampUserText);
