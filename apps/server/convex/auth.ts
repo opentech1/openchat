@@ -5,7 +5,10 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
-import { getEnv, isProduction } from "./env";
+import { getEnv, isProduction, validateConvexEnv } from "./env";
+
+// Validate environment variables on module load
+validateConvexEnv();
 
 const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
 

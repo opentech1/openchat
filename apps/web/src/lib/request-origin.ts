@@ -9,6 +9,16 @@ const POSSIBLE_ORIGIN_ENVS = [
 	"CORS_ORIGIN",
 ];
 
+const DEPRECATED_ENV_VARS = new Set([
+	"NEXT_PUBLIC_SITE_URL",
+	"NEXT_PUBLIC_WEB_URL",
+	"NEXT_PUBLIC_BASE_URL",
+	"NEXT_PUBLIC_ORIGIN",
+]);
+
+// Track if we've already warned about deprecated vars to avoid spam
+let hasWarnedDeprecated = false;
+
 function normalizeOrigin(value: string | null | undefined) {
 	if (!value) return null;
 	const trimmed = value.trim();
@@ -31,12 +41,27 @@ function expandOrigins(value: string | string[] | null | undefined) {
 
 export function resolveAllowedOrigins(extra?: string | string[]) {
 	const origins = new Set<string>();
+	const deprecatedVarsUsed: string[] = [];
+	
 	for (const envKey of POSSIBLE_ORIGIN_ENVS) {
 		const envValue = process.env[envKey];
+		if (envValue && DEPRECATED_ENV_VARS.has(envKey)) {
+			deprecatedVarsUsed.push(envKey);
+		}
 		for (const origin of expandOrigins(envValue)) {
 			origins.add(origin);
 		}
 	}
+	
+	// Warn about deprecated variables (only once per process)
+	if (!hasWarnedDeprecated && deprecatedVarsUsed.length > 0) {
+		console.warn(
+			`⚠️  Deprecated environment variables detected: ${deprecatedVarsUsed.join(", ")}\n` +
+			`   Please use NEXT_PUBLIC_APP_URL instead. These variables will be removed in a future version.`
+		);
+		hasWarnedDeprecated = true;
+	}
+	
 	for (const origin of expandOrigins(extra ?? null)) {
 		origins.add(origin);
 	}
