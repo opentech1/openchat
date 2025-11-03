@@ -26,18 +26,10 @@ export function restoreFocus(element: HTMLElement | null): void {
  * Move focus to the main content area after navigation
  */
 export function focusMainContent(): void {
-	// Try to find main element or fall back to body
-	const main = document.querySelector('main');
-	if (main instanceof HTMLElement && main.tabIndex === -1) {
+	// Try to find main element with tabIndex=-1
+	const main = document.querySelector('main[tabindex="-1"]');
+	if (main instanceof HTMLElement) {
 		main.focus({ preventScroll: false });
-	} else if (main instanceof HTMLElement) {
-		// Set tabIndex temporarily to make it focusable
-		main.tabIndex = -1;
-		main.focus({ preventScroll: false });
-		// Remove tabIndex after focus
-		setTimeout(() => {
-			main.removeAttribute('tabindex');
-		}, 0);
 	}
 }
 
