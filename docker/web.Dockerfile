@@ -19,12 +19,14 @@ ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}
 ENV NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL}
 ENV NEXT_PUBLIC_POSTHOG_KEY=${NEXT_PUBLIC_POSTHOG_KEY}
 ENV NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST}
-# Disable Sentry source map upload during Docker build (saves time/memory)
+# Disable Sentry completely during build to save massive memory
+ENV NEXT_PUBLIC_SENTRY_DSN=""
 ENV SENTRY_UPLOAD_DRY_RUN=true
 # Disable Next.js telemetry
 ENV NEXT_TELEMETRY_DISABLED=1
-# Increase Node.js memory limit for build
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Reduce memory usage: lower heap size + disable source maps
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV GENERATE_SOURCEMAP=false
 RUN bun run --cwd apps/web build
 
 FROM node:20-alpine AS runner
