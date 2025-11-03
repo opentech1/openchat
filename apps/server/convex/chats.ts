@@ -3,6 +3,38 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+// Input sanitization for chat titles
+const MAX_TITLE_LENGTH = 200;
+
+function sanitizeTitle(title: string): string {
+	// Remove any null bytes
+	let sanitized = title.replace(/\0/g, "");
+	
+	// Trim whitespace
+	sanitized = sanitized.trim();
+	
+	// Replace control characters (except newlines and tabs which we'll convert to spaces)
+	sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+	
+	// Convert newlines and tabs to single spaces
+	sanitized = sanitized.replace(/[\n\r\t]+/g, " ");
+	
+	// Collapse multiple spaces into one
+	sanitized = sanitized.replace(/\s+/g, " ");
+	
+	// Truncate to maximum length
+	if (sanitized.length > MAX_TITLE_LENGTH) {
+		sanitized = sanitized.slice(0, MAX_TITLE_LENGTH);
+	}
+	
+	// If empty after sanitization, provide default
+	if (sanitized.length === 0) {
+		return "New Chat";
+	}
+	
+	return sanitized;
+}
+
 const chatDoc = v.object({
 	_id: v.id("chats"),
 	_creationTime: v.number(),
@@ -47,10 +79,13 @@ export const create = mutation({
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
+		// Sanitize the title to prevent injection attacks and ensure valid input
+		const sanitizedTitle = sanitizeTitle(args.title);
+		
 		const now = Date.now();
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
-			title: args.title,
+			title: sanitizedTitle,
 			createdAt: now,
 			updatedAt: now,
 			lastMessageAt: now,

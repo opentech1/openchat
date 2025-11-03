@@ -47,7 +47,7 @@ export const createAuth = (
 			}),
 		],
 		advanced: {
-			useSecureCookies: process.env.NODE_ENV === "production",
+			useSecureCookies: process.env.NODE_ENV === "production" || siteUrl.startsWith("https://"),
 			cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
 		},
 		session: {
