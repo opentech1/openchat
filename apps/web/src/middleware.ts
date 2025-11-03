@@ -7,18 +7,32 @@ export async function middleware(request: NextRequest) {
 	const publicRoutes = ["/", "/auth/sign-in"];
 	const isPublicRoute = publicRoutes.includes(pathname);
 
-	// Check session by calling the Better Auth session endpoint
-	// This properly validates the session (not just cookie existence)
-	const sessionValid = await checkSession(request);
+	// Get the session cookie directly
+	const cookiePrefix = "openchat";
+	const sessionCookie = request.cookies.get(`${cookiePrefix}.session-token`);
 
-	// If user is on sign-in page and has valid session, redirect to dashboard
-	if (pathname === "/auth/sign-in" && sessionValid) {
-		return NextResponse.redirect(new URL("/dashboard", request.url));
+	// If no session cookie exists and trying to access protected route, redirect to sign-in
+	if (!isPublicRoute && !sessionCookie) {
+		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
-	// If user is trying to access protected route without valid session, redirect to sign-in
-	if (!isPublicRoute && !sessionValid) {
-		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
+	// If session cookie exists, validate it with the Better Auth session endpoint
+	// but only for non-public routes to avoid unnecessary API calls
+	if (!isPublicRoute && sessionCookie) {
+		const sessionValid = await checkSession(request);
+
+		// If session validation fails, redirect to sign-in
+		if (!sessionValid) {
+			return NextResponse.redirect(new URL("/auth/sign-in", request.url));
+		}
+	}
+
+	// If user is on sign-in page and has a session cookie, validate and redirect
+	if (pathname === "/auth/sign-in" && sessionCookie) {
+		const sessionValid = await checkSession(request);
+		if (sessionValid) {
+			return NextResponse.redirect(new URL("/dashboard", request.url));
+		}
 	}
 
 	return NextResponse.next();
@@ -29,8 +43,8 @@ async function checkSession(request: NextRequest): Promise<boolean> {
 		// Get the base URL for the API call
 		const baseUrl = request.nextUrl.origin;
 
-		// Call the Better Auth session endpoint to validate the session
-		const response = await fetch(`${baseUrl}/api/auth/session`, {
+		// Call the Better Auth get-session endpoint to validate the session
+		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
 			headers: {
 				// Forward all cookies to the session endpoint
 				cookie: request.headers.get("cookie") || "",
@@ -39,10 +53,12 @@ async function checkSession(request: NextRequest): Promise<boolean> {
 		});
 
 		if (!response.ok) {
+			console.log("Session validation failed with status:", response.status);
 			return false;
 		}
 
 		const data = await response.json();
+		console.log("Session data:", data?.user ? "User found" : "No user");
 		// Session is valid if it has a user
 		return !!data.user;
 	} catch (error) {
