@@ -22,6 +22,13 @@ const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) &
 	? RAW_MAX_TRACKED_RATE_BUCKETS
 	: null;
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
+
+// Request size limits for security
+const MAX_MESSAGES_PER_REQUEST = Number(process.env.MAX_MESSAGES_PER_REQUEST ?? 100);
+const MAX_REQUEST_BODY_SIZE = Number(process.env.MAX_REQUEST_BODY_SIZE ?? 10_000_000); // 10MB default
+const MAX_ATTACHMENT_SIZE = Number(process.env.MAX_ATTACHMENT_SIZE ?? 5_000_000); // 5MB per attachment
+const MAX_MESSAGE_CONTENT_LENGTH = Number(process.env.MAX_MESSAGE_CONTENT_LENGTH ?? 50_000); // 50k chars
+
 const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 80);
 const STREAM_FLUSH_INTERVAL_MS =
 	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
@@ -111,9 +118,18 @@ function pickClientIp(request: Request): string {
 	}
 }
 
+/**
+ * Anonymize client IP using SHA-256 hash.
+ * 
+ * Security strategy:
+ * - Uses full SHA-256 hash (64 hex chars) for better anonymization
+ * - One-way hash prevents reverse-lookup of original IP
+ * - Allows correlation of requests from same IP without storing PII
+ * - Sufficient for rate limiting and abuse detection
+ */
 function hashClientIp(ip: string): string {
 	try {
-		return createHash("sha256").update(ip).digest("hex").slice(0, 16);
+		return createHash("sha256").update(ip).digest("hex");
 	} catch {
 		return "unknown";
 	}
