@@ -77,6 +77,7 @@ export function validateServerEnv(): ServerEnv {
 	const envWithDefaults = isProdEnv ? process.env : {
 		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
+		NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL || "http://localhost:3210",
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "dev-secret",
 		...process.env,
 	};
