@@ -13,10 +13,29 @@ import { Toaster } from "sonner";
 import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 
+// Create singleton clients at module scope to prevent recreation on re-renders
+const queryClient = new QueryClient();
+const posthogClient = initPosthog();
+
+function getConvexClient() {
+	const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+	if (!url) {
+		// During build time, use a placeholder URL
+		if (typeof window === "undefined") {
+			return new ConvexReactClient("http://localhost:3210");
+		}
+		throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
+	}
+	return new ConvexReactClient(url);
+}
+
+const convexClient = getConvexClient();
+
 function PosthogPageViewTracker() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
-	const posthogClient = useMemo(() => initPosthog(), []);
+	// Use module-scoped singleton instead of creating new instance
+	const localPosthogClient = posthogClient;
 	const entryReferrer = useMemo(() => {
 		if (typeof document === "undefined") return "direct";
 		return document.referrer && document.referrer.length > 0 ? document.referrer : "direct";
@@ -24,7 +43,7 @@ function PosthogPageViewTracker() {
 	const previousPathRef = useRef<string | null>(null);
 
 	useEffect(() => {
-		if (!posthogClient) return;
+		if (!localPosthogClient) return;
 		if (typeof window === "undefined") return;
 		const currentPath = pathname ?? window.location.pathname;
 		const search = searchParams?.toString() ?? window.location.search.replace(/^\?/, "");
@@ -40,32 +59,20 @@ function PosthogPageViewTracker() {
 				referrerDomain = "direct";
 			}
 		}
-		posthogClient.capture("$pageview", {
+		localPosthogClient.capture("$pageview", {
 			referrer_url: referrerUrl,
 			referrer_domain: referrerDomain,
 			entry_path: currentPath || "/",
 			entry_query: search.length > 0 ? `?${search}` : "",
 		});
 		previousPathRef.current = `${currentPath || "/"}${search.length > 0 ? `?${search}` : ""}`;
-	}, [entryReferrer, pathname, posthogClient, searchParams]);
+	}, [entryReferrer, pathname, localPosthogClient, searchParams]);
 
 	return null;
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-	const queryClient = useMemo(() => new QueryClient(), []);
-	const posthogClient = useMemo(() => initPosthog(), []);
-	const convexClient = useMemo(() => {
-		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-		if (!url) {
-			// During build time, use a placeholder URL
-			if (typeof window === "undefined") {
-				return new ConvexReactClient("http://localhost:3210");
-			}
-			throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
-		}
-		return new ConvexReactClient(url);
-	}, []);
+	// Use module-scoped singleton clients instead of creating new instances on each render
 
 	const appTree = (
 		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
