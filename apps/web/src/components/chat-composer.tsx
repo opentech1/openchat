@@ -180,30 +180,6 @@ export default function ChatComposer({
 			setIsSending(false);
 		}
 	}, [adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
-			onMissingRequirement?.("model");
-			return;
-		}
-		if (!apiKey) {
-			onMissingRequirement?.("apiKey");
-			return;
-		}
-		setErrorMessage(null);
-		setIsSending(true);
-	try {
-		await onSend({ text: trimmed, modelId: currentModelId, apiKey });
-		setValue('');
-		adjustHeight(true);
-		} catch (error) {
-			console.error('Failed to send message', error);
-			setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
-		} finally {
-			setIsSending(false);
-		}
-<<<<<<< HEAD
-	}, [adjustHeight, apiKey, disabled, isSending, onMissingRequirement, onSend, value]);
-=======
-	}, [activeModelId, adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
->>>>>>> main
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
