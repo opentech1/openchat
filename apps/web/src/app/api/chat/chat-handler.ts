@@ -57,7 +57,7 @@ type ChatRequestPayload = {
 	modelId?: string;
 	apiKey?: string;
 	chatId?: string;
-	messages?: unknown[];
+	messages?: AnyUIMessage[];
 	assistantMessageId?: string;
 };
 
