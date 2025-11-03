@@ -78,17 +78,19 @@ export const remove = mutation({
 		await ctx.db.patch(args.chatId, {
 			deletedAt: now,
 		});
-		// Cascade soft delete to all messages in the chat
+		// Cascade soft delete to all messages in the chat (skip already deleted messages)
 		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
 			.collect();
 		await Promise.all(
-			messages.map((message) =>
-				ctx.db.patch(message._id, {
-					deletedAt: now,
-				}),
-			),
+			messages
+				.filter((message) => !message.deletedAt)
+				.map((message) =>
+					ctx.db.patch(message._id, {
+						deletedAt: now,
+					}),
+				),
 		);
 		return { ok: true } as const;
 	},
