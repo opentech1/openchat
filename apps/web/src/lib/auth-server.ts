@@ -9,39 +9,8 @@ export type UserContext = {
 	image?: string | null;
 };
 
-export type SessionData = {
-	user: {
-		id: string;
-		email?: string | null;
-		name?: string | null;
-		image?: string | null;
-	};
-} | null;
-
-// Shared cached session fetch that both middleware and server components use
-export const fetchSession = cache(async (sessionToken: string): Promise<SessionData> => {
-	try {
-		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3001";
-		const response = await fetch(`${baseUrl}/api/auth/session`, {
-			headers: {
-				Cookie: `openchat.session-token=${sessionToken}`,
-			},
-			cache: "no-store",
-		});
-
-		if (!response.ok) {
-			return null;
-		}
-
-		const data = await response.json();
-		return data.user ? data : null;
-	} catch (error) {
-		console.error("Failed to fetch session:", error);
-		return null;
-	}
-});
-
 // Get session from better-auth API
+// Using React cache() to avoid duplicate fetches within the same request across server components
 const resolveUserContext = cache(async (): Promise<UserContext> => {
 	const cookieStore = await cookies();
 
@@ -53,19 +22,36 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 		redirect("/auth/sign-in");
 	}
 
-	// Use the shared cached session fetch
-	const session = await fetchSession(sessionToken);
+	// Call better-auth API to get session
+	try {
+		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3001";
+		const response = await fetch(`${baseUrl}/api/auth/session`, {
+			headers: {
+				Cookie: `openchat.session-token=${sessionToken}`,
+			},
+			cache: "no-store",
+		});
 
-	if (!session?.user) {
+		if (!response.ok) {
+			redirect("/auth/sign-in");
+		}
+
+		const data = await response.json();
+
+		if (!data.user) {
+			redirect("/auth/sign-in");
+		}
+
+		return {
+			userId: data.user.id,
+			email: data.user.email,
+			name: data.user.name,
+			image: data.user.image,
+		};
+	} catch (error) {
+		console.error("Failed to get session:", error);
 		redirect("/auth/sign-in");
 	}
-
-	return {
-		userId: session.user.id,
-		email: session.user.email,
-		name: session.user.name,
-		image: session.user.image,
-	};
 });
 
 export async function getUserContext(): Promise<UserContext> {
