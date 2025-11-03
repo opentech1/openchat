@@ -16,22 +16,18 @@ export async function middleware(request: NextRequest) {
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
-	// If session cookie exists, validate it with the Better Auth session endpoint
-	// but only for non-public routes to avoid unnecessary API calls
-	if (!isPublicRoute && sessionCookie) {
+	// If session cookie exists, validate it
+	if (sessionCookie) {
 		const sessionValid = await checkSession(request);
 
-		// If session validation fails, redirect to sign-in
-		if (!sessionValid) {
-			return NextResponse.redirect(new URL("/auth/sign-in", request.url));
-		}
-	}
-
-	// If user is on sign-in page and has a session cookie, validate and redirect
-	if (pathname === "/auth/sign-in" && sessionCookie) {
-		const sessionValid = await checkSession(request);
-		if (sessionValid) {
+		// If on sign-in page with valid session, redirect to dashboard
+		if (pathname === "/auth/sign-in" && sessionValid) {
 			return NextResponse.redirect(new URL("/dashboard", request.url));
+		}
+
+		// If on protected route with invalid session, redirect to sign-in
+		if (!isPublicRoute && !sessionValid) {
+			return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 		}
 	}
 
@@ -53,12 +49,16 @@ async function checkSession(request: NextRequest): Promise<boolean> {
 		});
 
 		if (!response.ok) {
-			console.log("Session validation failed with status:", response.status);
+			if (process.env.NODE_ENV !== "production") {
+				console.log("Session validation failed with status:", response.status);
+			}
 			return false;
 		}
 
 		const data = await response.json();
-		console.log("Session data:", data?.user ? "User found" : "No user");
+		if (process.env.NODE_ENV !== "production") {
+			console.log("Session data:", data?.user ? "User found" : "No user");
+		}
 		// Session is valid if it has a user
 		return !!data.user;
 	} catch (error) {
