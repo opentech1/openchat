@@ -27,9 +27,9 @@ export default defineSchema({
 		createdAt: v.number(),
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),
+		deletedAt: v.optional(v.number()),
 	})
 		.index("by_chat", ["chatId", "createdAt"])
 		.index("by_client_id", ["chatId", "clientMessageId"])
-		.index("by_user", ["userId"])
-		.index("unique_client_message", ["chatId", "clientMessageId"]),
+		.index("by_user", ["userId"]),
 });

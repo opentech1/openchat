@@ -14,6 +14,7 @@ const messageDoc = v.object({
 	createdAt: v.number(),
 	status: v.optional(v.string()),
 	userId: v.optional(v.id("users")),
+	deletedAt: v.optional(v.number()),
 });
 
 export const list = query({
@@ -25,11 +26,13 @@ export const list = query({
 	handler: async (ctx, args) => {
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
 		if (!chat) return [];
-		return await ctx.db
+		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
 			.order("asc")
 			.collect();
+		// Filter out soft-deleted messages
+		return messages.filter((message) => !message.deletedAt);
 	},
 });
 
@@ -69,6 +72,7 @@ export const send = mutation({
 			createdAt: userCreatedAt,
 			clientMessageId: args.userMessage.clientMessageId,
 			status: "completed",
+			userId: args.userId,
 		});
 
 		let assistantMessageId: Id<"messages"> | null = null;
@@ -82,6 +86,7 @@ export const send = mutation({
 				createdAt: assistantCreatedAt,
 				clientMessageId: args.assistantMessage.clientMessageId,
 				status: "completed",
+				userId: args.userId,
 			});
 		}
 
@@ -127,6 +132,7 @@ export const streamUpsert = mutation({
 			status: args.status ?? "streaming",
 			clientMessageId: args.clientMessageId,
 			overrideId: args.messageId ?? undefined,
+			userId: args.userId,
 		});
 
 		if (args.status === "completed" && (args.role === "assistant" || args.role === "user")) {
@@ -153,10 +159,12 @@ async function insertOrUpdateMessage(
 		status: string;
 		clientMessageId?: string | null;
 		overrideId?: Id<"messages">;
+		userId?: Id<"users">;
 	},
 ) {
-	// Validate message content length (100KB max)
-	if (args.content.length > MAX_MESSAGE_CONTENT_LENGTH) {
+	// Validate message content length (100KB max) - count actual bytes, not string length
+	const contentBytes = new TextEncoder().encode(args.content).length;
+	if (contentBytes > MAX_MESSAGE_CONTENT_LENGTH) {
 		throw new Error(
 			`Message content exceeds maximum length of ${MAX_MESSAGE_CONTENT_LENGTH} bytes`,
 		);
@@ -181,6 +189,7 @@ async function insertOrUpdateMessage(
 			content: args.content,
 			createdAt: args.createdAt,
 			status: args.status,
+			userId: args.userId ?? undefined,
 		});
 	} else {
 		await ctx.db.patch(targetId, {
@@ -189,6 +198,7 @@ async function insertOrUpdateMessage(
 			content: args.content,
 			createdAt: args.createdAt,
 			status: args.status,
+			userId: args.userId ?? undefined,
 		});
 	}
 	return targetId;
