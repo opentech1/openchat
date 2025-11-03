@@ -11,26 +11,27 @@ type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const adjustHeight = useCallback(
-    (reset?: boolean) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+	const adjustHeight = useCallback(
+		(reset?: boolean) => {
+			const textarea = textareaRef.current;
+			if (!textarea) return;
 
-      if (reset) {
-        textarea.style.height = `${minHeight}px`;
-        return;
-      }
+			if (reset) {
+				textarea.style.height = `${minHeight}px`;
+				return;
+			}
 
-      textarea.style.height = `${minHeight}px`;
-      const newHeight = Math.max(
-        minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
-      );
+			// Set height to 'auto' temporarily to get accurate scrollHeight without visual flash
+			textarea.style.height = 'auto';
+			const newHeight = Math.max(
+				minHeight,
+				Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
+			);
 
-      textarea.style.height = `${newHeight}px`;
-    },
-    [minHeight, maxHeight],
-  );
+			textarea.style.height = `${newHeight}px`;
+		},
+		[minHeight, maxHeight],
+	);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -96,6 +97,7 @@ Textarea.displayName = "Textarea";
 export type ChatComposerProps = {
 	onSend: (payload: { text: string; modelId: string; apiKey: string }) => void | Promise<void>;
 	disabled?: boolean;
+	sendDisabled?: boolean;
 	placeholder?: string;
 	modelOptions?: ModelSelectorOption[];
 	modelValue?: string | null;
@@ -110,6 +112,7 @@ export type ChatComposerProps = {
 export default function ChatComposer({
 	onSend,
 	disabled,
+	sendDisabled,
 	placeholder = "Ask OpenChat a question...",
 	modelOptions = [],
 	modelValue,
@@ -153,7 +156,7 @@ export default function ChatComposer({
 
 	const send = useCallback(async () => {
 		const trimmed = value.trim();
-		if (!trimmed || disabled || isSending) return;
+		if (!trimmed || sendDisabled || isSending) return;
 		// Use ref to get the latest activeModelId value
 		const currentModelId = activeModelIdRef.current;
 		if (!currentModelId) {
@@ -176,7 +179,31 @@ export default function ChatComposer({
 		} finally {
 			setIsSending(false);
 		}
+	}, [adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
+			onMissingRequirement?.("model");
+			return;
+		}
+		if (!apiKey) {
+			onMissingRequirement?.("apiKey");
+			return;
+		}
+		setErrorMessage(null);
+		setIsSending(true);
+	try {
+		await onSend({ text: trimmed, modelId: currentModelId, apiKey });
+		setValue('');
+		adjustHeight(true);
+		} catch (error) {
+			console.error('Failed to send message', error);
+			setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
+		} finally {
+			setIsSending(false);
+		}
+<<<<<<< HEAD
 	}, [adjustHeight, apiKey, disabled, isSending, onMissingRequirement, onSend, value]);
+=======
+	}, [activeModelId, adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
+>>>>>>> main
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -256,7 +283,7 @@ export default function ChatComposer({
 				}}
 				whileHover={{ scale: 1.01 }}
 				whileTap={{ scale: 0.98 }}
-				disabled={isStreaming ? disabled : (disabled || isSending || !value.trim() || !activeModelId || !apiKey)}
+				disabled={isStreaming ? sendDisabled : (sendDisabled || isSending || !value.trim() || !activeModelId || !apiKey)}
 				className={cn(
 					'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
 					isStreaming
