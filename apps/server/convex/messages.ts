@@ -177,7 +177,8 @@ async function insertOrUpdateMessage(
 				q.eq("chatId", args.chatId).eq("clientMessageId", args.clientMessageId!),
 			)
 			.unique();
-		if (existing) {
+		// Only reuse the message if it hasn't been soft-deleted
+		if (existing && !existing.deletedAt) {
 			targetId = existing._id;
 		}
 	}
