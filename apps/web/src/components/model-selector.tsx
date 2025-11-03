@@ -171,9 +171,9 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 										onChange?.(currentValue)
 										setOpen(false)
 									}}
-									role="option"
-									aria-selected={isSelected}
-									aria-label={`${option.label}${option.pricing ? `. ${formatPricing(option.pricing)}` : ""}${option.context ? `. Context: ${Intl.NumberFormat().format(option.context)} tokens` : ""}`}
+								role="option"
+								aria-selected={isSelected}
+								aria-label={option.label}
 										className={cn(
 											"flex items-center justify-between gap-2 rounded-lg px-3 py-2",
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
