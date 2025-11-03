@@ -4,8 +4,11 @@ import { ensureConvexUser, createChatForUser, listChats } from "@/lib/convex-ser
 import { serializeChat } from "@/lib/chat-serializers";
 
 // Rate limiting for chat creation
+// NOTE: This in-memory implementation is suitable for single-instance deployments.
+// For production multi-instance/serverless deployments, use Redis or a distributed rate limiter.
 const CHAT_CREATE_LIMIT = Number(process.env.CHAT_CREATE_RATE_LIMIT ?? 10);
 const CHAT_CREATE_WINDOW_MS = Number(process.env.CHAT_CREATE_WINDOW_MS ?? 60_000); // 1 minute
+const MAX_BUCKETS = 10000; // Prevent memory leaks
 
 type RateBucket = {
 	count: number;
@@ -14,10 +17,33 @@ type RateBucket = {
 
 const rateBuckets = new Map<string, RateBucket>();
 
+function cleanupExpiredBuckets(now: number) {
+	// Lazy cleanup on each request to avoid setInterval issues in serverless
+	const keysToDelete: string[] = [];
+	rateBuckets.forEach((bucket, key) => {
+		if (now > bucket.resetAt) {
+			keysToDelete.push(key);
+		}
+	});
+	keysToDelete.forEach((key) => rateBuckets.delete(key));
+	
+	// If still too many buckets, remove oldest entries
+	if (rateBuckets.size > MAX_BUCKETS) {
+		const excess = rateBuckets.size - MAX_BUCKETS;
+		let removed = 0;
+		for (const key of rateBuckets.keys()) {
+			rateBuckets.delete(key);
+			if (++removed >= excess) break;
+		}
+	}
+}
+
 function isRateLimited(userId: string): { limited: boolean; retryAfter?: number } {
 	if (CHAT_CREATE_LIMIT <= 0) return { limited: false };
 	
 	const now = Date.now();
+	cleanupExpiredBuckets(now);
+	
 	const bucket = rateBuckets.get(userId);
 	
 	if (!bucket || now > bucket.resetAt) {
@@ -32,18 +58,6 @@ function isRateLimited(userId: string): { limited: boolean; retryAfter?: number 
 	bucket.count += 1;
 	return { limited: false };
 }
-
-// Cleanup old buckets periodically
-setInterval(() => {
-	const now = Date.now();
-	const keysToDelete: string[] = [];
-	rateBuckets.forEach((bucket, key) => {
-		if (now > bucket.resetAt) {
-			keysToDelete.push(key);
-		}
-	});
-	keysToDelete.forEach((key) => rateBuckets.delete(key));
-}, CHAT_CREATE_WINDOW_MS);
 
 export async function GET() {
 	const session = await getUserContext();
