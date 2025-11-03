@@ -24,9 +24,13 @@ export interface ConvexEnv {
  */
 export function validateConvexEnv(): ConvexEnv {
 	const errors: string[] = [];
+	const isProd = process.env.NODE_ENV === "production";
+	
+	// Apply development defaults only in non-production environments
+	const appUrl = process.env.NEXT_PUBLIC_APP_URL || (!isProd ? "http://localhost:3001" : undefined);
+	const authSecret = process.env.BETTER_AUTH_SECRET || (!isProd ? "dev-secret" : undefined);
 	
 	// Check required variables
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 	if (!appUrl) {
 		errors.push("NEXT_PUBLIC_APP_URL is required");
 	} else {
@@ -37,10 +41,9 @@ export function validateConvexEnv(): ConvexEnv {
 		}
 	}
 	
-	const authSecret = process.env.BETTER_AUTH_SECRET;
 	if (!authSecret) {
 		errors.push("BETTER_AUTH_SECRET is required");
-	} else if (authSecret === "dev-secret" && process.env.NODE_ENV === "production") {
+	} else if (authSecret === "dev-secret" && isProd) {
 		errors.push("BETTER_AUTH_SECRET must not be 'dev-secret' in production");
 	}
 	
