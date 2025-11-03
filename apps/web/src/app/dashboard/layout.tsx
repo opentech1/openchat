@@ -28,12 +28,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
 	return (
 		<div className="relative flex h-svh overflow-hidden">
+			<a
+				href="#main-content"
+				className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+			>
+				Skip to main content
+			</a>
 			<div className="hidden md:block">
 				<div className="fixed inset-y-0 left-0">
 					<AppSidebar initialChats={chats} currentUserId={session.userId} />
 				</div>
 			</div>
-            <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
+            <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
                 <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
                     <MobileDashboardNav initialChats={chats} currentUserId={session.userId} />
                     <Link

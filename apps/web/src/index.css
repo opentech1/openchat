@@ -15,12 +15,12 @@
   --card-foreground: oklch(0.2046 0 0);
   --popover: oklch(0.9911 0 0);
   --popover-foreground: oklch(0.4386 0 0);
-  --primary: oklch(0.72 0.21 254.624);
-  --primary-foreground: oklch(0.251 0.02 262.5);
+  --primary: oklch(0.65 0.21 254.624);
+  --primary-foreground: oklch(0.98 0.01 262.5);
   --secondary: oklch(0.9940 0 0);
   --secondary-foreground: oklch(0.2046 0 0);
   --muted: oklch(0.9461 0 0);
-  --muted-foreground: oklch(0.2435 0 0);
+  --muted-foreground: oklch(0.2046 0 0);
   --accent: oklch(0.9461 0 0);
   --accent-foreground: oklch(0.2435 0 0);
   --destructive: oklch(0.5523 0.1927 32.7272);
@@ -65,12 +65,12 @@
   --card-foreground: oklch(0.9288 0.0126 255.5078);
   --popover: oklch(0.2603 0 0);
   --popover-foreground: oklch(0.7348 0 0);
-  --primary: oklch(0.56 0.2 254.624);
-  --primary-foreground: oklch(0.92 0.012 255.7);
+  --primary: oklch(0.62 0.2 254.624);
+  --primary-foreground: oklch(0.98 0.01 255.7);
   --secondary: oklch(0.2603 0 0);
   --secondary-foreground: oklch(0.9851 0 0);
   --muted: oklch(0.2393 0 0);
-  --muted-foreground: oklch(0.7122 0 0);
+  --muted-foreground: oklch(0.78 0 0);
   --accent: oklch(0.3132 0 0);
   --accent-foreground: oklch(0.9851 0 0);
   --destructive: oklch(0.3123 0.0852 29.7877);
@@ -106,8 +106,8 @@
 }
 
 :root[data-brand-theme="red"] {
-  --primary: oklch(0.7 0.23 25);
-  --primary-foreground: oklch(0.22 0.03 25);
+  --primary: oklch(0.62 0.23 25);
+  --primary-foreground: oklch(0.98 0.01 25);
   --ring: oklch(0.7 0.23 25);
   --chart-1: oklch(0.7 0.23 25);
   --sidebar-primary: oklch(0.66 0.21 25);
@@ -116,8 +116,8 @@
 }
 
 .dark[data-brand-theme="red"] {
-  --primary: oklch(0.54 0.24 25);
-  --primary-foreground: oklch(0.96 0.02 25);
+  --primary: oklch(0.62 0.22 25);
+  --primary-foreground: oklch(0.98 0.01 25);
   --ring: oklch(0.62 0.23 25);
   --chart-1: oklch(0.62 0.23 25);
   --sidebar-primary: oklch(0.47 0.18 25);
@@ -126,8 +126,8 @@
 }
 
 :root[data-brand-theme="orange"] {
-  --primary: oklch(0.83 0.18 70);
-  --primary-foreground: oklch(0.32 0.05 60);
+  --primary: oklch(0.75 0.18 70);
+  --primary-foreground: oklch(0.22 0.04 60);
   --ring: oklch(0.83 0.18 70);
   --chart-1: oklch(0.83 0.18 70);
   --sidebar-primary: oklch(0.79 0.18 70);
@@ -136,8 +136,8 @@
 }
 
 .dark[data-brand-theme="orange"] {
-  --primary: oklch(0.64 0.18 70);
-  --primary-foreground: oklch(0.94 0.02 80);
+  --primary: oklch(0.72 0.18 70);
+  --primary-foreground: oklch(0.98 0.01 80);
   --ring: oklch(0.74 0.19 70);
   --chart-1: oklch(0.74 0.19 70);
   --sidebar-primary: oklch(0.55 0.14 70);
@@ -146,8 +146,8 @@
 }
 
 :root[data-brand-theme="yellow"] {
-  --primary: oklch(0.93 0.15 100);
-  --primary-foreground: oklch(0.34 0.05 98);
+  --primary: oklch(0.85 0.16 100);
+  --primary-foreground: oklch(0.22 0.04 98);
   --ring: oklch(0.93 0.15 100);
   --chart-1: oklch(0.93 0.15 100);
   --sidebar-primary: oklch(0.9 0.15 100);
@@ -156,8 +156,8 @@
 }
 
 .dark[data-brand-theme="yellow"] {
-  --primary: oklch(0.78 0.18 100);
-  --primary-foreground: oklch(0.96 0.02 100);
+  --primary: oklch(0.82 0.18 100);
+  --primary-foreground: oklch(0.18 0.02 100);
   --ring: oklch(0.83 0.18 100);
   --chart-1: oklch(0.83 0.18 100);
   --sidebar-primary: oklch(0.64 0.12 100);
@@ -166,8 +166,8 @@
 }
 
 :root[data-brand-theme="green"] {
-  --primary: oklch(0.84 0.14 140);
-  --primary-foreground: oklch(0.26 0.04 140);
+  --primary: oklch(0.72 0.15 140);
+  --primary-foreground: oklch(0.98 0.01 140);
   --ring: oklch(0.84 0.14 140);
   --chart-1: oklch(0.84 0.14 140);
   --sidebar-primary: oklch(0.8 0.14 140);
@@ -176,8 +176,8 @@
 }
 
 .dark[data-brand-theme="green"] {
-  --primary: oklch(0.6 0.18 140);
-  --primary-foreground: oklch(0.95 0.02 145);
+  --primary: oklch(0.68 0.18 140);
+  --primary-foreground: oklch(0.98 0.01 145);
   --ring: oklch(0.68 0.16 140);
   --chart-1: oklch(0.68 0.16 140);
   --sidebar-primary: oklch(0.54 0.12 140);
@@ -186,8 +186,8 @@
 }
 
 :root[data-brand-theme="blue"] {
-  --primary: oklch(0.72 0.21 254.624);
-  --primary-foreground: oklch(0.251 0.02 262.5);
+  --primary: oklch(0.65 0.21 254.624);
+  --primary-foreground: oklch(0.98 0.01 262.5);
   --ring: oklch(0.72 0.21 254.624);
   --chart-1: oklch(0.72 0.21 254.624);
   --sidebar-primary: oklch(0.68 0.19 254.624);
@@ -196,8 +196,8 @@
 }
 
 .dark[data-brand-theme="blue"] {
-  --primary: oklch(0.56 0.2 254.624);
-  --primary-foreground: oklch(0.92 0.012 255.7);
+  --primary: oklch(0.62 0.2 254.624);
+  --primary-foreground: oklch(0.98 0.01 255.7);
   --ring: oklch(0.7 0.2 254.624);
   --chart-1: oklch(0.7 0.2 254.624);
   --sidebar-primary: oklch(0.5 0.14 254.624);
@@ -206,8 +206,8 @@
 }
 
 :root[data-brand-theme="indigo"] {
-  --primary: oklch(0.64 0.18 278);
-  --primary-foreground: oklch(0.24 0.04 278);
+  --primary: oklch(0.58 0.18 278);
+  --primary-foreground: oklch(0.98 0.01 278);
   --ring: oklch(0.64 0.18 278);
   --chart-1: oklch(0.64 0.18 278);
   --sidebar-primary: oklch(0.6 0.17 278);
@@ -216,8 +216,8 @@
 }
 
 .dark[data-brand-theme="indigo"] {
-  --primary: oklch(0.5 0.16 278);
-  --primary-foreground: oklch(0.95 0.01 284);
+  --primary: oklch(0.6 0.17 278);
+  --primary-foreground: oklch(0.98 0.01 284);
   --ring: oklch(0.58 0.17 278);
   --chart-1: oklch(0.58 0.17 278);
   --sidebar-primary: oklch(0.44 0.12 278);
@@ -226,8 +226,8 @@
 }
 
 :root[data-brand-theme="violet"] {
-  --primary: oklch(0.68 0.2 320);
-  --primary-foreground: oklch(0.26 0.05 320);
+  --primary: oklch(0.62 0.2 320);
+  --primary-foreground: oklch(0.98 0.01 320);
   --ring: oklch(0.68 0.2 320);
   --chart-1: oklch(0.68 0.2 320);
   --sidebar-primary: oklch(0.64 0.19 320);
@@ -236,8 +236,8 @@
 }
 
 .dark[data-brand-theme="violet"] {
-  --primary: oklch(0.52 0.18 320);
-  --primary-foreground: oklch(0.95 0.02 330);
+  --primary: oklch(0.62 0.19 320);
+  --primary-foreground: oklch(0.98 0.01 330);
   --ring: oklch(0.6 0.19 320);
   --chart-1: oklch(0.6 0.19 320);
   --sidebar-primary: oklch(0.46 0.14 320);
@@ -323,5 +323,30 @@ html, body {
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+  
+  .not-sr-only {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
   }
 }
