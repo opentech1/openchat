@@ -28,12 +28,6 @@ export default function DashboardAccessFallback({
 				>
 					Sign in
 				</Link>
-				<Link
-					href="/auth/sign-up"
-					className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-				>
-					Create account
-				</Link>
 				{showHomeLink ? (
 					<Link
 						href="/"
