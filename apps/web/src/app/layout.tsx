@@ -5,6 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import Script from "next/script";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
 
@@ -85,6 +86,11 @@ export default function RootLayout({
 				{children}
 			</Providers>
 			<SpeedInsights />
+			<Script
+				src="https://analytics.ahrefs.com/analytics.js"
+				data-key="pVbTOeB5dRe6tq3vF2K4UA"
+				strategy="afterInteractive"
+			/>
 		</body>
 		</html>
 	);
