@@ -4,20 +4,20 @@ export async function middleware(request: NextRequest) {
 	const { pathname } = request.nextUrl;
 
 	// Public routes that don't require authentication
+	// Include auth callback routes to allow OAuth flow to complete
 	const publicRoutes = ["/", "/auth/sign-in"];
-	const isPublicRoute = publicRoutes.includes(pathname);
+	const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith("/api/auth");
 
-	// Get the session cookie directly
-	const cookiePrefix = "openchat";
-	const sessionCookie = request.cookies.get(`${cookiePrefix}.session-token`);
+	// Check if user has any cookies (quick check to avoid API call for completely new visitors)
+	const hasCookies = request.cookies.size > 0;
 
-	// If no session cookie exists and trying to access protected route, redirect to sign-in
-	if (!isPublicRoute && !sessionCookie) {
+	// For protected routes without any cookies, redirect immediately
+	if (!isPublicRoute && !hasCookies) {
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
-	// If session cookie exists, validate it
-	if (sessionCookie) {
+	// Only validate session when needed: sign-in page or protected routes with cookies
+	if (pathname === "/auth/sign-in" || (!isPublicRoute && hasCookies)) {
 		const sessionValid = await checkSession(request);
 
 		// If on sign-in page with valid session, redirect to dashboard
