@@ -17,29 +17,19 @@ const chatDoc = v.object({
 export const list = query({
 	args: {
 		userId: v.id("users"),
-		cursor: v.optional(v.string()),
-		limit: v.optional(v.number()),
 	},
-	returns: v.object({
-		chats: v.array(chatDoc),
-		cursor: v.union(v.string(), v.null()),
-		isDone: v.boolean(),
-	}),
+	returns: v.array(chatDoc),
 	handler: async (ctx, args) => {
-		const limit = Math.min(args.limit ?? 50, 100);
-		const results = await ctx.db
+		// Query chats without filtering by status to handle existing data
+		// Filter out deleted chats in application logic
+		const allChats = await ctx.db
 			.query("chats")
-			.withIndex("by_user_status", (q) => 
-				q.eq("userId", args.userId).eq("status", "active")
-			)
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.paginate({ cursor: args.cursor ?? null, numItems: limit });
-		
-		return {
-			chats: results.page,
-			cursor: results.continueCursor,
-			isDone: results.isDone,
-		};
+			.collect();
+
+		// Filter out deleted chats (handle undefined status for existing data)
+		return allChats.filter((chat) => chat.status !== "deleted");
 	},
 });
 
@@ -63,17 +53,21 @@ export const create = mutation({
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
-		// Rate limit: check recent chat creation
+		// Rate limit: check recent NON-DELETED chat creation
+		// Important: filter out deleted chats to prevent bypass via create/delete loop
 		const recentChats = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.take(1);
-		
+			.collect();
+
+		// Find most recent non-deleted chat
+		const recentActiveChats = recentChats.filter((chat) => chat.status !== "deleted");
+
 		const now = Date.now();
 		const rateLimit = 60 * 1000; // 1 minute
-		if (recentChats.length > 0) {
-			const lastChatTime = recentChats[0].createdAt;
+		if (recentActiveChats.length > 0) {
+			const lastChatTime = recentActiveChats[0].createdAt;
 			if (now - lastChatTime < rateLimit) {
 				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
 			}
@@ -102,29 +96,27 @@ export const remove = mutation({
 		if (!chat || chat.userId !== args.userId) {
 			return { ok: false } as const;
 		}
-		
+
 		// Soft delete: mark chat as deleted
 		await ctx.db.patch(args.chatId, {
 			status: "deleted",
 			updatedAt: Date.now(),
 		});
-		
-		// Soft delete all messages in this chat using batch update
-		// This is more efficient than the previous N+1 approach
+
+		// Soft delete ALL messages in this chat (not just completed ones)
+		// This handles messages with any status: "streaming", "completed", etc.
 		const messages = await ctx.db
 			.query("messages")
-			.withIndex("by_chat_status", (q) => 
-				q.eq("chatId", args.chatId).eq("status", "completed")
-			)
+			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
 			.collect();
-		
+
 		// Batch update messages to deleted status
 		await Promise.all(
 			messages.map((message) =>
 				ctx.db.patch(message._id, { status: "deleted" })
 			)
 		);
-		
+
 		return { ok: true } as const;
 	},
 });
