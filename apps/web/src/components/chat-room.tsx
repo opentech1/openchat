@@ -46,6 +46,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() ?? "";
 
+  // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
     if (!workspaceId) return;
     identifyClient(workspaceId, {
@@ -55,8 +56,9 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     registerClientProperties({
       auth_state: "member",
       workspace_id: workspaceId,
+      has_openrouter_key: Boolean(apiKey),
     });
-  }, [workspaceId]);
+  }, [workspaceId, apiKey]);
 
 
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -71,10 +73,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const missingKeyToastRef = useRef<string | number | null>(null);
   const storedModelIdRef = useRef<string | null>(null);
   const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    registerClientProperties({ has_openrouter_key: Boolean(apiKey) });
-  }, [apiKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
