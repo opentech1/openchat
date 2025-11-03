@@ -11,19 +11,35 @@ const chatDoc = v.object({
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	lastMessageAt: v.optional(v.number()),
+	status: v.optional(v.string()),
 });
 
 export const list = query({
 	args: {
 		userId: v.id("users"),
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
 	},
-	returns: v.array(chatDoc),
+	returns: v.object({
+		chats: v.array(chatDoc),
+		cursor: v.union(v.string(), v.null()),
+		isDone: v.boolean(),
+	}),
 	handler: async (ctx, args) => {
-		return await ctx.db
+		const limit = Math.min(args.limit ?? 50, 100);
+		const results = await ctx.db
 			.query("chats")
-			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.withIndex("by_user_status", (q) => 
+				q.eq("userId", args.userId).eq("status", "active")
+			)
 			.order("desc")
-			.take(200);
+			.paginate({ cursor: args.cursor ?? null, numItems: limit });
+		
+		return {
+			chats: results.page,
+			cursor: results.continueCursor,
+			isDone: results.isDone,
+		};
 	},
 });
 
@@ -47,13 +63,29 @@ export const create = mutation({
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
+		// Rate limit: check recent chat creation
+		const recentChats = await ctx.db
+			.query("chats")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.order("desc")
+			.take(1);
+		
 		const now = Date.now();
+		const rateLimit = 60 * 1000; // 1 minute
+		if (recentChats.length > 0) {
+			const lastChatTime = recentChats[0].createdAt;
+			if (now - lastChatTime < rateLimit) {
+				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
+			}
+		}
+
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
 			title: args.title,
 			createdAt: now,
 			updatedAt: now,
 			lastMessageAt: now,
+			status: "active",
 		});
 		return { chatId };
 	},
@@ -70,12 +102,29 @@ export const remove = mutation({
 		if (!chat || chat.userId !== args.userId) {
 			return { ok: false } as const;
 		}
+		
+		// Soft delete: mark chat as deleted
+		await ctx.db.patch(args.chatId, {
+			status: "deleted",
+			updatedAt: Date.now(),
+		});
+		
+		// Soft delete all messages in this chat using batch update
+		// This is more efficient than the previous N+1 approach
 		const messages = await ctx.db
 			.query("messages")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+			.withIndex("by_chat_status", (q) => 
+				q.eq("chatId", args.chatId).eq("status", "completed")
+			)
 			.collect();
-		await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
-		await ctx.db.delete(args.chatId);
+		
+		// Batch update messages to deleted status
+		await Promise.all(
+			messages.map((message) =>
+				ctx.db.patch(message._id, { status: "deleted" })
+			)
+		);
+		
 		return { ok: true } as const;
 	},
 });
