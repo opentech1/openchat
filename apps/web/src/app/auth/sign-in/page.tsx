@@ -4,38 +4,26 @@ import { useState, useEffect } from "react";
 import { GalleryVerticalEnd, Github } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
 	const router = useRouter();
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState<string | null>(null);
-	const [lastMethod, setLastMethod] = useState<string | null>(null);
-
-	// Check if user is already signed in
-	const { data: session, isPending } = authClient.useSession();
-
-	useEffect(() => {
-		// Redirect to dashboard if already signed in
-		if (!isPending && session) {
-			router.push("/dashboard");
-		}
-	}, [session, isPending, router]);
-
-	useEffect(() => {
-		// Get last login method on mount
-		const method = authClient.getLastUsedLoginMethod();
-		setLastMethod(method);
-	}, []);
 
 	const handleGitHubSignIn = async () => {
 		setError("");
 		setLoading("github");
 		try {
-			await authClient.signIn.social({
-				provider: "github",
-				callbackURL: "/dashboard",
-			});
+			// Generate WorkOS authorization URL for GitHub
+			const redirectUri = `${window.location.origin}/api/auth/callback/workos`;
+			const state = crypto.randomUUID(); // CSRF protection
+
+			// Store state in sessionStorage for verification
+			sessionStorage.setItem("workos_state", state);
+			sessionStorage.setItem("workos_provider", "github");
+
+			// Redirect to server endpoint that generates WorkOS URL
+			window.location.href = `/api/auth/workos?provider=GitHubOAuth&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with GitHub");
 			setLoading(null);
@@ -46,29 +34,21 @@ export default function LoginPage() {
 		setError("");
 		setLoading("google");
 		try {
-			await authClient.signIn.social({
-				provider: "google",
-				callbackURL: "/dashboard",
-			});
+			// Generate WorkOS authorization URL for Google
+			const redirectUri = `${window.location.origin}/api/auth/callback/workos`;
+			const state = crypto.randomUUID(); // CSRF protection
+
+			// Store state in sessionStorage for verification
+			sessionStorage.setItem("workos_state", state);
+			sessionStorage.setItem("workos_provider", "google");
+
+			// Redirect to server endpoint that generates WorkOS URL
+			window.location.href = `/api/auth/workos?provider=GoogleOAuth&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with Google");
 			setLoading(null);
 		}
 	};
-
-	// Show loading state while checking session
-	if (isPending) {
-		return (
-			<div className="flex min-h-svh items-center justify-center">
-				<div className="text-muted-foreground">Loading...</div>
-			</div>
-		);
-	}
-
-	// Don't render login page if already signed in
-	if (session) {
-		return null;
-	}
 
 	return (
 		<div className="grid min-h-svh lg:grid-cols-2">
@@ -84,15 +64,10 @@ export default function LoginPage() {
 				<div className="flex flex-1 items-center justify-center">
 					<div className="w-full max-w-xs space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Welcome back</h1>
+							<h1 className="text-xl font-semibold tracking-tight">Welcome to OpenChat</h1>
 							<p className="text-muted-foreground text-sm">
-								Sign in to access your workspace.
+								Sign in to access your workspace
 							</p>
-							{lastMethod && (
-								<p className="text-primary text-xs mt-2">
-									You last signed in with {lastMethod === "github" ? "GitHub" : "Google"}
-								</p>
-							)}
 						</div>
 
 						<div className="space-y-3">
@@ -106,30 +81,17 @@ export default function LoginPage() {
 							<button
 								onClick={handleGitHubSignIn}
 								disabled={loading !== null}
-								className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 ${
-									lastMethod === "github"
-										? "border-primary bg-primary/5 hover:bg-primary/10"
-										: "border-input bg-background hover:bg-accent hover:text-accent-foreground"
-								}`}
+								className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed"
 							>
 								<Github className="size-4" />
 								{loading === "github" ? "Signing in..." : "Continue with GitHub"}
-								{lastMethod === "github" && (
-									<span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
-										Last used
-									</span>
-								)}
 							</button>
 
 							{/* Google Sign In Button */}
 							<button
 								onClick={handleGoogleSignIn}
 								disabled={loading !== null}
-								className={`relative inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-medium transition disabled:opacity-50 ${
-									lastMethod === "google"
-										? "border-primary bg-primary/5 hover:bg-primary/10"
-										: "border-input bg-background hover:bg-accent hover:text-accent-foreground"
-								}`}
+								className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground disabled:opacity-50 disabled:cursor-not-allowed"
 							>
 								<svg className="size-4" viewBox="0 0 24 24">
 									<path
@@ -150,11 +112,6 @@ export default function LoginPage() {
 									/>
 								</svg>
 								{loading === "google" ? "Signing in..." : "Continue with Google"}
-								{lastMethod === "google" && (
-									<span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-semibold">
-										Last used
-									</span>
-								)}
 							</button>
 						</div>
 
