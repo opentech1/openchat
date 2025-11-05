@@ -126,7 +126,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 	const displayName = user.name || user.email || "Unnamed user";
 	const initials = (() => {
 		const parts = displayName.trim().split(/\s+/);
-		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "U";
+		return parts.slice(0, 2).map((part: string) => part[0]?.toUpperCase() ?? "").join("") || "U";
 	})();
 
 	async function handleSaveApiKey(event: FormEvent<HTMLFormElement>) {
