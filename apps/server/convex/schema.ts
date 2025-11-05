@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Note: Better-auth tables are automatically provided by the betterAuth component
+// configured in convex.config.ts. They don't need to be imported here.
 export default defineSchema({
 	users: defineTable({
 		externalId: v.string(),

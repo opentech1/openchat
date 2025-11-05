@@ -40,7 +40,7 @@ export default function MobileDashboardNav(props: AppSidebarProps) {
 								<X className="size-4" />
 							</button>
 						</div>
-						<div className="ml-auto h-full w-full max-w-xs border-l border-border bg-background shadow-xl">
+					<div className="ml-auto h-full w-full max-w-xs border-l border-sidebar-border bg-sidebar shadow-xl">
 							<AppSidebarWrapper {...props} />
 						</div>
 					</div>
