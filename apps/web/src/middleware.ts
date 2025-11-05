@@ -17,17 +17,13 @@ export async function middleware(request: NextRequest) {
 	// Actual session validation happens in Server Components
 	const sessionToken = request.cookies.get("openchat.session_token");
 
-	console.log("[MIDDLEWARE] Path:", pathname, "| Session cookie:", sessionToken ? "EXISTS" : "MISSING");
-
 	// If no session cookie, redirect to sign-in
 	if (!sessionToken) {
-		console.log("[MIDDLEWARE] Redirecting to sign-in");
 		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
 	}
 
 	// Cookie exists, allow through
 	// Server Components will validate the actual session
-	console.log("[MIDDLEWARE] Allowing access");
 	return NextResponse.next();
 }
 
