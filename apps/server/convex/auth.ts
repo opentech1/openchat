@@ -1,12 +1,11 @@
 import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { lastLoginMethod } from "better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
-const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 // @ts-ignore - betterAuth component is registered via convex.config.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
@@ -18,19 +17,7 @@ export const createAuth = (
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
-	// WorkOS-based authentication (preferred for production)
-	if (process.env.WORKOS_CLIENT_ID && process.env.WORKOS_API_KEY) {
-		// WorkOS provides centralized Google and GitHub OAuth
-		// Users click Google/GitHub on our UI, we route through WorkOS
-		socialProviders.workos = {
-			clientId: process.env.WORKOS_CLIENT_ID,
-			clientSecret: process.env.WORKOS_API_KEY,
-			// Custom provider configuration for WorkOS
-			enabled: true,
-		};
-	}
-
-	// Fallback: Direct GitHub OAuth (for development without WorkOS)
+	// GitHub OAuth
 	if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 		socialProviders.github = {
 			clientId: process.env.GITHUB_CLIENT_ID,
@@ -38,7 +25,7 @@ export const createAuth = (
 		};
 	}
 
-	// Fallback: Direct Google OAuth (for development without WorkOS)
+	// Google OAuth (optional)
 	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 		socialProviders.google = {
 			clientId: process.env.GOOGLE_CLIENT_ID,
@@ -54,9 +41,6 @@ export const createAuth = (
 		socialProviders,
 		plugins: [
 			convex(),
-			lastLoginMethod({
-				storeInDatabase: true,
-			}),
 		],
 		advanced: {
 			useSecureCookies: process.env.NODE_ENV === "production",

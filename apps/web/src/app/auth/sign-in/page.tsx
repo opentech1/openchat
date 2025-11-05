@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { GalleryVerticalEnd, Github } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { authClient } from "@/lib/auth-client";
 
 export default function LoginPage() {
-	const router = useRouter();
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState<string | null>(null);
 
@@ -14,16 +13,10 @@ export default function LoginPage() {
 		setError("");
 		setLoading("github");
 		try {
-			// Generate WorkOS authorization URL for GitHub
-			const redirectUri = `${window.location.origin}/api/auth/callback/workos`;
-			const state = crypto.randomUUID(); // CSRF protection
-
-			// Store state in sessionStorage for verification
-			sessionStorage.setItem("workos_state", state);
-			sessionStorage.setItem("workos_provider", "github");
-
-			// Redirect to server endpoint that generates WorkOS URL
-			window.location.href = `/api/auth/workos?provider=GitHubOAuth&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+			await authClient.signIn.social({
+				provider: "github",
+				callbackURL: "/dashboard",
+			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with GitHub");
 			setLoading(null);
@@ -34,16 +27,10 @@ export default function LoginPage() {
 		setError("");
 		setLoading("google");
 		try {
-			// Generate WorkOS authorization URL for Google
-			const redirectUri = `${window.location.origin}/api/auth/callback/workos`;
-			const state = crypto.randomUUID(); // CSRF protection
-
-			// Store state in sessionStorage for verification
-			sessionStorage.setItem("workos_state", state);
-			sessionStorage.setItem("workos_provider", "google");
-
-			// Redirect to server endpoint that generates WorkOS URL
-			window.location.href = `/api/auth/workos?provider=GoogleOAuth&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+			await authClient.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with Google");
 			setLoading(null);
