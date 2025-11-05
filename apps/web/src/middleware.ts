@@ -15,7 +15,7 @@ export async function middleware(request: NextRequest) {
 	// For protected routes, check if session cookie exists
 	// Note: We only check for cookie EXISTENCE, not validity
 	// Actual session validation happens in Server Components
-	const sessionToken = request.cookies.get("openchat.session-token");
+	const sessionToken = request.cookies.get("openchat.session_token");
 
 	// If no session cookie, redirect to sign-in
 	if (!sessionToken) {
