@@ -1,29 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function middleware(request: NextRequest) {
-	const { pathname } = request.nextUrl;
-
-	// Public routes that don't require authentication
-	const publicRoutes = ["/", "/auth/sign-in"];
-	const isPublicRoute = publicRoutes.includes(pathname);
-
-	// Skip middleware for public routes and API routes
-	if (isPublicRoute || pathname.startsWith("/api/")) {
-		return NextResponse.next();
-	}
-
-	// For protected routes, check if Better Auth session exists
-	// Better Auth uses multiple cookies for session management
-	const sessionToken = request.cookies.get("better-auth.session_token") ||
-	                     request.cookies.get("openchat.session_token");
-
-	// If no session cookie, redirect to sign-in
-	if (!sessionToken) {
-		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
-	}
-
-	// Cookie exists, allow through
-	// Server Components will validate the actual session
+	// Let all requests through - auth is handled by ConvexBetterAuthProvider
+	// and useSession() hook in components
 	return NextResponse.next();
 }
 
