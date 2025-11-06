@@ -1,0 +1,10 @@
+--- /home/leo/.bun/install/cache/@convex-dev/better-auth@0.9.7@@@1/src/component/schema.ts	2025-11-03 19:51:01.070000053 -0500
++++ /home/leo/openchat/node_modules/@convex-dev/better-auth/src/component/schema.ts	2025-11-06 16:16:16.275535678 -0500
+@@ -20,6 +20,7 @@
+     phoneNumber: v.optional(v.union(v.null(), v.string())),
+     phoneNumberVerified: v.optional(v.union(v.null(), v.boolean())),
+     userId: v.optional(v.union(v.null(), v.string())),
++    lastLoginMethod: v.optional(v.union(v.null(), v.string())),
+   })
+     .index("email_name", ["email","name"])
+     .index("name", ["name"])
