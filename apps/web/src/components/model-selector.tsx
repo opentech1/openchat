@@ -16,6 +16,13 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { registerClientProperties } from "@/lib/posthog"
 
+const TOKENS_PER_MILLION = 1_000_000
+
+function scaleCostToMillion(cost: number | null): number | null {
+	if (cost == null || !Number.isFinite(cost)) return null
+	return cost * TOKENS_PER_MILLION
+}
+
 export type ModelSelectorOption = {
 	value: string
 	label: string
@@ -54,7 +61,9 @@ function formatCost(cost: number | null) {
 }
 
 function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	return `In: ${formatCost(pricing.prompt)} · Out: ${formatCost(pricing.completion)} per 1M tokens`
+	const promptPerMillion = scaleCostToMillion(pricing.prompt)
+	const completionPerMillion = scaleCostToMillion(pricing.completion)
+	return `In: ${formatCost(promptPerMillion)} · Out: ${formatCost(completionPerMillion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {
