@@ -11,6 +11,7 @@ import React, {
 import { authClient } from '@/lib/auth-client';
 import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQueryState } from "nuqs";
 import { DefaultChatTransport } from "ai";
 import { toast } from "sonner";
 
@@ -52,7 +53,10 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelOptions, setModelOptions] = useState<ModelSelectorOption[]>([]);
-  const [selectedModel, setSelectedModelState] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useQueryState("model", {
+    defaultValue: null,
+    shallow: false,
+  });
   const [checkedApiKey, setCheckedApiKey] = useState(false);
   const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
   const missingKeyToastRef = useRef<string | number | null>(null);
@@ -73,56 +77,43 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     });
   }, [workspaceId, apiKey]);
 
+  // Migrate from localStorage to URL on first load
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    // If no model is in URL, check localStorage for backward compatibility
+    if (!selectedModel) {
+      const stored = window.localStorage.getItem(LAST_MODEL_STORAGE_KEY);
+      if (stored) {
+        storedModelIdRef.current = stored;
+        void setSelectedModel(stored);
+      }
+    }
+
+    // Load cached models
     const cached = readCachedModels();
     if (cached && cached.length > 0) {
       setModelOptions(cached);
-      setSelectedModelState((prev) => {
-        if (prev) return prev;
+
+      // If no model is selected yet, select the first available or the stored one
+      if (!selectedModel) {
         const stored = storedModelIdRef.current;
         if (stored && cached.some((option) => option.value === stored)) {
-          return stored;
+          void setSelectedModel(stored);
+        } else if (cached[0]?.value) {
+          void setSelectedModel(cached[0].value);
         }
-        return cached[0]?.value ?? null;
-      });
-    }
-  }, []);
-
-  const persistSelectedModel = useCallback((next: string | null) => {
-    if (typeof window !== "undefined") {
-      try {
-        if (next) {
-          window.localStorage.setItem(LAST_MODEL_STORAGE_KEY, next);
-        } else {
-          window.localStorage.removeItem(LAST_MODEL_STORAGE_KEY);
-        }
-      } catch {
-        // ignore storage failures
       }
     }
-    storedModelIdRef.current = next;
   }, []);
 
+  // Simplified apply function - nuqs handles persistence via URL
   const applySelectedModel = useCallback(
     (next: string | null) => {
-      setSelectedModelState((prev) => {
-        if (prev === next) return prev;
-        persistSelectedModel(next);
-        return next;
-      });
+      void setSelectedModel(next);
     },
-    [persistSelectedModel],
+    [setSelectedModel],
   );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(LAST_MODEL_STORAGE_KEY);
-    storedModelIdRef.current = stored;
-    if (stored) {
-      setSelectedModelState((prev) => prev ?? stored);
-    }
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -187,18 +178,22 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         const parsedModels = data.models as ModelSelectorOption[];
         setModelOptions(parsedModels);
         writeCachedModels(parsedModels);
+
+        // Determine which model to select
+        const storedPreferred = storedModelIdRef.current;
+        const currentModel = selectedModel;
         const fallback = parsedModels[0]?.value ?? null;
-        setSelectedModelState((previous) => {
-          const storedPreferred = storedModelIdRef.current;
-          let next: string | null = previous;
-          if (storedPreferred && parsedModels.some((model) => model.value === storedPreferred)) {
-            next = storedPreferred;
-          } else if (!previous || !parsedModels.some((model) => model.value === previous)) {
-            next = fallback;
-          }
-          if (next !== previous) persistSelectedModel(next ?? null);
-          return next ?? null;
-        });
+
+        let nextModel: string | null = currentModel;
+        if (storedPreferred && parsedModels.some((model) => model.value === storedPreferred)) {
+          nextModel = storedPreferred;
+        } else if (!currentModel || !parsedModels.some((model) => model.value === currentModel)) {
+          nextModel = fallback;
+        }
+
+        if (nextModel !== currentModel) {
+          void setSelectedModel(nextModel);
+        }
       } catch (error) {
         // Ignore abort errors (request was cancelled)
         if (error instanceof Error && error.name === "AbortError") {
@@ -226,7 +221,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           });
         }
         setModelOptions([]);
-        applySelectedModel(null);
+        void setSelectedModel(null);
         setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
       } finally {
         // Only clear loading if this is still the active request
@@ -236,7 +231,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         }
       }
     },
-    [persistSelectedModel],
+    [selectedModel, setSelectedModel],
   );
 
   useEffect(() => {
@@ -261,14 +256,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   useEffect(() => {
     if (modelOptions.length === 0) return;
     const stored = storedModelIdRef.current;
-    if (!stored) return;
-    setSelectedModelState((previous) => {
-      if (previous) return previous;
-      const exists = modelOptions.some((option) => option.value === stored);
-      if (!exists) return previous;
-      return stored;
-    });
-  }, [modelOptions]);
+    if (!stored || selectedModel) return;
+
+    const exists = modelOptions.some((option) => option.value === stored);
+    if (exists) {
+      void setSelectedModel(stored);
+    }
+  }, [modelOptions, selectedModel, setSelectedModel]);
 
   useEffect(() => {
     if (!checkedApiKey) return;

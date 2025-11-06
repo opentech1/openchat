@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ConvexReactClient } from "convex/react";
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { authClient } from "@/lib/auth-client";
@@ -75,25 +76,27 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 	// Use module-scoped singleton clients instead of creating new instances on each render
 
 	const appTree = (
-		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-			<ThemeProvider
-				attribute="class"
-				defaultTheme="system"
-				enableSystem
-				disableTransitionOnChange
-			>
-				<BrandThemeProvider>
-					<QueryClientProvider client={queryClient}>
-						<PosthogBootstrap />
-						<Suspense fallback={null}>
-							<PosthogPageViewTracker />
-						</Suspense>
-						{children}
-						<Toaster richColors position="bottom-right" />
-					</QueryClientProvider>
-				</BrandThemeProvider>
-			</ThemeProvider>
-		</ConvexBetterAuthProvider>
+		<NuqsAdapter>
+			<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="system"
+					enableSystem
+					disableTransitionOnChange
+				>
+					<BrandThemeProvider>
+						<QueryClientProvider client={queryClient}>
+							<PosthogBootstrap />
+							<Suspense fallback={null}>
+								<PosthogPageViewTracker />
+							</Suspense>
+							{children}
+							<Toaster richColors position="bottom-right" />
+						</QueryClientProvider>
+					</BrandThemeProvider>
+				</ThemeProvider>
+			</ConvexBetterAuthProvider>
+		</NuqsAdapter>
 	);
 
 	if (posthogClient) {
