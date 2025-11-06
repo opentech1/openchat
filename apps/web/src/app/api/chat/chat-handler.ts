@@ -15,13 +15,32 @@ type RateBucket = {
 	resetAt: number;
 };
 
-const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? 30);
+// Rate limiting configuration
+/** Default maximum requests per minute if not configured via env */
+const DEFAULT_RATE_LIMIT_PER_MINUTE = 30;
+/** Rate limit window duration in milliseconds (1 minute) */
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? 1_000);
+/** Default maximum number of rate limit buckets to track in memory */
+const DEFAULT_MAX_TRACKED_BUCKETS = 1_000;
+
+// Message content configuration
+/** Maximum characters allowed in user message parts before truncation */
+const DEFAULT_MAX_USER_CHARS = 8_000;
+
+// Stream buffering configuration
+/** Default interval for flushing buffered stream chunks to database (milliseconds) */
+const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 80;
+/** Default minimum characters required before flushing a stream chunk */
+const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 24;
+/** Default delay between smooth stream word chunks (milliseconds) */
+const DEFAULT_STREAM_SMOOTH_DELAY_MS = 12;
+
+const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? DEFAULT_RATE_LIMIT_PER_MINUTE);
+const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? DEFAULT_MAX_TRACKED_BUCKETS);
 const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) && RAW_MAX_TRACKED_RATE_BUCKETS > 0
 	? RAW_MAX_TRACKED_RATE_BUCKETS
 	: null;
-const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
+const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? DEFAULT_MAX_USER_CHARS);
 
 // Request size limits for security
 const MAX_MESSAGES_PER_REQUEST = (() => {
@@ -41,24 +60,24 @@ const MAX_MESSAGE_CONTENT_LENGTH = (() => {
 	return Number.isFinite(val) && val > 0 ? val : 50_000;
 })();
 
-const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 80);
+const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? DEFAULT_STREAM_FLUSH_INTERVAL_MS);
 const STREAM_FLUSH_INTERVAL_MS =
 	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
 		? STREAM_FLUSH_INTERVAL_RAW
-		: 80;
+		: DEFAULT_STREAM_FLUSH_INTERVAL_MS;
 const STREAM_MIN_CHARS_PER_FLUSH_RAW = Number(
-	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? 24,
+	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? DEFAULT_STREAM_MIN_CHARS_PER_FLUSH,
 );
 const STREAM_MIN_CHARS_PER_FLUSH =
 	Number.isFinite(STREAM_MIN_CHARS_PER_FLUSH_RAW) && STREAM_MIN_CHARS_PER_FLUSH_RAW > 0
 		? STREAM_MIN_CHARS_PER_FLUSH_RAW
-		: 24;
+		: DEFAULT_STREAM_MIN_CHARS_PER_FLUSH;
 const STREAM_SMOOTH_DELAY_MS = (() => {
 	const raw = process.env.OPENROUTER_STREAM_DELAY_MS;
-	if (raw === undefined || raw === null || raw.trim() === "") return 12;
+	if (raw === undefined || raw === null || raw.trim() === "") return DEFAULT_STREAM_SMOOTH_DELAY_MS;
 	if (raw.trim().toLowerCase() === "null") return null;
 	const parsed = Number(raw);
-	if (!Number.isFinite(parsed)) return 12;
+	if (!Number.isFinite(parsed)) return DEFAULT_STREAM_SMOOTH_DELAY_MS;
 	return parsed < 0 ? 0 : parsed;
 })();
 const MAX_TOKENS = (() => {
