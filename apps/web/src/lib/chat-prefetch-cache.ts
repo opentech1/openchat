@@ -9,7 +9,8 @@ export type PrefetchMessage = {
 
 export type PrefetchEntry = {
 	messages: PrefetchMessage[];
-	fetchedAt: number;
+	fetchedAt: number; // When data was fetched (for TTL expiration)
+	lastAccessedAt: number; // When entry was last accessed (for LRU eviction)
 };
 
 const STORAGE_KEY = "openchat.chat-prefetch";
@@ -60,43 +61,48 @@ export function readChatPrefetch(chatId: string): PrefetchEntry | null {
 	const { entries } = getGlobalState();
 	const entry = entries[chatId];
 	if (!entry) return null;
+
+	// Check TTL expiration based on fetchedAt (when data was fetched)
 	if (entry.fetchedAt + DEFAULT_TTL_MS < Date.now()) {
 		delete entries[chatId];
 		persistEntries(entries);
 		return null;
 	}
-	// Update access time for true LRU tracking
-	entry.fetchedAt = Date.now();
+
+	// Update access time for LRU tracking without affecting TTL
+	entry.lastAccessedAt = Date.now();
 	persistEntries(entries);
 	return entry;
 }
 
 export function storeChatPrefetch(chatId: string, messages: PrefetchMessage[]) {
 	const state = getGlobalState();
-	
+	const now = Date.now();
+
 	// Check if this is an update to an existing entry or a new entry
 	const isUpdate = chatId in state.entries;
-	
+
 	// Enforce size limit before insertion to prevent overflow
 	const currentEntries = Object.entries(state.entries);
 	// Only remove entries if we're adding a new entry (not updating existing)
 	if (!isUpdate && currentEntries.length >= MAX_CACHE_SIZE) {
-		// Sort by fetchedAt ascending (oldest first)
-		currentEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
-		// Remove oldest entries to make room for the new entry
+		// Sort by lastAccessedAt ascending (least recently used first)
+		currentEntries.sort((a, b) => a[1].lastAccessedAt - b[1].lastAccessedAt);
+		// Remove least recently used entries to make room for the new entry
 		const numToRemove = currentEntries.length - MAX_CACHE_SIZE + 1;
 		const toRemove = currentEntries.slice(0, numToRemove);
 		for (const [id] of toRemove) {
 			delete state.entries[id];
 		}
 	}
-	
+
 	// Now insert or update the entry
 	state.entries[chatId] = {
 		messages,
-		fetchedAt: Date.now(),
+		fetchedAt: now, // When data was fetched
+		lastAccessedAt: now, // When entry was last accessed
 	};
-	
+
 	persistEntries(state.entries);
 }
 
