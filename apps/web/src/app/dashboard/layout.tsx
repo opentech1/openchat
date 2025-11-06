@@ -7,6 +7,7 @@ import { ensureConvexUser, listChats } from "@/lib/convex-server";
 import AppSidebar from "@/components/app-sidebar-wrapper";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
+import SidebarCollapseButton from "@/components/sidebar-collapse-button";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full">
                 <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
                     <MobileDashboardNav initialChats={chats} currentUserId={session.userId} />
+                    <div className="hidden md:block">
+                        <SidebarCollapseButton />
+                    </div>
                     <Link
                         href="/dashboard/settings"
                         className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
