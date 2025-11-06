@@ -5,8 +5,9 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 import { RouteFocusManager } from "@/components/route-focus-manager";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
 	title: {
@@ -85,6 +86,7 @@ export default function RootLayout({
 					<RouteFocusManager />
 					{children}
 				</Providers>
+				<SpeedInsights />
 			</body>
 		</html>
 	);
