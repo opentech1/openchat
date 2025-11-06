@@ -473,7 +473,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
-				maxTokens: MAX_TOKENS,
+				maxOutputTokens: MAX_TOKENS,
 				experimental_transform: smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
