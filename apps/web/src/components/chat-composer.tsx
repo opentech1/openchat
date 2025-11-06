@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };

@@ -33,7 +33,7 @@ export type ChatListItem = {
 	lastActivityMs?: number | null;
 };
 
-export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
+export type AppSidebarProps = { initialChats?: ChatListItem[]; authUserId: string } & ComponentProps<typeof Sidebar>;
 
 function toDate(value: string | Date | null | undefined) {
 	if (!value) return undefined;
@@ -115,7 +115,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 	return dedupeChats(list.concat([chat]));
 }
 
-export default function AppSidebar({ initialChats = [], currentUserId, ...sidebarProps }: AppSidebarProps) {
+export default function AppSidebar({ initialChats = [], authUserId, ...sidebarProps }: AppSidebarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { data: session } = authClient.useSession(); const user = session?.user;
@@ -248,7 +248,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 						onClick={() => {
 							void handleCreateChat();
 						}}
-						disabled={!currentUserId || isCreating}
+						disabled={!authUserId || isCreating}
 						aria-label="Create new chat"
 						aria-busy={isCreating}
 					>

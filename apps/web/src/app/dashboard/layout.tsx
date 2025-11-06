@@ -36,12 +36,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 			</a>
 			<div className="hidden md:block">
 				<div className="fixed inset-y-0 left-0">
-					<AppSidebar initialChats={chats} currentUserId={session.userId} />
+					<AppSidebar initialChats={chats} authUserId={session.userId} />
 				</div>
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
                 <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
-                    <MobileDashboardNav initialChats={chats} currentUserId={session.userId} />
+                    <MobileDashboardNav initialChats={chats} authUserId={session.userId} />
                     <Link
                         href="/dashboard/settings"
                         className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
