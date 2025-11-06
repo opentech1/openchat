@@ -26,22 +26,24 @@ export const list = query({
 	}),
 	handler: async (ctx, args) => {
 		const limit = args.limit ?? 50;
-		const query = ctx.db
+
+		// Filter out soft-deleted chats before pagination
+		const allChats = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
-			.order("desc");
+			.order("desc")
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.collect();
 
-		const results = await query.paginate({
-			cursor: args.cursor ?? null,
-			numItems: limit,
-		});
-
-		// Filter out soft-deleted chats
-		const filteredChats = results.page.filter((chat) => !chat.deletedAt);
+		// Implement manual pagination on the filtered results
+		const startIndex = args.cursor ? Number.parseInt(args.cursor, 10) : 0;
+		const endIndex = startIndex + limit;
+		const chats = allChats.slice(startIndex, endIndex);
+		const nextCursor = endIndex < allChats.length ? String(endIndex) : null;
 
 		return {
-			chats: filteredChats,
-			nextCursor: results.continueCursor ?? null,
+			chats,
+			nextCursor,
 		};
 	},
 });

@@ -65,6 +65,9 @@ export function readChatPrefetch(chatId: string): PrefetchEntry | null {
 		persistEntries(entries);
 		return null;
 	}
+	// Update access time for true LRU tracking
+	entry.fetchedAt = Date.now();
+	persistEntries(entries);
 	return entry;
 }
 
