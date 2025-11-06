@@ -24,10 +24,22 @@ const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) &
 const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
 
 // Request size limits for security
-const MAX_MESSAGES_PER_REQUEST = Number(process.env.MAX_MESSAGES_PER_REQUEST ?? 100);
-const MAX_REQUEST_BODY_SIZE = Number(process.env.MAX_REQUEST_BODY_SIZE ?? 10_000_000); // 10MB default
-const MAX_ATTACHMENT_SIZE = Number(process.env.MAX_ATTACHMENT_SIZE ?? 5_000_000); // 5MB per attachment
-const MAX_MESSAGE_CONTENT_LENGTH = Number(process.env.MAX_MESSAGE_CONTENT_LENGTH ?? 50_000); // 50k chars
+const MAX_MESSAGES_PER_REQUEST = (() => {
+	const val = Number(process.env.MAX_MESSAGES_PER_REQUEST ?? 100);
+	return Number.isFinite(val) && val > 0 ? val : 100;
+})();
+const MAX_REQUEST_BODY_SIZE = (() => {
+	const val = Number(process.env.MAX_REQUEST_BODY_SIZE ?? 10_000_000);
+	return Number.isFinite(val) && val > 0 ? val : 10_000_000;
+})();
+const MAX_ATTACHMENT_SIZE = (() => {
+	const val = Number(process.env.MAX_ATTACHMENT_SIZE ?? 5_000_000);
+	return Number.isFinite(val) && val > 0 ? val : 5_000_000;
+})();
+const MAX_MESSAGE_CONTENT_LENGTH = (() => {
+	const val = Number(process.env.MAX_MESSAGE_CONTENT_LENGTH ?? 50_000);
+	return Number.isFinite(val) && val > 0 ? val : 50_000;
+})();
 
 const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 80);
 const STREAM_FLUSH_INTERVAL_MS =
@@ -276,12 +288,25 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
+		// Validate request body size BEFORE loading into memory
+		const contentLength = request.headers.get("content-length");
+		if (contentLength) {
+			const declaredSize = Number.parseInt(contentLength, 10);
+			if (!Number.isNaN(declaredSize) && declaredSize > MAX_REQUEST_BODY_SIZE) {
+				const headers = buildCorsHeaders(request, allowOrigin);
+				return new Response(
+					`Request body too large: ${declaredSize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
+					{ status: 413, headers }
+				);
+			}
+		}
+
 		let payload: ChatRequestPayload;
 		let rawBody: string;
 		try {
 			rawBody = await request.text();
 
-			// Validate request body size
+			// Double-check actual body size after loading (in case Content-Length was missing or incorrect)
 			const bodySize = new TextEncoder().encode(rawBody).length;
 			if (bodySize > MAX_REQUEST_BODY_SIZE) {
 				const headers = buildCorsHeaders(request, allowOrigin);
@@ -385,30 +410,28 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					}
 				}
 
-				// Validate attachment size
+				// Validate attachment size - check combined size to prevent bypass
 				if ((part as any).type === "file") {
 					const filePart = part as any;
-					// Check data URL size if present
+					let totalAttachmentSize = 0;
+
+					// Add data URL size if present
 					if (typeof filePart.data === "string") {
-						const dataSize = new TextEncoder().encode(filePart.data).length;
-						if (dataSize > MAX_ATTACHMENT_SIZE) {
-							const headers = buildCorsHeaders(request, allowOrigin);
-							return new Response(
-								`Attachment too large: ${dataSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
-								{ status: 413, headers }
-							);
-						}
+						totalAttachmentSize += new TextEncoder().encode(filePart.data).length;
 					}
-					// Check url content if it's a data URL
+
+					// Add url content size if it's a data URL
 					if (typeof filePart.url === "string" && filePart.url.startsWith("data:")) {
-						const urlSize = new TextEncoder().encode(filePart.url).length;
-						if (urlSize > MAX_ATTACHMENT_SIZE) {
-							const headers = buildCorsHeaders(request, allowOrigin);
-							return new Response(
-								`Attachment too large: ${urlSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
-								{ status: 413, headers }
-							);
-						}
+						totalAttachmentSize += new TextEncoder().encode(filePart.url).length;
+					}
+
+					// Check combined size to prevent bypass by splitting content
+					if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {
+						const headers = buildCorsHeaders(request, allowOrigin);
+						return new Response(
+							`Attachment too large: ${totalAttachmentSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
+							{ status: 413, headers }
+						);
 					}
 				}
 			}
