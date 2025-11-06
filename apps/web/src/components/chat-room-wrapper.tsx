@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
-import ChatRoom from "@/components/chat-room";
+import dynamic from "next/dynamic";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
+
+// Lazy load the heavy ChatRoom component (600+ lines)
+const ChatRoom = dynamic(() => import("@/components/chat-room"), {
+	ssr: false,
+	loading: () => <ChatRoomSkeleton />,
+});
 
 function ChatRoomSkeleton() {
 	return (
@@ -16,7 +22,17 @@ function ChatRoomSkeleton() {
 	);
 }
 
-export default function ChatRoomWrapper(props: ComponentProps<typeof ChatRoom>) {
+type ChatRoomProps = {
+	chatId: string;
+	initialMessages: Array<{
+		id: string;
+		role: string;
+		content: string;
+		createdAt: string | Date;
+	}>;
+};
+
+export default function ChatRoomWrapper(props: ChatRoomProps) {
 	const [mounted, setMounted] = useState(false);
 	const initialUiMessages = useMemo(
 		() =>
