@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 export default function SettingsPageClient() {
   const [open, setOpen] = useState(false);
