@@ -7,7 +7,6 @@ import { ChatMessagesPanel } from "@/components/chat-messages-panel";
 import type { NormalizedMessage } from "@/lib/chat-message-utils";
 import {
 	mergeNormalizedMessages,
-	normalizeMessage,
 	normalizeUiMessage,
 } from "@/lib/chat-message-utils";
 
