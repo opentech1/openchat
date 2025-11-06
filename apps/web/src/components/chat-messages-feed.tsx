@@ -16,6 +16,7 @@ export type ChatMessagesFeedProps = {
 	optimisticMessages: UIMessage<{ createdAt?: string }> [];
 	paddingBottom: number;
 	className?: string;
+	loading?: boolean;
 };
 
 export function ChatMessagesFeed({
@@ -23,6 +24,7 @@ export function ChatMessagesFeed({
 	optimisticMessages,
 	paddingBottom,
 	className,
+	loading = false,
 }: ChatMessagesFeedProps) {
 	const optimisticNormalized = useMemo(
 		() => optimisticMessages.map(normalizeUiMessage),
@@ -30,16 +32,17 @@ export function ChatMessagesFeed({
 	);
 
 	const lastMergedRef = useRef<NormalizedMessage[] | null>(null);
+	const prevByIdRef = useRef<Map<string, NormalizedMessage>>(new Map());
 	const merged = useMemo(() => {
 		const next = mergeNormalizedMessages(initialMessages, optimisticNormalized);
 		const prev = lastMergedRef.current;
 		if (!prev) {
 			lastMergedRef.current = next;
+			prevByIdRef.current = new Map(next.map((msg) => [msg.id, msg]));
 			return next;
 		}
-		const prevById = new Map(prev.map((msg) => [msg.id, msg]));
 		const stabilized = next.map((msg) => {
-			const previous = prevById.get(msg.id);
+			const previous = prevByIdRef.current.get(msg.id);
 			if (!previous) return msg;
 			const sameRole = previous.role === msg.role;
 			const sameContent = previous.content === msg.content;
@@ -52,6 +55,7 @@ export function ChatMessagesFeed({
 			return msg;
 		});
 		lastMergedRef.current = stabilized;
+		prevByIdRef.current = new Map(stabilized.map((msg) => [msg.id, msg]));
 		return stabilized;
 	}, [initialMessages, optimisticNormalized]);
 
@@ -60,6 +64,7 @@ export function ChatMessagesFeed({
 			messages={merged.map((msg) => ({ id: msg.id, role: msg.role, content: msg.content }))}
 			paddingBottom={paddingBottom}
 			className={className}
+			loading={loading}
 		/>
 	);
 }

@@ -49,6 +49,13 @@ const STREAM_SMOOTH_DELAY_MS = (() => {
 	if (!Number.isFinite(parsed)) return 12;
 	return parsed < 0 ? 0 : parsed;
 })();
+const MAX_TOKENS = (() => {
+	const raw = process.env.OPENROUTER_MAX_TOKENS;
+	if (!raw || raw.trim() === "") return 8192;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) return 8192;
+	return Math.min(parsed, 32768); // Cap at 32k to prevent excessive token usage
+})();
 
 type StreamPersistRequest = {
 	userId: string;
@@ -58,6 +65,14 @@ type StreamPersistRequest = {
 	content: string;
 	createdAt: string;
 	status: "streaming" | "completed";
+};
+
+type ChatRequestPayload = {
+	modelId?: string;
+	apiKey?: string;
+	chatId?: string;
+	messages?: AnyUIMessage[];
+	assistantMessageId?: string;
 };
 
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
@@ -158,7 +173,7 @@ export type ChatHandlerOptions = {
 	persistMessage?: (input: StreamPersistRequest) => Promise<{ ok: boolean }>;
 	resolveModel?: (input: {
 		request: Request;
-		payload: any;
+		payload: ChatRequestPayload;
 	}) => Promise<{ provider: ReturnType<typeof createOpenRouter>; modelId: string }>;
 };
 
@@ -261,7 +276,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
-		let payload: any;
+		let payload: ChatRequestPayload;
 		let rawBody: string;
 		try {
 			rawBody = await request.text();
@@ -557,6 +572,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
+				maxOutputTokens: MAX_TOKENS,
 				experimental_transform: smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
