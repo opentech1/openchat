@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { lastLoginMethod } from "better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
@@ -16,7 +15,7 @@ function ensureValidated() {
 	}
 }
 
-// @ts-ignore - betterAuth component is registered via convex.config.ts
+// betterAuth component is registered via convex.config.ts and properly typed in _generated/api.d.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (
@@ -31,7 +30,7 @@ export const createAuth = (
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
-	// GitHub (primary OAuth provider)
+	// GitHub OAuth
 	if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 		socialProviders.github = {
 			clientId: process.env.GITHUB_CLIENT_ID,
@@ -48,12 +47,12 @@ export const createAuth = (
 	}
 
 	const authSecret = getEnv("BETTER_AUTH_SECRET", "dev-secret");
-	
+
 	// Warn if using dev-secret in production
 	if (authSecret === "dev-secret" && isProduction()) {
 		console.error("⚠️  WARNING: Using dev-secret in production! Generate a secure secret with: openssl rand -base64 32");
 	}
-	
+
 	return betterAuth({
 		logger: { disabled: optionsOnly },
 		baseURL: siteUrl,
@@ -62,9 +61,6 @@ export const createAuth = (
 		socialProviders,
 		plugins: [
 			convex(),
-			lastLoginMethod({
-				storeInDatabase: true,
-			}),
 		],
 		advanced: {
 			useSecureCookies: isProduction(),
@@ -84,7 +80,8 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		// @ts-ignore - authComponent expects GenericCtx but query provides QueryCtx
+		// QueryCtx is compatible with GenericCtx at runtime - the types are structurally compatible
+		// @ts-expect-error - authComponent.getAuthUser expects GenericCtx but query provides QueryCtx which has a compatible structure
 		return authComponent.getAuthUser(ctx);
 	},
 });
