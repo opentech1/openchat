@@ -52,19 +52,18 @@ export const create = mutation({
 	handler: async (ctx, args) => {
 		// Rate limit: check recent NON-DELETED chat creation
 		// Important: filter out deleted chats to prevent bypass via create/delete loop
-		const recentChats = await ctx.db
+		// Use take(1) to only fetch the most recent chat for efficiency
+		const recentChat = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.collect();
-
-		// Find most recent non-deleted chat
-		const recentActiveChats = recentChats.filter((chat) => !chat.deletedAt);
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.first();
 
 		const now = Date.now();
 		const rateLimit = 60 * 1000; // 1 minute
-		if (recentActiveChats.length > 0) {
-			const lastChatTime = recentActiveChats[0].createdAt;
+		if (recentChat) {
+			const lastChatTime = recentChat.createdAt;
 			if (now - lastChatTime < rateLimit) {
 				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
 			}
