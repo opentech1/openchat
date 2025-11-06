@@ -93,7 +93,9 @@ export function requireEnv(key: string): string {
  * Get an optional environment variable with default
  */
 export function getEnv(key: string, defaultValue: string): string {
-	return process.env[key] || defaultValue;
+	const value = process.env[key];
+	// Handle empty strings properly - return default if undefined or empty
+	return value !== undefined && value !== "" ? value : defaultValue;
 }
 
 /**
