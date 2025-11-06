@@ -60,8 +60,9 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
     <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
       <aside
         data-collapsed={collapsed || undefined}
-        className={cn(
-          "bg-background/70 backdrop-blur supports-backdrop-blur:border-border/40 group/sidebar sticky top-0 h-svh w-64 border-r overflow-hidden will-change-transform translate-z-0",
+		className={cn(
+			// Light mode now uses dedicated sidebar tokens so the chrome stays legible without feeling stark.
+			"bg-sidebar/95 text-sidebar-foreground backdrop-blur supports-backdrop-blur:border-sidebar-border/50 group/sidebar sticky top-0 h-svh w-64 border-r border-sidebar-border/80 overflow-hidden will-change-transform translate-z-0",
           mounted ? "transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]" : "duration-0",
           collapsed ? "-translate-x-full pointer-events-none" : "translate-x-0",
           className,
