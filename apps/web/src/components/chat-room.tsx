@@ -7,7 +7,6 @@ import React, {
 	useMemo,
 	useRef,
 	useState,
-	useTransition,
 } from "react";
 import { authClient } from '@/lib/auth-client';
 import { useChat } from "@ai-sdk-tools/store";
@@ -47,19 +46,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() ?? "";
 
-  useEffect(() => {
-    if (!workspaceId) return;
-    identifyClient(workspaceId, {
-      workspaceId,
-      properties: { auth_state: "member" },
-    });
-    registerClientProperties({
-      auth_state: "member",
-      workspace_id: workspaceId,
-    });
-  }, [workspaceId]);
-
-
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [savingApiKey, setSavingApiKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -71,10 +57,21 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [keyPromptDismissed, setKeyPromptDismissed] = useState(false);
   const missingKeyToastRef = useRef<string | number | null>(null);
   const storedModelIdRef = useRef<string | null>(null);
+  const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
 
+  // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
-    registerClientProperties({ has_openrouter_key: Boolean(apiKey) });
-  }, [apiKey]);
+    if (!workspaceId) return;
+    identifyClient(workspaceId, {
+      workspaceId,
+      properties: { auth_state: "member" },
+    });
+    registerClientProperties({
+      auth_state: "member",
+      workspace_id: workspaceId,
+      has_openrouter_key: Boolean(apiKey),
+    });
+  }, [workspaceId, apiKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -142,6 +139,14 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const fetchModels = useCallback(
     async (key: string) => {
+      // Cancel any in-flight request to prevent race conditions
+      if (fetchModelsAbortControllerRef.current) {
+        fetchModelsAbortControllerRef.current.abort();
+      }
+
+      const abortController = new AbortController();
+      fetchModelsAbortControllerRef.current = abortController;
+
       setModelsLoading(true);
       setModelsError(null);
       try {
@@ -149,6 +154,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ apiKey: key }),
+          signal: abortController.signal,
         });
         const data = await response.json();
         if (!response.ok || !data?.ok) {
@@ -194,6 +200,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           return next ?? null;
         });
       } catch (error) {
+        // Ignore abort errors (request was cancelled)
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
         console.error("Failed to load OpenRouter models", error);
         if (!(error as any)?.__posthogTracked) {
           const status = typeof (error as any)?.status === "number" ? (error as any).status : 0;
@@ -218,7 +229,11 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         applySelectedModel(null);
         setModelsError(error instanceof Error && error.message ? error.message : "Failed to load OpenRouter models.");
       } finally {
-        setModelsLoading(false);
+        // Only clear loading if this is still the active request
+        if (fetchModelsAbortControllerRef.current === abortController) {
+          setModelsLoading(false);
+          fetchModelsAbortControllerRef.current = null;
+        }
       }
     },
     [persistSelectedModel],
@@ -261,7 +276,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       if (missingKeyToastRef.current == null) {
         missingKeyToastRef.current = toast.warning("Add your OpenRouter API key", {
           description: "Open settings to paste your key and start chatting.",
-          duration: Infinity,
+          duration: 8000,
           action: {
             label: "Settings",
             onClick: () => router.push("/dashboard/settings"),
@@ -390,15 +405,6 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-	const [visibleMessages, setVisibleMessages] = useState(messages);
-	const [isPending, startTransition] = useTransition();
-
-	useEffect(() => {
-		startTransition(() => {
-			setVisibleMessages(messages);
-		});
-	}, [messages, startTransition]);
-
 	useEffect(() => {
 		const entry = readChatPrefetch(chatId);
 		if (!entry) return;
@@ -411,10 +417,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			}),
 		);
 		const uiMessages = normalized.map(toUiMessage);
-		startTransition(() => {
-			setMessages(uiMessages);
-		});
-	}, [chatId, setMessages, startTransition]);
+		setMessages(uiMessages);
+	}, [chatId, setMessages]);
 
   useEffect(() => {
     if (status !== "ready") return;
@@ -436,9 +440,13 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 			};
 		})
 		.filter((message): message is PrefetchMessage => Boolean(message));
-	if (payload.length > 0) {
+	
+	if (payload.length === 0) return;
+	
+	const timeoutId = setTimeout(() => {
 		storeChatPrefetch(chatId, payload);
-	}
+	}, 500);
+	return () => clearTimeout(timeoutId);
 }, [chatId, messages, status]);
 
   const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
@@ -527,7 +535,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const shouldPromptForKey = !isLinked;
   const shouldForceModal = Boolean(modelsError);
   const showKeyModal = checkedApiKey && (shouldForceModal || (shouldPromptForKey && !keyPromptDismissed));
-  const composerDisabled = busy || modelsLoading || shouldPromptForKey || !selectedModel;
+  const composerDisabled = shouldPromptForKey;
+  const sendDisabled = busy || modelsLoading || shouldPromptForKey || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -559,15 +568,17 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       />
       <ChatMessagesFeed
         initialMessages={normalizedInitial}
-        optimisticMessages={visibleMessages}
+        optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
+        loading={!messages.length}
       />
 
-      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
+      <div className="pointer-events-none fixed bottom-4 left-6 right-6 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
 			<ChatComposer
 				placeholder="Ask OpenChat a question..."
+				sendDisabled={sendDisabled}
 				disabled={composerDisabled}
 				onSend={handleSend}
 				modelOptions={modelOptions}
