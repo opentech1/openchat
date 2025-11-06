@@ -15,19 +15,24 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 	const cookieStore = await cookies();
 
 	// better-auth stores session token with the cookiePrefix from convex/auth.ts
-	// Default is "openchat" so cookie is "openchat.session-token"
-	const sessionToken = cookieStore.get("openchat.session-token")?.value;
+	// In production (HTTPS), cookies get __Secure- prefix: "__Secure-openchat.session_token"
+	// In development (HTTP), cookies don't have prefix: "openchat.session_token"
+	const secureCookie = cookieStore.get("__Secure-openchat.session_token");
+	const normalCookie = cookieStore.get("openchat.session_token");
+	const sessionCookie = secureCookie || normalCookie;
 
-	if (!sessionToken) {
+	if (!sessionCookie?.value) {
 		redirect("/auth/sign-in");
 	}
 
 	// Call better-auth API to get session
 	try {
-		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3001";
-		const response = await fetch(`${baseUrl}/api/auth/session`, {
+		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3000";
+		// Use the correct cookie name based on which one exists
+		const cookieName = secureCookie ? "__Secure-openchat.session_token" : "openchat.session_token";
+		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
 			headers: {
-				Cookie: `openchat.session-token=${sessionToken}`,
+				Cookie: `${cookieName}=${sessionCookie.value}`,
 			},
 			cache: "no-store",
 		});

@@ -32,54 +32,8 @@ function isValidOrigin(urlString: string, trustedBaseUrl: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
-	const { pathname } = request.nextUrl;
-
-	// Public routes that don't require authentication
-	const publicRoutes = ["/", "/auth/sign-in"];
-	const isPublicRoute = publicRoutes.includes(pathname);
-
-	// Get session token from cookie
-	const sessionToken = request.cookies.get("openchat.session-token")?.value;
-	const hasSessionToken = !!sessionToken;
-
-	// For sign-in page: if user has a session token, they might be logged in
-	// We'll let the page itself validate and redirect if needed
-	if (pathname === "/auth/sign-in" && hasSessionToken) {
-		// Validate session to avoid unnecessary redirects
-		try {
-			// Use trusted base URL instead of request.nextUrl.origin to prevent SSRF
-			const baseUrl = getTrustedBaseUrl();
-
-			// Additional validation: ensure the request URL itself is from a trusted origin
-			if (!baseUrl || !isValidOrigin(request.url, baseUrl)) {
-				// If we can't validate the origin, let them proceed to sign-in page
-				// This is safer than making a potentially malicious API call
-				return NextResponse.next();
-			}
-
-			const response = await fetch(`${baseUrl}/api/auth/session`, {
-				headers: {
-					cookie: request.headers.get("cookie") || "",
-				},
-				cache: "no-store",
-			});
-			if (response.ok) {
-				const data = await response.json();
-				if (data.user) {
-					return NextResponse.redirect(new URL("/dashboard", request.url));
-				}
-			}
-		} catch {
-			// If validation fails, let them proceed to sign-in
-		}
-	}
-
-	// If user is trying to access protected route without session token, redirect to sign-in
-	// Server components will do the full validation
-	if (!isPublicRoute && !hasSessionToken) {
-		return NextResponse.redirect(new URL("/auth/sign-in", request.url));
-	}
-
+	// Let all requests through - auth is handled by ConvexBetterAuthProvider
+	// and useSession() hook in components
 	return NextResponse.next();
 }
 

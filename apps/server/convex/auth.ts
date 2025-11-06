@@ -1,14 +1,13 @@
 import { betterAuth } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
-import { lastLoginMethod } from "better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
-const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+const siteUrl = process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-// @ts-ignore - betterAuth component is registered via convex.config.ts
+// betterAuth component is registered via convex.config.ts and properly typed in _generated/api.d.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
 export const createAuth = (
@@ -18,19 +17,11 @@ export const createAuth = (
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
-	// GitHub (primary OAuth provider)
+	// GitHub OAuth
 	if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 		socialProviders.github = {
 			clientId: process.env.GITHUB_CLIENT_ID,
 			clientSecret: process.env.GITHUB_CLIENT_SECRET,
-		};
-	}
-
-	// Google (optional - only if credentials provided)
-	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-		socialProviders.google = {
-			clientId: process.env.GOOGLE_CLIENT_ID,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
 		};
 	}
 
@@ -42,9 +33,6 @@ export const createAuth = (
 		socialProviders,
 		plugins: [
 			convex(),
-			lastLoginMethod({
-				storeInDatabase: true,
-			}),
 		],
 		advanced: {
 			useSecureCookies: process.env.NODE_ENV === "production",
@@ -64,7 +52,8 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		// @ts-ignore - authComponent expects GenericCtx but query provides QueryCtx
+		// QueryCtx is compatible with GenericCtx at runtime - the types are structurally compatible
+		// @ts-expect-error - authComponent.getAuthUser expects GenericCtx but query provides QueryCtx which has a compatible structure
 		return authComponent.getAuthUser(ctx);
 	},
 });
