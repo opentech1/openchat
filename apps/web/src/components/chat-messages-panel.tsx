@@ -29,12 +29,13 @@ type ChatMessagesPanelProps = {
 	messages: ChatMessage[];
 	paddingBottom: number;
 	className?: string;
+	loading?: boolean;
 	autoStick?: boolean;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
 
-function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true }: ChatMessagesPanelProps) {
+function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoStick = true, loading = false }: ChatMessagesPanelProps) {
 	const viewportRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const [isAtBottom, setIsAtBottom] = useState(true);
@@ -132,7 +133,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 		const observer = new ResizeObserver(() => {
 			if (!initialSyncDoneRef.current) return;
 			if (!shouldStickRef.current) return;
-			scrollToBottom("auto");
+			scrollToBottom("smooth");
 		});
 		observer.observe(contentNode);
 		return () => observer.disconnect();
@@ -162,6 +163,24 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 							messages.map((msg) => (
 								<ChatMessageBubble key={msg.id} message={msg} />
 							))
+						) : loading ? (
+							<div className="flex flex-col gap-4" data-ph-no-capture>
+								<div className="flex gap-3 animate-pulse">
+									<div className="h-8 w-8 rounded-full bg-muted" />
+									<div className="flex-1 space-y-2">
+										<div className="h-4 w-3/4 rounded bg-muted" />
+										<div className="h-4 w-1/2 rounded bg-muted" />
+									</div>
+								</div>
+								<div className="flex gap-3 animate-pulse">
+									<div className="h-8 w-8 rounded-full bg-muted" />
+									<div className="flex-1 space-y-2">
+										<div className="h-4 w-2/3 rounded bg-muted" />
+										<div className="h-4 w-4/5 rounded bg-muted" />
+										<div className="h-4 w-1/3 rounded bg-muted" />
+									</div>
+								</div>
+							</div>
 						) : (
 							<p className="text-muted-foreground text-sm" data-ph-no-capture>No messages yet. Say hi!</p>
 						)}
@@ -179,6 +198,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 						shouldStickRef.current = true;
 						scrollToBottom("smooth");
 					}}
+					aria-label="Scroll to bottom of conversation"
 					className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 shadow-sm"
 				>
 					<ArrowDownIcon className="size-4" />
@@ -197,8 +217,14 @@ type ChatMessageBubbleProps = {
 
 const ChatMessageBubble = memo(
 	({ message }: ChatMessageBubbleProps) => {
+		const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
 		return (
-			<Message from={message.role} className={message.role === "assistant" ? "justify-start flex-row" : undefined}>
+			<Message 
+				from={message.role} 
+				className={message.role === "assistant" ? "justify-start flex-row" : undefined}
+				aria-label={ariaLabel}
+				role="article"
+			>
 				{message.role === "assistant" ? (
 					<SafeStreamdown className="text-foreground text-sm leading-6 whitespace-pre-wrap" data-ph-no-capture>
 						{message.content}

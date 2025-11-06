@@ -203,7 +203,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 	const userInitials = useMemo(() => {
 		if (!userDisplayLabel) return "";
 		const parts = userDisplayLabel.trim().split(/\s+/);
-		return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
+		return parts.slice(0, 2).map((part: string) => part[0]?.toUpperCase() ?? "").join("");
 	}, [userDisplayLabel]);
 
 	const dashboardTrackedRef = useRef(false);

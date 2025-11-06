@@ -4,8 +4,9 @@ import Providers from "@/components/providers";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
 	title: {
@@ -79,11 +80,12 @@ export default function RootLayout({
 			suppressHydrationWarning
 			data-brand-theme="blue"
 			className={`${GeistSans.variable} ${GeistMono.variable}`}>
-			<body className={cn("font-sans antialiased", GeistSans.className)}>
-				<Providers>
-					{children}
-				</Providers>
-			</body>
+		<body className={cn("font-sans antialiased", GeistSans.className)}>
+			<Providers>
+				{children}
+			</Providers>
+			<SpeedInsights />
+		</body>
 		</html>
 	);
 }
