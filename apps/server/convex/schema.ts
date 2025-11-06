@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Note: Better-auth tables are automatically provided by the betterAuth component
+// configured in convex.config.ts. They don't need to be imported here.
 export default defineSchema({
 	users: defineTable({
 		externalId: v.string(),
@@ -18,20 +20,20 @@ export default defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
-		status: v.optional(v.string()),
-	})
-		.index("by_user", ["userId", "updatedAt"])
-		.index("by_user_status", ["userId", "status", "updatedAt"]),
+		deletedAt: v.optional(v.number()),
+	}).index("by_user", ["userId", "updatedAt"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
+		// Max length: 100KB (102400 bytes)
 		content: v.string(),
 		createdAt: v.number(),
-		status: v.string(),
+		status: v.optional(v.string()),
+		userId: v.optional(v.id("users")),
+		deletedAt: v.optional(v.number()),
 	})
 		.index("by_chat", ["chatId", "createdAt"])
 		.index("by_client_id", ["chatId", "clientMessageId"])
-		.index("by_chat_status", ["chatId", "status", "createdAt"])
-		.index("by_status", ["status"]),
+		.index("by_user", ["userId"]),
 });
