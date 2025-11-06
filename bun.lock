@@ -100,7 +100,6 @@
         "@tailwindcss/postcss": "^4.1.10",
         "@tanstack/react-query-devtools": "^5.85.5",
         "@testing-library/react": "^16.1.0",
-        "@types/better-sqlite3": "^7.6.13",
         "@types/node": "^20",
         "@types/react": "~19.1.10",
         "@types/react-dom": "^19",

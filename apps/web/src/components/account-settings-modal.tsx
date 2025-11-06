@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
-import { signOutAction } from "@/actions/sign-out";
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
@@ -185,19 +184,22 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 	}
 
 	async function handleSignOut() {
-		try {
-			setSigningOut(true);
-			await signOutAction();
-			onClose();
-			toast.success("Signed out");
-			router.push("/");
-			router.refresh();
-		} catch (error) {
-			console.error("sign-out", error);
-			toast.error("Unexpected error while signing out");
-		} finally {
-			setSigningOut(false);
-		}
+		setSigningOut(true);
+		await authClient.signOut({
+			fetchOptions: {
+				onSuccess: () => {
+					onClose();
+					toast.success("Signed out");
+					router.push("/");
+					router.refresh();
+				},
+				onError: (ctx) => {
+					console.error("sign-out", ctx.error);
+					toast.error("Failed to sign out");
+					setSigningOut(false);
+				},
+			},
+		});
 	}
 
 	async function handleCopyUserId() {
@@ -295,7 +297,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 
 
 					<div className="space-y-2 text-sm text-muted-foreground">
-							<p>You are signed in with WorkOS AuthKit. Use the button below to sign out from all tabs.</p>
+							<p>You are signed in with Better Auth. Use the button below to sign out from all tabs.</p>
 						</div>
 						<Button variant="destructive" className="w-full" onClick={handleSignOut} disabled={signingOut}>
 							{signingOut ? "Signing out…" : "Sign out"}
