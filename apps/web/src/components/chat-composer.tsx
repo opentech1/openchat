@@ -11,26 +11,27 @@ type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const adjustHeight = useCallback(
-    (reset?: boolean) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
+	const adjustHeight = useCallback(
+		(reset?: boolean) => {
+			const textarea = textareaRef.current;
+			if (!textarea) return;
 
-      if (reset) {
-        textarea.style.height = `${minHeight}px`;
-        return;
-      }
+			if (reset) {
+				textarea.style.height = `${minHeight}px`;
+				return;
+			}
 
-      textarea.style.height = `${minHeight}px`;
-      const newHeight = Math.max(
-        minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
-      );
+			// Set height to 'auto' temporarily to get accurate scrollHeight without visual flash
+			textarea.style.height = 'auto';
+			const newHeight = Math.max(
+				minHeight,
+				Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
+			);
 
-      textarea.style.height = `${newHeight}px`;
-    },
-    [minHeight, maxHeight],
-  );
+			textarea.style.height = `${newHeight}px`;
+		},
+		[minHeight, maxHeight],
+	);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -96,6 +97,7 @@ Textarea.displayName = "Textarea";
 export type ChatComposerProps = {
 	onSend: (payload: { text: string; modelId: string; apiKey: string }) => void | Promise<void>;
 	disabled?: boolean;
+	sendDisabled?: boolean;
 	placeholder?: string;
 	modelOptions?: ModelSelectorOption[];
 	modelValue?: string | null;
@@ -110,6 +112,7 @@ export type ChatComposerProps = {
 export default function ChatComposer({
 	onSend,
 	disabled,
+	sendDisabled,
 	placeholder = "Ask OpenChat a question...",
 	modelOptions = [],
 	modelValue,
@@ -127,6 +130,7 @@ export default function ChatComposer({
 	const prefersReducedMotion = useReducedMotion();
 	const fast = prefersReducedMotion ? 0 : 0.3;
 	const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
+	const activeModelIdRef = useRef<string>('');
 
   useEffect(() => {
     if (modelValue) {
@@ -145,10 +149,17 @@ export default function ChatComposer({
 
   const activeModelId = modelValue ?? fallbackModelId;
 
+  // Keep ref in sync with the latest activeModelId to prevent stale closures
+  useEffect(() => {
+    activeModelIdRef.current = activeModelId;
+  }, [activeModelId]);
+
 	const send = useCallback(async () => {
 		const trimmed = value.trim();
-		if (!trimmed || disabled || isSending) return;
-		if (!activeModelId) {
+		if (!trimmed || sendDisabled || isSending) return;
+		// Use ref to get the latest activeModelId value
+		const currentModelId = activeModelIdRef.current;
+		if (!currentModelId) {
 			onMissingRequirement?.("model");
 			return;
 		}
@@ -159,7 +170,7 @@ export default function ChatComposer({
 		setErrorMessage(null);
 		setIsSending(true);
 	try {
-		await onSend({ text: trimmed, modelId: activeModelId, apiKey });
+		await onSend({ text: trimmed, modelId: currentModelId, apiKey });
 		setValue('');
 		adjustHeight(true);
 		} catch (error) {
@@ -168,7 +179,7 @@ export default function ChatComposer({
 		} finally {
 			setIsSending(false);
 		}
-	}, [activeModelId, adjustHeight, apiKey, disabled, isSending, onMissingRequirement, onSend, value]);
+	}, [adjustHeight, apiKey, sendDisabled, isSending, onMissingRequirement, onSend, value]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -248,7 +259,7 @@ export default function ChatComposer({
 				}}
 				whileHover={{ scale: 1.01 }}
 				whileTap={{ scale: 0.98 }}
-				disabled={isStreaming ? disabled : (disabled || isSending || !value.trim() || !activeModelId || !apiKey)}
+				disabled={isStreaming ? sendDisabled : (sendDisabled || isSending || !value.trim() || !activeModelId || !apiKey)}
 				className={cn(
 					'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
 					isStreaming
