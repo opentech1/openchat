@@ -60,6 +60,14 @@ type StreamPersistRequest = {
 	status: "streaming" | "completed";
 };
 
+type ChatRequestPayload = {
+	modelId?: string;
+	apiKey?: string;
+	chatId?: string;
+	messages?: AnyUIMessage[];
+	assistantMessageId?: string;
+};
+
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
 	if (message.role !== "user") return message;
 	let remaining = MAX_USER_PART_CHARS;
@@ -149,7 +157,7 @@ export type ChatHandlerOptions = {
 	persistMessage?: (input: StreamPersistRequest) => Promise<{ ok: boolean }>;
 	resolveModel?: (input: {
 		request: Request;
-		payload: any;
+		payload: ChatRequestPayload;
 	}) => Promise<{ provider: ReturnType<typeof createOpenRouter>; modelId: string }>;
 };
 
@@ -252,7 +260,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
-		let payload: any;
+		let payload: ChatRequestPayload;
 		try {
 			payload = await request.json();
 		} catch {
