@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 	// Get session token BEFORE getUserContext to prevent timing attacks
 	// This allows rate limiting based on session token, avoiding user enumeration
 	const cookieStore = await cookies();
-	const sessionToken = cookieStore.get("openchat.session-token")?.value ?? "anonymous";
+	const sessionToken = cookieStore.get("openchat.session_token")?.value ?? "anonymous";
 	
 	// Check rate limit BEFORE user validation to prevent timing attacks
 	// Using session token as identifier prevents user enumeration through timing analysis
