@@ -52,7 +52,7 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		// QueryCtx is compatible with GenericCtx<DataModel> as it extends it
+		// QueryCtx is structurally compatible with GenericCtx<DataModel>
 		return authComponent.getAuthUser(ctx as GenericCtx<DataModel>);
 	},
 });
