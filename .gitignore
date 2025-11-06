@@ -11,3 +11,7 @@ test-results/
 tmp/
 packages/auth/dist/
 .dmux/
+apps/server/node_modules.bak/
+.auth.db
+better-auth_migrations/
+.vercel
