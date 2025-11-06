@@ -11,6 +11,7 @@ const chatDoc = v.object({
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	lastMessageAt: v.optional(v.number()),
+	deletedAt: v.optional(v.number()),
 });
 
 export const list = query({
@@ -29,14 +30,17 @@ export const list = query({
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc");
-		
+
 		const results = await query.paginate({
 			cursor: args.cursor ?? null,
 			numItems: limit,
 		});
-		
+
+		// Filter out soft-deleted chats
+		const filteredChats = results.page.filter((chat) => !chat.deletedAt);
+
 		return {
-			chats: results.page,
+			chats: filteredChats,
 			nextCursor: results.continueCursor ?? null,
 		};
 	},
@@ -50,7 +54,7 @@ export const get = query({
 	returns: v.union(chatDoc, v.null()),
 	handler: async (ctx, args) => {
 		const chat = await ctx.db.get(args.chatId);
-		if (!chat || chat.userId !== args.userId) return null;
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) return null;
 		return chat;
 	},
 });
@@ -82,15 +86,28 @@ export const remove = mutation({
 	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
 		const chat = await ctx.db.get(args.chatId);
-		if (!chat || chat.userId !== args.userId) {
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
 			return { ok: false } as const;
 		}
+		const now = Date.now();
+		// Soft delete: mark chat as deleted instead of hard delete
+		await ctx.db.patch(args.chatId, {
+			deletedAt: now,
+		});
+		// Cascade soft delete to all messages in the chat (skip already deleted messages)
 		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
 			.collect();
-		await Promise.all(messages.map((message) => ctx.db.delete(message._id)));
-		await ctx.db.delete(args.chatId);
+		await Promise.all(
+			messages
+				.filter((message) => !message.deletedAt)
+				.map((message) =>
+					ctx.db.patch(message._id, {
+						deletedAt: now,
+					}),
+				),
+		);
 		return { ok: true } as const;
 	},
 });
@@ -101,7 +118,7 @@ export async function assertOwnsChat(
 	userId: Id<"users">,
 ) {
 	const chat = await ctx.db.get(chatId);
-	if (!chat || chat.userId !== userId) {
+	if (!chat || chat.userId !== userId || chat.deletedAt) {
 		return null;
 	}
 	return chat;

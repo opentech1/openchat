@@ -5,6 +5,13 @@ const nextConfig = {
 	experimental: {
 		externalDir: true,
 	},
+	serverExternalPackages: ["better-sqlite3"],
+	// Make environment variables available to server-side code
+	env: {
+		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
+		GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+	},
 	typedRoutes: true,
 	output: "standalone",
 	images: {
@@ -102,6 +109,21 @@ const nextConfig = {
 				config.devtool = false;
 			}
 		}
+
+		// Suppress warnings from Sentry and OpenTelemetry dynamic requires
+		config.ignoreWarnings = [
+			...(config.ignoreWarnings || []),
+			/Critical dependency:/,
+			/@opentelemetry/,
+			/require-in-the-middle/,
+		];
+
+		// Suppress infrastructure logging warnings
+		config.infrastructureLogging = {
+			...config.infrastructureLogging,
+			level: 'error',
+		};
+
 		return config;
 	},
 };
