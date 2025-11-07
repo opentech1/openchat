@@ -82,8 +82,26 @@ export const create = mutation({
 	handler: async (ctx, args) => {
 		// Sanitize the title to prevent injection attacks and ensure valid input
 		const sanitizedTitle = sanitizeTitle(args.title);
-		
+
+		// Rate limit: check recent NON-DELETED chat creation
+		// Important: filter out deleted chats to prevent bypass via create/delete loop
+		// Use by_user_created index to sort by createdAt, preventing bypass via chat updates
+		const recentChat = await ctx.db
+			.query("chats")
+			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+			.order("desc")
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.first();
+
 		const now = Date.now();
+		const rateLimit = 60 * 1000; // 1 minute
+		if (recentChat) {
+			const lastChatTime = recentChat.createdAt;
+			if (now - lastChatTime < rateLimit) {
+				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
+			}
+		}
+
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
 			title: sanitizedTitle,
@@ -140,3 +158,4 @@ export async function assertOwnsChat(
 	}
 	return chat;
 }
+
