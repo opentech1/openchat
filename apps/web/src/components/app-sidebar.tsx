@@ -249,6 +249,8 @@ export default function AppSidebar({ initialChats = [], authUserId, ...sidebarPr
 							void handleCreateChat();
 						}}
 						disabled={!authUserId || isCreating}
+						aria-label="Create new chat"
+						aria-busy={isCreating}
 					>
 						{isCreating ? "Creating…" : "New Chat"}
 					</Button>
@@ -274,6 +276,7 @@ export default function AppSidebar({ initialChats = [], authUserId, ...sidebarPr
 					type="button"
 					onClick={() => setAccountOpen(true)}
 					className="hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition"
+					aria-label="Open account settings"
 				>
 					<span className="text-xs text-muted-foreground">Account</span>
 	{user ? (
