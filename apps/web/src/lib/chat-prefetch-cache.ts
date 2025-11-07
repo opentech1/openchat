@@ -37,8 +37,21 @@ function getGlobalState() {
 			try {
 				const raw = window.sessionStorage?.getItem(STORAGE_KEY);
 				if (raw) {
-					const parsed = JSON.parse(raw) as Record<string, PrefetchEntry>;
-					globalThis.__OPENCHAT_CHAT_PREFETCH__.entries = parsed;
+					const parsed = JSON.parse(raw) as Record<string, Partial<PrefetchEntry>>;
+					// Migrate old cache entries that lack lastAccessedAt field
+					const now = Date.now();
+					const migrated: Record<string, PrefetchEntry> = {};
+					for (const [chatId, entry] of Object.entries(parsed)) {
+						if (entry.messages && typeof entry.fetchedAt === 'number') {
+							migrated[chatId] = {
+								messages: entry.messages,
+								fetchedAt: entry.fetchedAt,
+								// Use fetchedAt as fallback for old entries without lastAccessedAt
+								lastAccessedAt: entry.lastAccessedAt ?? entry.fetchedAt,
+							};
+						}
+					}
+					globalThis.__OPENCHAT_CHAT_PREFETCH__.entries = migrated;
 				}
 			} catch {
 				// ignore storage errors
@@ -125,8 +138,9 @@ export async function prefetchChat(chatId: string) {
 				messages?: PrefetchMessage[];
 			};
 			if (!payload.ok || !payload.messages) throw new Error("Prefetch failed");
+			const now = Date.now();
 			storeChatPrefetch(chatId, payload.messages);
-			return { messages: payload.messages, fetchedAt: Date.now() };
+			return { messages: payload.messages, fetchedAt: now, lastAccessedAt: now };
 		} catch (error) {
 			console.error("prefetch chat", error);
 			return null;
