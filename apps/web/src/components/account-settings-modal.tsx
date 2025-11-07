@@ -214,22 +214,24 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 
 	const modal = (
 		<div className="fixed inset-0 z-50">
-			<div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+			<div className="absolute inset-0 bg-black/20 dark:bg-black/50" onClick={onClose} aria-hidden />
 			<div className="pointer-events-auto absolute inset-0 flex items-center justify-center p-4">
 				<div
 					ref={dialogRef}
 					className={cn("bg-background w-full max-w-lg rounded-xl border shadow-2xl")}
 					role="dialog"
 					aria-modal="true"
+					aria-labelledby="account-settings-title"
 					tabIndex={-1}
 				>
 					<div className="flex items-center justify-between border-b px-4 py-3">
-						<h2 className="text-base font-medium">Account Settings</h2>
+						<h2 id="account-settings-title" className="text-base font-medium">Account Settings</h2>
 						<button
 							onClick={onClose}
 							className="hover:bg-accent rounded-md p-1 text-sm"
 							type="button"
 							ref={closeButtonRef}
+							aria-label="Close settings"
 						>
 							Close
 						</button>
@@ -250,7 +252,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 						<div className="rounded-lg border bg-muted/50 p-3 text-sm">
 							<div className="flex items-center justify-between gap-2">
 								<div className="max-w-xs truncate text-muted-foreground">User ID: {user.id}</div>
-								<Button variant="secondary" size="sm" type="button" onClick={handleCopyUserId}>
+								<Button variant="secondary" size="sm" type="button" onClick={handleCopyUserId} aria-label="Copy user ID to clipboard">
 									Copy
 								</Button>
 							</div>
@@ -265,7 +267,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 									{hasStoredKey ? `Linked${storedKeyTail ? ` ••••${storedKeyTail}` : ""}` : "Not linked"}
 								</span>
 							</div>
-							{apiKeyError ? <p className="text-xs font-medium text-destructive">{apiKeyError}</p> : null}
+							{apiKeyError ? <p id="settings-api-key-error" className="text-xs font-medium text-destructive" role="alert">{apiKeyError}</p> : null}
 							<form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSaveApiKey}>
 								<Input
 									value={apiKeyInput}
@@ -278,17 +280,20 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 									autoComplete="off"
 									required
 									className="font-mono"
+									aria-label="OpenRouter API key"
+									aria-invalid={!!apiKeyError}
+									aria-describedby={apiKeyError ? "settings-api-key-error" : undefined}
 								/>
-								<Button type="submit" disabled={savingKey || apiKeyInput.trim().length < 10} className="sm:w-auto">
-									{savingKey ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+								<Button type="submit" disabled={savingKey || apiKeyInput.trim().length < 10} className="sm:w-auto" aria-busy={savingKey}>
+									{savingKey ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
 									{hasStoredKey ? "Replace key" : "Save key"}
 								</Button>
 							</form>
 							<div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
 								<p>Keys are encrypted locally in your browser. Remove the key to stop using OpenRouter.</p>
 								{hasStoredKey ? (
-									<Button type="button" variant="ghost" size="sm" onClick={handleRemoveApiKey} disabled={removingKey}>
-										{removingKey ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+									<Button type="button" variant="ghost" size="sm" onClick={handleRemoveApiKey} disabled={removingKey} aria-label="Remove OpenRouter API key" aria-busy={removingKey}>
+										{removingKey ? <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" /> : null}
 										Remove key
 									</Button>
 								) : null}
@@ -299,7 +304,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 					<div className="space-y-2 text-sm text-muted-foreground">
 							<p>You are signed in with Better Auth. Use the button below to sign out from all tabs.</p>
 						</div>
-						<Button variant="destructive" className="w-full" onClick={handleSignOut} disabled={signingOut}>
+						<Button variant="destructive" className="w-full" onClick={handleSignOut} disabled={signingOut} aria-label="Sign out of account" aria-busy={signingOut}>
 							{signingOut ? "Signing out…" : "Sign out"}
 						</Button>
 					</div>

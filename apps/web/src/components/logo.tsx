@@ -23,8 +23,7 @@ const LogoMark = ({ className, uniColor }: { className?: string; uniColor?: bool
 			/>
 			<path
 				d="M7.5 6.5H14.5V8.25H7.5V6.5ZM6 10.5H16V12.25H6V10.5ZM8.5 14.5H13.5V16.25H8.5V14.5Z"
-				fill="white"
-				fillOpacity="0.9"
+				className="fill-foreground/90 dark:fill-white/90"
 			/>
 			<defs>
 				<linearGradient
