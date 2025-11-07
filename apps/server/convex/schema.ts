@@ -21,7 +21,9 @@ export default defineSchema({
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
 		deletedAt: v.optional(v.number()),
-	}).index("by_user", ["userId", "updatedAt"]),
+	})
+		.index("by_user", ["userId", "updatedAt"])
+		.index("by_user_created", ["userId", "createdAt"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
