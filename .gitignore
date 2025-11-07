@@ -15,3 +15,4 @@ apps/server/node_modules.bak/
 .auth.db
 better-auth_migrations/
 .vercel
+ISSUES_COMPREHENSIVE.txt

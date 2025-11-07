@@ -38,6 +38,25 @@ type ModelSelectorProps = {
 
 const TOKENS_PER_MILLION = 1_000_000
 
+// Memoize the number formatters to avoid recreating them on every render
+const getNumberFormatter = (() => {
+	const cache = new Map<number, Intl.NumberFormat>();
+	return (fractionDigits: number): Intl.NumberFormat => {
+		if (!cache.has(fractionDigits)) {
+			cache.set(
+				fractionDigits,
+				new Intl.NumberFormat("en-US", {
+					style: "currency",
+					currency: "USD",
+					minimumFractionDigits: fractionDigits,
+					maximumFractionDigits: fractionDigits,
+				})
+			);
+		}
+		return cache.get(fractionDigits)!;
+	};
+})();
+
 function formatCost(cost: number | null) {
 	if (cost == null || !Number.isFinite(cost)) return "–"
 	const abs = Math.abs(cost)
@@ -47,12 +66,7 @@ function formatCost(cost: number | null) {
 	else if (abs >= 0.01) fractionDigits = 4
 	else if (abs >= 0.001) fractionDigits = 5
 	else fractionDigits = 6
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: fractionDigits,
-		maximumFractionDigits: fractionDigits,
-	}).format(cost)
+	return getNumberFormatter(fractionDigits).format(cost)
 }
 
 const scaleCostToMillion = (cost: number | null) => {
@@ -86,7 +100,7 @@ function OptionGlyph({ option }: { option: ModelSelectorOption | null }) {
 	)
 }
 
-export function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
+function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
 	const [open, setOpen] = React.useState(false)
 	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
 
@@ -221,3 +235,8 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 		</Popover>
 	)
 }
+
+ModelSelector.displayName = "ModelSelector";
+
+export const MemoizedModelSelector = React.memo(ModelSelector);
+export { MemoizedModelSelector as ModelSelector };

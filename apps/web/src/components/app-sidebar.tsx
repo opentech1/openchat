@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { toast } from "sonner";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { authClient } from '@/lib/auth-client';
 import {
@@ -22,6 +23,7 @@ import { AccountSettingsModal } from "@/components/account-settings-modal";
 import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
+import { logError } from "@/lib/logger";
 
 export type ChatListItem = {
 	id: string;
@@ -115,7 +117,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 	return dedupeChats(list.concat([chat]));
 }
 
-export default function AppSidebar({ initialChats = [], authUserId, ...sidebarProps }: AppSidebarProps) {
+function AppSidebar({ initialChats = [], authUserId, ...sidebarProps }: AppSidebarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { data: session } = authClient.useSession(); const user = session?.user;
@@ -161,7 +163,7 @@ export default function AppSidebar({ initialChats = [], authUserId, ...sidebarPr
 			});
 			await router.push(`/dashboard/chat/${payload.chat.id}`);
 		} catch (error) {
-			console.error("create chat", error);
+			logError("Failed to create chat", error);
 			toast.error("Unable to create chat", {
 				description: error instanceof Error ? error.message : "Try again in a moment",
 			});
@@ -184,7 +186,7 @@ export default function AppSidebar({ initialChats = [], authUserId, ...sidebarPr
 				}
 				setChats((prev) => sortChats(prev.filter((chat) => chat.id !== chatId)));
 			} catch (error) {
-				console.error("delete chat", error);
+				logError("Failed to delete chat", error);
 				toast.error("Unable to delete chat", {
 					description: error instanceof Error ? error.message : "Please retry",
 				});
@@ -295,6 +297,10 @@ export default function AppSidebar({ initialChats = [], authUserId, ...sidebarPr
 	);
 }
 
+AppSidebar.displayName = "AppSidebar";
+
+export default React.memo(AppSidebar);
+
 function ChatList({
 	chats,
 	activePath,
@@ -308,51 +314,138 @@ function ChatList({
 	deletingId: string | null;
 	onHoverChat?: (chatId: string) => void;
 }) {
+	const parentRef = useRef<HTMLDivElement>(null);
+
+	// Only virtualize when we have many chats (>30)
+	const shouldVirtualize = chats.length > 30;
+
+	const virtualizer = useVirtualizer({
+		count: chats.length,
+		getScrollElement: () => parentRef.current,
+		estimateSize: () => 44, // Estimated height for each chat item
+		overscan: 10, // Render 10 extra items above and below viewport
+		enabled: shouldVirtualize,
+	});
+
 	if (chats.length === 0) return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
+
+	if (!shouldVirtualize) {
+		// Non-virtualized list for few chats
+		return (
+			<ul className="px-1 space-y-1" data-ph-no-capture>
+				{chats.map((c) => (
+					<ChatListItem
+						key={c.id}
+						chat={c}
+						activePath={activePath}
+						onDelete={onDelete}
+						deletingId={deletingId}
+						onHoverChat={onHoverChat}
+					/>
+				))}
+			</ul>
+		);
+	}
+
+	// Virtualized list for many chats
 	return (
-		<ul className="px-1 space-y-1" data-ph-no-capture>
-			{chats.map((c) => {
-				const hrefPath = `/dashboard/chat/${c.id}`;
-				const isActive = activePath === hrefPath;
-				return (
-					<li key={c.id} className="group relative">
-						<Link
-							href={`/dashboard/chat/${c.id}`}
-							prefetch
-							className={cn(
-								"block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
-								isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
-							)}
-							aria-current={isActive ? "page" : undefined}
-							onMouseEnter={() => onHoverChat?.(c.id)}
-							onFocus={() => onHoverChat?.(c.id)}
-						>
-							{c.title || "Untitled"}
-						</Link>
-						<button
-							type="button"
-							onClick={(event) => {
-								event.preventDefault();
-								event.stopPropagation();
-								void onDelete(c.id);
+		<div
+			ref={parentRef}
+			className="px-1 overflow-auto"
+			style={{ maxHeight: "calc(100vh - 280px)" }}
+			data-ph-no-capture
+		>
+			<div
+				style={{
+					height: `${virtualizer.getTotalSize()}px`,
+					width: "100%",
+					position: "relative",
+				}}
+			>
+				{virtualizer.getVirtualItems().map((virtualItem) => {
+					const chat = chats[virtualItem.index];
+					if (!chat) return null;
+					return (
+						<div
+							key={virtualItem.key}
+							data-index={virtualItem.index}
+							ref={virtualizer.measureElement}
+							style={{
+								position: "absolute",
+								top: 0,
+								left: 0,
+								width: "100%",
+								transform: `translateY(${virtualItem.start}px)`,
 							}}
-							className={cn(
-								"absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
-								"transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
-								"bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
-								"hover:text-destructive-foreground focus-visible:text-destructive-foreground",
-								"disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
-								deletingId === c.id ? "opacity-100" : "opacity-0",
-							)}
-							aria-label="Delete chat"
-							disabled={deletingId === c.id}
+							className="pb-1"
 						>
-							{deletingId === c.id ? <span className="animate-pulse text-base">…</span> : <X className="h-4 w-4" />}
-						</button>
-					</li>
-				);
-			})}
-		</ul>
+							<ChatListItem
+								chat={chat}
+								activePath={activePath}
+								onDelete={onDelete}
+								deletingId={deletingId}
+								onHoverChat={onHoverChat}
+							/>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function ChatListItem({
+	chat,
+	activePath,
+	onDelete,
+	deletingId,
+	onHoverChat,
+}: {
+	chat: ChatListItem;
+	activePath?: string | null;
+	onDelete: (chatId: string) => void | Promise<void>;
+	deletingId: string | null;
+	onHoverChat?: (chatId: string) => void;
+}) {
+	const hrefPath = `/dashboard/chat/${chat.id}`;
+	const isActive = activePath === hrefPath;
+
+	return (
+		<div className="group relative">
+			<Link
+				href={`/dashboard/chat/${chat.id}`}
+				prefetch
+				className={cn(
+					"block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
+					isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
+				)}
+				aria-current={isActive ? "page" : undefined}
+				onMouseEnter={() => onHoverChat?.(chat.id)}
+				onFocus={() => onHoverChat?.(chat.id)}
+			>
+				{chat.title || "Untitled"}
+			</Link>
+			<button
+				type="button"
+				onClick={(event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					void onDelete(chat.id);
+				}}
+				className={cn(
+					"absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
+					"transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
+					"bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
+					"hover:text-destructive-foreground focus-visible:text-destructive-foreground",
+					"disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
+					deletingId === chat.id ? "opacity-100" : "opacity-0",
+				)}
+				aria-label="Delete chat"
+				disabled={deletingId === chat.id}
+			>
+				{deletingId === chat.id ? <span className="animate-pulse text-base">…</span> : <X className="h-4 w-4" />}
+			</button>
+		</div>
 	);
 }
 

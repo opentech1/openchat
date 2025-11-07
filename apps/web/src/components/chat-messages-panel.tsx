@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,16 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 		const last = messages[messages.length - 1]!;
 		return `${last.id}:${last.role}:${last.content.length}`;
 	}, [hasMessages, messages]);
+
+	// Virtualization setup - only virtualize when we have many messages (>20)
+	const shouldVirtualize = messages.length > 20;
+	const virtualizer = useVirtualizer({
+		count: messages.length,
+		getScrollElement: () => viewportRef.current,
+		estimateSize: () => 120, // Estimated height for each message
+		overscan: 5, // Render 5 extra items above and below viewport for smooth scrolling
+		enabled: shouldVirtualize,
+	});
 
 	const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
 		return node.scrollHeight - node.scrollTop - node.clientHeight <= SCROLL_LOCK_THRESHOLD_PX;
@@ -151,7 +162,7 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 			>
 				<div
 					ref={contentRef}
-					className="flex min-h-full flex-col gap-4 bg-background/30 px-4 pt-4"
+					className="flex min-h-full flex-col bg-background/30 px-4 pt-4"
 					role="log"
 					aria-live="polite"
 					aria-relevant="additions"
@@ -160,9 +171,45 @@ function ChatMessagesPanelComponent({ messages, paddingBottom, className, autoSt
 					style={{ paddingBottom }}
 				>
 						{hasMessages ? (
-							messages.map((msg) => (
-								<ChatMessageBubble key={msg.id} message={msg} />
-							))
+							shouldVirtualize ? (
+								// Virtualized list for many messages
+								<div
+									style={{
+										height: `${virtualizer.getTotalSize()}px`,
+										width: "100%",
+										position: "relative",
+									}}
+								>
+									{virtualizer.getVirtualItems().map((virtualItem) => {
+										const msg = messages[virtualItem.index];
+										if (!msg) return null;
+										return (
+											<div
+												key={virtualItem.key}
+												data-index={virtualItem.index}
+												ref={virtualizer.measureElement}
+												style={{
+													position: "absolute",
+													top: 0,
+													left: 0,
+													width: "100%",
+													transform: `translateY(${virtualItem.start}px)`,
+												}}
+												className="pb-4"
+											>
+												<ChatMessageBubble message={msg} />
+											</div>
+										);
+									})}
+								</div>
+							) : (
+								// Non-virtualized list for few messages
+								<div className="flex flex-col gap-4">
+									{messages.map((msg) => (
+										<ChatMessageBubble key={msg.id} message={msg} />
+									))}
+								</div>
+							)
 						) : loading ? (
 							<div className="flex flex-col gap-4" data-ph-no-capture>
 								<div className="flex gap-3 animate-pulse">

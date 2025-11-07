@@ -144,19 +144,20 @@ export const remove = mutation({
 		await ctx.db.patch(args.chatId, {
 			deletedAt: now,
 		});
-		// Cascade soft delete to all messages in the chat (skip already deleted messages)
+		// PERFORMANCE FIX: Cascade soft delete to all messages in the chat
+		// Filter at database level to avoid loading already-deleted messages
+		// Use Promise.all for parallel execution to minimize total time
 		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
 			.collect();
 		await Promise.all(
-			messages
-				.filter((message) => !message.deletedAt)
-				.map((message) =>
-					ctx.db.patch(message._id, {
-						deletedAt: now,
-					}),
-				),
+			messages.map((message) =>
+				ctx.db.patch(message._id, {
+					deletedAt: now,
+				}),
+			),
 		);
 		return { ok: true } as const;
 	},

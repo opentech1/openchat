@@ -3,6 +3,9 @@ import { cookies } from "next/headers";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, createChatForUser, listChats } from "@/lib/convex-server";
 import { serializeChat } from "@/lib/chat-serializers";
+import { validateCsrfToken, requiresCsrfProtection, CSRF_COOKIE_NAME } from "@/lib/csrf";
+import { createChatSchema, createValidationErrorResponse } from "@/lib/validation";
+import { logError } from "@/lib/logger-server";
 
 // Rate limiting for chat creation
 // NOTE: This in-memory implementation is suitable for single-instance deployments.
@@ -79,14 +82,14 @@ export async function POST(request: Request) {
 	const secureCookie = cookieStore.get("__Secure-openchat.session_token");
 	const normalCookie = cookieStore.get("openchat.session_token");
 	const sessionToken = secureCookie?.value ?? normalCookie?.value ?? "anonymous";
-	
+
 	// Check rate limit BEFORE user validation to prevent timing attacks
 	// Using session token as identifier prevents user enumeration through timing analysis
 	const rateLimitResult = isRateLimited(sessionToken);
 	if (rateLimitResult.limited) {
 		return NextResponse.json(
 			{ error: "Too many chat creation requests. Please try again later." },
-			{ 
+			{
 				status: 429,
 				headers: {
 					"Retry-After": rateLimitResult.retryAfter?.toString() ?? "60",
@@ -96,7 +99,21 @@ export async function POST(request: Request) {
 			}
 		);
 	}
-	
+
+	// CSRF protection is handled by the client (see withCsrfProtection below)
+	// We don't wrap the entire handler because we need to rate limit first
+	const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
+	const csrfValidation = requiresCsrfProtection(request.method)
+		? validateCsrfToken(request, csrfCookie?.value)
+		: { valid: true };
+
+	if (!csrfValidation.valid) {
+		return NextResponse.json(
+			{ error: "CSRF validation failed", message: csrfValidation.error },
+			{ status: 403 },
+		);
+	}
+
 	const session = await getUserContext();
 	const userId = await ensureConvexUser({
 		id: session.userId,
@@ -104,9 +121,24 @@ export async function POST(request: Request) {
 		name: session.name,
 		image: session.image,
 	});
-	
-	const body = await request.json().catch(() => ({}));
-	const title = typeof body?.title === "string" ? body.title : "New Chat";
-	const chat = await createChatForUser(userId, title);
-	return NextResponse.json({ chat: serializeChat(chat) });
+
+	// Validate request body
+	try {
+		const body = await request.json().catch(() => ({}));
+		const validation = createChatSchema.safeParse(body);
+
+		if (!validation.success) {
+			return createValidationErrorResponse(validation.error);
+		}
+
+		const { title } = validation.data;
+		const chat = await createChatForUser(userId, title);
+		return NextResponse.json({ chat: serializeChat(chat) });
+	} catch (error) {
+		logError("Error creating chat", error);
+		return NextResponse.json(
+			{ error: "Failed to create chat" },
+			{ status: 500 },
+		);
+	}
 }

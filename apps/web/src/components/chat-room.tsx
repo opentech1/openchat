@@ -24,6 +24,7 @@ import { readCachedModels, writeCachedModels } from "@/lib/openrouter-model-cach
 import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
 import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
 import type { ModelSelectorOption } from "@/components/model-selector";
+import { logError } from "@/lib/logger";
 
 type ChatRoomProps = {
   chatId: string;
@@ -38,7 +39,7 @@ type ChatRoomProps = {
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 const MESSAGE_THROTTLE_MS = Number(process.env.NEXT_PUBLIC_CHAT_THROTTLE_MS ?? 80);
 
-export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
+function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const { data: session } = authClient.useSession(); const user = session?.user;
   const workspaceId = user?.id ?? null;
   const router = useRouter();
@@ -206,7 +207,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           return;
         }
 
-        console.error("Failed to load OpenRouter models", error);
+        logError("Failed to load OpenRouter models", error);
         if (!(error as any)?.__posthogTracked) {
           const status = typeof (error as any)?.status === "number" ? (error as any).status : 0;
           let providerHost = "openrouter.ai";
@@ -237,7 +238,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         }
       }
     },
-    [persistSelectedModel],
+    [persistSelectedModel, applySelectedModel],
   );
 
   useEffect(() => {
@@ -311,7 +312,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         });
         await fetchModels(key);
       } catch (error) {
-        console.error("Failed to save OpenRouter API key", error);
+        logError("Failed to save OpenRouter API key", error);
         setApiKeyError(error instanceof Error && error.message ? error.message : "Failed to save OpenRouter API key.");
       } finally {
         setSavingApiKey(false);
@@ -387,7 +388,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           return;
         }
       }
-      console.error("Chat stream error", error);
+      logError("Chat stream error", error);
     },
   });
 
@@ -450,7 +451,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 	return () => clearTimeout(timeoutId);
 }, [chatId, messages, status]);
 
-  const handleSend = async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
+  const handleSend = useCallback(async ({ text, modelId, apiKey: requestApiKey }: { text: string; modelId: string; apiKey: string }) => {
     const content = text.trim();
     if (!content) return;
     if (!modelId) {
@@ -520,9 +521,9 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         handleMissingRequirement("apiKey");
         return;
       }
-      console.error("Failed to send message", error);
+      logError("Failed to send message", error);
     }
-  };
+  }, [chatId, sendMessage, handleMissingRequirement, setApiKey, setModelsError]);
 
   const handleModelSelection = useCallback(
     (next: string) => {
@@ -596,3 +597,7 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     </div>
   );
 }
+
+ChatRoom.displayName = "ChatRoom";
+
+export default React.memo(ChatRoom);

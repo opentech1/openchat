@@ -11,6 +11,16 @@ export type SessionUser = {
 
 let cachedClient: ConvexHttpClient | null = null;
 
+// PERFORMANCE FIX: Request-level cache for ensureConvexUser calls
+// Prevents multiple database lookups for the same user within a single request
+// Cache is cleared after 5 seconds to prevent stale data
+type UserCacheEntry = {
+	userId: Id<"users">;
+	timestamp: number;
+};
+const userCache = new Map<string, UserCacheEntry>();
+const CACHE_TTL_MS = 5000; // 5 seconds - short TTL to keep data fresh
+
 function getConvexUrl() {
 	return process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
 }
@@ -27,6 +37,24 @@ function getClient() {
 }
 
 export async function ensureConvexUser(sessionUser: SessionUser) {
+	// PERFORMANCE FIX: Check cache first to avoid redundant database calls
+	const now = Date.now();
+	const cacheKey = sessionUser.id;
+	const cached = userCache.get(cacheKey);
+
+	if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+		return cached.userId;
+	}
+
+	// Clean up expired cache entries periodically (when cache size > 100)
+	if (userCache.size > 100) {
+		for (const [key, entry] of userCache.entries()) {
+			if (now - entry.timestamp >= CACHE_TTL_MS) {
+				userCache.delete(key);
+			}
+		}
+	}
+
 	const client = getClient();
 	const result = await client.mutation(api.users.ensure, {
 		externalId: sessionUser.id,
@@ -34,7 +62,16 @@ export async function ensureConvexUser(sessionUser: SessionUser) {
 		name: sessionUser.name ?? undefined,
 		avatarUrl: sessionUser.image ?? undefined,
 	});
-	return result.userId as Id<"users">;
+
+	const userId = result.userId as Id<"users">;
+
+	// Store in cache for future requests
+	userCache.set(cacheKey, {
+		userId,
+		timestamp: now,
+	});
+
+	return userId;
 }
 
 export async function listChats(userId: Id<"users">) {

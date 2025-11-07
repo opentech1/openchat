@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logError } from "@/lib/logger-server";
 
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
 
 		return NextResponse.json({ ok: true, models });
 	} catch (error) {
-		console.error("/api/openrouter/models", error);
+		logError("Failed to fetch OpenRouter models", error);
 		return NextResponse.json({ ok: false, error: "Failed to fetch models" }, { status: 500 });
 	}
 }
