@@ -24,9 +24,9 @@ export const createAuth = (
 ) => {
 	// Validate environment variables on first auth creation
 	ensureValidated();
-	
+
 	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
-	
+
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
@@ -38,7 +38,7 @@ export const createAuth = (
 		};
 	}
 
-	// Google (optional - only if credentials provided)
+	// Google OAuth
 	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 		socialProviders.google = {
 			clientId: process.env.GOOGLE_CLIENT_ID,
@@ -84,4 +84,3 @@ export const getCurrentUser = query({
 		return authComponent.getAuthUser(ctx as GenericCtx<DataModel>);
 	},
 });
-
