@@ -47,16 +47,31 @@ const chatDoc = v.object({
 export const list = query({
 	args: {
 		userId: v.id("users"),
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
 	},
-	returns: v.array(chatDoc),
+	returns: v.object({
+		chats: v.array(chatDoc),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
-		const chats = await ctx.db
+		const limit = args.limit ?? 50;
+
+		// Filter out soft-deleted chats in the query, then use paginate
+		const results = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.take(200);
-		// Filter out soft-deleted chats
-		return chats.filter((chat) => !chat.deletedAt);
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.paginate({
+				cursor: args.cursor ?? null,
+				numItems: limit,
+			});
+
+		return {
+			chats: results.page,
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 
