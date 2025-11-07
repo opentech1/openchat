@@ -52,10 +52,10 @@ export const create = mutation({
 	handler: async (ctx, args) => {
 		// Rate limit: check recent NON-DELETED chat creation
 		// Important: filter out deleted chats to prevent bypass via create/delete loop
-		// Use take(1) to only fetch the most recent chat for efficiency
+		// Use by_user_created index to sort by createdAt, preventing bypass via chat updates
 		const recentChat = await ctx.db
 			.query("chats")
-			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
 			.order("desc")
 			.filter((q) => q.eq(q.field("deletedAt"), undefined))
 			.first();
