@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { GaugeCircle, Palette, Users } from "lucide-react";
 import type { ReactNode } from "react";
+import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 
 export default function Features() {
     return (
@@ -18,11 +19,11 @@ export default function Features() {
                         We obsess over speed, flexibility, and community so your product can ship delightful AI chat experiences without vendor lock-in.
                     </p>
                 </div>
-                <div className="@min-4xl:max-w-full @min-4xl:grid-cols-3 mx-auto mt-12 grid max-w-sm gap-6 *:text-left md:mt-16">
-                    <Card className="group border-border/60 bg-card/90 shadow-none backdrop-blur">
+                <div className={`@min-4xl:max-w-full @min-4xl:grid-cols-3 mx-auto mt-12 grid max-w-sm *:text-left md:mt-16 ${spacing.gap.xl}`}>
+                    <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <GaugeCircle className="size-6" aria-hidden />
+                                <GaugeCircle className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
                             <h3 className="mt-6 font-semibold text-foreground">Blazing-fast UI</h3>
@@ -33,10 +34,10 @@ export default function Features() {
                         </CardContent>
                     </Card>
 
-                    <Card className="group border-border/60 bg-card/90 shadow-none backdrop-blur">
+                    <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <Palette className="size-6" aria-hidden />
+                                <Palette className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
                             <h3 className="mt-6 font-semibold text-foreground">Made to customize</h3>
@@ -47,10 +48,10 @@ export default function Features() {
                         </CardContent>
                     </Card>
 
-                    <Card className="group border-border/60 bg-card/90 shadow-none backdrop-blur">
+                    <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <Users className="size-6" aria-hidden />
+                                <Users className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
                             <h3 className="mt-6 font-semibold text-foreground">Community-led roadmap</h3>

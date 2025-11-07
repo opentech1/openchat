@@ -1,8 +1,4 @@
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { UIMessage } from "ai";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -17,7 +13,7 @@ export const Message = ({ className, from, ...props }: MessageProps) => (
     className={cn(
       "group flex w-full items-end justify-end gap-2 py-4",
       from === "user" ? "is-user" : "is-assistant flex-row-reverse justify-end",
-      className
+      className,
     )}
     {...props}
   />
@@ -42,7 +38,7 @@ const messageContentVariants = cva(
     defaultVariants: {
       variant: "contained",
     },
-  }
+  },
 );
 
 export type MessageContentProps = HTMLAttributes<HTMLDivElement> &

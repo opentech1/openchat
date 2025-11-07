@@ -1,14 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { randomBytes } from "crypto";
+
+/**
+ * Generate a unique request correlation ID
+ *
+ * Format: {timestamp}-{random}
+ * Example: 1699564231-a3f9c8d2
+ */
+function generateCorrelationId(): string {
+	const timestamp = Date.now().toString(36);
+	const random = randomBytes(4).toString("hex");
+	return `${timestamp}-${random}`;
+}
 
 /**
  * Middleware for route-level protection
  *
  * Provides:
+ * - Request correlation IDs for distributed tracing
  * - Authentication checks for protected routes
  * - Security headers for all responses
+ *
+ * REQUEST CORRELATION IDS:
+ * - Each request gets a unique X-Request-ID header
+ * - If client provides one, we use it (for client-side correlation)
+ * - Otherwise, we generate a new one
+ * - This ID should be logged with all operations for that request
+ * - Makes it easy to trace a request through multiple services/logs
  */
 export async function middleware(request: NextRequest) {
 	const { pathname } = request.nextUrl;
+
+	// Extract or generate correlation ID
+	const existingCorrelationId = request.headers.get("x-request-id");
+	const correlationId = existingCorrelationId || generateCorrelationId();
 
 	// Protected routes that require authentication
 	const protectedRoutes = ["/dashboard", "/chat", "/settings"];
@@ -40,6 +65,10 @@ export async function middleware(request: NextRequest) {
 
 	// Add security headers to all responses
 	const response = NextResponse.next();
+
+	// Set correlation ID for request tracing
+	// This allows logs to be correlated across services
+	response.headers.set("X-Request-ID", correlationId);
 
 	// Prevent clickjacking attacks
 	response.headers.set("X-Frame-Options", "DENY");

@@ -78,8 +78,70 @@ export class RateLimiter {
 	/**
 	 * Check if an identifier is rate limited
 	 *
-	 * @param identifier - Unique identifier (e.g., IP address, user ID)
-	 * @returns Rate limit result
+	 * Checks if the given identifier has exceeded its rate limit quota.
+	 * This method is thread-safe and handles cleanup automatically.
+	 *
+	 * ALGORITHM:
+	 * - Uses sliding window counter (resets after window expires)
+	 * - First request creates bucket with count=1
+	 * - Subsequent requests increment counter
+	 * - Returns limited=true when counter >= limit
+	 *
+	 * BUCKET LIFECYCLE:
+	 * 1. Request arrives, check identifier
+	 * 2. If no bucket or expired: Create new bucket, count=1, allow
+	 * 3. If bucket exists and valid: Increment count
+	 * 4. If count >= limit: Deny with retry-after seconds
+	 * 5. Periodic cleanup removes expired buckets
+	 *
+	 * MEMORY MANAGEMENT:
+	 * - Automatic cleanup of expired buckets
+	 * - Maximum bucket limit prevents unbounded growth
+	 * - LRU eviction when maxBuckets exceeded
+	 *
+	 * IDENTIFIER STRATEGIES:
+	 * - IP address: Basic rate limiting (can be spoofed)
+	 * - User ID: Authenticated user rate limiting
+	 * - API key: Per-key rate limiting
+	 * - Session token: Pre-authentication rate limiting
+	 * - Composite: "ip:user_id" for multi-layer protection
+	 *
+	 * DISTRIBUTED SYSTEMS:
+	 * This in-memory implementation works for single-instance deployments.
+	 * For distributed/serverless, use Redis or database-backed solution.
+	 *
+	 * @param identifier - Unique identifier (e.g., IP address, user ID, API key)
+	 *                     Use consistent format for same entity across requests
+	 * @returns Rate limit result object
+	 * @returns limited - true if rate limit exceeded, false if allowed
+	 * @returns retryAfter - Seconds until rate limit resets (only when limited)
+	 * @returns count - Current request count for this identifier
+	 * @returns resetAt - Timestamp when the rate limit window resets
+	 *
+	 * @example
+	 * ```typescript
+	 * // IP-based rate limiting
+	 * const ip = getClientIp(request);
+	 * const result = rateLimiter.check(ip);
+	 *
+	 * if (result.limited) {
+	 *   return new Response("Too many requests", {
+	 *     status: 429,
+	 *     headers: {
+	 *       "Retry-After": result.retryAfter!.toString()
+	 *     }
+	 *   });
+	 * }
+	 *
+	 * // User ID rate limiting
+	 * const result = rateLimiter.check(`user:${userId}`);
+	 *
+	 * // Composite identifier
+	 * const result = rateLimiter.check(`${ip}:${userId}`);
+	 * ```
+	 *
+	 * @see {@link createRateLimitHeaders} to generate standard response headers
+	 * @see {@link getClientIp} to extract IP from request
 	 */
 	check(identifier: string): RateLimitResult {
 		const now = Date.now();
@@ -221,5 +283,140 @@ export function createRateLimitHeaders(result: RateLimitResult, config: RateLimi
 			? "0"
 			: (config.limit - (result.count ?? 1)).toString(),
 		...(result.retryAfter && { "Retry-After": result.retryAfter.toString() }),
+	};
+}
+
+/**
+ * Known bot patterns for User-Agent detection
+ *
+ * These patterns help identify automated requests and scrapers.
+ * Legitimate bots (search engines) should be handled separately with different rate limits.
+ */
+const SUSPICIOUS_USER_AGENT_PATTERNS = [
+	// Generic bot indicators
+	/bot/i,
+	/crawler/i,
+	/spider/i,
+	/scraper/i,
+	// Common scripting tools
+	/curl/i,
+	/wget/i,
+	/python-requests/i,
+	/node-fetch/i,
+	/axios/i,
+	/http\.client/i,
+	// Headless browsers (unless specifically allowed)
+	/headless/i,
+	/phantom/i,
+	// Blank or suspicious patterns
+	/^$/,
+	/null/i,
+	/undefined/i,
+	// Known malicious patterns
+	/masscan/i,
+	/nmap/i,
+	/sqlmap/i,
+	/nikto/i,
+];
+
+/**
+ * Legitimate bot patterns that should be allowed
+ * (Search engines, monitoring services, etc.)
+ */
+const ALLOWED_BOT_PATTERNS = [
+	/googlebot/i,
+	/bingbot/i,
+	/slackbot/i,
+	/twitterbot/i,
+	/facebookexternalhit/i,
+	/linkedinbot/i,
+	/discordbot/i,
+];
+
+/**
+ * User-Agent validation result
+ */
+export type UserAgentValidation = {
+	/** Whether the user-agent is valid */
+	valid: boolean;
+	/** Whether this is a suspicious bot */
+	isSuspiciousBot: boolean;
+	/** Whether this is a legitimate bot (search engine, etc.) */
+	isLegitimateBot: boolean;
+	/** Reason for validation failure */
+	reason?: string;
+};
+
+/**
+ * Validate User-Agent header for bot detection
+ *
+ * SECURITY: This helps identify automated requests and potential scrapers.
+ * However, User-Agent can be easily spoofed, so this should be combined with:
+ * - Rate limiting
+ * - CAPTCHA challenges for suspicious behavior
+ * - IP reputation checks
+ * - Behavioral analysis
+ *
+ * @param userAgent - User-Agent string from request header
+ * @returns Validation result with bot detection
+ *
+ * @example
+ * ```typescript
+ * const userAgent = request.headers.get("user-agent");
+ * const validation = validateUserAgent(userAgent);
+ *
+ * if (validation.isSuspiciousBot) {
+ *   // Apply stricter rate limits or challenge
+ *   await auditLog({
+ *     event: "request.suspicious_bot",
+ *     userAgent,
+ *     status: "denied"
+ *   });
+ * }
+ * ```
+ */
+export function validateUserAgent(userAgent: string | null): UserAgentValidation {
+	// Missing or empty User-Agent is suspicious
+	if (!userAgent || userAgent.trim() === "") {
+		return {
+			valid: false,
+			isSuspiciousBot: true,
+			isLegitimateBot: false,
+			reason: "Missing or empty User-Agent",
+		};
+	}
+
+	// Check for legitimate bots first
+	const isLegitimateBot = ALLOWED_BOT_PATTERNS.some((pattern) =>
+		pattern.test(userAgent),
+	);
+
+	if (isLegitimateBot) {
+		return {
+			valid: true,
+			isSuspiciousBot: false,
+			isLegitimateBot: true,
+		};
+	}
+
+	// Check for suspicious patterns
+	const isSuspiciousBot = SUSPICIOUS_USER_AGENT_PATTERNS.some((pattern) =>
+		pattern.test(userAgent),
+	);
+
+	if (isSuspiciousBot) {
+		return {
+			valid: false,
+			isSuspiciousBot: true,
+			isLegitimateBot: false,
+			reason: "Suspicious bot pattern detected",
+		};
+	}
+
+	// Valid user-agent
+	return {
+		valid: true,
+		isSuspiciousBot: false,
+		isLegitimateBot: false,
 	};
 }

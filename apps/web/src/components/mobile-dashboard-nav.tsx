@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 
 import AppSidebarWrapper from "@/components/app-sidebar-wrapper";
 import type { AppSidebarProps } from "@/components/app-sidebar";
+import { opacity, iconSize } from "@/styles/design-tokens";
 export default function MobileDashboardNav(props: AppSidebarProps) {
 	const [open, setOpen] = useState(false);
 	useEffect(() => {
@@ -21,10 +22,10 @@ export default function MobileDashboardNav(props: AppSidebarProps) {
 			<button
 				type="button"
 				onClick={() => setOpen(true)}
-				className="md:hidden inline-flex size-9 items-center justify-center rounded-md border border-border/60 bg-card/80 text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-accent-foreground"
+				className={`md:hidden inline-flex size-9 items-center justify-center rounded-md border border-border/60 bg-card/${opacity.subtle} text-muted-foreground shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-accent-foreground`}
 				aria-label="Open chat navigation"
 			>
-				<Menu className="size-4" />
+				<Menu className={iconSize.sm} />
 			</button>
 			{open ? (
 				<div className="fixed inset-0 z-40 md:hidden">
@@ -34,10 +35,10 @@ export default function MobileDashboardNav(props: AppSidebarProps) {
 							<button
 								type="button"
 								onClick={() => setOpen(false)}
-								className="inline-flex size-9 items-center justify-center rounded-md border border-border/60 bg-card/80 text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+								className={`inline-flex size-9 items-center justify-center rounded-md border border-border/60 bg-card/${opacity.subtle} text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground`}
 								aria-label="Close chat navigation"
 							>
-								<X className="size-4" />
+								<X className={iconSize.sm} />
 							</button>
 						</div>
 					<div className="ml-auto h-full w-full max-w-xs border-l border-sidebar-border bg-sidebar shadow-xl">

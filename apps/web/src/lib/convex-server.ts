@@ -145,5 +145,23 @@ export async function streamUpsertMessage(args: {
 	});
 }
 
+/**
+ * PERFORMANCE: Combined helper that gets user context and ensures Convex user in one call
+ * This eliminates redundant getUserContext calls in API routes
+ * @returns Tuple of [session context, convex user ID]
+ */
+export async function getConvexUserFromSession(): Promise<[SessionUser, Id<"users">]> {
+	const { getUserContext } = await import("./auth-server");
+	const session = await getUserContext();
+	const sessionUser: SessionUser = {
+		id: session.userId,
+		email: session.email,
+		name: session.name,
+		image: session.image,
+	};
+	const convexUserId = await ensureConvexUser(sessionUser);
+	return [sessionUser, convexUserId];
+}
+
 export type ChatDoc = Doc<"chats">;
 export type MessageDoc = Doc<"messages">;

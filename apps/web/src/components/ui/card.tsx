@@ -1,13 +1,14 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        `bg-card text-card-foreground flex flex-col border py-6 ${borderRadius.lg} ${shadows.sm} ${spacing.gap.xl}`,
         className
       )}
       {...props}

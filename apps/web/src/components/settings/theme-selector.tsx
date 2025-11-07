@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { cn } from "@/lib/utils";
+import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 
 export default function ThemeSelector({ className }: { className?: string }) {
 	const { theme, setTheme, themes } = useBrandTheme();
@@ -12,7 +13,7 @@ export default function ThemeSelector({ className }: { className?: string }) {
 		<div
 			role="radiogroup"
 			aria-label="Select accent theme"
-			className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)}
+			className={cn("grid sm:grid-cols-2 lg:grid-cols-3", spacing.gap.lg, className)}
 		>
 			{themes.map((item) => {
 				const isActive = item.id === theme;
@@ -24,7 +25,7 @@ export default function ThemeSelector({ className }: { className?: string }) {
 						onClick={() => setTheme(item.id)}
 						key={item.id}
 						className={cn(
-							"group relative flex h-32 flex-col justify-between rounded-2xl border bg-card/80 p-4 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+							`group relative flex h-32 flex-col justify-between rounded-2xl border bg-card/${opacity.subtle} p-4 text-left transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`,
 							isActive
 								? "border-ring shadow-lg shadow-ring/15"
 								: "border-border/60 hover:-translate-y-1 hover:border-ring/70 hover:shadow-lg/20",
@@ -43,7 +44,7 @@ export default function ThemeSelector({ className }: { className?: string }) {
 								)}
 								style={isActive ? { background: item.previewColor, color: item.previewForeground } : undefined}
 							>
-								<Check className="size-4" />
+								<Check className={iconSize.sm} />
 							</span>
 						</div>
 						<div

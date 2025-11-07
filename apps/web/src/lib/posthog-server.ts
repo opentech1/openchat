@@ -1,5 +1,5 @@
 import { PostHog } from "posthog-node";
-import { logError } from "./logger-server";
+import { logError, logWarn } from "./logger-server";
 
 let serverClient: PostHog | null = null;
 
