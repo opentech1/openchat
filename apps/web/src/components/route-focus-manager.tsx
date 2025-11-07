@@ -21,13 +21,13 @@ export function RouteFocusManager() {
 		// Only handle focus if route actually changed
 		if (previousPathRef.current !== pathname) {
 			previousPathRef.current = pathname;
-			
-			// Small delay to ensure content is rendered
-			const timeoutId = setTimeout(() => {
-				focusMainContent();
-			}, 100);
 
-			return () => clearTimeout(timeoutId);
+			// Use RAF to ensure content is rendered before focusing
+			const rafId = requestAnimationFrame(() => {
+				focusMainContent();
+			});
+
+			return () => cancelAnimationFrame(rafId);
 		}
 	}, [pathname]);
 
