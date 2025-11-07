@@ -31,6 +31,8 @@ export function ProgressiveBlur({
     <div className={cn('relative', className)}>
       {Array.from({ length: layers }).map((_, index) => {
         const angle = GRADIENT_ANGLES[direction];
+        // Note: White is used for mask gradient (white = visible, black = hidden in CSS masks)
+        // This is theme-independent as it only controls the mask, not visible colors
         const gradientStops = [
           index * segmentSize,
           (index + 1) * segmentSize,

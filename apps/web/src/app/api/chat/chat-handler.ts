@@ -15,31 +15,69 @@ type RateBucket = {
 	resetAt: number;
 };
 
-const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? 30);
+// Rate limiting configuration
+/** Default maximum requests per minute if not configured via env */
+const DEFAULT_RATE_LIMIT_PER_MINUTE = 30;
+/** Rate limit window duration in milliseconds (1 minute) */
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? 1_000);
+/** Default maximum number of rate limit buckets to track in memory */
+const DEFAULT_MAX_TRACKED_BUCKETS = 1_000;
+
+// Message content configuration
+/** Maximum characters allowed in user message parts before truncation */
+const DEFAULT_MAX_USER_CHARS = 8_000;
+
+// Stream buffering configuration
+/** Default interval for flushing buffered stream chunks to database (milliseconds) */
+const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 80;
+/** Default minimum characters required before flushing a stream chunk */
+const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 24;
+/** Default delay between smooth stream word chunks (milliseconds) */
+const DEFAULT_STREAM_SMOOTH_DELAY_MS = 12;
+
+const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? DEFAULT_RATE_LIMIT_PER_MINUTE);
+const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? DEFAULT_MAX_TRACKED_BUCKETS);
 const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) && RAW_MAX_TRACKED_RATE_BUCKETS > 0
 	? RAW_MAX_TRACKED_RATE_BUCKETS
 	: null;
-const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? 8_000);
-const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? 80);
+const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? DEFAULT_MAX_USER_CHARS);
+
+// Request size limits for security
+const MAX_MESSAGES_PER_REQUEST = (() => {
+	const val = Number(process.env.MAX_MESSAGES_PER_REQUEST ?? 100);
+	return Number.isFinite(val) && val > 0 ? val : 100;
+})();
+const MAX_REQUEST_BODY_SIZE = (() => {
+	const val = Number(process.env.MAX_REQUEST_BODY_SIZE ?? 10_000_000);
+	return Number.isFinite(val) && val > 0 ? val : 10_000_000;
+})();
+const MAX_ATTACHMENT_SIZE = (() => {
+	const val = Number(process.env.MAX_ATTACHMENT_SIZE ?? 5_000_000);
+	return Number.isFinite(val) && val > 0 ? val : 5_000_000;
+})();
+const MAX_MESSAGE_CONTENT_LENGTH = (() => {
+	const val = Number(process.env.MAX_MESSAGE_CONTENT_LENGTH ?? 50_000);
+	return Number.isFinite(val) && val > 0 ? val : 50_000;
+})();
+
+const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? DEFAULT_STREAM_FLUSH_INTERVAL_MS);
 const STREAM_FLUSH_INTERVAL_MS =
 	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
 		? STREAM_FLUSH_INTERVAL_RAW
-		: 80;
+		: DEFAULT_STREAM_FLUSH_INTERVAL_MS;
 const STREAM_MIN_CHARS_PER_FLUSH_RAW = Number(
-	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? 24,
+	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? DEFAULT_STREAM_MIN_CHARS_PER_FLUSH,
 );
 const STREAM_MIN_CHARS_PER_FLUSH =
 	Number.isFinite(STREAM_MIN_CHARS_PER_FLUSH_RAW) && STREAM_MIN_CHARS_PER_FLUSH_RAW > 0
 		? STREAM_MIN_CHARS_PER_FLUSH_RAW
-		: 24;
+		: DEFAULT_STREAM_MIN_CHARS_PER_FLUSH;
 const STREAM_SMOOTH_DELAY_MS = (() => {
 	const raw = process.env.OPENROUTER_STREAM_DELAY_MS;
-	if (raw === undefined || raw === null || raw.trim() === "") return 12;
+	if (raw === undefined || raw === null || raw.trim() === "") return DEFAULT_STREAM_SMOOTH_DELAY_MS;
 	if (raw.trim().toLowerCase() === "null") return null;
 	const parsed = Number(raw);
-	if (!Number.isFinite(parsed)) return 12;
+	if (!Number.isFinite(parsed)) return DEFAULT_STREAM_SMOOTH_DELAY_MS;
 	return parsed < 0 ? 0 : parsed;
 })();
 const MAX_TOKENS = (() => {
@@ -126,9 +164,18 @@ function pickClientIp(request: Request): string {
 	}
 }
 
+/**
+ * Anonymize client IP using SHA-256 hash.
+ * 
+ * Security strategy:
+ * - Uses full SHA-256 hash (64 hex chars) for better anonymization
+ * - One-way hash prevents reverse-lookup of original IP
+ * - Allows correlation of requests from same IP without storing PII
+ * - Sufficient for rate limiting and abuse detection
+ */
 function hashClientIp(ip: string): string {
 	try {
-		return createHash("sha256").update(ip).digest("hex").slice(0, 16);
+		return createHash("sha256").update(ip).digest("hex");
 	} catch {
 		return "unknown";
 	}
@@ -260,12 +307,41 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Too Many Requests", { status: 429, headers });
 		}
 
+		// Validate request body size BEFORE loading into memory
+		const contentLength = request.headers.get("content-length");
+		if (contentLength) {
+			const declaredSize = Number.parseInt(contentLength, 10);
+			if (!Number.isNaN(declaredSize) && declaredSize > MAX_REQUEST_BODY_SIZE) {
+				const headers = buildCorsHeaders(request, allowOrigin);
+				return new Response(
+					`Request body too large: ${declaredSize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
+					{ status: 413, headers }
+				);
+			}
+		}
+
 		let payload: ChatRequestPayload;
+		let rawBody: string;
 		try {
-			payload = await request.json();
-		} catch {
+			rawBody = await request.text();
+
+			// Double-check actual body size after loading (in case Content-Length was missing or incorrect)
+			const bodySize = new TextEncoder().encode(rawBody).length;
+			if (bodySize > MAX_REQUEST_BODY_SIZE) {
+				const headers = buildCorsHeaders(request, allowOrigin);
+				return new Response(
+					`Request body too large: ${bodySize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
+					{ status: 413, headers }
+				);
+			}
+
+			payload = JSON.parse(rawBody);
+		} catch (error) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Invalid JSON payload", { status: 400, headers });
+			if (error instanceof SyntaxError) {
+				return new Response("Invalid JSON payload", { status: 400, headers });
+			}
+			throw error;
 		}
 
 		const modelIdFromPayload = typeof payload?.modelId === "string" && payload.modelId.trim().length > 0
@@ -321,6 +397,63 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		if (rawMessages.length === 0) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Missing chat messages", { status: 400, headers });
+		}
+
+		// Validate messages array length
+		if (rawMessages.length > MAX_MESSAGES_PER_REQUEST) {
+			const headers = buildCorsHeaders(request, allowOrigin);
+			return new Response(
+				`Too many messages: ${rawMessages.length} (max: ${MAX_MESSAGES_PER_REQUEST})`,
+				{ status: 413, headers }
+			);
+		}
+
+		// Validate message content length and attachment sizes
+		for (let i = 0; i < rawMessages.length; i++) {
+			const message = rawMessages[i];
+			if (!message) continue;
+
+			// Check each part of the message
+			for (const part of message.parts ?? []) {
+				if (!part) continue;
+
+				// Validate text content length
+				if ((part as any).type === "text" && typeof (part as any).text === "string") {
+					const textLength = (part as any).text.length;
+					if (textLength > MAX_MESSAGE_CONTENT_LENGTH) {
+						const headers = buildCorsHeaders(request, allowOrigin);
+						return new Response(
+							`Message content too long: ${textLength} characters (max: ${MAX_MESSAGE_CONTENT_LENGTH})`,
+							{ status: 413, headers }
+						);
+					}
+				}
+
+				// Validate attachment size - check combined size to prevent bypass
+				if ((part as any).type === "file") {
+					const filePart = part as any;
+					let totalAttachmentSize = 0;
+
+					// Add data URL size if present
+					if (typeof filePart.data === "string") {
+						totalAttachmentSize += new TextEncoder().encode(filePart.data).length;
+					}
+
+					// Add url content size if it's a data URL
+					if (typeof filePart.url === "string" && filePart.url.startsWith("data:")) {
+						totalAttachmentSize += new TextEncoder().encode(filePart.url).length;
+					}
+
+					// Check combined size to prevent bypass by splitting content
+					if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {
+						const headers = buildCorsHeaders(request, allowOrigin);
+						return new Response(
+							`Attachment too large: ${totalAttachmentSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
+							{ status: 413, headers }
+						);
+					}
+				}
+			}
 		}
 
 		const safeMessages = rawMessages.map(clampUserText);
@@ -596,3 +729,4 @@ export function createOptionsHandler(options: { corsOrigin?: string } = {}) {
 		return new Response(null, { status: 204, headers });
 	};
 }
+

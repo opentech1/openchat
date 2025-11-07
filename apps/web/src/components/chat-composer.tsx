@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
@@ -198,7 +197,7 @@ export default function ChatComposer({
       transition={{ delay: 0.05, duration: fast }}
     >
       <div className="p-4">
-        <Textarea
+          <Textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => {
@@ -222,6 +221,9 @@ export default function ChatComposer({
           style={{ overflow: 'hidden' }}
           showRing={false}
           disabled={disabled}
+          aria-label="Message input"
+          aria-invalid={!!errorMessage}
+          aria-describedby={errorMessage ? "composer-error" : undefined}
         />
       </div>
 
@@ -244,7 +246,7 @@ export default function ChatComposer({
 
 		<div className="flex flex-col items-end gap-1">
 			{errorMessage && (
-				<span className="text-destructive text-xs font-medium" role="alert">
+				<span id="composer-error" className="text-destructive text-xs font-medium" role="alert">
 					{errorMessage}
 				</span>
 			)}
@@ -260,6 +262,8 @@ export default function ChatComposer({
 				whileHover={{ scale: 1.01 }}
 				whileTap={{ scale: 0.98 }}
 				disabled={isStreaming ? sendDisabled : (sendDisabled || isSending || !value.trim() || !activeModelId || !apiKey)}
+				aria-label={isStreaming ? 'Stop generating response' : 'Send message'}
+				aria-busy={isSending}
 				className={cn(
 					'flex h-9 items-center gap-2 rounded-xl px-4 text-sm font-medium transition-all shadow-sm',
 					isStreaming
@@ -270,11 +274,11 @@ export default function ChatComposer({
 				)}
 			>
 				{isStreaming ? (
-					<SquareIcon className="h-4 w-4" />
+					<SquareIcon className="h-4 w-4" aria-hidden="true" />
 				) : isSending ? (
-					<LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
+					<LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" aria-hidden="true" />
 				) : (
-					<SendIcon className="h-4 w-4" />
+					<SendIcon className="h-4 w-4" aria-hidden="true" />
 				)}
 				<span>{isStreaming ? 'Stop' : 'Send'}</span>
 			</motion.button>

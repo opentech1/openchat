@@ -36,6 +36,8 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
+const TOKENS_PER_MILLION = 1_000_000
+
 function formatCost(cost: number | null) {
 	if (cost == null || !Number.isFinite(cost)) return "–"
 	const abs = Math.abs(cost)
@@ -53,8 +55,15 @@ function formatCost(cost: number | null) {
 	}).format(cost)
 }
 
+const scaleCostToMillion = (cost: number | null) => {
+	if (cost == null || !Number.isFinite(cost)) return null
+	return cost * TOKENS_PER_MILLION
+}
+
 function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	return `In: ${formatCost(pricing.prompt)} · Out: ${formatCost(pricing.completion)} per 1M tokens`
+	const promptPerMillion = scaleCostToMillion(pricing.prompt)
+	const completionPerMillion = scaleCostToMillion(pricing.completion)
+	return `In: ${formatCost(promptPerMillion)} · Out: ${formatCost(completionPerMillion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {

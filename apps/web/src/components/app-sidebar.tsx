@@ -33,7 +33,7 @@ export type ChatListItem = {
 	lastActivityMs?: number | null;
 };
 
-export type AppSidebarProps = { initialChats?: ChatListItem[]; currentUserId: string } & ComponentProps<typeof Sidebar>;
+export type AppSidebarProps = { initialChats?: ChatListItem[]; authUserId: string } & ComponentProps<typeof Sidebar>;
 
 function toDate(value: string | Date | null | undefined) {
 	if (!value) return undefined;
@@ -115,7 +115,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 	return dedupeChats(list.concat([chat]));
 }
 
-export default function AppSidebar({ initialChats = [], currentUserId, ...sidebarProps }: AppSidebarProps) {
+export default function AppSidebar({ initialChats = [], authUserId, ...sidebarProps }: AppSidebarProps) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { data: session } = authClient.useSession(); const user = session?.user;
@@ -248,7 +248,9 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 						onClick={() => {
 							void handleCreateChat();
 						}}
-						disabled={!currentUserId || isCreating}
+						disabled={!authUserId || isCreating}
+						aria-label="Create new chat"
+						aria-busy={isCreating}
 					>
 						{isCreating ? "Creating…" : "New Chat"}
 					</Button>
@@ -274,6 +276,7 @@ export default function AppSidebar({ initialChats = [], currentUserId, ...sideba
 					type="button"
 					onClick={() => setAccountOpen(true)}
 					className="hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition"
+					aria-label="Open account settings"
 				>
 					<span className="text-xs text-muted-foreground">Account</span>
 	{user ? (
@@ -353,7 +356,35 @@ function ChatList({
 	);
 }
 
+// Memoization cache for sortChats based on content hash
+const sortChatsCache = new Map<string, ChatListItem[]>();
+const MAX_SORT_CACHE_SIZE = 10;
+
+function generateCacheKey(list: ChatListItem[]): string {
+	// Create a stable cache key based on chat IDs and their last activity times
+	return list
+		.map((chat) => {
+			const c = ensureNormalizedChat(chat);
+			return `${c.id}:${c.lastActivityMs ?? 0}:${c.updatedAtMs ?? 0}`;
+		})
+		.sort()
+		.join("|");
+}
+
 function sortChats(list: ChatListItem[]) {
+	// Generate cache key based on content
+	const cacheKey = generateCacheKey(list);
+
+	// Check if we have a cached result for this content
+	const cached = sortChatsCache.get(cacheKey);
+	if (cached) {
+		// Move to end (most recently used) for true LRU
+		sortChatsCache.delete(cacheKey);
+		sortChatsCache.set(cacheKey, cached);
+		// Return a shallow copy to prevent mutation of cached data
+		return [...cached];
+	}
+
 	const copy = list.map(ensureNormalizedChat);
 	copy.sort((a, b) => {
 		const aLast = a.lastActivityMs ?? 0;
@@ -364,5 +395,14 @@ function sortChats(list: ChatListItem[]) {
 		if (bUp !== aUp) return bUp - aUp;
 		return a.id.localeCompare(b.id);
 	});
+
+	// Cache the result with LRU eviction
+	if (sortChatsCache.size >= MAX_SORT_CACHE_SIZE) {
+		// Remove least recently used entry (first one in the Map)
+		const firstKey = sortChatsCache.keys().next().value;
+		if (firstKey) sortChatsCache.delete(firstKey);
+	}
+	sortChatsCache.set(cacheKey, copy);
+
 	return copy;
 }

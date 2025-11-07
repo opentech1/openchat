@@ -3,6 +3,36 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+// Input sanitization for chat titles
+const MAX_TITLE_LENGTH = 200;
+
+function sanitizeTitle(title: string): string {
+	// Trim whitespace
+	let sanitized = title.trim();
+	
+	// Replace control characters including null bytes ([\x00-\x1F\x7F])
+	// except newlines and tabs which we'll convert to spaces
+	sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+	
+	// Convert newlines and tabs to single spaces
+	sanitized = sanitized.replace(/[\n\r\t]+/g, " ");
+	
+	// Collapse multiple spaces into one
+	sanitized = sanitized.replace(/\s+/g, " ");
+	
+	// Truncate to maximum length
+	if (sanitized.length > MAX_TITLE_LENGTH) {
+		sanitized = sanitized.slice(0, MAX_TITLE_LENGTH);
+	}
+	
+	// If empty after sanitization, provide default
+	if (sanitized.length === 0) {
+		return "New Chat";
+	}
+	
+	return sanitized;
+}
+
 const chatDoc = v.object({
 	_id: v.id("chats"),
 	_creationTime: v.number(),
@@ -17,16 +47,31 @@ const chatDoc = v.object({
 export const list = query({
 	args: {
 		userId: v.id("users"),
+		cursor: v.optional(v.string()),
+		limit: v.optional(v.number()),
 	},
-	returns: v.array(chatDoc),
+	returns: v.object({
+		chats: v.array(chatDoc),
+		nextCursor: v.union(v.string(), v.null()),
+	}),
 	handler: async (ctx, args) => {
-		const chats = await ctx.db
+		const limit = args.limit ?? 50;
+
+		// Filter out soft-deleted chats in the query, then use paginate
+		const results = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
 			.order("desc")
-			.take(200);
-		// Filter out soft-deleted chats
-		return chats.filter((chat) => !chat.deletedAt);
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.paginate({
+				cursor: args.cursor ?? null,
+				numItems: limit,
+			});
+
+		return {
+			chats: results.page,
+			nextCursor: results.continueCursor ?? null,
+		};
 	},
 });
 
@@ -50,10 +95,31 @@ export const create = mutation({
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
+		// Sanitize the title to prevent injection attacks and ensure valid input
+		const sanitizedTitle = sanitizeTitle(args.title);
+
+		// Rate limit: check recent NON-DELETED chat creation
+		// Important: filter out deleted chats to prevent bypass via create/delete loop
+		// Use by_user_created index to sort by createdAt, preventing bypass via chat updates
+		const recentChat = await ctx.db
+			.query("chats")
+			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+			.order("desc")
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.first();
+
 		const now = Date.now();
+		const rateLimit = 60 * 1000; // 1 minute
+		if (recentChat) {
+			const lastChatTime = recentChat.createdAt;
+			if (now - lastChatTime < rateLimit) {
+				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
+			}
+		}
+
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
-			title: args.title,
+			title: sanitizedTitle,
 			createdAt: now,
 			updatedAt: now,
 			lastMessageAt: now,
@@ -107,3 +173,4 @@ export async function assertOwnsChat(
 	}
 	return chat;
 }
+
