@@ -52,8 +52,8 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		// QueryCtx is compatible with GenericCtx at runtime - the types are structurally compatible
-		// @ts-expect-error - authComponent.getAuthUser expects GenericCtx but query provides QueryCtx which has a compatible structure
-		return authComponent.getAuthUser(ctx);
+		// QueryCtx is structurally compatible with GenericCtx<DataModel>
+		return authComponent.getAuthUser(ctx as GenericCtx<DataModel>);
 	},
 });
+
