@@ -147,22 +147,58 @@ export class RateLimiter {
 	}
 }
 
+export type IpExtractionStrategy = "x-forwarded-for" | "x-real-ip" | "strict";
+
 /**
  * Extract client IP from request
- * Checks X-Forwarded-For header first, then falls back to URL hostname
+ *
+ * SECURITY WARNING: IP-based rate limiting can be spoofed if not behind a trusted proxy.
+ *
+ * X-Forwarded-For and X-Real-IP headers can be set by clients unless your infrastructure
+ * overwrites them. This is only secure if:
+ * 1. Your app runs behind a trusted reverse proxy (nginx, cloudflare, etc.)
+ * 2. The proxy is configured to overwrite these headers with the actual client IP
+ * 3. Direct client access to your app is blocked (only proxy can reach it)
+ *
+ * For production deployments:
+ * - Use strategy: "strict" if NOT behind a trusted proxy (prevents header spoofing)
+ * - Use strategy: "x-forwarded-for" or "x-real-ip" if behind a trusted proxy
+ * - Consider additional rate limiting strategies (user ID, API key, etc.)
+ * - Implement network-level protection (firewall rules, DDoS protection)
+ *
+ * @param request - The incoming request
+ * @param strategy - IP extraction strategy (default: "x-forwarded-for")
  */
-export function getClientIp(request: Request): string {
+export function getClientIp(
+	request: Request,
+	strategy: IpExtractionStrategy = "x-forwarded-for",
+): string {
+	// Strict mode: Don't trust any headers, only use connection info
+	// Use this if NOT behind a trusted proxy to prevent IP spoofing
+	if (strategy === "strict") {
+		try {
+			const url = new URL(request.url);
+			return url.hostname;
+		} catch {
+			return "127.0.0.1";
+		}
+	}
+
 	// Check forwarded headers (from proxy/load balancer)
-	const forwarded = request.headers.get("x-forwarded-for");
-	if (forwarded) {
-		// Take first IP in the chain
-		return forwarded.split(",")[0]!.trim();
+	if (strategy === "x-forwarded-for") {
+		const forwarded = request.headers.get("x-forwarded-for");
+		if (forwarded) {
+			// Take first IP in the chain (leftmost is the original client)
+			return forwarded.split(",")[0]!.trim();
+		}
 	}
 
 	// Check real IP header
-	const realIp = request.headers.get("x-real-ip");
-	if (realIp) {
-		return realIp.trim();
+	if (strategy === "x-real-ip" || strategy === "x-forwarded-for") {
+		const realIp = request.headers.get("x-real-ip");
+		if (realIp) {
+			return realIp.trim();
+		}
 	}
 
 	// Fallback to URL hostname

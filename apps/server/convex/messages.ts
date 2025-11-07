@@ -151,6 +151,22 @@ export const streamUpsert = mutation({
 
 const MAX_MESSAGE_CONTENT_LENGTH = 100 * 1024; // 100KB
 
+// SECURITY: Maximum messages per chat to prevent DoS and database bloat
+const MAX_MESSAGES_PER_CHAT = 10_000;
+
+// SECURITY: Allowed message roles (reject any other values)
+const ALLOWED_ROLES = ["user", "assistant"] as const;
+type MessageRole = typeof ALLOWED_ROLES[number];
+
+function validateRole(role: string): MessageRole {
+	if (!ALLOWED_ROLES.includes(role as MessageRole)) {
+		throw new Error(
+			`Invalid message role: "${role}". Only "user" and "assistant" are allowed.`,
+		);
+	}
+	return role as MessageRole;
+}
+
 async function insertOrUpdateMessage(
 	ctx: MutationCtx,
 	args: {
@@ -164,6 +180,9 @@ async function insertOrUpdateMessage(
 		userId?: Id<"users">;
 	},
 ) {
+	// SECURITY: Validate role is exactly "user" or "assistant"
+	const validatedRole = validateRole(args.role);
+
 	// Validate message content length (100KB max) - count actual bytes, not string length
 	const contentBytes = new TextEncoder().encode(args.content).length;
 	if (contentBytes > MAX_MESSAGE_CONTENT_LENGTH) {
@@ -184,11 +203,28 @@ async function insertOrUpdateMessage(
 			targetId = existing._id;
 		}
 	}
+
+	// SECURITY: Check message count limit before inserting new message
+	// Only check if we're creating a new message (not updating existing)
+	if (!targetId) {
+		const messageCount = await ctx.db
+			.query("messages")
+			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.collect()
+			.then((messages) => messages.length);
+
+		if (messageCount >= MAX_MESSAGES_PER_CHAT) {
+			throw new Error(
+				`Chat has reached maximum message limit of ${MAX_MESSAGES_PER_CHAT}. Please create a new chat.`,
+			);
+		}
+	}
 	if (!targetId) {
 		targetId = await ctx.db.insert("messages", {
 			chatId: args.chatId,
 			clientMessageId: args.clientMessageId ?? undefined,
-			role: args.role,
+			role: validatedRole,
 			content: args.content,
 			createdAt: args.createdAt,
 			status: args.status,
@@ -197,7 +233,7 @@ async function insertOrUpdateMessage(
 	} else {
 		await ctx.db.patch(targetId, {
 			clientMessageId: args.clientMessageId ?? undefined,
-			role: args.role,
+			role: validatedRole,
 			content: args.content,
 			createdAt: args.createdAt,
 			status: args.status,
