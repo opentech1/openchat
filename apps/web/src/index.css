@@ -331,6 +331,11 @@ html, body {
   body {
     @apply bg-background text-foreground;
   }
+  /* See: https://github.com/shadcn-ui/ui/issues/6843 */
+  button:not([disabled]),
+  [role="button"]:not([disabled]) {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {
