@@ -42,10 +42,13 @@ export default function SidebarCollapseButton() {
 
 	const toggleSidebar = useCallback(() => {
 		// Trigger the keyboard shortcut to ensure sidebar component updates
+		// Use metaKey on macOS, ctrlKey on Windows/Linux
+		const isMac = typeof navigator !== "undefined" && navigator.platform?.toLowerCase().includes("mac");
 		const event = new KeyboardEvent("keydown", {
 			key: "b",
 			code: "KeyB",
-			ctrlKey: true,
+			ctrlKey: !isMac,
+			metaKey: isMac,
 			bubbles: true,
 			cancelable: true,
 		});
