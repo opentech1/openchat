@@ -5,8 +5,19 @@ import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ModelSelector, type ModelSelectorOption } from "@/components/model-selector";
 import { cn } from "@/lib/utils";
+import { logError } from "@/lib/logger";
 
 type UseAutoResizeTextareaProps = { minHeight: number; maxHeight?: number };
+
+// Debounce utility function
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+	let timeout: ReturnType<typeof setTimeout> | null = null;
+	return (...args: Parameters<T>) => {
+		if (timeout) clearTimeout(timeout);
+		timeout = setTimeout(() => func(...args), wait);
+	};
+}
+
 function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,6 +43,12 @@ function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaPr
 		[minHeight, maxHeight],
 	);
 
+	// Debounced version of adjustHeight for onChange events
+	const debouncedAdjustHeight = useCallback(
+		debounce(() => adjustHeight(), 50),
+		[adjustHeight],
+	);
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -45,7 +62,7 @@ function useAutoResizeTextarea({ minHeight, maxHeight }: UseAutoResizeTextareaPr
     return () => window.removeEventListener('resize', handleResize);
   }, [adjustHeight]);
 
-  return { textareaRef, adjustHeight };
+  return { textareaRef, adjustHeight, debouncedAdjustHeight };
 }
 
 type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
@@ -108,7 +125,7 @@ export type ChatComposerProps = {
 	onMissingRequirement?: (reason: "apiKey" | "model") => void;
 };
 
-export default function ChatComposer({
+function ChatComposer({
 	onSend,
 	disabled,
 	sendDisabled,
@@ -128,7 +145,7 @@ export default function ChatComposer({
 	const [fallbackModelId, setFallbackModelId] = useState<string>('');
 	const prefersReducedMotion = useReducedMotion();
 	const fast = prefersReducedMotion ? 0 : 0.3;
-	const { textareaRef, adjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
+	const { textareaRef, adjustHeight, debouncedAdjustHeight } = useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
 	const activeModelIdRef = useRef<string>('');
 
   useEffect(() => {
@@ -173,7 +190,7 @@ export default function ChatComposer({
 		setValue('');
 		adjustHeight(true);
 		} catch (error) {
-			console.error('Failed to send message', error);
+			logError('Failed to send message', error);
 			setErrorMessage(error instanceof Error && error.message ? error.message : 'Failed to send message. Try again.');
 		} finally {
 			setIsSending(false);
@@ -203,7 +220,7 @@ export default function ChatComposer({
           onChange={(e) => {
             setValue(e.target.value);
             if (errorMessage) setErrorMessage(null);
-            adjustHeight();
+            debouncedAdjustHeight();
           }}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
@@ -287,3 +304,7 @@ export default function ChatComposer({
 	</motion.div>
 	);
 }
+
+ChatComposer.displayName = "ChatComposer";
+
+export default React.memo(ChatComposer);

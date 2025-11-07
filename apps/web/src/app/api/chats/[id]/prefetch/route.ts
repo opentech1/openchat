@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, listMessagesForChat } from "@/lib/convex-server";
+import { logError } from "@/lib/logger-server";
 
 export async function GET(
 	_request: Request,
@@ -31,7 +32,7 @@ export async function GET(
 		}));
 		return NextResponse.json({ ok: true, chatId: chatIdParam, messages: serialized });
 	} catch (error) {
-		console.error("/api/chats/[id]/prefetch", error);
+		logError("Failed to prefetch chat messages", error);
 		return NextResponse.json({ ok: false, error: "Failed to preload chat" }, { status: 500 });
 	}
 }

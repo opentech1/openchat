@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, sendMessagePair } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
+import { validateCsrfToken, CSRF_COOKIE_NAME } from "@/lib/csrf";
 import { z } from "zod";
+import { logError, logWarn } from "@/lib/logger-server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +33,19 @@ export async function POST(req: Request) {
 	const corsHeaders: HeadersInit | undefined = allowOrigin
 		? { "Access-Control-Allow-Origin": allowOrigin, Vary: "Origin" }
 		: undefined;
+
+	// CSRF protection
+	const cookieStore = await cookies();
+	const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
+	const csrfValidation = validateCsrfToken(req, csrfCookie?.value);
+
+	if (!csrfValidation.valid) {
+		logWarn(`CSRF validation failed: ${csrfValidation.error}`);
+		return NextResponse.json(
+			{ ok: false, error: "CSRF validation failed" },
+			{ status: 403, headers: corsHeaders },
+		);
+	}
 
 	try {
 		const payload = payloadSchema.parse(await req.json());
@@ -63,7 +79,7 @@ export async function POST(req: Request) {
 		if (error instanceof z.ZodError) {
 			return NextResponse.json({ ok: false, issues: error.issues }, { status: 422, headers: corsHeaders });
 		}
-		console.error("/api/chat/send", error);
+		logError("Failed to send chat message", error);
 		return NextResponse.json({ ok: false }, { status: 500, headers: corsHeaders });
 	}
 }

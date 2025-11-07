@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { logError } from "@/lib/logger";
 
 export default function SettingsError({
 	error,
@@ -14,7 +15,7 @@ export default function SettingsError({
 	const router = useRouter();
 
 	useEffect(() => {
-		console.error("Settings error:", error);
+		logError("Settings error", error);
 	}, [error]);
 
 	return (

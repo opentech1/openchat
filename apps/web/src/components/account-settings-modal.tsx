@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { loadOpenRouterKey, removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
+import { logError } from "@/lib/logger";
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
@@ -108,7 +109,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 				}
 				setApiKeyError(null);
 			} catch (error) {
-				console.error("load-openrouter-key", error);
+				logError("Failed to load OpenRouter key", error);
 				if (cancelled) return;
 				setHasStoredKey(false);
 				setStoredKeyTail(null);
@@ -151,7 +152,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 			});
 			registerClientProperties({ has_openrouter_key: true });
 		} catch (error) {
-			console.error("save-openrouter-key", error);
+			logError("Failed to save OpenRouter key", error);
 			setApiKeyError("Failed to save OpenRouter key.");
 			toast.error("Failed to save OpenRouter key");
 		} finally {
@@ -176,7 +177,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 			});
 			registerClientProperties({ has_openrouter_key: false });
 		} catch (error) {
-			console.error("remove-openrouter-key", error);
+			logError("Failed to remove OpenRouter key", error);
 			toast.error("Failed to remove OpenRouter key");
 		} finally {
 			setRemovingKey(false);
@@ -194,7 +195,7 @@ export function AccountSettingsModal({ open, onClose }: { open: boolean; onClose
 					router.refresh();
 				},
 				onError: (ctx) => {
-					console.error("sign-out", ctx.error);
+					logError("Failed to sign out", ctx.error);
 					toast.error("Failed to sign out");
 					setSigningOut(false);
 				},

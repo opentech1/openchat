@@ -1,4 +1,5 @@
 import { PostHog } from "posthog-node";
+import { logError } from "./logger-server";
 
 let serverClient: PostHog | null = null;
 
@@ -56,7 +57,7 @@ export function captureServerEvent(
 	client
 		.capture({ event, distinctId, properties: sanitized })
 		.catch((error) => {
-			console.error("[posthog] capture failed", error);
+			logError("PostHog capture failed", error);
 		});
 }
 
@@ -65,7 +66,7 @@ export async function shutdownServerPosthog() {
 	try {
 		await serverClient.shutdownAsync();
 	} catch (error) {
-		console.error("[posthog] shutdown failed", error);
+		logError("PostHog shutdown failed", error);
 	}
 	serverClient = null;
 }

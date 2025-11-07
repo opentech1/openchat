@@ -1,3 +1,5 @@
+import { logWarn } from "./logger-server";
+
 // Primary environment variable for the web app URL
 // Legacy variables are still checked for backwards compatibility
 const POSSIBLE_ORIGIN_ENVS = [
@@ -55,7 +57,7 @@ export function resolveAllowedOrigins(extra?: string | string[]) {
 	
 	// Warn about deprecated variables (only once per process)
 	if (!hasWarnedDeprecated && deprecatedVarsUsed.length > 0) {
-		console.warn(
+		logWarn(
 			`⚠️  Deprecated environment variables detected: ${deprecatedVarsUsed.join(", ")}\n` +
 			`   Please use NEXT_PUBLIC_APP_URL instead. These variables will be removed in a future version.`
 		);

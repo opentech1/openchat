@@ -90,12 +90,14 @@ export function validateServerEnv(): ServerEnv {
 				const path = issue.path.join(".");
 				return `  - ${path}: ${issue.message}`;
 			});
-			
+
+			// Environment validation errors should always be shown, even in production
+			// This helps with deployment debugging
 			console.error("❌ Invalid environment variables:");
 			console.error(issues.join("\n"));
 			console.error("\nPlease check your .env file and ensure all required variables are set.");
 			console.error("See .env.example for reference.\n");
-			
+
 			throw new Error("Environment validation failed");
 		}
 		throw error;
@@ -130,10 +132,12 @@ export function validateClientEnv(): ClientEnv {
 				const path = issue.path.join(".");
 				return `  - ${path}: ${issue.message}`;
 			});
-			
+
+			// Environment validation errors should always be shown, even in production
+			// This helps with deployment debugging
 			console.error("❌ Invalid client environment variables:");
 			console.error(issues.join("\n"));
-			
+
 			throw new Error("Client environment validation failed");
 		}
 		throw error;

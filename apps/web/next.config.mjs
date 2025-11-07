@@ -1,4 +1,9 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+const withBundleAnalyzer = bundleAnalyzer({
+	enabled: process.env.ANALYZE === "true",
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -6,11 +11,11 @@ const nextConfig = {
 		externalDir: true,
 	},
 	serverExternalPackages: ["better-sqlite3"],
-	// Make environment variables available to server-side code
+	// SECURITY: Only expose non-sensitive variables to client
+	// Secrets (GITHUB_CLIENT_SECRET, BETTER_AUTH_SECRET, etc.) should NOT be in env block
+	// They are automatically available server-side via process.env
 	env: {
-		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
-		GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
-		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID, // Safe to expose (OAuth public client ID)
 	},
 	typedRoutes: true,
 	output: "standalone",
@@ -131,7 +136,10 @@ const nextConfig = {
 // Skip Sentry entirely if DSN is not configured (saves build memory)
 const shouldUseSentry = process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN.length > 0;
 
-const finalConfig = shouldUseSentry ? withSentryConfig(nextConfig, {
+// Apply bundle analyzer wrapper first, then Sentry
+const configWithAnalyzer = withBundleAnalyzer(nextConfig);
+
+const finalConfig = shouldUseSentry ? withSentryConfig(configWithAnalyzer, {
 	// For all available options, see:
 	// https://github.com/getsentry/sentry-webpack-plugin#options
 
@@ -169,6 +177,6 @@ const finalConfig = shouldUseSentry ? withSentryConfig(nextConfig, {
 	// https://docs.sentry.io/product/crons/
 	// https://vercel.com/docs/cron-jobs
 	automaticVercelMonitors: true,
-}) : nextConfig;
+}) : configWithAnalyzer;
 
 export default finalConfig;

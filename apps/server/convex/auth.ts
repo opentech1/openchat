@@ -81,6 +81,6 @@ export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
 		// QueryCtx is structurally compatible with GenericCtx<DataModel>
-		return authComponent.getAuthUser(ctx as GenericCtx<DataModel>);
+		return authComponent.getAuthUser(ctx as unknown as GenericCtx<DataModel>);
 	},
 });
