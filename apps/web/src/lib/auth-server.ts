@@ -10,6 +10,7 @@ export type UserContext = {
 };
 
 // Get session from better-auth API
+// Using React cache() to avoid duplicate fetches within the same request across server components
 const resolveUserContext = cache(async (): Promise<UserContext> => {
 	const cookieStore = await cookies();
 

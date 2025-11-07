@@ -67,8 +67,8 @@ export async function GET() {
 		name: session.name,
 		image: session.image,
 	});
-	const chats = await listChats(userId);
-	return NextResponse.json({ chats: chats.map(serializeChat) });
+	const result = await listChats(userId);
+	return NextResponse.json({ chats: result.chats.map(serializeChat), nextCursor: result.nextCursor });
 }
 
 export async function POST(request: Request) {
