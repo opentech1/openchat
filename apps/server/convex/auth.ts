@@ -25,6 +25,14 @@ export const createAuth = (
 		};
 	}
 
+	// Google OAuth
+	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+		socialProviders.google = {
+			clientId: process.env.GOOGLE_CLIENT_ID,
+			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+		};
+	}
+
 	return betterAuth({
 		logger: { disabled: optionsOnly },
 		baseURL: siteUrl,
@@ -35,7 +43,7 @@ export const createAuth = (
 			convex(),
 		],
 		advanced: {
-			useSecureCookies: process.env.NODE_ENV === "production",
+			useSecureCookies: process.env.NODE_ENV === "production" || siteUrl.startsWith("https://"),
 			cookiePrefix: process.env.AUTH_COOKIE_PREFIX || "openchat",
 		},
 		session: {
