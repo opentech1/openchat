@@ -52,6 +52,86 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
 - `bun check-types` – project-wide type checking.
 - `bun test` – execute Vitest suites (`apps/web/src/app/api/chat/__tests__` etc.).
 - `bun build` – production build for all workspaces.
+- `ANALYZE=true bun run build` – generate bundle size analysis report.
+
+## Bundle Size Monitoring
+
+OpenChat includes Next.js bundle analyzer for monitoring JavaScript bundle sizes and identifying optimization opportunities.
+
+### Running Bundle Analysis
+
+To analyze your production bundle:
+
+```bash
+# From the project root
+ANALYZE=true bun run build
+
+# Or from apps/web
+cd apps/web
+ANALYZE=true bun run build
+```
+
+This will:
+1. Build the application for production
+2. Generate interactive HTML reports showing bundle composition
+3. Open reports in your default browser:
+   - **Client bundle:** Shows all client-side JavaScript
+   - **Server bundle:** Shows server-side code (if applicable)
+
+### Reading the Reports
+
+The analyzer visualizes your bundle as a treemap where:
+- **Size of boxes** = file size (larger = more bytes)
+- **Colors** = different modules/packages
+- **Hover** = shows exact sizes and paths
+- **Click** = drills down into nested dependencies
+
+### What to Look For
+
+1. **Large Dependencies**
+   - Unexpectedly large third-party packages
+   - Multiple versions of the same package (e.g., two versions of React)
+   - Entire libraries imported when only a small part is used
+
+2. **Optimization Opportunities**
+   - Move large libraries to dynamic imports: `import('large-lib')`
+   - Use tree-shaking compatible imports: `import { specific } from 'lib'` instead of `import lib from 'lib'`
+   - Consider lighter alternatives for heavy packages
+
+3. **Duplicate Code**
+   - Same code appearing in multiple chunks
+   - Shared dependencies not properly code-split
+
+### Bundle Size Best Practices
+
+- **Set budgets:** Configure bundle size budgets in next.config.mjs to fail builds that exceed limits
+- **Monitor trends:** Run analysis regularly to catch regressions early
+- **Lazy load:** Use dynamic imports for routes and heavy components
+- **Code split:** Break up large bundles into smaller, on-demand chunks
+- **Audit dependencies:** Regularly review and remove unused packages
+
+### CI/CD Integration
+
+Consider integrating bundle analysis into your CI pipeline:
+
+```yaml
+# Example GitHub Actions step
+- name: Analyze bundle size
+  run: ANALYZE=true bun run build
+  env:
+    CI: true
+
+- name: Upload bundle stats
+  uses: actions/upload-artifact@v3
+  with:
+    name: bundle-analysis
+    path: apps/web/.next/analyze/
+```
+
+For more details on bundle optimization, see:
+- [Next.js Bundle Analyzer](https://www.npmjs.com/package/@next/bundle-analyzer)
+- [Web Performance Best Practices](https://web.dev/performance/)
+- `/apps/web/src/lib/image-config.ts` for image optimization guidelines
 
 ## Environment Notes
 - The chat API reads per-user OpenRouter keys from encrypted storage; without a key chats will prompt for one.

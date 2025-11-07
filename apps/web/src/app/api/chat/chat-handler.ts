@@ -385,15 +385,22 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			logError("Failed to resolve model", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const messageText = error instanceof Error ? error.message : String(error ?? "");
+			const isProduction = process.env.NODE_ENV === "production";
 			let status = 500;
 			let responseMessage = "Server configuration error";
+
+			// Check for specific known errors
 			if (messageText.includes("Missing apiKey")) {
 				status = 400;
 				responseMessage = "Missing apiKey";
 			} else if (messageText.includes("Missing modelId")) {
 				status = 400;
 				responseMessage = "Missing modelId";
+			} else if (!isProduction) {
+				// In development, include detailed error for debugging
+				responseMessage = messageText || "Server configuration error";
 			}
+
 			return new Response(responseMessage, { status, headers });
 		}
 
@@ -733,10 +740,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const upstreamStatus =
 				typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : undefined;
+			const isProduction = process.env.NODE_ENV === "production";
+
+			// Handle specific error cases with generic messages in production
 			if (upstreamStatus === 401) {
 				return new Response("OpenRouter API key invalid", { status: 401, headers });
 			}
-			return new Response("Upstream error", { status: 502, headers });
+
+			// In production, return generic error message; in development, include details
+			let errorMessage = "Upstream error";
+			if (!isProduction && error instanceof Error) {
+				errorMessage = `Upstream error: ${error.message}`;
+			}
+
+			return new Response(errorMessage, { status: 502, headers });
 		}
 	};
 }

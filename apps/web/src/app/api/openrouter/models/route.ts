@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { logError } from "@/lib/logger-server";
+import { apiKeySchema, createValidationErrorResponse } from "@/lib/validation";
 
 const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+
+// Validation schema for the request body
+const modelsRequestSchema = z.object({
+	apiKey: apiKeySchema,
+});
 
 type OpenRouterModelOption = {
 	value: string;
@@ -29,11 +36,24 @@ const parseNumericField = (candidate: unknown): number | null => {
 
 export async function POST(request: Request) {
 	try {
-		const body = (await request.json().catch(() => ({}))) as { apiKey?: unknown };
-		const apiKey = typeof body?.apiKey === "string" && body.apiKey.trim().length > 0 ? body.apiKey.trim() : null;
-		if (!apiKey) {
-			return NextResponse.json({ ok: false, error: "Missing apiKey" }, { status: 400 });
+		// Parse and validate request body
+		let body: unknown;
+		try {
+			body = await request.json();
+		} catch {
+			return NextResponse.json(
+				{ ok: false, error: "Invalid JSON payload" },
+				{ status: 400 }
+			);
 		}
+
+		// Validate input using Zod schema
+		const validation = modelsRequestSchema.safeParse(body);
+		if (!validation.success) {
+			return createValidationErrorResponse(validation.error);
+		}
+
+		const { apiKey } = validation.data;
 
 		const response = await fetch(`${OPENROUTER_BASE_URL}/models`, {
 			headers: {

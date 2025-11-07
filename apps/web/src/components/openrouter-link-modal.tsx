@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { captureClientEvent } from "@/lib/posthog";
+import { borderRadius, shadows, spacing, iconSize } from "@/styles/design-tokens";
 
 type OpenRouterLinkModalProps = {
   open: boolean;
@@ -66,8 +67,8 @@ export function OpenRouterLinkModal({
           }}
           aria-describedby="openrouter-modal-description"
         >
-          <div className="pointer-events-auto w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
+          <div className={cn(`pointer-events-auto w-full max-w-lg border border-border bg-card ${borderRadius.xl} ${shadows["2xl"]}`, spacing.padding.xl)}>
+            <div className={cn("flex items-start justify-between", spacing.gap.lg)}>
               <div className="flex-1">
                 <Dialog.Title className="text-lg font-semibold">Add your OpenRouter API key</Dialog.Title>
                 <Dialog.Description id="openrouter-modal-description" className="text-muted-foreground mt-1 text-sm">
@@ -75,14 +76,14 @@ export function OpenRouterLinkModal({
                 </Dialog.Description>
               </div>
               <Dialog.Close
-                className="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex size-8 items-center justify-center rounded-md transition"
+                className={cn("text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex size-8 items-center justify-center transition", borderRadius.sm)}
                 aria-label="Close"
               >
-                <X className="size-4" />
+                <X className={iconSize.sm} />
               </Dialog.Close>
             </div>
             <form
-              className="mt-6 flex flex-col gap-4"
+              className={cn("mt-6 flex flex-col", spacing.gap.lg)}
               onSubmit={async (event) => {
                 event.preventDefault();
                 const trimmed = apiKey.trim();
@@ -90,7 +91,7 @@ export function OpenRouterLinkModal({
                 await onSubmit(trimmed);
               }}
             >
-              <div className="flex flex-col gap-2 text-left">
+              <div className={cn("flex flex-col text-left", spacing.gap.sm)}>
                 <Label htmlFor="openrouter-api-key" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   OpenRouter API Key
                 </Label>
@@ -112,33 +113,33 @@ export function OpenRouterLinkModal({
                   {" "}
                   <a
                     href="https://openrouter.ai/keys"
-                    className="text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                    className={cn("text-primary inline-flex items-center underline-offset-4 hover:underline", spacing.gap.xs)}
                     target="_blank"
                     rel="noreferrer"
                   >
                     OpenRouter → Keys
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className={iconSize.xs} />
                   </a>
                   .
                 </p>
               </div>
               {errorMessage ? (
-                <div 
+                <div
                   id="api-key-error"
                   role="alert"
-                  className="bg-destructive/10 text-destructive w-full rounded-lg px-3 py-2 text-xs font-medium"
+                  className={cn("bg-destructive/10 text-destructive w-full px-3 py-2 text-xs font-medium", borderRadius.md)}
                 >
                   {errorMessage}
                 </div>
               ) : null}
-              <div className="flex flex-col gap-2">
+              <div className={cn("flex flex-col", spacing.gap.sm)}>
                 <Button
                   type="submit"
                   disabled={saving || apiKey.trim().length < 10}
                   className={cn("h-9 w-full justify-center text-sm font-semibold")}
                   aria-busy={saving}
                 >
-                  {saving ? <LoaderIcon className="h-4 w-4 animate-spin" /> : "Save and continue"}
+                  {saving ? <LoaderIcon className={`${iconSize.sm} animate-spin`} /> : "Save and continue"}
                 </Button>
                 {onTroubleshoot ? (
                   <button

@@ -22,6 +22,17 @@ const nextConfig = {
 	images: {
 		remotePatterns: [{ protocol: "https", hostname: "ik.imagekit.io" }],
 	},
+	/**
+	 * SECURITY: Request body size limits
+	 *
+	 * Note: Next.js 15 does not support the 'api' config key.
+	 * Body size limits are enforced via:
+	 * 1. Next.js default (~1MB for API routes)
+	 * 2. Zod validation with max length constraints (see lib/validation.ts)
+	 * 3. Request validation in route handlers (try/catch on request.json())
+	 *
+	 * For custom limits, implement in individual route handlers or middleware.
+	 */
 	async rewrites() {
 		const server = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 		return [

@@ -42,9 +42,62 @@ function hashToken(token: string): string {
 /**
  * Validate CSRF token from request
  *
- * @param request - The incoming request
- * @param cookieToken - CSRF token from cookie (from cookies())
- * @returns Validation result
+ * Implements the Double Submit Cookie pattern for CSRF protection.
+ * Validates that the token in the request header matches the token in the cookie.
+ *
+ * HOW IT WORKS:
+ * 1. Server generates random CSRF token
+ * 2. Token stored in cookie (SameSite=Lax, HttpOnly optional)
+ * 3. Token also sent in response header for client to read
+ * 4. Client includes token in X-CSRF-Token header for mutations
+ * 5. Server validates cookie token === header token
+ *
+ * WHY IT'S SECURE:
+ * - Malicious sites can't read cookies from your domain (Same-Origin Policy)
+ * - They can't set custom headers on cross-origin requests (CORS)
+ * - Even if they trigger a request, they can't provide matching token
+ *
+ * WHEN TO VALIDATE:
+ * - All state-changing operations (POST, PUT, DELETE, PATCH)
+ * - Skip for safe methods (GET, HEAD, OPTIONS)
+ * - Skip for API endpoints using Bearer tokens (different auth model)
+ *
+ * TIMING ATTACKS:
+ * - Uses constant-time comparison via SHA-256 hashing
+ * - Prevents attackers from guessing tokens character by character
+ * - Even a one-character difference takes same time to compute
+ *
+ * @param request - The incoming HTTP request
+ * @param cookieToken - CSRF token from cookie (get via cookies().get())
+ * @returns Validation result with success flag and optional error message
+ * @returns valid - true if tokens match, false otherwise
+ * @returns error - Human-readable error message if validation fails
+ *
+ * @example
+ * ```typescript
+ * // In API route handler
+ * import { cookies } from "next/headers";
+ * import { validateCsrfToken, CSRF_COOKIE_NAME } from "@/lib/csrf";
+ *
+ * export async function POST(request: Request) {
+ *   const cookieStore = await cookies();
+ *   const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
+ *
+ *   const validation = validateCsrfToken(request, csrfCookie?.value);
+ *
+ *   if (!validation.valid) {
+ *     return new Response(
+ *       JSON.stringify({ error: validation.error }),
+ *       { status: 403 }
+ *     );
+ *   }
+ *
+ *   // Continue with request processing...
+ * }
+ * ```
+ *
+ * @see {@link withCsrfProtection} for middleware wrapper
+ * @see {@link requiresCsrfProtection} to check if method needs protection
  */
 export function validateCsrfToken(
 	request: Request,

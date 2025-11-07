@@ -133,20 +133,37 @@ export function safeValidate<T extends z.ZodType>(
 
 /**
  * Create validation error response
+ *
+ * SECURITY: In production, returns generic error message to prevent information leakage.
+ * In development, returns detailed validation errors for debugging.
+ *
+ * This prevents attackers from learning about internal validation logic, field names,
+ * and data structures by probing the API with invalid inputs.
  */
 export function createValidationErrorResponse(
 	error: z.ZodError,
 	headers?: HeadersInit,
 ): Response {
-	return new Response(
-		JSON.stringify({
+	const isProduction = process.env.NODE_ENV === "production";
+
+	// In production: Return generic error to prevent information leakage
+	// In development: Return detailed errors for debugging
+	const responseBody = isProduction
+		? {
+			error: "Invalid input",
+			message: "The request contains invalid data. Please check your input and try again.",
+		}
+		: {
 			error: "Validation failed",
 			issues: error.issues.map((err: z.ZodIssue) => ({
 				path: err.path.join("."),
 				message: err.message,
 				code: err.code,
 			})),
-		}),
+		};
+
+	return new Response(
+		JSON.stringify(responseBody),
 		{
 			status: 400,
 			headers: {

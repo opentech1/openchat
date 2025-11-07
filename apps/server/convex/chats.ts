@@ -44,6 +44,10 @@ const chatDoc = v.object({
 	deletedAt: v.optional(v.number()),
 });
 
+// Security configuration: enforce maximum chat list limit
+const MAX_CHAT_LIST_LIMIT = 200;
+const DEFAULT_CHAT_LIST_LIMIT = 50;
+
 export const list = query({
 	args: {
 		userId: v.id("users"),
@@ -55,7 +59,16 @@ export const list = query({
 		nextCursor: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
-		const limit = args.limit ?? 50;
+		// SECURITY: Enforce maximum limit to prevent unbounded queries
+		// Even if client requests more, cap at MAX_CHAT_LIST_LIMIT
+		let limit = args.limit ?? DEFAULT_CHAT_LIST_LIMIT;
+
+		// Validate and enforce maximum limit
+		if (!Number.isFinite(limit) || limit <= 0) {
+			limit = DEFAULT_CHAT_LIST_LIMIT;
+		} else if (limit > MAX_CHAT_LIST_LIMIT) {
+			limit = MAX_CHAT_LIST_LIMIT;
+		}
 
 		// Filter out soft-deleted chats in the query, then use paginate
 		const results = await ctx.db

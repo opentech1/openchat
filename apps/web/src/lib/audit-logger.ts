@@ -112,16 +112,76 @@ export function setAuditLogStore(store: AuditLogStore): void {
 /**
  * Log an audit event
  *
+ * Records security-relevant actions to the audit log for compliance,
+ * forensics, and monitoring purposes.
+ *
+ * WHEN TO USE:
+ * - User authentication/authorization events
+ * - Resource creation/modification/deletion
+ * - Permission changes
+ * - API key operations
+ * - Failed access attempts
+ *
+ * WHAT TO LOG:
+ * - Who: User ID performing the action
+ * - What: Type of event and affected resources
+ * - When: Automatic timestamp
+ * - Where: IP address and user agent
+ * - Result: Success, failure, or denial
+ *
+ * WHAT NOT TO LOG:
+ * - PII (Personally Identifiable Information) beyond user ID
+ * - Sensitive data (passwords, API keys, tokens)
+ * - Full request/response bodies
+ * - Excessive details that could aid attackers
+ *
+ * ERROR HANDLING:
+ * - Never throws errors (won't break application flow)
+ * - Logs failures to console/stderr
+ * - Consider dead letter queue for critical events
+ *
  * @param params - Audit event parameters
+ * @param params.event - Type of event being logged
+ * @param params.userId - ID of user performing the action (optional for anonymous)
+ * @param params.targetUserId - ID of user being affected (for admin actions)
+ * @param params.resourceId - ID of resource being accessed/modified
+ * @param params.ipAddress - Client IP address (for geo-location and blocking)
+ * @param params.userAgent - Client user agent string (for device tracking)
+ * @param params.status - Event outcome (success/failure/denied)
+ * @param params.metadata - Additional context (non-PII)
+ * @param params.error - Error message if status is failure
+ * @returns Promise that resolves when log is written
  *
  * @example
  * ```typescript
+ * // Log successful chat deletion
  * await auditLog({
  *   event: "chat.delete",
  *   userId: "user_123",
  *   resourceId: "chat_456",
  *   ipAddress: "192.168.1.1",
  *   status: "success"
+ * });
+ *
+ * // Log failed authentication
+ * await auditLog({
+ *   event: "auth.failed",
+ *   userId: "user_123",
+ *   ipAddress: "192.168.1.1",
+ *   status: "failure",
+ *   error: "Invalid password"
+ * });
+ *
+ * // Log authorization denial
+ * await auditLog({
+ *   event: "authz.denied",
+ *   userId: "user_123",
+ *   ipAddress: "192.168.1.1",
+ *   status: "denied",
+ *   metadata: {
+ *     resource: "admin_panel",
+ *     action: "view"
+ *   }
  * });
  * ```
  */
@@ -160,6 +220,43 @@ export async function auditLog(params: {
 
 /**
  * Helper to extract IP and user agent from request
+ *
+ * Extracts client metadata from HTTP request headers for audit logging.
+ * Handles various proxy configurations and header formats.
+ *
+ * IP ADDRESS EXTRACTION:
+ * - Checks X-Forwarded-For header (standard for proxies/load balancers)
+ * - Falls back to X-Real-IP header
+ * - Finally uses URL hostname as last resort
+ * - Always takes leftmost IP in X-Forwarded-For chain (original client)
+ *
+ * SECURITY NOTES:
+ * - X-Forwarded-For can be spoofed if not behind trusted proxy
+ * - Ensure your reverse proxy/load balancer sets these headers correctly
+ * - Direct client connections should use connection socket IP instead
+ * - Consider using rate-limit.ts getClientIp() for rate limiting
+ *
+ * @param request - HTTP request object
+ * @returns Object containing IP address and user agent
+ * @returns ipAddress - Client IP address (never empty, defaults to "unknown")
+ * @returns userAgent - Client user agent string (optional)
+ *
+ * @example
+ * ```typescript
+ * // In API route handler
+ * export async function POST(request: Request) {
+ *   const { ipAddress, userAgent } = getRequestMetadata(request);
+ *
+ *   await auditLog({
+ *     event: "chat.create",
+ *     userId,
+ *     resourceId: chatId,
+ *     ipAddress,
+ *     userAgent,
+ *     status: "success"
+ *   });
+ * }
+ * ```
  */
 export function getRequestMetadata(request: Request): {
 	ipAddress: string;

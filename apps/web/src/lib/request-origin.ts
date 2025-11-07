@@ -73,9 +73,10 @@ export function resolveAllowedOrigins(extra?: string | string[]) {
 export function validateRequestOrigin(request: Request, allowedOrigins: Set<string>) {
 	const originSet = new Set(allowedOrigins);
 	let requestOrigin: string | null = null;
+
+	// Extract request origin for logging/reference, but DO NOT auto-add to allowed list
 	try {
 		requestOrigin = new URL(request.url).origin;
-		if (requestOrigin) originSet.add(requestOrigin);
 	} catch {
 		// ignore malformed URL; fall back to allowed set only
 	}
@@ -104,9 +105,15 @@ export function validateRequestOrigin(request: Request, allowedOrigins: Set<stri
 		return { ok: false as const };
 	}
 
-	// Allow requests without Origin/Referer (e.g., server-to-server) to proceed, but
-	// prefer echoing the API origin to keep CORS reflective behaviour consistent.
-	return { ok: true as const, origin: requestOrigin };
+	// Allow requests without Origin/Referer (e.g., server-to-server) to proceed.
+	// SECURITY: Only allow if request origin matches an explicitly allowed origin.
+	// Do NOT auto-add arbitrary request origins to prevent CORS bypass attacks.
+	if (requestOrigin && originSet.has(requestOrigin)) {
+		return { ok: true as const, origin: requestOrigin };
+	}
+
+	// If no origin/referer header and request origin not in allowlist, deny by default
+	return { ok: false as const };
 }
 
 export type OriginValidationResult = ReturnType<typeof validateRequestOrigin>;

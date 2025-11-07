@@ -7,6 +7,7 @@ import { ensureConvexUser, listChats } from "@/lib/convex-server";
 import AppSidebar from "@/components/app-sidebar-wrapper";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
+import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -36,18 +37,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 			</a>
 			<div className="hidden md:block">
 				<div className="fixed inset-y-0 left-0">
-					<AppSidebar initialChats={chats} authUserId={session.userId} />
+					<AppSidebar initialChats={chats} />
 				</div>
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
-                <div className="pointer-events-auto absolute right-4 top-4 z-20 flex items-center gap-2 rounded-xl border bg-card/80 px-2 py-1.5 shadow-md backdrop-blur">
-                    <MobileDashboardNav initialChats={chats} authUserId={session.userId} />
+                <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
+                    <MobileDashboardNav initialChats={chats} />
                     <Link
                         href="/dashboard/settings"
                         className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
                         aria-label="Settings"
                     >
-						<Settings className="size-4" />
+						<Settings className={iconSize.sm} />
 					</Link>
 					<ThemeToggle />
 				</div>

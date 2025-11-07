@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { authClient } from '@/lib/auth-client'
 import { captureClientEvent } from '@/lib/posthog'
+import { throttleRAF } from '@/lib/throttle'
 
 const menuItems = [
     { name: 'Features', href: '#features' },
@@ -35,9 +36,11 @@ export const HeroHeader = () => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 48)
         }
+        // Throttle scroll handler to sync with browser paint cycles (~60fps)
+        const throttledScroll = throttleRAF(handleScroll)
         handleScroll()
-        window.addEventListener('scroll', handleScroll, { passive: true })
-        return () => window.removeEventListener('scroll', handleScroll)
+        window.addEventListener('scroll', throttledScroll, { passive: true })
+        return () => window.removeEventListener('scroll', throttledScroll)
     }, [])
 
     const closeMenu = () => setMenuState(false)
