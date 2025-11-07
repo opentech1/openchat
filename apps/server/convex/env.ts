@@ -27,8 +27,9 @@ export function validateConvexEnv(): ConvexEnv {
 	const isProd = process.env.NODE_ENV === "production";
 	
 	// Apply development defaults only in non-production environments
-	const appUrl = process.env.NEXT_PUBLIC_APP_URL || (!isProd ? "http://localhost:3001" : undefined);
-	const authSecret = process.env.BETTER_AUTH_SECRET || (!isProd ? "dev-secret" : undefined);
+	// Handle empty strings explicitly - they should trigger defaults too
+	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (!isProd ? "http://localhost:3001" : undefined));
+	const authSecret = (process.env.BETTER_AUTH_SECRET?.trim() || (!isProd ? "dev-secret" : undefined));
 	
 	// Check required variables
 	if (!appUrl) {
@@ -48,8 +49,9 @@ export function validateConvexEnv(): ConvexEnv {
 	}
 	
 	// Check OAuth providers - at least one should be configured
-	const hasGithub = process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET;
-	const hasGoogle = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+	// Treat empty strings as missing values
+	const hasGithub = process.env.GITHUB_CLIENT_ID?.trim() && process.env.GITHUB_CLIENT_SECRET?.trim();
+	const hasGoogle = process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim();
 	
 	if (!hasGithub && !hasGoogle) {
 		console.warn(
