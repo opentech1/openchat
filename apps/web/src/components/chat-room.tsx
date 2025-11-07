@@ -168,7 +168,8 @@ export default function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               : "Failed to fetch OpenRouter models.";
           let providerHost = "openrouter.ai";
           try {
-            providerHost = new URL(response.url ?? "https://openrouter.ai/api/v1").host;
+            const baseUrl = process.env.NEXT_PUBLIC_OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+            providerHost = new URL(response.url ?? baseUrl).host;
           } catch {
             providerHost = "openrouter.ai";
           }
