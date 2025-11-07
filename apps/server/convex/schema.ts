@@ -11,7 +11,9 @@ export default defineSchema({
 		avatarUrl: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
-	}).index("by_external_id", ["externalId"]),
+	})
+		.index("by_external_id", ["externalId"])
+		.index("by_email", ["email"]),
 	chats: defineTable({
 		userId: v.id("users"),
 		title: v.string(),
@@ -19,7 +21,9 @@ export default defineSchema({
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
 		deletedAt: v.optional(v.number()),
-	}).index("by_user", ["userId", "updatedAt"]),
+	})
+		.index("by_user", ["userId", "updatedAt"])
+		.index("by_user_created", ["userId", "createdAt"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
