@@ -140,9 +140,10 @@ export function createCsrfCookie(token: string, isProduction: boolean): string {
 	const secure = isProduction ? "Secure; " : "";
 	const sameSite = "SameSite=Lax";
 
-	// HttpOnly is NOT set because client needs to read the token
-	// This is safe because the token is also validated from a separate cookie
-	return `${CSRF_COOKIE_NAME}=${token}; Path=/; ${secure}${sameSite}; Max-Age=${maxAge}`;
+	// HttpOnly prevents XSS attacks from stealing the token
+	// Client reads token from response body/header, not cookie
+	// Cookie is only used for server-side validation
+	return `${CSRF_COOKIE_NAME}=${token}; Path=/; ${secure}${sameSite}; Max-Age=${maxAge}; HttpOnly`;
 }
 
 /**
