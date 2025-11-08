@@ -4,6 +4,7 @@ import * as React from "react"
 import { Command as CommandPrimitive } from "cmdk"
 
 import { cn } from "@/lib/utils"
+import { borderRadius, spacing } from "@/styles/design-tokens"
 
 const Command = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive>,
@@ -12,7 +13,7 @@ const Command = React.forwardRef<
 	<CommandPrimitive
 		ref={ref}
 		className={cn(
-			"bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden rounded-xl border border-border/60",
+			`bg-popover text-popover-foreground flex h-full w-full flex-col overflow-hidden ${borderRadius.lg} border border-border/60`,
 			className,
 		)}
 		{...props}
@@ -43,7 +44,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<CommandPrimitive.List
 		ref={ref}
-		className={cn("flex-1 overflow-y-auto p-2", className)}
+		className={cn(`flex-1 overflow-y-auto ${spacing.padding.sm}`, className)}
 		{...props}
 	/>
 ))
@@ -67,7 +68,7 @@ const CommandGroup = React.forwardRef<
 >(({ className, ...props }, ref) => (
 	<CommandPrimitive.Group
 		ref={ref}
-		className={cn("text-muted-foreground/70 overflow-hidden p-1", className)}
+		className={cn(`text-muted-foreground/70 overflow-hidden ${spacing.padding.xs}`, className)}
 		{...props}
 	/>
 ))
@@ -80,7 +81,7 @@ const CommandItem = React.forwardRef<
 	<CommandPrimitive.Item
 		ref={ref}
 		className={cn(
-			"text-foreground data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary flex w-full cursor-pointer select-none items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+			`text-foreground data-[selected=true]:bg-primary/10 data-[selected=true]:text-primary flex w-full cursor-pointer select-none items-center ${spacing.gap.md} ${borderRadius.md} px-3 py-2 text-sm transition-colors`,
 			className,
 		)}
 		{...props}

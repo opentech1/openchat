@@ -8,6 +8,8 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { authClient } from '@/lib/auth-client'
 import { captureClientEvent } from '@/lib/posthog'
+import { throttleRAF } from '@/lib/throttle'
+import { borderRadius, iconSize, shadows, spacing } from '@/styles/design-tokens';
 
 const menuItems = [
     { name: 'Features', href: '#features' },
@@ -35,9 +37,11 @@ export const HeroHeader = () => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 48)
         }
+        // Throttle scroll handler to sync with browser paint cycles (~60fps)
+        const throttledScroll = throttleRAF(handleScroll)
         handleScroll()
-        window.addEventListener('scroll', handleScroll, { passive: true })
-        return () => window.removeEventListener('scroll', handleScroll)
+        window.addEventListener('scroll', throttledScroll, { passive: true })
+        return () => window.removeEventListener('scroll', throttledScroll)
     }, [])
 
     const closeMenu = () => setMenuState(false)
@@ -48,10 +52,10 @@ export const HeroHeader = () => {
                 data-state={menuState ? 'active' : 'inactive'}
                 className={cn(
                     'fixed z-20 w-full border-b border-border/50 transition-all duration-300',
-                    isScrolled ? 'bg-background/80 backdrop-blur-2xl shadow-md' : 'bg-background/30 backdrop-blur-sm',
+                    isScrolled ? `bg-background/80 backdrop-blur-2xl ${shadows.md}` : 'bg-background/30 backdrop-blur-sm',
                 )}>
                 <div className="mx-auto max-w-6xl px-6 transition-all duration-300">
-                    <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
+                    <div className={`relative flex flex-wrap items-center justify-between ${spacing.gap.md} py-3 lg:gap-0 lg:py-4`}>
                         <div className="flex w-full items-center justify-between gap-12 lg:w-auto">
                             <Link
                                 href="/"
@@ -67,11 +71,11 @@ export const HeroHeader = () => {
                                 className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden">
                                 <Menu
                                     data-state={menuState ? 'active' : 'inactive'}
-                                    className="in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto size-6 duration-200"
+                                    className={`in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto ${iconSize.lg} duration-200`}
                                 />
                                 <X
                                     data-state={menuState ? 'active' : 'inactive'}
-                                    className="in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200"
+                                    className={`in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto ${iconSize.lg} -rotate-180 scale-0 opacity-0 duration-200`}
                                 />
                             </button>
 
@@ -102,7 +106,7 @@ export const HeroHeader = () => {
 
                         <div
                             data-state={menuState ? 'active' : 'inactive'}
-                            className="bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent">
+                            className={`bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 ${borderRadius["2xl"]} border ${spacing.padding.xl} ${shadows["2xl"]} shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent`}>
                             <div className="lg:hidden">
                                 <ul className="space-y-6 text-base">
 									{menuItems.map((item) => (

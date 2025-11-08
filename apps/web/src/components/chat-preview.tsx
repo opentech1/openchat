@@ -1,134 +1,40 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useCallback, useTransition } from 'react';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Paperclip, SendIcon, XIcon, LoaderIcon } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import * as React from 'react';
-
-interface UseAutoResizeTextareaProps {
-  minHeight: number;
-  maxHeight?: number;
-}
-
-function useAutoResizeTextarea({
-  minHeight,
-  maxHeight,
-}: UseAutoResizeTextareaProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const adjustHeight = useCallback(
-    (reset?: boolean) => {
-      const textarea = textareaRef.current;
-      if (!textarea) return;
-
-      if (reset) {
-        textarea.style.height = `${minHeight}px`;
-        return;
-      }
-
-      textarea.style.height = `${minHeight}px`;
-      const newHeight = Math.max(
-        minHeight,
-        Math.min(textarea.scrollHeight, maxHeight ?? Number.POSITIVE_INFINITY),
-      );
-
-      textarea.style.height = `${newHeight}px`;
-    },
-    [minHeight, maxHeight],
-  );
-
-  useEffect(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = `${minHeight}px`;
-    }
-  }, [minHeight]);
-
-  useEffect(() => {
-    const handleResize = () => adjustHeight();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [adjustHeight]);
-
-  return { textareaRef, adjustHeight };
-}
-
-interface TextareaProps
-  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  containerClassName?: string;
-  showRing?: boolean;
-}
-
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, containerClassName, showRing = true, ...props }, ref) => {
-    const [isFocused, setIsFocused] = React.useState(false);
-
-    return (
-      <div className={cn('relative', containerClassName)}>
-        <textarea
-          className={cn(
-            'border-input bg-background flex min-h-[80px] w-full rounded-md border px-3 py-2 text-sm',
-            'transition-all duration-200 ease-in-out',
-            'placeholder:text-muted-foreground',
-            'disabled:cursor-not-allowed disabled:opacity-50',
-            showRing
-              ? 'focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none'
-              : '',
-            className,
-          )}
-          ref={ref}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          {...props}
-        />
-
-        {showRing && isFocused && (
-          <motion.span
-            className="ring-primary/30 pointer-events-none absolute inset-0 rounded-md ring-2 ring-offset-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-          />
-        )}
-
-        {props.onChange && (
-          <div
-            className="bg-primary absolute right-2 bottom-2 h-2 w-2 rounded-full opacity-0"
-            style={{
-              animation: 'none',
-            }}
-            id="textarea-ripple"
-          />
-        )}
-      </div>
-    );
-  },
-);
-Textarea.displayName = 'Textarea';
+import { useEffect, useRef, useCallback, useTransition } from "react";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
+import * as React from "react";
+import { useAutoResizeTextarea } from "@/components/ui/auto-resize-textarea";
+import {
+  borderRadius,
+  shadows,
+  spacing,
+  opacity,
+  iconSize,
+} from "@/styles/design-tokens";
 
 function ChatPreview({ className }: { className?: string }) {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-  const fast = prefersReducedMotion ? 0 : 0.3;
-  const slower = prefersReducedMotion ? 0 : 0.5;
   const [, startTransition] = useTransition();
-  useEffect(() => () => {
-    if (typingTimeoutRef.current !== null) {
-      window.clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (typingTimeoutRef.current !== null) {
+        window.clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    },
+    [],
+  );
   // removed pointer-following gradient for performance
-  const { textareaRef, adjustHeight } = useAutoResizeTextarea({
-    minHeight: 60,
-    maxHeight: 200,
-  });
+  const { textareaRef, adjustHeight, debouncedAdjustHeight } =
+    useAutoResizeTextarea({
+      minHeight: 60,
+      maxHeight: 200,
+    });
   // unused focus overlay removed
   // Slash command palette removed for a cleaner dashboard preview
 
@@ -137,7 +43,7 @@ function ChatPreview({ className }: { className?: string }) {
   // Click-outside handling no longer necessary
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (value.trim()) handleSendMessage();
     }
@@ -152,7 +58,7 @@ function ChatPreview({ className }: { className?: string }) {
         }
         typingTimeoutRef.current = window.setTimeout(() => {
           setIsTyping(false);
-          setValue('');
+          setValue("");
           adjustHeight(true);
           typingTimeoutRef.current = null;
         }, 3000);
@@ -175,145 +81,142 @@ function ChatPreview({ className }: { className?: string }) {
     <div className={cn("w-full", className)}>
       <div className="text-foreground relative w-full overflow-hidden bg-transparent p-0">
         <div className="relative mx-auto w-full max-w-2xl">
-          <motion.div
-            className="relative z-10 space-y-12"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: slower, ease: 'easeOut' }}
-          >
+          <div className="relative z-10 space-y-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
             <div className="space-y-3 text-center">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, duration: fast }}
-                className="inline-block"
-              >
-                <h1 className="pb-1 text-3xl font-medium tracking-tight">How can OpenChat help today?</h1>
-                <motion.div
-                  className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: '100%', opacity: 1 }}
-                  transition={{ delay: 0.25, duration: prefersReducedMotion ? 0 : 0.4 }}
-                />
-              </motion.div>
-              <motion.p
-                className="text-muted-foreground text-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2, duration: fast }}
-              >
+              <div className="inline-block animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150">
+                <h1 className="pb-1 text-3xl font-medium tracking-tight">
+                  How can OpenChat help today?
+                </h1>
+                <div className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent animate-in fade-in-0 duration-400 delay-250" />
+              </div>
+              <p className="text-muted-foreground text-sm animate-in fade-in-0 duration-300 delay-200">
                 Ask a question or type a command
-              </motion.p>
+              </p>
             </div>
 
-            <motion.div
-              className="border-border bg-card/80 relative rounded-2xl border shadow-xl backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl"
-              initial={{ scale: 0.985 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.05, duration: fast }}
+            <div
+              className={cn(
+                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-300 delay-50`,
+                borderRadius.xl,
+                shadows.xl,
+              )}
             >
               {/* Removed focus ring overlay for a cleaner typing experience */}
               {/* Command palette removed */}
 
-              <div className="p-4">
-                <Textarea
+              <div className={spacing.padding.lg}>
+                <textarea
                   ref={textareaRef}
                   value={value}
                   onChange={(e) => {
                     setValue(e.target.value);
-                    adjustHeight();
+                    debouncedAdjustHeight();
                   }}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask OpenChat a question..."
-                  containerClassName="w-full"
                   className={cn(
-                    'w-full px-4 py-3',
-                    'resize-none',
-                    'bg-transparent',
-                    'border-none',
-                    'text-foreground text-sm',
-                    'focus:outline-none',
-                    'placeholder:text-muted-foreground',
-                    'min-h-[60px]',
+                    "w-full px-4 py-3",
+                    "resize-none",
+                    "bg-transparent",
+                    "border-none",
+                    "text-foreground text-sm",
+                    "focus:outline-none",
+                    "placeholder:text-muted-foreground",
+                    "min-h-[60px]",
                   )}
                   style={{
-                    overflow: 'hidden',
+                    overflow: "hidden",
                   }}
-                  showRing={false}
+                  data-ph-no-capture
+                  aria-label="Message input"
                 />
               </div>
 
-              <AnimatePresence>
-                {attachments.length > 0 && (
-                  <motion.div
-                    className="flex flex-wrap gap-2 px-4 pb-3"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    {attachments.map((file, index) => (
-                      <motion.div
-                        key={index}
-                        className="bg-primary/5 text-muted-foreground flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
+              {attachments.length > 0 && (
+                <div className={cn("flex flex-wrap px-4 pb-3 animate-in fade-in-0 duration-200", spacing.gap.sm)}>
+                  {attachments.map((file, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "bg-primary/5 text-muted-foreground flex items-center px-3 py-1.5 text-xs animate-in fade-in-0 zoom-in-95 duration-200",
+                        borderRadius.md,
+                        spacing.gap.sm,
+                      )}
+                    >
+                      <span>{file}</span>
+                      <button
+                        onClick={() => removeAttachment(index)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={`Remove ${file}`}
                       >
-                        <span>{file}</span>
-                        <button
-                          onClick={() => removeAttachment(index)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <XIcon className="h-3 w-3" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                        <XIcon className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-              <div className="border-border flex items-center justify-between gap-4 border-t p-4">
-                <div className="flex items-center gap-3">
-                  <motion.button
+              <div
+                className={cn(
+                  "border-border flex items-center justify-between border-t",
+                  spacing.gap.lg,
+                  spacing.padding.lg,
+                )}
+              >
+                <div className={cn("flex items-center", spacing.gap.md)}>
+                  <button
                     type="button"
                     onClick={handleAttachFile}
-                    whileTap={{ scale: 0.94 }}
-                    className="group text-muted-foreground hover:text-foreground relative rounded-lg p-2 transition-colors"
+                    className={cn(
+                      "group text-muted-foreground hover:text-foreground relative p-2 transition-all active:scale-[0.94]",
+                      borderRadius.md,
+                    )}
+                    aria-label="Attach file"
                   >
-                    <Paperclip className="h-4 w-4" />
-                    <motion.span
-                      className="bg-primary/10 absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
-                      layoutId="button-highlight"
+                    <Paperclip className="size-4" />
+                    <span
+                      className={cn(
+                        "bg-primary/10 absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100",
+                        borderRadius.md,
+                      )}
                     />
-                  </motion.button>
+                  </button>
                 </div>
 
-                <motion.button
+                <button
                   type="button"
                   onClick={handleSendMessage}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
                   disabled={isTyping || !value.trim()}
                   className={cn(
-                    'rounded-lg px-4 py-2 text-sm font-medium transition-all',
-                    'flex items-center gap-2',
+                    "px-4 py-2 text-sm font-medium transition-all hover:scale-[1.01] active:scale-[0.98]",
+                    "flex items-center",
+                    borderRadius.md,
+                    spacing.gap.sm,
                     value.trim()
-                      ? 'bg-primary text-primary-foreground shadow-primary/10 shadow-lg'
-                      : 'bg-muted/50 text-muted-foreground',
+                      ? cn(
+                          "bg-primary text-primary-foreground shadow-primary/10",
+                          shadows.lg,
+                        )
+                      : "bg-muted/50 text-muted-foreground",
                   )}
+                  aria-label={isTyping ? "Sending message" : "Send message"}
+                  aria-busy={isTyping}
                 >
                   {isTyping ? (
-                    <LoaderIcon className="h-4 w-4 animate-[spin_2s_linear_infinite]" />
+                    <LoaderIcon
+                      className="size-4 animate-[spin_2s_linear_infinite]"
+                      aria-hidden="true"
+                    />
                   ) : (
-                    <SendIcon className="h-4 w-4" />
+                    <SendIcon className="size-4" aria-hidden="true" />
                   )}
                   <span>Send</span>
-                </motion.button>
+                </button>
               </div>
-            </motion.div>
+            </div>
 
             {/* Removed suggested command chips below input */}
-          </motion.div>
+          </div>
         </div>
 
         {/* Neutral look; gradients removed for performance */}
@@ -333,10 +236,10 @@ const rippleKeyframes = `
 }
 `;
 
-if (typeof document !== 'undefined') {
-  const STYLE_ID = 'chat-preview-ripple-style';
+if (typeof document !== "undefined") {
+  const STYLE_ID = "chat-preview-ripple-style";
   if (!document.getElementById(STYLE_ID)) {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = STYLE_ID;
     style.innerHTML = rippleKeyframes;
     document.head.appendChild(style);

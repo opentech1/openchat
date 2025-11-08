@@ -7,6 +7,7 @@ import { captureServerEvent } from "@/lib/posthog-server";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
+import { logError } from "@/lib/logger-server";
 
 type AnyUIMessage = UIMessage<Record<string, unknown>>;
 
@@ -86,6 +87,15 @@ const MAX_TOKENS = (() => {
 	const parsed = Number(raw);
 	if (!Number.isFinite(parsed) || parsed <= 0) return 8192;
 	return Math.min(parsed, 32768); // Cap at 32k to prevent excessive token usage
+})();
+
+// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
+const OPENROUTER_TIMEOUT_MS = (() => {
+	const raw = process.env.OPENROUTER_TIMEOUT_MS;
+	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
+	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
 })();
 
 type StreamPersistRequest = {
@@ -372,18 +382,25 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				config = { provider, modelId: modelIdFromPayload };
 			}
 		} catch (error) {
-			console.error("/api/chat resolve model", error);
+			logError("Failed to resolve model", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const messageText = error instanceof Error ? error.message : String(error ?? "");
+			const isProduction = process.env.NODE_ENV === "production";
 			let status = 500;
 			let responseMessage = "Server configuration error";
+
+			// Check for specific known errors
 			if (messageText.includes("Missing apiKey")) {
 				status = 400;
 				responseMessage = "Missing apiKey";
 			} else if (messageText.includes("Missing modelId")) {
 				status = 400;
 				responseMessage = "Missing modelId";
+			} else if (!isProduction) {
+				// In development, include detailed error for debugging
+				responseMessage = messageText || "Server configuration error";
 			}
+
 			return new Response(responseMessage, { status, headers });
 		}
 
@@ -493,7 +510,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				throw new Error("user streamUpsert rejected");
 			}
 		} catch (error) {
-			console.error("Failed to persist user message", error);
+			logError("Failed to persist user message", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist message", { status: 502, headers });
 		}
@@ -512,7 +529,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				throw new Error("assistant streamUpsert rejected");
 			}
 		} catch (error) {
-			console.error("Failed to bootstrap assistant message", error);
+			logError("Failed to bootstrap assistant message", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist assistant", { status: 502, headers });
 		}
@@ -563,7 +580,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				try {
 					await persistAssistant("streaming");
 				} catch (error) {
-					console.error("Failed to persist assistant chunk", error);
+					logError("Failed to persist assistant chunk", error);
 					if (!persistenceError) {
 						persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant chunk");
 					}
@@ -599,7 +616,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			try {
 				await persistAssistant("completed", true);
 			} catch (error) {
-				console.error("Failed to persist assistant completion", error);
+				logError("Failed to persist assistant completion", error);
 				if (!persistenceError) {
 					persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant completion");
 				}
@@ -609,12 +626,22 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		};
 
+		// PERFORMANCE FIX: Create AbortController with timeout to prevent hanging requests
+		const abortController = new AbortController();
+		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
 		try {
+			timeoutId = setTimeout(() => {
+				logError(`OpenRouter stream timeout after ${OPENROUTER_TIMEOUT_MS}ms`, new Error("Stream timeout"));
+				abortController.abort(new Error(`Request timeout after ${OPENROUTER_TIMEOUT_MS}ms`));
+			}, OPENROUTER_TIMEOUT_MS);
+
 			const model = config.provider.chat(config.modelId);
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
 				maxOutputTokens: MAX_TOKENS,
+				abortSignal: abortController.signal,
 				experimental_transform: smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
@@ -626,15 +653,18 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					}
 				},
 				onFinish: async () => {
+					if (timeoutId) clearTimeout(timeoutId);
 					streamStatus = "completed";
 					await finalize();
 				},
 				onAbort: async () => {
+					if (timeoutId) clearTimeout(timeoutId);
 					streamStatus = "aborted";
 					await finalize();
 				},
 				onError: async ({ error }) => {
-					console.error("/api/chat stream", error);
+					if (timeoutId) clearTimeout(timeoutId);
+					logError("Chat stream error", error);
 					streamStatus = "error";
 					await finalize();
 				},
@@ -678,11 +708,13 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				headers,
 			});
 		} catch (error) {
-			console.error("/api/chat", error);
+			// Ensure timeout is cleared even if error occurs before callbacks
+			if (timeoutId) clearTimeout(timeoutId);
+			logError("Chat handler error", error);
 			try {
 				await finalize();
 			} catch (finalizeError) {
-				console.error("/api/chat finalize", finalizeError);
+				logError("Chat finalize error", finalizeError);
 				if (!persistenceError) {
 					persistenceError =
 						finalizeError instanceof Error
@@ -708,10 +740,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const upstreamStatus =
 				typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : undefined;
+			const isProduction = process.env.NODE_ENV === "production";
+
+			// Handle specific error cases with generic messages in production
 			if (upstreamStatus === 401) {
 				return new Response("OpenRouter API key invalid", { status: 401, headers });
 			}
-			return new Response("Upstream error", { status: 502, headers });
+
+			// In production, return generic error message; in development, include details
+			let errorMessage = "Upstream error";
+			if (!isProduction && error instanceof Error) {
+				errorMessage = `Upstream error: ${error.message}`;
+			}
+
+			return new Response(errorMessage, { status: 502, headers });
 		}
 	};
 }

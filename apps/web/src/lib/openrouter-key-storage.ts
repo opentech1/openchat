@@ -1,3 +1,5 @@
+import { logError } from "./logger";
+
 const STORAGE_KEY = "openchat.openrouter.apiKey";
 const MASTER_KEY_STORAGE_KEY = "openchat.openrouter.masterKey";
 
@@ -112,7 +114,7 @@ export async function loadOpenRouterKey() {
 		const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, cryptoKey, ciphertext);
 		return new TextDecoder().decode(decrypted);
 	} catch (error) {
-		console.error("Failed to decrypt stored OpenRouter API key", error);
+		logError("Failed to decrypt stored OpenRouter API key", error);
 		try {
 			getStorage()?.removeItem(STORAGE_KEY);
 			getStorage()?.removeItem(MASTER_KEY_STORAGE_KEY);

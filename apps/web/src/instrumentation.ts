@@ -5,8 +5,9 @@ export async function register() {
 		// Validate environment variables on server startup
 		// This will throw and prevent app startup if validation fails
 		const { validateServerEnv } = await import("./lib/env");
+		const { logInfo } = await import("./lib/logger-server");
 		validateServerEnv();
-		console.log("✅ Environment variables validated successfully");
+		logInfo("✅ Environment variables validated successfully");
 		
 		await import("./sentry.server.config");
 	}

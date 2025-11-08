@@ -121,7 +121,27 @@ if (!databaseAdapter) {
 
 const rawBaseUrl = process.env.BETTER_AUTH_URL || process.env.SERVER_INTERNAL_URL || process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 const baseURL = rawBaseUrl.replace(/\/$/, "");
-const secret = process.env.BETTER_AUTH_SECRET || "dev-secret";
+
+// Secret validation - prevent using default secret in production
+const rawSecret = process.env.BETTER_AUTH_SECRET || "dev-secret";
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction && rawSecret === "dev-secret") {
+	throw new Error(
+		"[auth] SECURITY ERROR: Using default secret 'dev-secret' in production is not allowed. " +
+		"Set BETTER_AUTH_SECRET to a secure random value. " +
+		"Generate one with: openssl rand -base64 32"
+	);
+}
+
+if (isProduction && rawSecret.length < 32) {
+	console.warn(
+		"[auth] WARNING: BETTER_AUTH_SECRET is shorter than recommended (32+ characters). " +
+		"Generate a secure secret with: openssl rand -base64 32"
+	);
+}
+
+const secret = rawSecret;
 const crossDomain = process.env.AUTH_COOKIE_DOMAIN || computeCookieDomain(baseURL);
 
 function parseOriginList(raw: string | undefined) {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
 import { Button } from "@/components/ui/button";
+import { spacing } from "@/styles/design-tokens";
 
 export default function SettingsPageClient() {
   const [open, setOpen] = useState(false);
@@ -15,7 +16,7 @@ export default function SettingsPageClient() {
         <p className="text-muted-foreground mt-2">Manage your application preferences and account.</p>
       </div>
 
-      <div className="grid gap-6">
+      <div className={`grid ${spacing.gap.xl}`}>
         <section className="rounded-xl border p-4">
           <h2 className="text-sm font-medium">Account</h2>
           <p className="text-muted-foreground mt-1 text-sm">Update your profile, emails, and security.</p>
