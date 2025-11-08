@@ -13,6 +13,7 @@ import {
 } from "@/lib/openrouter-model-cache";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 
@@ -119,7 +120,7 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
       setModelsLoading(true);
       setModelsError(null);
       try {
-        const response = await fetch("/api/openrouter/models", {
+        const response = await fetchWithCsrf("/api/openrouter/models", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ apiKey: key }),

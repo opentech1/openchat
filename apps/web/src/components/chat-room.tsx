@@ -42,6 +42,7 @@ import {
   setStorageItemSync,
   removeStorageItemSync,
 } from "@/lib/storage";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 
 type ChatRoomProps = {
   chatId: string;
@@ -253,7 +254,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       dispatch({ type: "SET_MODELS_LOADING", payload: true });
       dispatch({ type: "SET_MODELS_ERROR", payload: null });
       try {
-        const response = await fetch("/api/openrouter/models", {
+        const response = await fetchWithCsrf("/api/openrouter/models", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ apiKey: key }),

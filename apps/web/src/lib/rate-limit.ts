@@ -4,6 +4,29 @@
  * Provides IP-based rate limiting for API endpoints.
  * Suitable for single-instance deployments. For production multi-instance/serverless,
  * consider using Redis or a distributed rate limiter.
+ *
+ * DEPLOYMENT MODES:
+ *
+ * Single Instance (default): Uses in-memory rate limiting
+ * - Fast and simple
+ * - No external dependencies
+ * - Rate limits are per-instance (not shared across servers)
+ * - Memory usage is bounded by maxBuckets config
+ *
+ * Multi Instance: Set REDIS_URL env var to enable Redis-based rate limiting
+ * - Distributed rate limiting across all instances
+ * - Requires Redis server and ioredis package
+ * - Rate limits are globally enforced
+ * - See rate-limit-redis.ts for implementation details
+ *
+ * Example:
+ * ```bash
+ * # Single instance (default)
+ * bun run start
+ *
+ * # Multi instance with Redis
+ * REDIS_URL=redis://localhost:6379 bun run start
+ * ```
  */
 
 type RateBucket = {
@@ -419,4 +442,103 @@ export function validateUserAgent(userAgent: string | null): UserAgentValidation
 		isSuspiciousBot: false,
 		isLegitimateBot: false,
 	};
+}
+
+/**
+ * Rate limiter interface for both in-memory and Redis implementations
+ */
+export interface IRateLimiter {
+	check(identifier: string): RateLimitResult | Promise<RateLimitResult>;
+	reset(identifier: string): void | Promise<void>;
+	clear(): void | Promise<void>;
+	getStats():
+		| { totalBuckets: number; config: Required<RateLimitConfig> }
+		| Promise<{ totalBuckets: number; config: Required<RateLimitConfig> }>;
+}
+
+/**
+ * Create a rate limiter instance
+ *
+ * Automatically selects the appropriate implementation based on environment:
+ * - If REDIS_URL is set: Uses distributed Redis-based rate limiting
+ * - Otherwise: Uses in-memory rate limiting (single instance only)
+ *
+ * USAGE:
+ * ```typescript
+ * // Basic usage
+ * const limiter = await createRateLimiter({
+ *   limit: 10,
+ *   windowMs: 60000, // 1 minute
+ * });
+ *
+ * const result = await limiter.check("user-id-123");
+ * if (result.limited) {
+ *   return new Response("Too many requests", { status: 429 });
+ * }
+ *
+ * // With custom Redis URL
+ * const limiter = await createRateLimiter(
+ *   { limit: 100, windowMs: 60000 },
+ *   "redis://custom-host:6379"
+ * );
+ * ```
+ *
+ * TESTING:
+ * ```typescript
+ * // Force in-memory for tests (ignore REDIS_URL)
+ * const limiter = new RateLimiter({ limit: 10, windowMs: 60000 });
+ *
+ * // Force Redis for tests
+ * const { RedisRateLimiter } = await import("./rate-limit-redis");
+ * const limiter = new RedisRateLimiter(
+ *   { limit: 10, windowMs: 60000 },
+ *   "redis://localhost:6379"
+ * );
+ * ```
+ *
+ * @param config - Rate limit configuration
+ * @param redisUrl - Optional Redis URL (defaults to REDIS_URL env var)
+ * @returns Rate limiter instance (in-memory or Redis-based)
+ */
+export async function createRateLimiter(
+	config: RateLimitConfig,
+	redisUrl?: string,
+): Promise<IRateLimiter> {
+	const useRedis = redisUrl || process.env.REDIS_URL;
+
+	if (useRedis) {
+		// Lazy load Redis limiter only if needed
+		try {
+			const { RedisRateLimiter } = await import("./rate-limit-redis");
+			return new RedisRateLimiter(config, redisUrl);
+		} catch (error) {
+			console.error(
+				"Failed to load Redis rate limiter, falling back to in-memory:",
+				error,
+			);
+			// Fallback to in-memory if Redis fails to load
+			return new RateLimiter(config);
+		}
+	}
+
+	return new RateLimiter(config);
+}
+
+/**
+ * Synchronous version of createRateLimiter for backwards compatibility
+ *
+ * DEPRECATED: Use createRateLimiter (async) instead for Redis support.
+ * This function only supports in-memory rate limiting.
+ *
+ * @deprecated Use createRateLimiter instead
+ */
+export function createRateLimiterSync(config: RateLimitConfig): RateLimiter {
+	if (process.env.REDIS_URL) {
+		console.warn(
+			"REDIS_URL is set but createRateLimiterSync was called. " +
+				"Use createRateLimiter (async) for Redis support. " +
+				"Falling back to in-memory rate limiting.",
+		);
+	}
+	return new RateLimiter(config);
 }

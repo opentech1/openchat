@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
 import dynamic from "next/dynamic";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
+import { borderRadius, spacing } from "@/styles/design-tokens";
 
 // Lazy load the heavy ChatRoom component (600+ lines)
 const ChatRoom = dynamic(() => import("@/components/chat-room"), {
@@ -13,10 +14,10 @@ const ChatRoom = dynamic(() => import("@/components/chat-room"), {
 
 function ChatRoomSkeleton() {
   return (
-    <div className="mx-auto max-w-3xl p-4 md:p-6">
+    <div className={`mx-auto max-w-3xl ${spacing.padding.lg} md:p-6`}>
       <div className="animate-pulse space-y-4">
-        <div className="h-4 w-1/3 rounded bg-muted" />
-        <div className="h-24 rounded-xl bg-muted" />
+        <div className={`h-4 w-1/3 ${borderRadius.sm} bg-muted`} />
+        <div className={`h-24 ${borderRadius.lg} bg-muted`} />
       </div>
     </div>
   );

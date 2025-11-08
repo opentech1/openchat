@@ -119,6 +119,64 @@ const nextConfig = {
 				moduleIds: 'deterministic',
 				// Use less memory-intensive minimizer settings
 				minimize: true,
+				// Enhanced code splitting for better caching
+				splitChunks: !isServer ? {
+					chunks: 'all',
+					cacheGroups: {
+						default: false,
+						vendors: false,
+						// Framework bundle (React, Next.js core)
+						framework: {
+							name: 'framework',
+							test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next[\\/])[\\/]/,
+							priority: 40,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Large UI libraries
+						ui: {
+							name: 'ui-libs',
+							test: /[\\/]node_modules[\\/](@radix-ui|cmdk|sonner)[\\/]/,
+							priority: 35,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Data fetching and state management
+						data: {
+							name: 'data-libs',
+							test: /[\\/]node_modules[\\/](@tanstack|@electric-sql)[\\/]/,
+							priority: 30,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// AI SDK and related packages
+						ai: {
+							name: 'ai-libs',
+							test: /[\\/]node_modules[\\/](ai|@ai-sdk|@openrouter)[\\/]/,
+							priority: 30,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Other node_modules
+						lib: {
+							test: /[\\/]node_modules[\\/]/,
+							name(module) {
+								const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)?.[1];
+								return packageName ? `npm.${packageName.replace('@', '')}` : 'npm.other';
+							},
+							priority: 20,
+							minChunks: 1,
+							reuseExistingChunk: true,
+						},
+						// Common application code
+						commons: {
+							name: 'commons',
+							minChunks: 2,
+							priority: 10,
+							reuseExistingChunk: true,
+						},
+					},
+				} : undefined,
 			};
 			// Disable source maps if GENERATE_SOURCEMAP is false
 			if (process.env.GENERATE_SOURCEMAP === 'false') {

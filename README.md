@@ -144,6 +144,58 @@ For more details on bundle optimization, see:
 - The repository ships `docker/web.Dockerfile` and `docker/convex.Dockerfile` images that are referenced in the compose manifests.
 - For bespoke hosting, review `docs/SYNC.md` for websocket expectations and `posthog.md` for analytics instrumentation before scaling out.
 
+### Rate Limiting
+
+OpenChat includes built-in rate limiting for API endpoints with support for both single-instance and multi-instance deployments.
+
+**Single Instance (default):** In-memory rate limiting
+- Fast and efficient with no external dependencies
+- Suitable for single-server deployments
+- Rate limits are per-instance only
+- No additional setup required
+
+**Multi Instance:** Redis-based distributed rate limiting
+- Shared rate limits across all server instances
+- Essential for load-balanced or horizontal scaling deployments
+- Requires Redis server and `ioredis` package
+
+To enable Redis-based rate limiting:
+
+1. **Install ioredis** (optional dependency):
+   ```bash
+   bun add ioredis
+   ```
+
+2. **Set REDIS_URL environment variable**:
+   ```bash
+   # Local Redis
+   REDIS_URL=redis://localhost:6379
+
+   # Remote Redis with auth
+   REDIS_URL=redis://:password@redis-host:6379
+
+   # Redis Cluster
+   REDIS_URL=redis://redis-cluster:6379
+   ```
+
+3. **Start your application**:
+   ```bash
+   REDIS_URL=redis://localhost:6379 bun run start
+   ```
+
+The application will automatically detect the `REDIS_URL` environment variable and switch to distributed rate limiting. No code changes are required.
+
+For local development with Redis:
+```bash
+# Start Redis with Docker
+docker run -d -p 6379:6379 redis:alpine
+
+# Run OpenChat
+REDIS_URL=redis://localhost:6379 bun dev
+```
+
+**Note:** Rate limiting configuration is defined in `/apps/web/src/lib/rate-limit.ts`. The system automatically falls back to in-memory rate limiting if Redis is unavailable.
+
 ## Additional Documentation
 - `docs/SYNC.md` – design document for the realtime `/sync` websocket hub.
 - `posthog.md` – event naming strategy and dashboards.

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
-import { motion, useReducedMotion } from "framer-motion";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -56,8 +55,6 @@ function ChatComposer({
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fallbackModelId, setFallbackModelId] = useState<string>("");
-  const prefersReducedMotion = useReducedMotion();
-  const fast = prefersReducedMotion ? 0 : 0.3;
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
@@ -135,15 +132,12 @@ function ChatComposer({
   const isBusy = isSending || isStreaming;
 
   return (
-    <motion.div
+    <div
       className={cn(
-        `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl`,
+        `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-300`,
         borderRadius.xl,
         shadows.xl,
       )}
-      initial={{ scale: 0.985 }}
-      animate={{ scale: 1 }}
-      transition={{ delay: 0.05, duration: fast }}
     >
       <div className={spacing.padding.lg}>
         <textarea
@@ -210,7 +204,7 @@ function ChatComposer({
               {errorMessage}
             </span>
           )}
-          <motion.button
+          <button
             type="button"
             onClick={() => {
               if (isStreaming) {
@@ -219,8 +213,6 @@ function ChatComposer({
                 void send();
               }
             }}
-            whileHover={{ scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
             disabled={
               isStreaming
                 ? sendDisabled
@@ -235,7 +227,7 @@ function ChatComposer({
             }
             aria-busy={isSending}
             className={cn(
-              "flex h-9 items-center text-sm font-medium transition-all",
+              "flex h-9 items-center text-sm font-medium transition-all hover:scale-[1.01] active:scale-[0.98]",
               borderRadius.lg,
               spacing.gap.sm,
               shadows.sm,
@@ -258,10 +250,10 @@ function ChatComposer({
               <SendIcon className="size-4" aria-hidden="true" />
             )}
             <span>{isStreaming ? "Stop" : "Send"}</span>
-          </motion.button>
+          </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

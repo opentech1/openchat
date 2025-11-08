@@ -4,6 +4,7 @@ import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
+import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
 
 const Popover = PopoverPrimitive.Root
 const PopoverTrigger = PopoverPrimitive.Trigger
@@ -19,7 +20,7 @@ const PopoverContent = React.forwardRef<
 			align={align}
 			sideOffset={sideOffset}
 			className={cn(
-				"bg-popover text-popover-foreground z-50 w-72 rounded-xl border border-border/60 p-4 shadow-xl outline-none",
+				`bg-popover text-popover-foreground z-50 w-72 ${borderRadius.lg} border border-border/60 ${spacing.padding.lg} ${shadows.xl} outline-none`,
 				"focus-visible:border-ring focus-visible:ring-ring/20 focus-visible:ring-2",
 				"data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
 				"data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",

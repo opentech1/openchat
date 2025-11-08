@@ -34,6 +34,7 @@ import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
+import { fetchWithCsrf } from "@/lib/csrf-client";
 
 export type ChatListItem = {
   id: string;
@@ -172,7 +173,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     if (isCreating) return;
     setIsCreating(true);
     try {
-      const response = await fetch("/api/chats", {
+      const response = await fetchWithCsrf("/api/chats", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
@@ -207,7 +208,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   const handleDelete = useCallback(async (chatId: string) => {
     setDeletingChatId(chatId);
     try {
-      const response = await fetch(`/api/chats/${chatId}`, {
+      const response = await fetchWithCsrf(`/api/chats/${chatId}`, {
         method: "DELETE",
         credentials: "include",
       });
