@@ -271,7 +271,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   }, [brandTheme, chats.length, user?.id]);
 
   return (
-    <Sidebar defaultCollapsed {...sidebarProps}>
+    <Sidebar defaultCollapsed={false} {...sidebarProps}>
       <SidebarHeader className="px-2 py-3">
         <div className="flex items-center justify-center">
           <Link
