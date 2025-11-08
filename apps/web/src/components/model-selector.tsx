@@ -37,8 +37,6 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
-const TOKENS_PER_MILLION = 1_000_000
-
 // Memoize the number formatters to avoid recreating them on every render
 const getNumberFormatter = (() => {
 	const cache = new Map<number, Intl.NumberFormat>();
@@ -60,6 +58,8 @@ const getNumberFormatter = (() => {
 
 function formatCost(cost: number | null) {
 	if (cost == null || !Number.isFinite(cost)) return "–"
+	// Show "free" for zero-cost models
+	if (cost === 0) return "free"
 	const abs = Math.abs(cost)
 	let fractionDigits = 3
 	if (abs >= 1) fractionDigits = 2
@@ -70,15 +70,10 @@ function formatCost(cost: number | null) {
 	return getNumberFormatter(fractionDigits).format(cost)
 }
 
-const scaleCostToMillion = (cost: number | null) => {
-	if (cost == null || !Number.isFinite(cost)) return null
-	return cost * TOKENS_PER_MILLION
-}
-
 function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	const promptPerMillion = scaleCostToMillion(pricing.prompt)
-	const completionPerMillion = scaleCostToMillion(pricing.completion)
-	return `In: ${formatCost(promptPerMillion)} · Out: ${formatCost(completionPerMillion)} per 1M tokens`
+	// OpenRouter API returns pricing already in dollars per million tokens format
+	// No need to multiply by 1,000,000
+	return `In: ${formatCost(pricing.prompt)} · Out: ${formatCost(pricing.completion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {
@@ -159,7 +154,7 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 					aria-haspopup="listbox"
 					aria-label={`Select AI model. Current selection: ${triggerLabel}`}
 					title={triggerTitle}
-					className={cn("flex h-10 min-w-[220px] max-w-[360px] items-center justify-between bg-background/90 px-3 text-left text-foreground", borderRadius.lg, spacing.gap.sm)}
+					className={cn("flex h-10 min-w-[220px] max-w-[360px] items-center justify-between bg-background px-3 text-left text-foreground", borderRadius.lg, spacing.gap.sm)}
 				>
 					<span className={cn("flex min-w-0 items-center", spacing.gap.sm)}>
 						<span className={cn("bg-muted text-muted-foreground/90 flex size-8 items-center justify-center", borderRadius.md)}>
@@ -170,7 +165,7 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent align="end" className={cn("w-[320px] max-w-[90vw] border-none bg-popover/95 p-0", shadows.xl)}>
+			<PopoverContent align="end" className={cn("w-[320px] max-w-[90vw] border-none bg-popover p-0", shadows.xl)}>
 				<Command className="border-none bg-transparent shadow-none" loop>
 					<CommandInput 
 						placeholder="Search models" 
