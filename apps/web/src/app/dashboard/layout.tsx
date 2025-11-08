@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
                 <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
-                    <MobileDashboardNav initialChats={chats} authUserId={session.userId} />
+                    <MobileDashboardNav initialChats={chats} />
                     <div className="hidden md:block">
                         <SidebarCollapseButton />
                     </div>
