@@ -9,10 +9,18 @@ class MockMessagePort {
 	onmessageerror: ((this: MessagePort, ev: MessageEvent) => any) | null = null;
 
 	close() {}
-	postMessage(_message: any) {}
+	postMessage(_message: any, _transfer?: Transferable[]) {}
 	start() {}
-	addEventListener() {}
-	removeEventListener() {}
+	addEventListener(
+		_type: string,
+		_listener: EventListenerOrEventListenerObject | null,
+		_options?: boolean | AddEventListenerOptions,
+	) {}
+	removeEventListener(
+		_type: string,
+		_listener: EventListenerOrEventListenerObject | null,
+		_options?: boolean | EventListenerOptions,
+	) {}
 	dispatchEvent(_event: Event): boolean {
 		return true;
 	}
