@@ -1,0 +1,6 @@
+# Vercel Cache Bust
+
+This file forces Vercel to rebuild with a fresh cache.
+
+Build timestamp: 2025-11-08T02:10:00Z
+Reason: Fix build cache corruption issue
