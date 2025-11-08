@@ -12,8 +12,13 @@
  * 3. Configure the schedule in Convex dashboard under "Crons"
  */
 
+import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+
+const crons = cronJobs();
+
+export default crons;
 
 /**
  * Cleanup soft-deleted records

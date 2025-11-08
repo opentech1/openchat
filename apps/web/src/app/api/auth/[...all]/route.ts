@@ -6,7 +6,8 @@ import { logWarn } from "@/lib/logger-server";
 // Export the Convex Better Auth handler for Next.js
 // This uses Convex as the database backend instead of SQLite
 // Sessions and user data are stored in Convex
-const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_URL || "https://outgoing-setter-201.convex.cloud";
+// IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
+const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL || "https://outgoing-setter-201.convex.site";
 const { GET: originalGET, POST: originalPOST } = nextJsHandler({ convexSiteUrl });
 
 // Rate limiter for auth endpoints to prevent brute force attacks
