@@ -1,15 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 
 /**
  * Generate a unique request correlation ID
  *
  * Format: {timestamp}-{random}
  * Example: 1699564231-a3f9c8d2
+ *
+ * Uses Web Crypto API (edge-compatible) instead of Node.js crypto module
  */
 function generateCorrelationId(): string {
 	const timestamp = Date.now().toString(36);
-	const random = randomBytes(4).toString("hex");
+	// Use Web Crypto API which is available in Edge Runtime
+	const randomArray = new Uint8Array(4);
+	crypto.getRandomValues(randomArray);
+	const random = Array.from(randomArray)
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
 	return `${timestamp}-${random}`;
 }
 
