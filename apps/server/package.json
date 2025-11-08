@@ -9,7 +9,7 @@
     "test": "echo \"No Convex tests yet\""
   },
   "dependencies": {
-    "@convex-dev/better-auth": "^0.9.6",
+    "@convex-dev/better-auth": "^0.9.7",
     "convex": "1.28.2"
   }
 }
