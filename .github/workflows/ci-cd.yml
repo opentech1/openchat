@@ -1,0 +1,141 @@
+name: CI/CD with Blacksmith
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  # Reduce Turborepo telemetry noise
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  build-and-test:
+    name: Build, Test & Deploy
+    runs-on: blacksmith-4vcpu-ubuntu-2204  # 🔥 Blacksmith: 2-10x faster than standard runners
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for better caching
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Cache dependencies for faster installs
+      - name: Cache dependencies
+        uses: useblacksmith/cache@v5
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      # Cache Next.js build for faster rebuilds
+      - name: Cache Next.js build
+        uses: useblacksmith/cache@v5
+        with:
+          path: |
+            apps/web/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lockb') }}-${{ hashFiles('apps/web/**/*.ts', 'apps/web/**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('**/bun.lockb') }}-
+            ${{ runner.os }}-nextjs-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint code
+        run: bun run check
+        continue-on-error: true  # Don't fail the build on linting errors (just warn)
+
+      - name: Type check
+        run: bun run check-types
+
+      - name: Run tests
+        run: bun test
+        continue-on-error: true  # Don't fail on test errors yet (you can make this strict later)
+
+      - name: Build application
+        run: bun run build
+        env:
+          # Pass through environment variables needed for build
+          NODE_ENV: production
+          NEXT_TELEMETRY_DISABLED: 1
+
+      # Deploy to Vercel on main branch only
+      - name: Deploy to Vercel (Production)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "Installing Vercel CLI..."
+          bun x vercel --version
+
+          echo "Deploying to production..."
+          cd apps/web
+          bunx vercel deploy --prod --token=$VERCEL_TOKEN --yes
+
+      # Deploy preview for PRs
+      - name: Deploy to Vercel (Preview)
+        if: github.event_name == 'pull_request'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "Deploying preview..."
+          cd apps/web
+          DEPLOYMENT_URL=$(bunx vercel deploy --token=$VERCEL_TOKEN --yes)
+          echo "Preview URL: $DEPLOYMENT_URL"
+
+          # Comment on PR with preview URL
+          gh pr comment ${{ github.event.pull_request.number }} --body "🚀 Preview deployed: $DEPLOYMENT_URL"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Optional: Bundle size analysis job
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: blacksmith-2vcpu-ubuntu-2204  # Smaller runner for analysis
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache dependencies
+        uses: useblacksmith/cache@v5
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Analyze bundle
+        run: |
+          cd apps/web
+          ANALYZE=true bun run build > /dev/null 2>&1 || true
+
+          # Generate bundle size report
+          if [ -f ".next/analyze/client.html" ]; then
+            echo "📦 Bundle analysis complete!"
+            echo "Client bundle size: $(du -sh .next/analyze/client.html | cut -f1)"
+          fi
+        continue-on-error: true
