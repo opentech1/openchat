@@ -62,9 +62,15 @@ export const createAuth = (
 		plugins: [
 			convex(),
 		],
+		trustedOrigins: [
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"https://osschat.dev",
+		],
 		advanced: {
 			useSecureCookies: isProduction(),
 			cookiePrefix: getEnv("AUTH_COOKIE_PREFIX", "openchat"),
+			disableCSRFCheck: !isProduction(), // TEMPORARY: Disable CSRF in dev to debug
 		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days

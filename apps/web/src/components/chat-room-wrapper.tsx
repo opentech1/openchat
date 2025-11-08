@@ -14,7 +14,7 @@ const ChatRoom = dynamic(() => import("@/components/chat-room"), {
 
 function ChatRoomSkeleton() {
   return (
-    <div className={`mx-auto max-w-3xl ${spacing.padding.lg} md:p-6`}>
+    <div className="mx-auto max-w-5xl px-3">
       <div className="animate-pulse space-y-4">
         <div className={`h-4 w-1/3 ${borderRadius.sm} bg-muted`} />
         <div className={`h-24 ${borderRadius.lg} bg-muted`} />
