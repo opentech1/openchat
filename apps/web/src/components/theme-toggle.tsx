@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import { borderRadius, iconSize } from "@/styles/design-tokens";
 
 export default function ThemeToggle() {
 	const { resolvedTheme, setTheme } = useTheme();
@@ -16,9 +17,9 @@ export default function ThemeToggle() {
 			type="button"
 			aria-label="Toggle theme"
 			onClick={() => setTheme(isDark ? "light" : "dark")}
-			className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+			className={`hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center ${borderRadius.sm} transition-colors`}
 		>
-			{mounted ? (isDark ? <Sun className="size-4" /> : <Moon className="size-4" />) : <Moon className="size-4" />}
+			{mounted ? (isDark ? <Sun className={iconSize.sm} /> : <Moon className={iconSize.sm} />) : <Moon className={iconSize.sm} />}
 		</button>
 	);
 }

@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { borderRadius } from "@/styles/design-tokens";
 
@@ -110,8 +109,6 @@ export const AutoResizeTextarea = React.forwardRef<
 		ref,
 	) => {
 		const [isFocused, setIsFocused] = useState(false);
-		const prefersReducedMotion = useReducedMotion();
-		const fast = prefersReducedMotion ? 0 : 0.3;
 
 		const { textareaRef, debouncedAdjustHeight } = useAutoResizeTextarea({
 			minHeight,
@@ -149,12 +146,8 @@ export const AutoResizeTextarea = React.forwardRef<
 				/>
 
 				{showRing && isFocused && (
-					<motion.span
-						className={`ring-primary/30 pointer-events-none absolute inset-0 ${borderRadius.sm} ring-2 ring-offset-0`}
-						initial={{ opacity: 0 }}
-						animate={{ opacity: 1 }}
-						exit={{ opacity: 0 }}
-						transition={{ duration: fast }}
+					<span
+						className={`ring-primary/30 pointer-events-none absolute inset-0 ${borderRadius.sm} ring-2 ring-offset-0 animate-in fade-in-0 duration-300`}
 					/>
 				)}
 			</div>

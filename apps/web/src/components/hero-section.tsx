@@ -10,6 +10,7 @@ import { TrustedBrands } from '@/components/hero/trusted-brands';
 import { IntegrationsSection } from '@/components/hero/integrations-section';
 import { PricingSection } from '@/components/hero/pricing-section';
 import { captureClientEvent } from '@/lib/posthog';
+import { borderRadius } from '@/styles/design-tokens';
 
 function screenWidthBucket(width: number) {
   if (width < 640) return 'xs';
@@ -76,9 +77,9 @@ export default function HeroSection() {
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute left-1/2 top-[-20%] h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,theme(colors.primary/30%)0%,transparent70%)] [filter:blur(140px)]" />
-          <div className="absolute -right-40 top-1/3 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle_at_center,theme(colors.accent/25%)0%,transparent70%)] [filter:blur(140px)]" />
-          <div className="absolute -left-32 bottom-[-10%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle_at_center,theme(colors.primary/25%)0%,transparent70%)] [filter:blur(140px)]" />
+          <div className={`absolute left-1/2 top-[-20%] h-[32rem] w-[32rem] -translate-x-1/2 ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.primary/30%)0%,transparent70%)] [filter:blur(140px)]`} />
+          <div className={`absolute -right-40 top-1/3 h-[28rem] w-[28rem] ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.accent/25%)0%,transparent70%)] [filter:blur(140px)]`} />
+          <div className={`absolute -left-32 bottom-[-10%] h-[26rem] w-[26rem] ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.primary/25%)0%,transparent70%)] [filter:blur(140px)]`} />
           <div className="absolute inset-x-0 bottom-[-35%] h-[40rem] bg-[radial-gradient(60%_50%_at_50%_50%,theme(colors.background/0%)0%,theme(colors.background)70%)]" />
         </div>
         <HeroContent onCtaClick={handleCtaClick} />

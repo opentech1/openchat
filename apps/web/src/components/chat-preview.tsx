@@ -4,7 +4,6 @@ import { useEffect, useRef, useCallback, useTransition } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import * as React from "react";
 import { useAutoResizeTextarea } from "@/components/ui/auto-resize-textarea";
 import {
@@ -20,9 +19,6 @@ function ChatPreview({ className }: { className?: string }) {
   const [attachments, setAttachments] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-  const fast = prefersReducedMotion ? 0 : 0.3;
-  const slower = prefersReducedMotion ? 0 : 0.5;
   const [, startTransition] = useTransition();
   useEffect(
     () => () => {
@@ -85,51 +81,25 @@ function ChatPreview({ className }: { className?: string }) {
     <div className={cn("w-full", className)}>
       <div className="text-foreground relative w-full overflow-hidden bg-transparent p-0">
         <div className="relative mx-auto w-full max-w-2xl">
-          <motion.div
-            className="relative z-10 space-y-12"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: slower, ease: "easeOut" }}
-          >
+          <div className="relative z-10 space-y-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
             <div className="space-y-3 text-center">
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15, duration: fast }}
-                className="inline-block"
-              >
+              <div className="inline-block animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150">
                 <h1 className="pb-1 text-3xl font-medium tracking-tight">
                   How can OpenChat help today?
                 </h1>
-                <motion.div
-                  className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent"
-                  initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: "100%", opacity: 1 }}
-                  transition={{
-                    delay: 0.25,
-                    duration: prefersReducedMotion ? 0 : 0.4,
-                  }}
-                />
-              </motion.div>
-              <motion.p
-                className="text-muted-foreground text-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2, duration: fast }}
-              >
+                <div className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent animate-in fade-in-0 duration-400 delay-250" />
+              </div>
+              <p className="text-muted-foreground text-sm animate-in fade-in-0 duration-300 delay-200">
                 Ask a question or type a command
-              </motion.p>
+              </p>
             </div>
 
-            <motion.div
+            <div
               className={cn(
-                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl`,
+                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-300 delay-50`,
                 borderRadius.xl,
                 shadows.xl,
               )}
-              initial={{ scale: 0.985 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.05, duration: fast }}
             >
               {/* Removed focus ring overlay for a cleaner typing experience */}
               {/* Command palette removed */}
@@ -162,39 +132,29 @@ function ChatPreview({ className }: { className?: string }) {
                 />
               </div>
 
-              <AnimatePresence>
-                {attachments.length > 0 && (
-                  <motion.div
-                    className={cn("flex flex-wrap px-4 pb-3", spacing.gap.sm)}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    {attachments.map((file, index) => (
-                      <motion.div
-                        key={index}
-                        className={cn(
-                          "bg-primary/5 text-muted-foreground flex items-center px-3 py-1.5 text-xs",
-                          borderRadius.md,
-                          spacing.gap.sm,
-                        )}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
+              {attachments.length > 0 && (
+                <div className={cn("flex flex-wrap px-4 pb-3 animate-in fade-in-0 duration-200", spacing.gap.sm)}>
+                  {attachments.map((file, index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        "bg-primary/5 text-muted-foreground flex items-center px-3 py-1.5 text-xs animate-in fade-in-0 zoom-in-95 duration-200",
+                        borderRadius.md,
+                        spacing.gap.sm,
+                      )}
+                    >
+                      <span>{file}</span>
+                      <button
+                        onClick={() => removeAttachment(index)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={`Remove ${file}`}
                       >
-                        <span>{file}</span>
-                        <button
-                          onClick={() => removeAttachment(index)}
-                          className="text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={`Remove ${file}`}
-                        >
-                          <XIcon className="size-3" />
-                        </button>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                        <XIcon className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div
                 className={cn(
@@ -204,35 +164,31 @@ function ChatPreview({ className }: { className?: string }) {
                 )}
               >
                 <div className={cn("flex items-center", spacing.gap.md)}>
-                  <motion.button
+                  <button
                     type="button"
                     onClick={handleAttachFile}
-                    whileTap={{ scale: 0.94 }}
                     className={cn(
-                      "group text-muted-foreground hover:text-foreground relative p-2 transition-colors",
+                      "group text-muted-foreground hover:text-foreground relative p-2 transition-all active:scale-[0.94]",
                       borderRadius.md,
                     )}
                     aria-label="Attach file"
                   >
                     <Paperclip className="size-4" />
-                    <motion.span
+                    <span
                       className={cn(
                         "bg-primary/10 absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100",
                         borderRadius.md,
                       )}
-                      layoutId="button-highlight"
                     />
-                  </motion.button>
+                  </button>
                 </div>
 
-                <motion.button
+                <button
                   type="button"
                   onClick={handleSendMessage}
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
                   disabled={isTyping || !value.trim()}
                   className={cn(
-                    "px-4 py-2 text-sm font-medium transition-all",
+                    "px-4 py-2 text-sm font-medium transition-all hover:scale-[1.01] active:scale-[0.98]",
                     "flex items-center",
                     borderRadius.md,
                     spacing.gap.sm,
@@ -255,12 +211,12 @@ function ChatPreview({ className }: { className?: string }) {
                     <SendIcon className="size-4" aria-hidden="true" />
                   )}
                   <span>Send</span>
-                </motion.button>
+                </button>
               </div>
-            </motion.div>
+            </div>
 
             {/* Removed suggested command chips below input */}
-          </motion.div>
+          </div>
         </div>
 
         {/* Neutral look; gradients removed for performance */}
