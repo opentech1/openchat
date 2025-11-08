@@ -18,7 +18,9 @@ const nextConfig = {
 		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID, // Safe to expose (OAuth public client ID)
 	},
 	typedRoutes: true,
-	output: "standalone",
+	// REMOVED: output: "standalone"
+	// Vercel has its own runtime and doesn't need standalone mode
+	// Keeping this enabled adds 150MB+ to builds and increases build time
 	images: {
 		remotePatterns: [{ protocol: "https", hostname: "ik.imagekit.io" }],
 	},
@@ -202,8 +204,13 @@ const nextConfig = {
 	},
 };
 
-// Skip Sentry entirely if DSN is not configured (saves build memory)
-const shouldUseSentry = process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN.length > 0;
+// Skip Sentry entirely if DSN is not configured OR in Vercel environment (saves build memory)
+// Sentry adds 500MB+ to webpack cache and significantly increases build time
+// Disable in Vercel to speed up deployments (can enable later if needed)
+const shouldUseSentry =
+	!process.env.VERCEL && // Skip Sentry in Vercel builds
+	process.env.NEXT_PUBLIC_SENTRY_DSN &&
+	process.env.NEXT_PUBLIC_SENTRY_DSN.length > 0;
 
 // Apply bundle analyzer wrapper first, then Sentry
 const configWithAnalyzer = withBundleAnalyzer(nextConfig);
