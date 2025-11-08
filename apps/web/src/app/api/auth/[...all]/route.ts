@@ -58,11 +58,18 @@ async function withAuthRateLimit(
 		windowMs: authRateLimiter.getStats().config.windowMs,
 	});
 
+	// Create a new response with rate limit headers
+	// (Response headers are immutable in Next.js App Router)
+	const newHeaders = new Headers(response.headers);
 	Object.entries(rateLimitHeaders).forEach(([key, value]) => {
-		response.headers.set(key, value);
+		newHeaders.set(key, value);
 	});
 
-	return response;
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers: newHeaders,
+	});
 }
 
 // Export wrapped handlers with rate limiting
