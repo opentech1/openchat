@@ -37,8 +37,6 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
-const TOKENS_PER_MILLION = 1_000_000
-
 // Memoize the number formatters to avoid recreating them on every render
 const getNumberFormatter = (() => {
 	const cache = new Map<number, Intl.NumberFormat>();
@@ -70,15 +68,9 @@ function formatCost(cost: number | null) {
 	return getNumberFormatter(fractionDigits).format(cost)
 }
 
-const scaleCostToMillion = (cost: number | null) => {
-	if (cost == null || !Number.isFinite(cost)) return null
-	return cost * TOKENS_PER_MILLION
-}
-
 function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	const promptPerMillion = scaleCostToMillion(pricing.prompt)
-	const completionPerMillion = scaleCostToMillion(pricing.completion)
-	return `In: ${formatCost(promptPerMillion)} · Out: ${formatCost(completionPerMillion)} per 1M tokens`
+	// OpenRouter already returns pricing in dollars per million tokens, no scaling needed
+	return `In: ${formatCost(pricing.prompt)} · Out: ${formatCost(pricing.completion)} per 1M tokens`
 }
 
 const getInitial = (label: string) => {
