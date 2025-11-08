@@ -25,7 +25,7 @@ export const createAuth = (
 	// Validate environment variables on first auth creation
 	ensureValidated();
 
-	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
+	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
 
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
@@ -62,9 +62,17 @@ export const createAuth = (
 		plugins: [
 			convex(),
 		],
+		trustedOrigins: [
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"https://osschat.dev",
+		],
 		advanced: {
 			useSecureCookies: isProduction(),
 			cookiePrefix: getEnv("AUTH_COOKIE_PREFIX", "openchat"),
+			// Disable CSRF protection in dev to prevent intermittent 403 errors
+			// Production keeps CSRF enabled for security
+			disableCSRFCheck: !isProduction(),
 		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days

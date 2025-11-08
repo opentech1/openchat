@@ -171,7 +171,7 @@ function ChatMessagesPanelComponent({
         >
           <div
             ref={contentRef}
-            className="flex min-h-full flex-col bg-background/30 px-4 pt-4"
+            className="flex min-h-full flex-col bg-background/30 px-3 pt-4"
             role="log"
             aria-live="polite"
             aria-relevant="additions"
