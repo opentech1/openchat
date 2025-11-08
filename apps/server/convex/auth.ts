@@ -25,7 +25,7 @@ export const createAuth = (
 	// Validate environment variables on first auth creation
 	ensureValidated();
 
-	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3001");
+	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
 
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
