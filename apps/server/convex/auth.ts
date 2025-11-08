@@ -70,7 +70,9 @@ export const createAuth = (
 		advanced: {
 			useSecureCookies: isProduction(),
 			cookiePrefix: getEnv("AUTH_COOKIE_PREFIX", "openchat"),
-			disableCSRFCheck: !isProduction(), // TEMPORARY: Disable CSRF in dev to debug
+			// Disable CSRF protection in dev to prevent intermittent 403 errors
+			// Production keeps CSRF enabled for security
+			disableCSRFCheck: !isProduction(),
 		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days

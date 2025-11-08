@@ -7,8 +7,11 @@ import { logWarn } from "@/lib/logger-server";
 // This uses Convex as the database backend instead of SQLite
 // Sessions and user data are stored in Convex
 // IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
-// Let nextJsHandler auto-detect from NEXT_PUBLIC_CONVEX_SITE_URL
-const { GET: originalGET, POST: originalPOST } = nextJsHandler();
+// Auto-detect from NEXT_PUBLIC_CONVEX_SITE_URL with fallback to production
+const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+const { GET: originalGET, POST: originalPOST } = nextJsHandler(
+	convexSiteUrl ? { convexSiteUrl } : undefined
+);
 
 // Rate limiter for auth endpoints to prevent brute force attacks
 // More restrictive than general API endpoints
