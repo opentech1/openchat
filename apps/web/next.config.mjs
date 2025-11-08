@@ -225,8 +225,10 @@ const finalConfig = shouldUseSentry ? withSentryConfig(configWithAnalyzer, {
 	widenClientFileUpload: true,
 
 	// Automatically annotate React components to show their full name in breadcrumbs and session replay
+	// DISABLED: This scans all React components during build and causes 5-10 minute hangs on Vercel
+	// Re-enable only on faster CI (Blacksmith) or when debugging specific component issues
 	reactComponentAnnotation: {
-		enabled: true,
+		enabled: false,
 	},
 
 	// Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
