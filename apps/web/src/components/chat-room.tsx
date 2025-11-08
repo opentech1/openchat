@@ -750,7 +750,6 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
-        loading={!messages.length}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-6 right-6 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
