@@ -8,7 +8,7 @@
 
 ## Build, Test, and Development Commands
 - Install deps: `bun install`
-- Dev (all): `bun dev` — web on `3001`, server on `3000`.
+- Dev (all): `bun dev` — web on `3000`, server on `3000`.
 - Dev (scoped): `bun dev:web`, `bun dev:server`
 - Build (all): `bun build`
 - Type-check: `bun check-types`
@@ -33,7 +33,7 @@
 - Keep PRs small and focused; update docs when behavior changes.
 
 ## Security & Configuration Tips
-- Server env: `DATABASE_URL`, `CORS_ORIGIN` (e.g., `http://localhost:3001`). Store in `apps/server/.env` and never commit.
+- Server env: `DATABASE_URL`, `CORS_ORIGIN` (e.g., `http://localhost:3000`). Store in `apps/server/.env` and never commit.
 - Auth: Better-Auth under `/api/auth`; use HTTPS in production (`SameSite=None; Secure` cookies). For local dev, set `CORS_ORIGIN` to the web URL.
 - Electric: when Electric runs behind an internal load balancer, set `ELECTRIC_SERVICE_URL`, `ELECTRIC_SOURCE_ID`, and optionally `ELECTRIC_FALLBACK_PORT`/`ELECTRIC_FALLBACK_DELAY_MS` so the API can retry the standby instance.
 - After editing `apps/server/src/db/schema`, run `bun db:push` and commit generated artifacts if applicable.
