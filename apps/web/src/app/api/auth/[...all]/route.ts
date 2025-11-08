@@ -67,9 +67,33 @@ async function withAuthRateLimit(
 
 // Export wrapped handlers with rate limiting
 export async function GET(request: Request) {
-	return withAuthRateLimit(request, originalGET);
+	try {
+		return await withAuthRateLimit(request, originalGET);
+	} catch (error) {
+		console.error("[Auth Route Error]", error);
+		return NextResponse.json(
+			{
+				error: "Internal server error",
+				message: error instanceof Error ? error.message : "Unknown error",
+				stack: error instanceof Error ? error.stack : undefined,
+			},
+			{ status: 500 },
+		);
+	}
 }
 
 export async function POST(request: Request) {
-	return withAuthRateLimit(request, originalPOST);
+	try {
+		return await withAuthRateLimit(request, originalPOST);
+	} catch (error) {
+		console.error("[Auth Route Error]", error);
+		return NextResponse.json(
+			{
+				error: "Internal server error",
+				message: error instanceof Error ? error.message : "Unknown error",
+				stack: error instanceof Error ? error.stack : undefined,
+			},
+			{ status: 500 },
+		);
+	}
 }
