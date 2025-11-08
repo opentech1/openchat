@@ -54,6 +54,8 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 		// Persist user preference after hydration without clobbering the stored value on first render.
 		try {
 			localStorage.setItem("oc:sb:collapsed", collapsed ? "1" : "0");
+			// Dispatch custom event to notify sidebar collapse button
+			window.dispatchEvent(new CustomEvent("sidebar-toggled"));
 		} catch {}
 	}, [collapsed]);
 
