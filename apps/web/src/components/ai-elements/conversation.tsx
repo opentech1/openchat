@@ -6,6 +6,7 @@ import { ArrowDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { borderRadius, iconSize, spacing } from "@/styles/design-tokens";
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
@@ -27,7 +28,7 @@ export const ConversationContent = ({
   className,
   ...props
 }: ConversationContentProps) => (
-  <StickToBottom.Content className={cn("p-4", className)} {...props} />
+  <StickToBottom.Content className={cn(spacing.padding.lg, className)} {...props} />
 );
 
 export type ConversationEmptyStateProps = ComponentProps<"div"> & {
@@ -46,8 +47,8 @@ export const ConversationEmptyState = ({
 }: ConversationEmptyStateProps) => (
   <div
     className={cn(
-      "flex size-full flex-col items-center justify-center gap-3 p-8 text-center",
-      className
+      `flex size-full flex-col items-center justify-center ${spacing.gap.md} ${spacing.padding["2xl"]} text-center`,
+      className,
     )}
     {...props}
   >
@@ -81,8 +82,8 @@ export const ConversationScrollButton = ({
     !isAtBottom && (
       <Button
         className={cn(
-          "absolute bottom-4 left-[50%] translate-x-[-50%] rounded-full",
-          className
+          `absolute bottom-4 left-[50%] translate-x-[-50%] ${borderRadius.full}`,
+          className,
         )}
         onClick={handleScrollToBottom}
         size="icon"
@@ -90,7 +91,7 @@ export const ConversationScrollButton = ({
         variant="outline"
         {...props}
       >
-        <ArrowDownIcon className="size-4" />
+        <ArrowDownIcon className={iconSize.sm} />
       </Button>
     )
   );

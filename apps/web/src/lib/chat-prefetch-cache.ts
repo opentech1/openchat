@@ -1,5 +1,7 @@
 "use client";
 
+import { logError } from "@/lib/logger";
+
 export type PrefetchMessage = {
 	id: string;
 	role: "assistant" | "user";
@@ -142,7 +144,7 @@ export async function prefetchChat(chatId: string) {
 			storeChatPrefetch(chatId, payload.messages);
 			return { messages: payload.messages, fetchedAt: now, lastAccessedAt: now };
 		} catch (error) {
-			console.error("prefetch chat", error);
+			logError("Failed to prefetch chat", error);
 			return null;
 		} finally {
 			delete state.inflight[chatId];

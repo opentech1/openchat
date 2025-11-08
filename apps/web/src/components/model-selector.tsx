@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { registerClientProperties } from "@/lib/posthog"
+import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
 
 export type ModelSelectorOption = {
 	value: string
@@ -38,6 +39,25 @@ type ModelSelectorProps = {
 
 const TOKENS_PER_MILLION = 1_000_000
 
+// Memoize the number formatters to avoid recreating them on every render
+const getNumberFormatter = (() => {
+	const cache = new Map<number, Intl.NumberFormat>();
+	return (fractionDigits: number): Intl.NumberFormat => {
+		if (!cache.has(fractionDigits)) {
+			cache.set(
+				fractionDigits,
+				new Intl.NumberFormat("en-US", {
+					style: "currency",
+					currency: "USD",
+					minimumFractionDigits: fractionDigits,
+					maximumFractionDigits: fractionDigits,
+				})
+			);
+		}
+		return cache.get(fractionDigits)!;
+	};
+})();
+
 function formatCost(cost: number | null) {
 	if (cost == null || !Number.isFinite(cost)) return "–"
 	const abs = Math.abs(cost)
@@ -47,12 +67,7 @@ function formatCost(cost: number | null) {
 	else if (abs >= 0.01) fractionDigits = 4
 	else if (abs >= 0.001) fractionDigits = 5
 	else fractionDigits = 6
-	return new Intl.NumberFormat("en-US", {
-		style: "currency",
-		currency: "USD",
-		minimumFractionDigits: fractionDigits,
-		maximumFractionDigits: fractionDigits,
-	}).format(cost)
+	return getNumberFormatter(fractionDigits).format(cost)
 }
 
 const scaleCostToMillion = (cost: number | null) => {
@@ -86,7 +101,7 @@ function OptionGlyph({ option }: { option: ModelSelectorOption | null }) {
 	)
 }
 
-export function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
+function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
 	const [open, setOpen] = React.useState(false)
 	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
 
@@ -144,10 +159,10 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					aria-haspopup="listbox"
 					aria-label={`Select AI model. Current selection: ${triggerLabel}`}
 					title={triggerTitle}
-					className="flex h-10 min-w-[220px] max-w-[360px] items-center justify-between gap-2 rounded-xl bg-background/90 px-3 text-left text-foreground"
+					className={cn("flex h-10 min-w-[220px] max-w-[360px] items-center justify-between bg-background/90 px-3 text-left text-foreground", borderRadius.lg, spacing.gap.sm)}
 				>
-					<span className="flex min-w-0 items-center gap-2">
-						<span className="bg-muted text-muted-foreground/90 flex size-8 items-center justify-center rounded-lg">
+					<span className={cn("flex min-w-0 items-center", spacing.gap.sm)}>
+						<span className={cn("bg-muted text-muted-foreground/90 flex size-8 items-center justify-center", borderRadius.md)}>
 							<OptionGlyph option={selectedOption} />
 						</span>
 						<span className="truncate text-sm font-medium leading-tight text-left">{triggerLabel}</span>
@@ -155,7 +170,7 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent align="end" className="w-[320px] max-w-[90vw] border-none bg-popover/95 p-0 shadow-xl">
+			<PopoverContent align="end" className={cn("w-[320px] max-w-[90vw] border-none bg-popover/95 p-0", shadows.xl)}>
 				<Command className="border-none bg-transparent shadow-none" loop>
 					<CommandInput 
 						placeholder="Search models" 
@@ -166,7 +181,7 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 						<CommandEmpty className="py-6 text-sm text-muted-foreground" role="status">
 							{loading ? "Loading models..." : "No models found."}
 						</CommandEmpty>
-						<CommandGroup className="flex flex-col gap-1 p-2" aria-label="Available models">
+						<CommandGroup className={cn("flex flex-col p-2", spacing.gap.xs)} aria-label="Available models">
 						{options.map((option) => {
 							const isSelected = option.value === selectedValue
 							return (
@@ -184,12 +199,14 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 									aria-selected={isSelected}
 									aria-label={option.label}
 										className={cn(
-											"flex items-center justify-between gap-2 rounded-lg px-3 py-2",
+											"flex items-center justify-between px-3 py-2",
+											borderRadius.md,
+											spacing.gap.sm,
 											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
 										)}
 									>
-									<span className="flex min-w-0 items-start gap-2">
-										<span className="bg-muted text-muted-foreground flex size-7 items-center justify-center rounded-lg">
+									<span className={cn("flex min-w-0 items-start", spacing.gap.sm)}>
+										<span className={cn("bg-muted text-muted-foreground flex size-7 items-center justify-center", borderRadius.md)}>
 											<OptionGlyph option={option} />
 										</span>
 										<span className="flex min-w-0 flex-col gap-0.5">
@@ -221,3 +238,8 @@ export function ModelSelector({ options, value, onChange, disabled, loading }: M
 		</Popover>
 	)
 }
+
+ModelSelector.displayName = "ModelSelector";
+
+export const MemoizedModelSelector = React.memo(ModelSelector);
+export { MemoizedModelSelector as ModelSelector };

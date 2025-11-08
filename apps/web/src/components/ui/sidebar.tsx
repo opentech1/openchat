@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
+import { spacing } from "@/styles/design-tokens";
 
 type SidebarContextValue = {
   collapsed: boolean;
@@ -91,7 +92,7 @@ export function SidebarGroup({ className, ...props }: React.ComponentProps<"div"
 }
 
 export function SidebarMenu({ className, ...props }: React.ComponentProps<"ul">) {
-  return <ul className={cn("flex flex-col gap-1", className)} {...props} />;
+  return <ul className={cn("flex flex-col", spacing.gap.xs, className)} {...props} />;
 }
 
 export function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
@@ -103,7 +104,8 @@ export function SidebarMenuButton({ className, asChild, size = "md", type = "but
 	return (
 		<Comp
 			className={cn(
-				"text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors",
+				"text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center rounded-md px-2 py-2 text-sm transition-colors",
+				spacing.gap.sm,
 				size === "lg" && "px-2 py-2.5 text-base",
 				className,
 			)}
@@ -114,7 +116,7 @@ export function SidebarMenuButton({ className, asChild, size = "md", type = "but
 }
 
 export function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
-  return <ul className={cn("ml-4 mt-1 flex flex-col gap-1", className)} {...props} />;
+  return <ul className={cn("ml-4 mt-1 flex flex-col", spacing.gap.xs, className)} {...props} />;
 }
 
 export function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">) {
@@ -126,7 +128,8 @@ export function SidebarMenuSubButton({ className, isActive, asChild, type = "but
 	return (
 		<Comp
 			className={cn(
-				"hover:bg-accent/70 inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors",
+				"hover:bg-accent/70 inline-flex w-full items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors",
+				spacing.gap.sm,
 				isActive && "bg-accent text-accent-foreground",
 				className,
 			)}

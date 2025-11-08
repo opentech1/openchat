@@ -1,4 +1,9 @@
 import { withSentryConfig } from "@sentry/nextjs";
+import bundleAnalyzer from "@next/bundle-analyzer";
+
+const withBundleAnalyzer = bundleAnalyzer({
+	enabled: process.env.ANALYZE === "true",
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -6,17 +11,28 @@ const nextConfig = {
 		externalDir: true,
 	},
 	serverExternalPackages: ["better-sqlite3"],
-	// Make environment variables available to server-side code
+	// SECURITY: Only expose non-sensitive variables to client
+	// Secrets (GITHUB_CLIENT_SECRET, BETTER_AUTH_SECRET, etc.) should NOT be in env block
+	// They are automatically available server-side via process.env
 	env: {
-		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
-		GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
-		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID, // Safe to expose (OAuth public client ID)
 	},
 	typedRoutes: true,
 	output: "standalone",
 	images: {
 		remotePatterns: [{ protocol: "https", hostname: "ik.imagekit.io" }],
 	},
+	/**
+	 * SECURITY: Request body size limits
+	 *
+	 * Note: Next.js 15 does not support the 'api' config key.
+	 * Body size limits are enforced via:
+	 * 1. Next.js default (~1MB for API routes)
+	 * 2. Zod validation with max length constraints (see lib/validation.ts)
+	 * 3. Request validation in route handlers (try/catch on request.json())
+	 *
+	 * For custom limits, implement in individual route handlers or middleware.
+	 */
 	async rewrites() {
 		const server = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 		return [
@@ -103,6 +119,64 @@ const nextConfig = {
 				moduleIds: 'deterministic',
 				// Use less memory-intensive minimizer settings
 				minimize: true,
+				// Enhanced code splitting for better caching
+				splitChunks: !isServer ? {
+					chunks: 'all',
+					cacheGroups: {
+						default: false,
+						vendors: false,
+						// Framework bundle (React, Next.js core)
+						framework: {
+							name: 'framework',
+							test: /[\\/]node_modules[\\/](react|react-dom|scheduler|next[\\/])[\\/]/,
+							priority: 40,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Large UI libraries
+						ui: {
+							name: 'ui-libs',
+							test: /[\\/]node_modules[\\/](@radix-ui|cmdk|sonner)[\\/]/,
+							priority: 35,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Data fetching and state management
+						data: {
+							name: 'data-libs',
+							test: /[\\/]node_modules[\\/](@tanstack|@electric-sql)[\\/]/,
+							priority: 30,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// AI SDK and related packages
+						ai: {
+							name: 'ai-libs',
+							test: /[\\/]node_modules[\\/](ai|@ai-sdk|@openrouter)[\\/]/,
+							priority: 30,
+							enforce: true,
+							reuseExistingChunk: true,
+						},
+						// Other node_modules
+						lib: {
+							test: /[\\/]node_modules[\\/]/,
+							name(module) {
+								const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)?.[1];
+								return packageName ? `npm.${packageName.replace('@', '')}` : 'npm.other';
+							},
+							priority: 20,
+							minChunks: 1,
+							reuseExistingChunk: true,
+						},
+						// Common application code
+						commons: {
+							name: 'commons',
+							minChunks: 2,
+							priority: 10,
+							reuseExistingChunk: true,
+						},
+					},
+				} : undefined,
 			};
 			// Disable source maps if GENERATE_SOURCEMAP is false
 			if (process.env.GENERATE_SOURCEMAP === 'false') {
@@ -131,7 +205,10 @@ const nextConfig = {
 // Skip Sentry entirely if DSN is not configured (saves build memory)
 const shouldUseSentry = process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NEXT_PUBLIC_SENTRY_DSN.length > 0;
 
-const finalConfig = shouldUseSentry ? withSentryConfig(nextConfig, {
+// Apply bundle analyzer wrapper first, then Sentry
+const configWithAnalyzer = withBundleAnalyzer(nextConfig);
+
+const finalConfig = shouldUseSentry ? withSentryConfig(configWithAnalyzer, {
 	// For all available options, see:
 	// https://github.com/getsentry/sentry-webpack-plugin#options
 
@@ -169,6 +246,6 @@ const finalConfig = shouldUseSentry ? withSentryConfig(nextConfig, {
 	// https://docs.sentry.io/product/crons/
 	// https://vercel.com/docs/cron-jobs
 	automaticVercelMonitors: true,
-}) : nextConfig;
+}) : configWithAnalyzer;
 
 export default finalConfig;

@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import { cn } from '@/lib/utils'
+import { spacing } from '@/styles/design-tokens'
 
 const LogoMark = ({ className, uniColor }: { className?: string; uniColor?: boolean }) => {
 	const gradientId = useId()
@@ -42,7 +43,7 @@ const LogoMark = ({ className, uniColor }: { className?: string; uniColor?: bool
 }
 
 export const Logo = ({ className, uniColor }: { className?: string; uniColor?: boolean }) => (
-	<span className={cn('inline-flex items-center gap-2 text-lg font-semibold tracking-tight', className)}>
+	<span className={cn('inline-flex items-center text-lg font-semibold tracking-tight', spacing.gap.sm, className)}>
 		<LogoMark uniColor={uniColor} />
 		<span className="text-foreground">OpenChat</span>
 	</span>

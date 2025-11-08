@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { logError } from "./logger-server";
 
 export type UserContext = {
 	userId: string;
@@ -54,7 +55,7 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 			image: data.user.image,
 		};
 	} catch (error) {
-		console.error("Failed to get session:", error);
+		logError("Failed to get session", error);
 		redirect("/auth/sign-in");
 	}
 });
