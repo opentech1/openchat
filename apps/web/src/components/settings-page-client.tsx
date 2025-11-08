@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
 import { Button } from "@/components/ui/button";
@@ -8,10 +10,19 @@ import { spacing } from "@/styles/design-tokens";
 
 export default function SettingsPageClient() {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6">
       <div>
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/dashboard")}
+          className="mb-4 gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-muted-foreground mt-2">Manage your application preferences and account.</p>
       </div>
