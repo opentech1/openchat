@@ -42,11 +42,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 				</div>
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
-                <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
-                    <MobileDashboardNav initialChats={chats} />
-                    <div className="hidden md:block">
+                <div className="pointer-events-auto absolute left-4 top-4 z-20 hidden md:block">
+                    <div className="flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur">
                         <SidebarCollapseButton />
                     </div>
+                </div>
+                <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-3 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
+                    <MobileDashboardNav initialChats={chats} />
                     <Link
                         href="/dashboard/settings"
                         className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
