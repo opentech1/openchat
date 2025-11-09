@@ -21,9 +21,11 @@
 				"POSTHOG_API_KEY",
 				"POSTHOG_HOST",
 				"CONVEX_DEPLOY_KEY",
-				"NEXT_PUBLIC_CONVEX_URL",
 				"NEXT_PUBLIC_DEPLOYMENT",
 				"VERCEL_URL"
+			],
+			"passThroughEnv": [
+				"NEXT_PUBLIC_CONVEX_URL"
 			]
 		},
 		"lint": {
