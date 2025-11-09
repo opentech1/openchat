@@ -14,6 +14,7 @@ import type * as crons from "../crons.js";
 import type * as env from "../env.js";
 import type * as http from "../http.js";
 import type * as messages from "../messages.js";
+import type * as previewSeed from "../previewSeed.js";
 import type * as users from "../users.js";
 
 import type {
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   env: typeof env;
   http: typeof http;
   messages: typeof messages;
+  previewSeed: typeof previewSeed;
   users: typeof users;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
