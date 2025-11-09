@@ -4,6 +4,9 @@ import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import { GalleryVerticalEnd } from "lucide-react";
 import Link from "next/link";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import { cn } from "@/lib/utils";
 
 export default function GlobalError({
 	error,
@@ -18,8 +21,12 @@ export default function GlobalError({
 	}, [error]);
 
 	return (
-		<html>
-			<body>
+		<html
+			lang="en"
+			suppressHydrationWarning
+			data-brand-theme="blue"
+			className={`${GeistSans.variable} ${GeistMono.variable}`}>
+			<body className={cn("font-sans antialiased", GeistSans.className)}>
 				<div className="flex min-h-screen items-center justify-center p-6">
 					<div className="w-full max-w-md space-y-6 text-center">
 						<div className="mx-auto flex size-12 items-center justify-center rounded-md bg-destructive/10">
