@@ -2,6 +2,8 @@
 
 This document explains how preview deployments work with Convex and Vercel.
 
+> **Note**: This is a test PR to verify the preview deployment seeding functionality works correctly.
+
 ## Overview
 
 Preview deployments automatically:
