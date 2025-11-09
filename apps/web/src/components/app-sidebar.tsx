@@ -277,7 +277,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           <Link
             href="/dashboard"
             className={cn(
-              "select-none text-lg font-semibold tracking-tight md:text-xl leading-none",
+              "select-none text-lg font-semibold tracking-tight md:text-xl leading-none text-white",
             )}
           >
             OpenChat
