@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
                 <div className="pointer-events-auto absolute left-4 top-4 z-20 hidden md:block">
-                    <div className="flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur">
+                    <div className={`flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur`}>
                         <SidebarCollapseButton />
                     </div>
                 </div>
