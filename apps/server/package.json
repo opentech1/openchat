@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "convex dev",
-    "build": "convex bundle",
+    "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --cmd 'cd ../web && bun run build' --preview-run previewSeed --preview-create NEXT_PUBLIC_DEPLOYMENT=preview NEXT_PUBLIC_APP_URL=https://$VERCEL_URL; else convex deploy --cmd 'cd ../web && bun run build'; fi",
     "check-types": "tsc --noEmit || true",
     "test": "echo \"No Convex tests yet\""
   },
