@@ -3,7 +3,6 @@
 	"ui": "tui",
 	"tasks": {
 		"build": {
-			"dependsOn": ["^build"],
 			"inputs": ["$TURBO_DEFAULT$", ".env*"],
 			"outputs": ["dist/**", ".output/**", ".next/**"],
 			"env": [
@@ -23,6 +22,9 @@
 				"CONVEX_DEPLOY_KEY",
 				"NEXT_PUBLIC_DEPLOYMENT",
 				"VERCEL_URL"
+			],
+			"passThroughEnv": [
+				"NEXT_PUBLIC_CONVEX_URL"
 			]
 		},
 		"lint": {
