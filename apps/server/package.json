@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "convex dev",
-    "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --preview-run previewSeed --preview-create $VERCEL_GIT_COMMIT_REF; else convex deploy; fi",
+    "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../.. && bun run build:web' --preview-run previewSeed --preview-create $VERCEL_GIT_COMMIT_REF; else convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../.. && bun run build:web'; fi",
     "check-types": "tsc --noEmit || true",
     "test": "echo \"No Convex tests yet\""
   },
