@@ -9,7 +9,7 @@
   "scripts": {
     "check": "turbo lint",
     "dev": "turbo -F web -F server dev",
-    "build": "turbo build",
+    "build": "turbo -F server build",
     "build:web": "turbo -F web build",
     "check-types": "turbo check-types",
     "verify:prod": "bun ./scripts/prod-canary.ts",
