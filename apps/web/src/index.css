@@ -6,6 +6,8 @@
 /* Animation utilities for shadcn UI (CSS-only package) */
 @import "tw-animate-css";
 
+/* Force cache bust for CSS rebuild */
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
