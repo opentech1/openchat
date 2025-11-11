@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link'
-import { Logo } from '@/components/logo'
+import { LogoWithEffect } from '@/components/logo-with-effect'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React, { useCallback, useEffect, useState } from 'react'
@@ -26,8 +26,8 @@ export const HeroHeader = () => {
     const handleHeaderCtaClick = useCallback(() => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 0
         captureClientEvent('marketing.cta_clicked', {
-            cta_id: 'header_try_openchat',
-            cta_copy: 'Try OpenChat',
+            cta_id: 'header_try_osschat',
+            cta_copy: 'Try osschat',
             section: 'header',
             screen_width_bucket: width < 640 ? 'xs' : width < 768 ? 'sm' : width < 1024 ? 'md' : width < 1280 ? 'lg' : 'xl',
         })
@@ -61,7 +61,7 @@ export const HeroHeader = () => {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <Logo />
+                                <LogoWithEffect />
                             </Link>
 
                             <button
@@ -159,7 +159,7 @@ export const HeroHeader = () => {
                                                     handleHeaderCtaClick()
                                                     closeMenu()
                                                 }}>
-                                                <span>Try OpenChat</span>
+                                                <span>Try osschat</span>
                                             </Link>
                                         </Button>
                                     </>

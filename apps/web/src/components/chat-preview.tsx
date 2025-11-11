@@ -85,7 +85,7 @@ function ChatPreview({ className }: { className?: string }) {
             <div className="space-y-3 text-center">
               <div className="inline-block animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150">
                 <h1 className="pb-1 text-3xl font-medium tracking-tight">
-                  How can OpenChat help today?
+                  How can osschat help today?
                 </h1>
                 <div className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent animate-in fade-in-0 duration-400 delay-250" />
               </div>
@@ -113,7 +113,7 @@ function ChatPreview({ className }: { className?: string }) {
                     debouncedAdjustHeight();
                   }}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask OpenChat a question..."
+                  placeholder="Ask osschat a question..."
                   className={cn(
                     "w-full px-4 py-3",
                     "resize-none",

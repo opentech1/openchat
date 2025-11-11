@@ -41,7 +41,7 @@ function ChatComposer({
   onSend,
   disabled,
   sendDisabled,
-  placeholder = "Ask OpenChat a question...",
+  placeholder = "Ask osschat a question...",
   modelOptions = [],
   modelValue,
   onModelChange,

@@ -35,6 +35,7 @@ import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
+import { Logo } from "@/components/logo";
 
 export type ChatListItem = {
   id: string;
@@ -276,16 +277,14 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         <div className="flex items-center justify-center">
           <Link
             href="/dashboard"
-            className={cn(
-              "select-none text-lg font-semibold tracking-tight md:text-xl leading-none",
-            )}
+            className="hover:opacity-80 transition-opacity"
           >
-            OpenChat
+            <Logo size="default" />
           </Link>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-2">
           <Button
             type="button"
             variant="outline"
@@ -300,8 +299,8 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
             {isCreating ? "Creating…" : "New Chat"}
           </Button>
         </SidebarGroup>
-        <SidebarGroup>
-          <div className="flex items-center justify-between px-2 py-1.5">
+        <SidebarGroup className="px-2">
+          <div className="flex items-center justify-between py-1.5">
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Chats
             </h3>
@@ -322,21 +321,34 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         <button
           type="button"
           onClick={() => setAccountOpen(true)}
-          className="hover:bg-accent flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition"
+          className="flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left transition-all hover:bg-accent hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Open account settings"
         >
-          <span className="text-xs text-muted-foreground">Account</span>
           {user ? (
-            <Avatar className="size-8">
-              {user.image ? (
-                <AvatarImage
-                  src={user.image}
-                  alt={userDisplayLabel || "User"}
-                />
-              ) : null}
-              <AvatarFallback>{userInitials || "U"}</AvatarFallback>
-            </Avatar>
-          ) : null}
+            <>
+              <Avatar className="size-9 ring-2 ring-border">
+                {user.image ? (
+                  <AvatarImage
+                    src={user.image}
+                    alt={userDisplayLabel || "User"}
+                  />
+                ) : null}
+                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                  {userInitials || "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium">
+                  {user.name || "User"}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {user.email || "Account Settings"}
+                </span>
+              </div>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">Account</span>
+          )}
         </button>
       </div>
       <SidebarRail />
@@ -487,20 +499,20 @@ function ChatListItem({
           void onDelete(chat.id);
         }}
         className={cn(
-          "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent text-destructive",
-          "transition-all duration-150 group-hover:opacity-100 group-hover:border-destructive/60",
-          "bg-destructive/10 hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive",
-          "hover:text-destructive-foreground focus-visible:text-destructive-foreground",
-          "disabled:cursor-progress disabled:bg-muted disabled:text-muted-foreground",
-          deletingId === chat.id ? "opacity-100" : "opacity-0",
+          "absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded-md",
+          "text-muted-foreground/70 transition-all duration-200",
+          "hover:bg-destructive/90 hover:text-destructive-foreground hover:scale-105",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          "disabled:cursor-wait disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent",
+          deletingId === chat.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
         aria-label="Delete chat"
         disabled={deletingId === chat.id}
       >
         {deletingId === chat.id ? (
-          <span className="animate-pulse text-base">…</span>
+          <span className="animate-pulse text-sm">⋯</span>
         ) : (
-          <X className="size-4" />
+          <X className="size-3.5" />
         )}
       </button>
     </div>

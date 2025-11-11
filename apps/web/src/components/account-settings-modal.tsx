@@ -11,10 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
+  saveOpenRouterKey,
   loadOpenRouterKey,
   removeOpenRouterKey,
-  saveOpenRouterKey,
 } from "@/lib/openrouter-key-storage";
+import { useConvex, useQuery } from "convex/react";
+import { api } from "@server/convex/_generated/api";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
 import {
@@ -48,6 +50,14 @@ export function AccountSettingsModal({
   const router = useRouter();
   const { data: session } = authClient.useSession();
   const user = session?.user;
+  const convex = useConvex();
+
+  // Get Convex user - only query when modal is open
+  const convexUser = useQuery(
+    api.users.getByExternalId,
+    open && user?.id ? { externalId: user.id } : "skip"
+  );
+
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -118,15 +128,18 @@ export function AccountSettingsModal({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) {
-      setApiKeyInput("");
-      setApiKeyError(null);
+    if (!open || !user?.id || !convexUser?._id) {
+      if (!open) {
+        setApiKeyInput("");
+        setApiKeyError(null);
+      }
       return;
     }
+
     let cancelled = false;
     void (async () => {
       try {
-        const existing = await loadOpenRouterKey();
+        const existing = await loadOpenRouterKey(convexUser._id, user.id, convex);
         if (cancelled) return;
         if (existing) {
           setHasStoredKey(true);
@@ -144,10 +157,11 @@ export function AccountSettingsModal({
         setApiKeyError("Unable to load your saved OpenRouter key.");
       }
     })();
+
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, user?.id, convexUser?._id, convex]);
 
   if (!open || !user) return null;
 
@@ -164,7 +178,7 @@ export function AccountSettingsModal({
 
   async function handleSaveApiKey(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (savingKey) return;
+    if (savingKey || !user?.id || !convexUser?._id) return;
     const trimmed = apiKeyInput.trim();
     if (trimmed.length < 10) {
       setApiKeyError("Enter a valid OpenRouter key (sk-or-v1…).");
@@ -173,7 +187,7 @@ export function AccountSettingsModal({
     setSavingKey(true);
     setApiKeyError(null);
     try {
-      await saveOpenRouterKey(trimmed);
+      await saveOpenRouterKey(trimmed, convexUser._id, user.id, convex);
       setHasStoredKey(true);
       setStoredKeyTail(trimmed.slice(-4));
       setApiKeyInput("");
@@ -194,11 +208,11 @@ export function AccountSettingsModal({
   }
 
   async function handleRemoveApiKey() {
-    if (removingKey) return;
+    if (removingKey || !convexUser?._id) return;
     const wasLinked = hasStoredKey;
     setRemovingKey(true);
     try {
-      removeOpenRouterKey();
+      await removeOpenRouterKey(convexUser._id, convex);
       setHasStoredKey(false);
       setStoredKeyTail(null);
       setApiKeyInput("");
@@ -247,117 +261,100 @@ export function AccountSettingsModal({
   }
 
   const modal = (
-    <div className="fixed inset-0 z-50">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       <div
-        className="absolute inset-0 bg-black/20 dark:bg-black/50"
-        onClick={onClose}
-        aria-hidden
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        aria-hidden="true"
       />
       <div
-        className={cn(
-          "pointer-events-auto absolute inset-0 flex items-center justify-center",
-          spacing.padding.lg,
-        )}
+        ref={dialogRef}
+        className="relative bg-background w-full max-w-md rounded-2xl shadow-2xl border animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="account-settings-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          ref={dialogRef}
-          className={cn(
-            `bg-background w-full max-w-lg border ${borderRadius.lg} ${shadows["2xl"]}`,
-          )}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="account-settings-title"
-          tabIndex={-1}
-        >
-          <div
-            className={cn(
-              "flex items-center justify-between border-b px-4 py-3",
-            )}
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <h2 id="account-settings-title" className="text-lg font-semibold">
+            Account Settings
+          </h2>
+          <button
+            onClick={onClose}
+            className="hover:bg-accent rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
+            type="button"
+            ref={closeButtonRef}
+            aria-label="Close settings"
           >
-            <h2 id="account-settings-title" className="text-base font-medium">
-              Account Settings
-            </h2>
-            <button
-              onClick={onClose}
-              className={cn("hover:bg-accent p-1 text-sm", borderRadius.sm)}
-              type="button"
-              ref={closeButtonRef}
-              aria-label="Close settings"
-            >
-              Close
-            </button>
-          </div>
-          <div
-            className={cn(
-              "max-h-[80svh] overflow-auto",
-              spacing.padding.lg,
-              spacing.gap.xl,
-            )}
-          >
-            <div className={`flex items-center ${spacing.gap.md}`}>
-              <Avatar className="size-14">
+            Close
+          </button>
+        </div>
+        <div className="max-h-[calc(90vh_-_80px)] overflow-y-auto p-6 space-y-6">
+            {/* User Profile Section */}
+            <div className="flex items-center gap-4 p-4 bg-accent/50 rounded-xl">
+              <Avatar className="size-16 ring-2 ring-border">
                 {user.image ? (
                   <AvatarImage src={user.image} alt={displayName || "User"} />
                 ) : null}
-                <AvatarFallback className="text-lg font-semibold">
+                <AvatarFallback className="text-xl font-semibold bg-primary/10 text-primary">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <p className="text-sm font-medium">{displayName}</p>
-                <p className="text-muted-foreground text-sm">{user.email}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-base font-semibold truncate">{displayName}</p>
+                <p className="text-sm text-muted-foreground truncate">{user.email}</p>
               </div>
             </div>
-            <div className="rounded-lg border bg-muted/50 p-3 text-sm">
-              <div
-                className={`flex items-center justify-between ${spacing.gap.sm}`}
-              >
-                <div className="max-w-xs truncate text-muted-foreground">
-                  User ID: {user.id}
-                </div>
+
+            {/* User ID Section */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                User ID
+              </label>
+              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border">
+                <code className="flex-1 text-xs font-mono truncate text-muted-foreground">
+                  {user.id}
+                </code>
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
                   type="button"
                   onClick={handleCopyUserId}
                   aria-label="Copy user ID to clipboard"
+                  className="shrink-0"
                 >
                   Copy
                 </Button>
               </div>
             </div>
-            <div
-              className={cn(
-                "border bg-muted/40 flex flex-col",
-                borderRadius.md,
-                spacing.padding.lg,
-                spacing.gap.md,
-              )}
-            >
-              <div
-                className={cn(
-                  "flex items-start justify-between",
-                  spacing.gap.sm,
-                )}
-              >
-                <div>
-                  <p className="text-sm font-medium">OpenRouter API key</p>
+            {/* OpenRouter API Key Section */}
+            <div className="space-y-3 p-4 bg-muted/40 rounded-xl border">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold">OpenRouter API Key</h3>
                   <p className="text-xs text-muted-foreground">
-                    Connect your personal key so OpenChat can call OpenRouter
-                    models for you.
+                    Connect your personal key so OpenChat can call OpenRouter models for you.
                   </p>
                 </div>
                 <span
                   className={cn(
-                    "text-xs font-medium",
-                    hasStoredKey ? "text-emerald-600" : "text-destructive",
+                    "shrink-0 px-2 py-1 text-xs font-semibold rounded-full",
+                    hasStoredKey
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-destructive/10 text-destructive"
                   )}
                 >
                   {hasStoredKey
-                    ? `Linked${storedKeyTail ? ` ••••${storedKeyTail}` : ""}`
-                    : "Not linked"}
+                    ? storedKeyTail
+                      ? `••••${storedKeyTail}`
+                      : "Linked"
+                    : "Not set"}
                 </span>
               </div>
+
               {apiKeyError ? (
                 <p
                   id="settings-api-key-error"
@@ -367,8 +364,9 @@ export function AccountSettingsModal({
                   {apiKeyError}
                 </p>
               ) : null}
+
               <form
-                className={`flex flex-col sm:flex-row ${spacing.gap.sm}`}
+                className="flex flex-col gap-2"
                 onSubmit={handleSaveApiKey}
               >
                 <Input
@@ -381,77 +379,74 @@ export function AccountSettingsModal({
                   placeholder="sk-or-v1..."
                   autoComplete="off"
                   required
-                  className="font-mono"
+                  className="font-mono text-sm"
                   aria-label="OpenRouter API key"
                   aria-invalid={!!apiKeyError}
                   aria-describedby={
                     apiKeyError ? "settings-api-key-error" : undefined
                   }
                 />
-                <Button
-                  type="submit"
-                  disabled={savingKey || apiKeyInput.trim().length < 10}
-                  className="sm:w-auto"
-                  aria-busy={savingKey}
-                >
-                  {savingKey ? (
-                    <Loader2
-                      className={cn("mr-2 animate-spin", iconSize.sm)}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  {hasStoredKey ? "Replace key" : "Save key"}
-                </Button>
-              </form>
-              <div
-                className={`flex flex-wrap items-center justify-between text-xs text-muted-foreground ${spacing.gap.sm}`}
-              >
-                <p>
-                  Keys are encrypted locally in your browser. Remove the key to
-                  stop using OpenRouter.
-                </p>
-                {hasStoredKey ? (
+                <div className="flex gap-2">
                   <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRemoveApiKey}
-                    disabled={removingKey}
-                    aria-label="Remove OpenRouter API key"
-                    aria-busy={removingKey}
+                    type="submit"
+                    disabled={savingKey || apiKeyInput.trim().length < 10}
+                    className="flex-1"
+                    aria-busy={savingKey}
                   >
-                    {removingKey ? (
+                    {savingKey ? (
                       <Loader2
-                        className={cn("mr-1 animate-spin", iconSize.xs)}
+                        className="mr-2 size-4 animate-spin"
                         aria-hidden="true"
                       />
                     ) : null}
-                    Remove key
+                    {hasStoredKey ? "Update" : "Save"}
                   </Button>
-                ) : null}
-              </div>
-            </div>
+                  {hasStoredKey ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleRemoveApiKey}
+                      disabled={removingKey}
+                      aria-label="Remove OpenRouter API key"
+                      aria-busy={removingKey}
+                    >
+                      {removingKey ? (
+                        <Loader2
+                          className="size-4 animate-spin"
+                          aria-hidden="true"
+                        />
+                      ) : (
+                        "Remove"
+                      )}
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
 
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                You are signed in with Better Auth. Use the button below to sign
-                out from all tabs.
+              <p className="text-xs text-muted-foreground">
+                Keys are encrypted client-side and stored securely on the server.
               </p>
             </div>
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={handleSignOut}
-              disabled={signingOut}
-              aria-label="Sign out of account"
-              aria-busy={signingOut}
-            >
-              {signingOut ? "Signing out…" : "Sign out"}
-            </Button>
+
+            {/* Sign Out Section */}
+            <div className="space-y-3 pt-4 border-t">
+              <p className="text-sm text-muted-foreground">
+                You are signed in with Better Auth. Signing out will end your session across all tabs.
+              </p>
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                aria-label="Sign out of account"
+                aria-busy={signingOut}
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
   );
 
   const portalTarget = typeof document !== "undefined" ? document.body : null;

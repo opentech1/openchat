@@ -238,9 +238,11 @@ function ChatMessagesPanelComponent({
                 </div>
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm" data-ph-no-capture>
-                No messages yet. Say hi!
-              </p>
+              <div className="w-full max-w-3xl mx-auto">
+                <p className="text-muted-foreground text-sm" data-ph-no-capture>
+                  No messages yet. Say hi!
+                </p>
+              </div>
             )}
           </div>
         </ScrollAreaPrimitive.Viewport>
