@@ -24,17 +24,25 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
 	const open = controlledOpen ?? internalOpen;
 	const setOpen = onOpenChange ?? setInternalOpen;
 
+	const toggleOpen = useCallback(() => {
+		if (onOpenChange) {
+			onOpenChange(!open);
+		} else {
+			setInternalOpen((prev) => !prev);
+		}
+	}, [onOpenChange, open]);
+
 	useEffect(() => {
 		const down = (e: KeyboardEvent) => {
 			if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
 				e.preventDefault();
-				setOpen(!open);
+				toggleOpen();
 			}
 		};
 
 		document.addEventListener("keydown", down);
 		return () => document.removeEventListener("keydown", down);
-	}, [setOpen, open]);
+	}, [toggleOpen]);
 
 	const handleNewChat = useCallback(() => {
 		router.push("/dashboard");
