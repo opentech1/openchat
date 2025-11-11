@@ -13,6 +13,7 @@ import {
   opacity,
   iconSize,
 } from "@/styles/design-tokens";
+import { createChatWithMessageAction } from "@/actions/create-chat-with-message";
 
 function ChatPreview({ className }: { className?: string }) {
   const [value, setValue] = useState("");
@@ -51,17 +52,15 @@ function ChatPreview({ className }: { className?: string }) {
 
   const handleSendMessage = () => {
     if (value.trim()) {
-      startTransition(() => {
+      startTransition(async () => {
         setIsTyping(true);
-        if (typingTimeoutRef.current !== null) {
-          window.clearTimeout(typingTimeoutRef.current);
-        }
-        typingTimeoutRef.current = window.setTimeout(() => {
+        try {
+          await createChatWithMessageAction(value.trim());
+          // The action will redirect, so we don't need to do anything else
+        } catch (error) {
+          console.error("Failed to create chat:", error);
           setIsTyping(false);
-          setValue("");
-          adjustHeight(true);
-          typingTimeoutRef.current = null;
-        }, 3000);
+        }
       });
     }
   };

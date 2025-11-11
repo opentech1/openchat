@@ -30,7 +30,7 @@ import {
   registerClientProperties,
 } from "@/lib/posthog";
 import { AccountSettingsModalLazy as AccountSettingsModal } from "@/components/lazy/account-settings-modal-lazy";
-import { loadOpenRouterKey } from "@/lib/openrouter-key-storage";
+import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
@@ -147,6 +147,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const { theme: brandTheme } = useBrandTheme();
+  const { hasKey: hasOpenRouterKey } = useOpenRouterKey();
   const [accountOpen, setAccountOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
@@ -249,27 +250,20 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     if (dashboardTrackedRef.current) return;
     if (!user?.id) return;
     dashboardTrackedRef.current = true;
-    void (async () => {
-      let hasKey = false;
-      try {
-        const key = await loadOpenRouterKey();
-        hasKey = Boolean(key);
-        registerClientProperties({ has_openrouter_key: hasKey });
-      } catch {
-        hasKey = false;
-      }
-      const entryPath =
-        typeof window !== "undefined"
-          ? window.location.pathname || "/dashboard"
-          : "/dashboard";
-      captureClientEvent("dashboard.entered", {
-        chat_total: chats.length,
-        has_api_key: hasKey,
-        entry_path: entryPath,
-        brand_theme: brandTheme,
-      });
-    })();
-  }, [brandTheme, chats.length, user?.id]);
+
+    registerClientProperties({ has_openrouter_key: hasOpenRouterKey });
+
+    const entryPath =
+      typeof window !== "undefined"
+        ? window.location.pathname || "/dashboard"
+        : "/dashboard";
+    captureClientEvent("dashboard.entered", {
+      chat_total: chats.length,
+      has_api_key: hasOpenRouterKey,
+      entry_path: entryPath,
+      brand_theme: brandTheme,
+    });
+  }, [brandTheme, chats.length, user?.id, hasOpenRouterKey]);
 
   return (
     <Sidebar defaultCollapsed {...sidebarProps}>
