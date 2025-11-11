@@ -627,8 +627,16 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		};
 
 		// PERFORMANCE FIX: Create AbortController with timeout to prevent hanging requests
+		// Also link to request.signal so client-side abort (stop button) works
 		const abortController = new AbortController();
 		let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+		// Forward client abort to our abort controller
+		if (request.signal) {
+			request.signal.addEventListener("abort", () => {
+				abortController.abort(new Error("Client aborted request"));
+			});
+		}
 
 		try {
 			timeoutId = setTimeout(() => {

@@ -16,6 +16,7 @@ export type ChatMessagesFeedProps = {
   paddingBottom: number;
   className?: string;
   loading?: boolean;
+  isStreaming?: boolean;
 };
 
 export function ChatMessagesFeed({
@@ -24,6 +25,7 @@ export function ChatMessagesFeed({
   paddingBottom,
   className,
   loading = false,
+  isStreaming = false,
 }: ChatMessagesFeedProps) {
   const optimisticNormalized = useMemo(
     () => optimisticMessages.map(normalizeUiMessage),
@@ -74,6 +76,7 @@ export function ChatMessagesFeed({
       paddingBottom={paddingBottom}
       className={className}
       loading={loading}
+      isStreaming={isStreaming}
     />
   );
 }

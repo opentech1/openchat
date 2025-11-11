@@ -282,7 +282,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-center"
+            className="w-full justify-start px-3"
             onClick={() => {
               void handleCreateChat();
             }}

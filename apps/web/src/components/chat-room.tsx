@@ -164,6 +164,27 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const storedModelIdRef = useRef<string | null>(null);
   const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string>("");
+  const [shouldAutoSend, setShouldAutoSend] = useState(false);
+  const autoSendAttemptedRef = useRef(false);
+
+  // Check for pending message and model from dashboard on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pending = sessionStorage.getItem("pendingMessage");
+    if (pending) {
+      setPendingMessage(pending);
+      setShouldAutoSend(true);
+      sessionStorage.removeItem("pendingMessage");
+    }
+    const pendingModel = sessionStorage.getItem("pendingModel");
+    if (pendingModel) {
+      dispatch({ type: "SET_SELECTED_MODEL", payload: pendingModel });
+      setStorageItemSync(LAST_MODEL_STORAGE_KEY, pendingModel);
+      storedModelIdRef.current = pendingModel;
+      sessionStorage.removeItem("pendingModel");
+    }
+  }, []);
 
   // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
@@ -670,14 +691,32 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     [applySelectedModel],
   );
 
+  // Auto-send pending message from dashboard
+  useEffect(() => {
+    if (!shouldAutoSend || autoSendAttemptedRef.current) return;
+    if (!pendingMessage || !selectedModel || !apiKey) return;
+    if (status !== "ready") return;
+
+    autoSendAttemptedRef.current = true;
+    setShouldAutoSend(false);
+
+    // Auto-send the message
+    void handleSend({
+      text: pendingMessage,
+      modelId: selectedModel,
+      apiKey: apiKey,
+    });
+  }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, status, handleSend]);
+
   const busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
   const shouldPromptForKey = !isLinked;
   // Never force modal - only show if user explicitly dismissed it as false (wants to add key)
   const showKeyModal = checkedApiKey && shouldPromptForKey && !keyPromptDismissed;
   const composerDisabled = shouldPromptForKey;
+  // Don't disable send button when streaming - user needs to be able to click stop
   const sendDisabled =
-    busy || modelsLoading || shouldPromptForKey || !selectedModel;
+    (status === "submitted") || modelsLoading || shouldPromptForKey || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -710,6 +749,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
+        isStreaming={status === "streaming"}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
@@ -718,7 +758,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             placeholder={
               !apiKey
                 ? "Add an OpenRouter API key in settings to start chatting..."
-                : "Ask osschat a question..."
+                : "Type your message..."
             }
             sendDisabled={sendDisabled}
             disabled={composerDisabled}

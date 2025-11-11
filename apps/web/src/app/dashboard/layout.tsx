@@ -9,6 +9,7 @@ import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 import SidebarControlsWrapper from "@/components/sidebar-controls-wrapper";
+import { HelpButton } from "@/components/help-button";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 				<div className="flex h-full w-full flex-1 flex-col overflow-hidden min-h-0">
 					{children}
 				</div>
+				<HelpButton />
 			</main>
 		</div>
 	);

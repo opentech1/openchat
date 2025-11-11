@@ -19,7 +19,34 @@ type OpenRouterModelOption = {
 		prompt: number | null;
 		completion: number | null;
 	};
+	popular?: boolean;
+	free?: boolean;
 };
+
+// Popular models to feature at the top
+const POPULAR_MODELS = new Set([
+	"openai/gpt-5",
+	"x-ai/grok-4-fast",
+	"anthropic/claude-sonnet-4.5",
+	"anthropic/claude-haiku-4.5",
+	"google/gemini-2.5-pro",
+	"google/gemini-2.5-flash-preview-0925",
+	"z-ai/glm-4.6",
+	"deepseek/deepseek-r1-0528:free",
+	"openrouter/polaris-alpha",
+]);
+
+// Free models to highlight
+const FREE_MODELS = new Set([
+	"deepseek/deepseek-r1-0528:free",
+	"openrouter/polaris-alpha",
+	"google/gemini-2.0-flash-exp:free",
+	"meta-llama/llama-3.2-3b-instruct:free",
+	"meta-llama/llama-3.2-1b-instruct:free",
+	"mistralai/mistral-7b-instruct:free",
+	"mistralai/mistral-nemo:free",
+	"qwen/qwen-2.5-7b-instruct:free",
+]);
 
 const parseNumericField = (candidate: unknown): number | null => {
 	if (typeof candidate === "number" && Number.isFinite(candidate)) {
@@ -95,12 +122,23 @@ export async function POST(request: Request) {
 						pricing = { prompt: promptCost, completion: completionCost };
 					}
 				}
+				const isFree = FREE_MODELS.has(id);
+				const isPopular = POPULAR_MODELS.has(id);
+
+				// Remove provider prefix (e.g., "Google: Gemini 2.5 Pro" -> "Gemini 2.5 Pro")
+				const cleanName = name.includes(":") ? name.split(":").slice(1).join(":").trim() : name;
+
+				// Don't add "(free)" if the name already contains it
+				const displayLabel = isFree && !cleanName.toLowerCase().includes("(free)") ? `${cleanName} (free)` : cleanName;
+
 				return {
 					value: id,
-					label: name,
+					label: displayLabel,
 					description,
 					context: contextLength ?? null,
 					pricing,
+					popular: isPopular,
+					free: isFree,
 				};
 			})
 			.filter((model): model is OpenRouterModelOption => Boolean(model))

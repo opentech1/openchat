@@ -1,21 +1,29 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronDown, Sparkles } from "lucide-react"
+import { Check, Info } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
-	Command,
-	CommandEmpty,
-	CommandGroup,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+	ModelSelector as AIModelSelector,
+	ModelSelectorTrigger,
+	ModelSelectorContent,
+	ModelSelectorInput,
+	ModelSelectorList,
+	ModelSelectorEmpty,
+	ModelSelectorGroup,
+	ModelSelectorItem,
+	ModelSelectorName,
+	ModelSelectorLogo,
+} from "@/components/ai-elements/model-selector"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipProvider,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { registerClientProperties } from "@/lib/posthog"
-import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
 
 export type ModelSelectorOption = {
 	value: string
@@ -27,6 +35,50 @@ export type ModelSelectorOption = {
 		completion: number | null
 	}
 	icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
+	popular?: boolean
+	free?: boolean
+}
+
+// Format price per million tokens
+function formatPrice(price: number | null): string {
+	if (price === null || price === undefined || !Number.isFinite(price)) return "Free"
+	const perMillion = price * 1_000_000
+	if (perMillion === 0) return "Free"
+	if (perMillion < 0.01) return `$${perMillion.toFixed(4)}`
+	if (perMillion < 1) return `$${perMillion.toFixed(2)}`
+	return `$${perMillion.toFixed(0)}`
+}
+
+// Get price tier based on combined input+output cost (0=green, 1=yellow, 2=red)
+function getPriceTier(pricing: NonNullable<ModelSelectorOption["pricing"]>): number {
+	const input = pricing.prompt ?? 0
+	const output = pricing.completion ?? 0
+	const avgCost = ((input + output) / 2) * 1_000_000
+
+	if (avgCost === 0) return 0 // Free - green
+	if (avgCost < 1) return 0 // Very cheap - green
+	if (avgCost < 5) return 1 // Medium - yellow
+	return 2 // Expensive - red
+}
+
+// Price indicator component with 3 bars
+function PriceIndicator({ tier }: { tier: number }) {
+	const colors = ["bg-green-500", "bg-yellow-500", "bg-red-500"]
+	const bgColors = ["bg-green-500/20", "bg-yellow-500/20", "bg-red-500/20"]
+
+	return (
+		<div className="flex items-center gap-0.5">
+			{[0, 1, 2].map((i) => (
+				<div
+					key={i}
+					className={cn(
+						"h-2 w-1 rounded-full",
+						i <= tier ? colors[tier] : bgColors[tier]
+					)}
+				/>
+			))}
+		</div>
+	)
 }
 
 type ModelSelectorProps = {
@@ -37,68 +89,111 @@ type ModelSelectorProps = {
 	loading?: boolean
 }
 
-const TOKENS_PER_MILLION = 1_000_000
+// Extract provider from model ID (e.g. "openai/gpt-4" -> "openai")
+// Also handle special cases and normalize provider names for models.dev logos
+function getProviderFromModelId(modelId: string): string | null {
+	const parts = modelId.split("/")
+	if (parts.length < 2) return null
 
-// Memoize the number formatters to avoid recreating them on every render
-const getNumberFormatter = (() => {
-	const cache = new Map<number, Intl.NumberFormat>();
-	return (fractionDigits: number): Intl.NumberFormat => {
-		if (!cache.has(fractionDigits)) {
-			cache.set(
-				fractionDigits,
-				new Intl.NumberFormat("en-US", {
-					style: "currency",
-					currency: "USD",
-					minimumFractionDigits: fractionDigits,
-					maximumFractionDigits: fractionDigits,
-				})
-			);
+	const provider = parts[0]!
+
+	// Normalize provider names to match models.dev logo slugs
+	const providerMap: Record<string, string> = {
+		"xai": "xai",
+		"x-ai": "xai",
+		"openai": "openai",
+		"anthropic": "anthropic",
+		"google": "google",
+		"deepseek": "deepseek",
+		"meta-llama": "llama",
+		"mistralai": "mistral",
+		"openrouter": "openrouter",
+		"perplexity": "perplexity",
+		"cohere": "cohere",
+		"01-ai": "01-ai",
+		"qwen": "alibaba",
+		"z-ai": "zhipuai",
+		"nvidia": "nvidia",
+		"microsoft": "azure",
+		"amazon": "amazon-bedrock",
+	}
+
+	return providerMap[provider] || provider
+}
+
+// Major providers to show in the list
+const MAJOR_PROVIDERS = new Set([
+	"openai",
+	"anthropic",
+	"google",
+	"xai",
+	"x-ai",
+	"deepseek",
+	"mistral",
+	"mistralai",
+	"meta-llama",
+	"openrouter",
+	"qwen",
+	"z-ai",
+]);
+
+// Group models with Popular and Free sections first, only showing major providers
+function groupModels(options: ModelSelectorOption[]) {
+	const groups: Array<[string, ModelSelectorOption[]]> = []
+
+	// Popular models section
+	const popularModels = options.filter(opt => opt.popular)
+	if (popularModels.length > 0) {
+		groups.push(["Popular", popularModels])
+	}
+
+	// Free models section - include all free models, even if they're also popular
+	const freeModels = options.filter(opt => opt.free)
+	if (freeModels.length > 0) {
+		groups.push(["Free Models", freeModels])
+	}
+
+	// Regular provider groups - only major providers
+	const regularModels = options.filter(opt => !opt.popular && !opt.free)
+	const grouped = new Map<string, ModelSelectorOption[]>()
+
+	for (const option of regularModels) {
+		const parts = option.value.split("/")
+		const provider = parts.length > 1 ? parts[0]! : "Other"
+
+		// Only include major providers
+		if (!MAJOR_PROVIDERS.has(provider)) {
+			continue
 		}
-		return cache.get(fractionDigits)!;
-	};
-})();
 
-function formatCost(cost: number | null) {
-	if (cost == null || !Number.isFinite(cost)) return "–"
-	const abs = Math.abs(cost)
-	let fractionDigits = 3
-	if (abs >= 1) fractionDigits = 2
-	else if (abs >= 0.1) fractionDigits = 3
-	else if (abs >= 0.01) fractionDigits = 4
-	else if (abs >= 0.001) fractionDigits = 5
-	else fractionDigits = 6
-	return getNumberFormatter(fractionDigits).format(cost)
-}
-
-const scaleCostToMillion = (cost: number | null) => {
-	if (cost == null || !Number.isFinite(cost)) return null
-	return cost * TOKENS_PER_MILLION
-}
-
-function formatPricing(pricing: NonNullable<ModelSelectorOption["pricing"]>) {
-	const promptPerMillion = scaleCostToMillion(pricing.prompt)
-	const completionPerMillion = scaleCostToMillion(pricing.completion)
-	return `In: ${formatCost(promptPerMillion)} · Out: ${formatCost(completionPerMillion)} per 1M tokens`
-}
-
-const getInitial = (label: string) => {
-	const trimmed = label.trim()
-	return trimmed.length > 0 ? trimmed[0]!.toUpperCase() : "?"
-}
-
-function OptionGlyph({ option }: { option: ModelSelectorOption | null }) {
-	if (!option) {
-		return <Sparkles className="size-4" />
+		if (!grouped.has(provider)) {
+			grouped.set(provider, [])
+		}
+		grouped.get(provider)!.push(option)
 	}
-	const Icon = option.icon
-	if (Icon) {
-		return <Icon className="size-4" />
-	}
-	return (
-		<span className="text-foreground/80 text-[11px] font-semibold uppercase leading-none">
-			{getInitial(option.label)}
-		</span>
-	)
+
+	groups.push(...Array.from(grouped.entries()))
+	return groups
+}
+
+// Map provider slugs to display names
+const providerNames: Record<string, string> = {
+	"openai": "OpenAI",
+	"anthropic": "Anthropic",
+	"google": "Google",
+	"meta-llama": "Meta",
+	"mistralai": "Mistral AI",
+	"deepseek": "DeepSeek",
+	"perplexity": "Perplexity",
+	"xai": "xAI",
+	"x-ai": "xAI",
+	"cohere": "Cohere",
+	"01-ai": "01.AI",
+	"qwen": "Alibaba",
+	"z-ai": "Z.AI",
+	"nvidia": "NVIDIA",
+	"microsoft": "Microsoft",
+	"amazon": "Amazon",
 }
 
 function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
@@ -139,103 +234,111 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 		return "Select model"
 	}, [loading, selectedOption])
 
-	const triggerTitle = React.useMemo(() => {
-		if (!selectedOption) return undefined
-		const parts: string[] = []
-		if (selectedOption.context) parts.push(`Context: ${Intl.NumberFormat().format(selectedOption.context)} tokens`)
-		if (selectedOption.pricing) parts.push(formatPricing(selectedOption.pricing))
-		return parts.length > 0 ? parts.join(" • ") : undefined
-	}, [selectedOption])
+	// Get provider logo for selected option
+	const selectedProvider = selectedOption ? getProviderFromModelId(selectedOption.value) : null
+
+	// Group options with Popular and Free sections first
+	const groupedOptions = React.useMemo(() => groupModels(options), [options])
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
+		<AIModelSelector open={open} onOpenChange={setOpen}>
+			<ModelSelectorTrigger asChild>
 				<Button
 					variant="outline"
-					size="sm"
 					disabled={disabled || loading || options.length === 0}
-					role="combobox"
-					aria-expanded={open}
-					aria-haspopup="listbox"
-					aria-label={`Select AI model. Current selection: ${triggerLabel}`}
-					title={triggerTitle}
-					className={cn("flex h-10 min-w-[220px] max-w-[360px] items-center justify-between bg-background/90 px-3 text-left text-foreground", borderRadius.lg, spacing.gap.sm)}
+					className="w-[200px] justify-between"
 				>
-					<span className={cn("flex min-w-0 items-center", spacing.gap.sm)}>
-						<span className={cn("bg-muted text-muted-foreground/90 flex size-8 items-center justify-center", borderRadius.md)}>
-							<OptionGlyph option={selectedOption} />
-						</span>
-						<span className="truncate text-sm font-medium leading-tight text-left">{triggerLabel}</span>
-					</span>
-					<ChevronDown className={cn("size-4 transition-transform", open ? "rotate-180" : "rotate-0", disabled ? "opacity-40" : "opacity-60")} />
+					{selectedProvider && (
+						<ModelSelectorLogo provider={selectedProvider} className="size-4" />
+					)}
+					{selectedOption && (
+						<ModelSelectorName>{triggerLabel}</ModelSelectorName>
+					)}
+					<Check className="ml-2 size-4 shrink-0 opacity-50" />
 				</Button>
-			</PopoverTrigger>
-			<PopoverContent align="end" className={cn("w-[320px] max-w-[90vw] border-none bg-popover/95 p-0", shadows.xl)}>
-				<Command className="border-none bg-transparent shadow-none" loop>
-					<CommandInput 
-						placeholder="Search models" 
-						className="h-9 px-3 text-sm"
-						aria-label="Search AI models"
-					/>
-					<CommandList className="max-h-60 overflow-y-auto" role="listbox">
-						<CommandEmpty className="py-6 text-sm text-muted-foreground" role="status">
-							{loading ? "Loading models..." : "No models found."}
-						</CommandEmpty>
-						<CommandGroup className={cn("flex flex-col p-2", spacing.gap.xs)} aria-label="Available models">
-						{options.map((option) => {
-							const isSelected = option.value === selectedValue
-							return (
-								<CommandItem
-									key={option.value}
-									value={option.value}
-									onSelect={(currentValue) => {
-										if (value === undefined) {
-											setInternalValue(currentValue)
-										}
-										onChange?.(currentValue)
-										setOpen(false)
-									}}
-									role="option"
-									aria-selected={isSelected}
-									aria-label={option.label}
-										className={cn(
-											"flex items-center justify-between px-3 py-2",
-											borderRadius.md,
-											spacing.gap.sm,
-											"data-[selected=true]:bg-primary/10 data-[selected=true]:text-foreground",
-										)}
+			</ModelSelectorTrigger>
+			<ModelSelectorContent>
+				<ModelSelectorInput placeholder="Search models..." />
+				<ModelSelectorList>
+					<ModelSelectorEmpty>
+						{loading ? "Loading models..." : "No models found."}
+					</ModelSelectorEmpty>
+					{groupedOptions.map(([groupName, groupModels]) => (
+						<ModelSelectorGroup
+							key={groupName}
+							heading={groupName === "Popular" || groupName === "Free Models" ? groupName : (providerNames[groupName] || groupName)}
+						>
+							{groupModels.map((option) => {
+								const isSelected = option.value === selectedValue
+								const provider = getProviderFromModelId(option.value)
+								const hasPricing = option.pricing && (option.pricing.prompt !== null || option.pricing.completion !== null)
+								const priceTier = hasPricing ? getPriceTier(option.pricing!) : 0
+
+								// Check if model is free (both input and output are 0)
+								const isFreeModel = hasPricing &&
+									((option.pricing!.prompt ?? 0) === 0 && (option.pricing!.completion ?? 0) === 0)
+
+								return (
+									<ModelSelectorItem
+										key={option.value}
+										value={option.value}
+										onSelect={(currentValue) => {
+											if (value === undefined) {
+												setInternalValue(currentValue)
+											}
+											onChange?.(currentValue)
+											setOpen(false)
+										}}
+										className="flex items-center gap-2"
 									>
-									<span className={cn("flex min-w-0 items-start", spacing.gap.sm)}>
-										<span className={cn("bg-muted text-muted-foreground flex size-7 items-center justify-center", borderRadius.md)}>
-											<OptionGlyph option={option} />
-										</span>
-										<span className="flex min-w-0 flex-col gap-0.5">
-											<span className="text-sm font-medium leading-tight text-left whitespace-normal">
-												{option.label}
-											</span>
-											{option.pricing ? (
-												<span className="text-muted-foreground text-[11px] leading-tight">
-													{formatPricing(option.pricing)}
-												</span>
-											) : null}
-											{option.context ? (
-												<span className="text-muted-foreground text-[11px] leading-tight">
-													Context: {Intl.NumberFormat().format(option.context)} tokens
-												</span>
-											) : null}
-										</span>
-									</span>
-											<Check className={cn("size-4", isSelected ? "opacity-100" : "opacity-0")}
-												aria-hidden={!isSelected}
-											/>
-										</CommandItem>
+										{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
+										<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
+										{hasPricing && (
+											<div className="flex items-center gap-1.5 shrink-0">
+												<TooltipProvider delayDuration={100}>
+													<Tooltip>
+														<TooltipTrigger asChild>
+															<div className="flex items-center gap-1 text-xs text-muted-foreground">
+																<PriceIndicator tier={priceTier} />
+																<span className="tabular-nums">
+																	{isFreeModel
+																		? "Free"
+																		: `${formatPrice(option.pricing!.prompt)}/${formatPrice(option.pricing!.completion)}`
+																	}
+																</span>
+															</div>
+														</TooltipTrigger>
+														<TooltipContent side="left" className="max-w-xs">
+															<div className="space-y-1 text-xs">
+																<div className="font-medium">Pricing per 1M tokens</div>
+																<div>Input: {formatPrice(option.pricing!.prompt)}</div>
+																<div>Output: {formatPrice(option.pricing!.completion)}</div>
+																<div className="pt-1 text-muted-foreground border-t">
+																	<Info className="inline-block size-3 mr-1" />
+																	Prices may vary by provider and are approximate
+																</div>
+															</div>
+														</TooltipContent>
+													</Tooltip>
+												</TooltipProvider>
+											</div>
+										)}
+										{isSelected && (
+											<Check className="size-4 shrink-0" />
+										)}
+									</ModelSelectorItem>
 								)
-								})}
-						</CommandGroup>
-					</CommandList>
-				</Command>
-			</PopoverContent>
-		</Popover>
+							})}
+						</ModelSelectorGroup>
+					))}
+					{!loading && groupedOptions.length > 0 && (
+						<div className="px-2 py-4 text-center text-xs text-muted-foreground">
+							Can't find your model? Search above...
+						</div>
+					)}
+				</ModelSelectorList>
+			</ModelSelectorContent>
+		</AIModelSelector>
 	)
 }
 

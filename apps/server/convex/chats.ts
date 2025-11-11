@@ -122,7 +122,7 @@ export const create = mutation({
 			.first();
 
 		const now = Date.now();
-		const rateLimit = 60 * 1000; // 1 minute
+		const rateLimit = 3 * 1000; // 3 seconds
 		if (recentChat) {
 			const lastChatTime = recentChat.createdAt;
 			if (now - lastChatTime < rateLimit) {
