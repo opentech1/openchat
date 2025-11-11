@@ -327,7 +327,7 @@ const ChatMessageBubble = memo(
         ) : (
           <div className="flex flex-col gap-2 max-w-full">
             {hasParts ? (
-              message.parts.map((part, index) => {
+              message.parts!.map((part, index) => {
                 if (part.type === "reasoning") {
                   // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
                   const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;

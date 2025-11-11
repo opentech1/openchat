@@ -110,7 +110,7 @@ function supportsReasoning(modelId: string): boolean {
 }
 
 // Get provider options for reasoning models
-function getReasoningProviderOptions(modelId: string): Record<string, unknown> | undefined {
+function getReasoningProviderOptions(modelId: string): Record<string, Record<string, any>> | undefined {
 	const lowerModelId = modelId.toLowerCase();
 
 	// Anthropic models (Claude 3.7, Claude 4)
@@ -778,14 +778,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
 						assistantText += chunk.text;
 						scheduleStreamFlush();
-					} else if (chunk.type === "reasoning-start") {
-						reasoningStartTime = Date.now();
-						console.log("[Reasoning] ✅ Started at", reasoningStartTime);
 					} else if (chunk.type === "reasoning-delta") {
-						// CRITICAL FIX: Start timer on FIRST reasoning chunk if not started
+						// Start timer on FIRST reasoning chunk if not started
 						if (!reasoningStartTime) {
 							reasoningStartTime = Date.now();
-							console.log("[Reasoning] ✅ Auto-started timer at", reasoningStartTime);
+							console.log("[Reasoning] ✅ Started timer at", reasoningStartTime);
 						}
 
 						const text = (chunk as any).text;
@@ -795,10 +792,6 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 							reasoningEndTime = Date.now();
 							scheduleStreamFlush();
 						}
-					} else if (chunk.type === "reasoning-end") {
-						reasoningEndTime = Date.now();
-						const duration = reasoningStartTime ? reasoningEndTime - reasoningStartTime : 0;
-						console.log(`[Reasoning] ✅ Completed in ${duration}ms, FINAL LENGTH: ${assistantReasoning.length} chars`);
 					}
 				},
 				onFinish: async (event) => {

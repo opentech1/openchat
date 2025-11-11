@@ -534,8 +534,21 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
                     .filter((p): p is { type: "text"; text: string } => p.type === "text")
                     .map(p => p.text)
                     .join("");
-                  if (textContent) {
-                    void handleSendMessage(textContent);
+                  if (textContent && selectedModel) {
+                    void sendMessage(
+                      {
+                        id: crypto.randomUUID(),
+                        role: "user",
+                        parts: [{ type: "text", text: textContent }],
+                        metadata: { createdAt: new Date().toISOString() },
+                      },
+                      {
+                        body: {
+                          chatId,
+                          modelId: selectedModel,
+                        },
+                      }
+                    );
                   }
                 }
               },

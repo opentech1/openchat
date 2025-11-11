@@ -11,8 +11,8 @@ import { encryptApiKey, decryptApiKey } from "./encryption";
 import { logError } from "./logger";
 
 type ConvexClient = {
-	mutation: (api: unknown, args: unknown) => Promise<unknown>;
-	query: (api: unknown, args: unknown) => Promise<unknown>;
+	mutation: (api: any, args?: any) => Promise<any>;
+	query: (api: any, args?: any) => Promise<any>;
 };
 
 /**

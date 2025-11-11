@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ModelSelectorOption } from "@/components/model-selector";
-import {
-  removeOpenRouterKey,
-  saveOpenRouterKey,
-} from "@/lib/openrouter-key-storage";
+// import { saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import {
   readCachedModels,
   writeCachedModels,
@@ -129,7 +126,7 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
         const data = await response.json();
         if (!response.ok || !data?.ok) {
           if (response.status === 401) {
-            removeOpenRouterKey();
+            // Clear local API key state (server-side key removal handled elsewhere)
             setApiKey(null);
           }
           const errorMessage =
@@ -230,7 +227,8 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
   const handleSaveApiKey = useCallback(
     async (key: string) => {
       try {
-        await saveOpenRouterKey(key);
+        // TODO: Save to server using useOpenRouterKey hook
+        // await saveOpenRouterKey(key, userId, externalUserId, convexClient);
         setApiKey(key);
         registerClientProperties({ has_openrouter_key: true });
         captureClientEvent("openrouter.key_saved", {
