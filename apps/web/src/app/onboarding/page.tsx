@@ -140,9 +140,9 @@ export default function OnboardingPage() {
 		switch (currentStep) {
 			case 1:
 				return (
-					<div className="w-full max-w-xs space-y-6">
+					<div className="w-full space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Welcome to OpenChat</h1>
+							<h1 className="text-2xl font-semibold tracking-tight">Welcome to OpenChat</h1>
 							<p className="text-muted-foreground text-sm">
 								Sign in to get started
 							</p>
@@ -173,15 +173,15 @@ export default function OnboardingPage() {
 
 			case 2:
 				return (
-					<div className="w-full max-w-md space-y-6">
+					<div className="w-full space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Add your OpenRouter API key</h1>
+							<h1 className="text-2xl font-semibold tracking-tight">Add your OpenRouter API key</h1>
 							<p className="text-muted-foreground text-sm">
 								Connect your OpenRouter account to start chatting
 							</p>
 						</div>
 
-						<form onSubmit={handleApiKeySubmit} className="space-y-4">
+						<form onSubmit={handleApiKeySubmit} className="space-y-5">
 							{error && (
 								<div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
 									{error}
@@ -200,7 +200,7 @@ export default function OnboardingPage() {
 									placeholder="sk-or-v1..."
 									autoFocus
 									required
-									className="font-mono"
+									className="font-mono h-11"
 								/>
 								<p className="text-muted-foreground text-xs">
 									Create a key under{" "}
@@ -219,7 +219,7 @@ export default function OnboardingPage() {
 							<Button
 								type="submit"
 								disabled={savingApiKey || apiKey.trim().length < 10}
-								className="w-full"
+								className="w-full h-11"
 							>
 								{savingApiKey ? (
 									<LoaderIcon className="size-4 animate-spin" />
@@ -228,8 +228,8 @@ export default function OnboardingPage() {
 								)}
 							</Button>
 
-							<p className="text-muted-foreground text-xs">
-								Your key is encrypted in your browser using AES-256 encryption, then stored securely.
+							<p className="text-muted-foreground text-xs text-center">
+								Your key is encrypted in your browser using AES-256 encryption, then stored in your account database and synced across devices. Once stored, keys cannot be viewed - only updated or removed.
 							</p>
 						</form>
 					</div>
@@ -237,9 +237,9 @@ export default function OnboardingPage() {
 
 			case 3:
 				return (
-					<div className="w-full max-w-md space-y-6">
+					<div className="w-full space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Personalize your experience</h1>
+							<h1 className="text-2xl font-semibold tracking-tight">Personalize your experience</h1>
 							<p className="text-muted-foreground text-sm">
 								Help us tailor the AI to your preferences
 							</p>
@@ -348,29 +348,26 @@ export default function OnboardingPage() {
 
 	return (
 		<div className="grid min-h-svh lg:grid-cols-2">
-			<div className="flex flex-col gap-4 p-6 md:p-10">
-				<div className="flex items-center justify-between">
-					<Link href="/" className="flex items-center gap-2 font-medium">
-						<Logo size="small" />
-					</Link>
-					{currentStep > (session?.user ? 2 : 1) && (
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={handleBack}
-							className="gap-2"
-						>
-							<ArrowLeft className="size-4" />
-							Back
-						</Button>
-					)}
+			<div className="flex flex-col p-6 md:p-10">
+				<div className="flex items-center justify-center py-6">
+					<Stepper steps={3} currentStep={currentStep} />
 				</div>
 
-				<div className="flex flex-1 flex-col items-center justify-center">
-					<div className="mb-8">
-						<Stepper steps={3} currentStep={currentStep} />
+				<div className="flex flex-1 items-center justify-center px-4">
+					<div className="w-full max-w-xl">
+						{currentStep > (session?.user ? 2 : 1) && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleBack}
+								className="mb-6 gap-2"
+							>
+								<ArrowLeft className="size-4" />
+								Back
+							</Button>
+						)}
+						{renderStep()}
 					</div>
-					{renderStep()}
 				</div>
 			</div>
 			<div className="bg-muted relative hidden lg:block">
