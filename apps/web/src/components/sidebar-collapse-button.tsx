@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function SidebarCollapseButton() {
 	const [collapsed, setCollapsed] = useState(false);
+	const router = useRouter();
 
 	const updateCollapsedState = useCallback(() => {
 		try {
@@ -55,18 +57,33 @@ export default function SidebarCollapseButton() {
 		window.dispatchEvent(event);
 	}, []);
 
+	const handleNewChat = useCallback(() => {
+		router.push("/dashboard");
+	}, [router]);
+
 	// Only show button when sidebar is collapsed
 	if (!collapsed) return null;
 
 	return (
-		<button
-			type="button"
-			onClick={toggleSidebar}
-			className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
-			aria-label="Expand sidebar"
-			title="Expand sidebar (Ctrl+B)"
-		>
-			<PanelLeft className="size-4" />
-		</button>
+		<>
+			<button
+				type="button"
+				onClick={toggleSidebar}
+				className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+				aria-label="Expand sidebar"
+				title="Expand sidebar (Ctrl+B)"
+			>
+				<PanelLeft className="size-4" />
+			</button>
+			<button
+				type="button"
+				onClick={handleNewChat}
+				className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+				aria-label="New chat"
+				title="New chat"
+			>
+				<Plus className="size-4" />
+			</button>
+		</>
 	);
 }

@@ -8,7 +8,7 @@ import AppSidebar from "@/components/app-sidebar-wrapper";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
-import SidebarControlsWrapper from "@/components/sidebar-controls-wrapper";
+import { DashboardControls } from "@/components/dashboard-controls";
 import { HelpButton } from "@/components/help-button";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 				</div>
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
-                <SidebarControlsWrapper />
+                <DashboardControls />
                 <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-3 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
                     <MobileDashboardNav initialChats={chats} />
                     <Link

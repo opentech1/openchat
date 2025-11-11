@@ -25,7 +25,9 @@ export default defineSchema({
 		deletedAt: v.optional(v.number()),
 	})
 		.index("by_user", ["userId", "updatedAt"])
-		.index("by_user_created", ["userId", "createdAt"]),
+		.index("by_user_created", ["userId", "createdAt"])
+		.index("by_user_last_message", ["userId", "lastMessageAt"])
+		.index("by_user_not_deleted", ["userId", "deletedAt", "updatedAt"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
@@ -43,5 +45,7 @@ export default defineSchema({
 	})
 		.index("by_chat", ["chatId", "createdAt"])
 		.index("by_client_id", ["chatId", "clientMessageId"])
-		.index("by_user", ["userId"]),
+		.index("by_user", ["userId"])
+		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
+		.index("by_user_created", ["userId", "createdAt"]),
 });
