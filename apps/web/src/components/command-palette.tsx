@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, MessageSquare, Search as SearchIcon } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
 	CommandDialog,
 	CommandEmpty,
@@ -10,23 +10,14 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-	CommandSeparator,
 } from "@/components/ui/command";
 
-export type ChatListItem = {
-	id: string;
-	title: string | null;
-	updatedAt?: string | Date;
-	lastMessageAt?: string | Date | null;
-};
-
 type CommandPaletteProps = {
-	chats: ChatListItem[];
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
 };
 
-export function CommandPalette({ chats, open: controlledOpen, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPaletteProps) {
 	const [internalOpen, setInternalOpen] = useState(false);
 	const router = useRouter();
 
@@ -49,14 +40,6 @@ export function CommandPalette({ chats, open: controlledOpen, onOpenChange }: Co
 		router.push("/dashboard");
 		setOpen(false);
 	}, [router, setOpen]);
-
-	const handleChatSelect = useCallback(
-		(chatId: string) => {
-			router.push(`/dashboard/${chatId}`);
-			setOpen(false);
-		},
-		[router, setOpen]
-	);
 
 	return (
 		<CommandDialog open={open} onOpenChange={setOpen}>

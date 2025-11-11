@@ -3,14 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import SidebarCollapseButton from "@/components/sidebar-collapse-button";
 import { CommandPalette, useCommandPalette } from "@/components/command-palette";
-import type { ChatListItem } from "@/components/command-palette";
 import { opacity, spacing } from "@/styles/design-tokens";
 
-type DashboardControlsProps = {
-	chats: ChatListItem[];
-};
-
-export function DashboardControls({ chats }: DashboardControlsProps) {
+export function DashboardControls() {
 	const { open, setOpen } = useCommandPalette();
 	const [collapsed, setCollapsed] = useState(false);
 
@@ -54,7 +49,7 @@ export function DashboardControls({ chats }: DashboardControlsProps) {
 					</div>
 				</div>
 			)}
-			<CommandPalette chats={chats} open={open} onOpenChange={setOpen} />
+			<CommandPalette open={open} onOpenChange={setOpen} />
 		</>
 	);
 }
