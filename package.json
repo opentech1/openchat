@@ -11,6 +11,7 @@
     "dev": "turbo -F web -F server dev",
     "build": "turbo -F server build",
     "build:web": "turbo -F web build",
+    "deploy": "bun ./scripts/deploy.ts",
     "check-types": "turbo check-types",
     "verify:prod": "bun ./scripts/prod-canary.ts",
     "test": "vitest run --coverage",
