@@ -1,6 +1,7 @@
 /**
- * Server-side encrypted OpenRouter API key storage.
- * Keys are encrypted client-side before being sent to the server.
+ * Server-side OpenRouter API key storage with client-side encryption.
+ * Keys are encrypted in your browser before being sent to the server and stored in your account database.
+ * Keys are synced across devices and are write-only - once stored, they cannot be retrieved or viewed.
  *
  * IMPORTANT: These are low-level functions. Use the useOpenRouterKey hook in React components instead.
  */
@@ -40,7 +41,8 @@ export async function saveOpenRouterKey(
 }
 
 /**
- * Loads the OpenRouter API key from the server (decrypted)
+ * Loads the OpenRouter API key for internal use (API calls)
+ * INTERNAL USE ONLY - Do not expose decrypted keys in the UI
  */
 export async function loadOpenRouterKey(
 	userId: Id<"users">,
@@ -60,6 +62,26 @@ export async function loadOpenRouterKey(
 	} catch (error) {
 		logError("Failed to load OpenRouter key", error);
 		return null;
+	}
+}
+
+/**
+ * Checks if an OpenRouter API key exists in storage (for UI display)
+ */
+export async function hasOpenRouterKey(
+	userId: Id<"users">,
+	convexClient: ConvexClient
+): Promise<boolean> {
+	try {
+		// Check if encrypted key exists on server
+		const encryptedKey = (await convexClient.query(api.users.getOpenRouterKey, {
+			userId,
+		})) as string | null;
+
+		return !!encryptedKey;
+	} catch (error) {
+		logError("Failed to check OpenRouter key status", error);
+		return false;
 	}
 }
 

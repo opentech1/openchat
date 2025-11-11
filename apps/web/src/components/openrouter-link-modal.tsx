@@ -72,7 +72,7 @@ export function OpenRouterLinkModal({
               <div className="flex-1">
                 <Dialog.Title className="text-lg font-semibold">Add your OpenRouter API key</Dialog.Title>
                 <Dialog.Description id="openrouter-modal-description" className="text-muted-foreground mt-1 text-sm">
-                  Paste a personal API key so OpenChat can stream responses using your OpenRouter account. Keys stay encrypted in your browser and are only sent to your server when you request a completion.
+                  Paste a personal API key so OpenChat can stream responses using your OpenRouter account. Keys are encrypted in your browser before being stored in your account database and synced across devices.
                 </Dialog.Description>
               </div>
               <Dialog.Close
@@ -155,7 +155,7 @@ export function OpenRouterLinkModal({
                 ) : null}
               </div>
               <p className="text-muted-foreground text-xs">
-                Your key is encrypted with an AES key generated via the Web Crypto API and stored locally. Clear browser storage or select “Remove key” in settings to delete it at any time.
+                Your key is encrypted in your browser using AES-256 encryption, then stored securely in your account database. Once stored, keys cannot be viewed - only updated or removed in settings.
               </p>
             </form>
           </div>

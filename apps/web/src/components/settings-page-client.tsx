@@ -52,7 +52,7 @@ export default function SettingsPageClient() {
               openrouter.ai/keys
             </a>
             {" "}
-            and save it when prompted in the chat composer. Keys are stored locally in your browser.
+            and save it when prompted in the chat composer. Keys are encrypted in your browser before being stored in your account database.
           </p>
           <p className="text-xs text-muted-foreground mt-2">We&apos;ll keep asking until a key is added.</p>
         </section>
