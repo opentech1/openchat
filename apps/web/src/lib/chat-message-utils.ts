@@ -67,6 +67,8 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 		(null);
 
 	// Build parts array if reasoning exists
+	// IMPORTANT: Reasoning MUST come before text content in parts array
+	// UI components like chat-messages-panel.tsx rely on this ordering
 	const parts: MessagePart[] = [];
 	if (message.reasoning) {
 		parts.push({ type: "reasoning", text: message.reasoning });

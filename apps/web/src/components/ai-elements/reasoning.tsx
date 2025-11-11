@@ -65,8 +65,11 @@ export const Reasoning = memo(
     const [hasAutoClosed, setHasAutoClosed] = useState(false);
     const [startTime, setStartTime] = useState<number | null>(null);
 
-    // Track duration when streaming starts and ends
+    // Track duration when streaming (only if no server-provided duration exists)
     useEffect(() => {
+      // If we have a duration from the server, don't override it with client calculation
+      if (durationProp !== undefined) return;
+
       if (isStreaming) {
         if (startTime === null) {
           setStartTime(Date.now());
@@ -75,7 +78,7 @@ export const Reasoning = memo(
         setDuration(Math.ceil((Date.now() - startTime) / MS_IN_S));
         setStartTime(null);
       }
-    }, [isStreaming, startTime, setDuration]);
+    }, [isStreaming, startTime, setDuration, durationProp]);
 
     // Auto-open when streaming starts, auto-close when streaming ends (once only)
     useEffect(() => {

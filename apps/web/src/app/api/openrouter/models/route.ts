@@ -68,7 +68,7 @@ function hasReasoningCapability(modelId: string): boolean {
 		lowerModelId.includes("/o3") ||
 		lowerModelId.includes("magistral") ||
 		lowerModelId.includes("command-a-reasoning") ||
-		lowerModelId.includes("qwen3") && lowerModelId.includes("thinking")
+		(lowerModelId.includes("qwen3") && lowerModelId.includes("thinking"))
 	);
 }
 
