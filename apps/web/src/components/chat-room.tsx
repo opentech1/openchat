@@ -126,7 +126,7 @@ const initialOpenRouterState: OpenRouterState = {
   modelOptions: [],
   selectedModel: null,
   checkedApiKey: false,
-  keyPromptDismissed: false,
+  keyPromptDismissed: true, // Start dismissed - only show when user clicks "Add key" in toast
 };
 
 function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
@@ -462,8 +462,17 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const handleMissingRequirement = useCallback((reason: "apiKey" | "model") => {
     if (reason === "apiKey") {
-      // Don't force modal or show toast - let user add key from settings when ready
-      dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: true });
+      // Show toast with action to add OpenRouter key
+      toast.error("Add your OpenRouter API key to use AI models", {
+        duration: 6000,
+        action: {
+          label: "Add key",
+          onClick: () => {
+            // Open the modal to add key
+            dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
+          },
+        },
+      });
     } else {
       toast.error("Select an OpenRouter model to continue.");
     }
@@ -772,13 +781,13 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
-  const shouldPromptForKey = !isLinked;
-  // Never force modal - only show if user explicitly dismissed it as false (wants to add key)
-  const showKeyModal = checkedApiKey && shouldPromptForKey && !keyPromptDismissed;
-  const composerDisabled = shouldPromptForKey;
+  // Only show modal when user explicitly wants to add key (via toast action or settings)
+  const showKeyModal = !keyPromptDismissed && checkedApiKey && !isLinked;
+  // Don't disable composer - let users type even without key
+  const composerDisabled = false;
   // Don't disable send button when streaming - user needs to be able to click stop
-  const sendDisabled =
-    (status === "submitted") || modelsLoading || shouldPromptForKey || !selectedModel;
+  // Also don't block sending without API key - let handleSend show the toast instead
+  const sendDisabled = (status === "submitted") || modelsLoading || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -817,11 +826,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
           <ChatComposer
-            placeholder={
-              !apiKey
-                ? "Add an OpenRouter API key in settings to start chatting..."
-                : "Type your message..."
-            }
+            placeholder="Type your message..."
             sendDisabled={sendDisabled}
             disabled={composerDisabled}
             onSend={handleSend}

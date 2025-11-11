@@ -234,8 +234,7 @@ function ChatComposer({
                 : sendDisabled ||
                   isSending ||
                   !value.trim() ||
-                  !activeModelId ||
-                  !apiKey
+                  !activeModelId
             }
             aria-label={
               isStreaming ? "Stop generating response" : "Send message"

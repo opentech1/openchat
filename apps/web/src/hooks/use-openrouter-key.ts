@@ -1,8 +1,12 @@
 /**
  * Hook for managing OpenRouter API key with server-side encrypted storage
+ * Keys are encrypted in browser, stored in database, and synced across devices
  *
  * IMPORTANT: Only use this hook in client-only components (with ssr: false)
  * or within components that are dynamically imported with { ssr: false }
+ *
+ * NOTE: This hook loads the decrypted key for internal use (API calls).
+ * Never display the decrypted key in the UI - use hasKey for UI display.
  */
 
 import { useEffect, useState, useCallback } from "react";

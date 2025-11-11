@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   saveOpenRouterKey,
-  loadOpenRouterKey,
+  hasOpenRouterKey,
   removeOpenRouterKey,
 } from "@/lib/openrouter-key-storage";
 import { useConvex, useQuery } from "convex/react";
@@ -67,7 +67,6 @@ export function AccountSettingsModal({
   const [removingKey, setRemovingKey] = useState(false);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [hasStoredKey, setHasStoredKey] = useState(false);
-  const [storedKeyTail, setStoredKeyTail] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -139,22 +138,15 @@ export function AccountSettingsModal({
     let cancelled = false;
     void (async () => {
       try {
-        const existing = await loadOpenRouterKey(convexUser._id, user.id, convex);
+        const keyExists = await hasOpenRouterKey(convexUser._id, convex);
         if (cancelled) return;
-        if (existing) {
-          setHasStoredKey(true);
-          setStoredKeyTail(existing.slice(-4));
-        } else {
-          setHasStoredKey(false);
-          setStoredKeyTail(null);
-        }
+        setHasStoredKey(keyExists);
         setApiKeyError(null);
       } catch (error) {
-        logError("Failed to load OpenRouter key", error);
+        logError("Failed to check OpenRouter key status", error);
         if (cancelled) return;
         setHasStoredKey(false);
-        setStoredKeyTail(null);
-        setApiKeyError("Unable to load your saved OpenRouter key.");
+        setApiKeyError("Unable to check your OpenRouter key status.");
       }
     })();
 
@@ -189,7 +181,6 @@ export function AccountSettingsModal({
     try {
       await saveOpenRouterKey(trimmed, convexUser._id, user.id, convex);
       setHasStoredKey(true);
-      setStoredKeyTail(trimmed.slice(-4));
       setApiKeyInput("");
       toast.success("OpenRouter key saved");
       captureClientEvent("openrouter.key_saved", {
@@ -214,7 +205,6 @@ export function AccountSettingsModal({
     try {
       await removeOpenRouterKey(convexUser._id, convex);
       setHasStoredKey(false);
-      setStoredKeyTail(null);
       setApiKeyInput("");
       setApiKeyError(null);
       toast.success("OpenRouter key removed");
@@ -347,11 +337,7 @@ export function AccountSettingsModal({
                       : "bg-destructive/10 text-destructive"
                   )}
                 >
-                  {hasStoredKey
-                    ? storedKeyTail
-                      ? `••••${storedKeyTail}`
-                      : "Linked"
-                    : "Not set"}
+                  {hasStoredKey ? "Key stored" : "Not set"}
                 </span>
               </div>
 
@@ -424,7 +410,7 @@ export function AccountSettingsModal({
               </form>
 
               <p className="text-xs text-muted-foreground">
-                Keys are encrypted client-side and stored securely on the server.
+                Keys are encrypted in your browser before being stored in your account database and synced across devices. Once stored, keys cannot be viewed - only updated or removed.
               </p>
             </div>
 

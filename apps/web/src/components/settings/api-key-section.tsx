@@ -13,11 +13,10 @@ import { spacing, iconSize } from "@/styles/design-tokens";
 
 type ApiKeySectionProps = {
   hasStoredKey: boolean;
-  storedKeyTail: string | null;
   onKeyChanged: () => void;
 };
 
-export function ApiKeySection({ hasStoredKey, storedKeyTail, onKeyChanged }: ApiKeySectionProps) {
+export function ApiKeySection({ hasStoredKey, onKeyChanged }: ApiKeySectionProps) {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [removingKey, setRemovingKey] = useState(false);
@@ -86,7 +85,7 @@ export function ApiKeySection({ hasStoredKey, storedKeyTail, onKeyChanged }: Api
           <p className="text-xs text-muted-foreground">Connect your personal key so OpenChat can call OpenRouter models for you.</p>
         </div>
         <span className={cn("text-xs font-medium", hasStoredKey ? "text-emerald-600" : "text-destructive")}>
-          {hasStoredKey ? `Linked${storedKeyTail ? ` ••••${storedKeyTail}` : ""}` : "Not linked"}
+          {hasStoredKey ? "Key stored" : "Not set"}
         </span>
       </div>
       {apiKeyError ? <p id="settings-api-key-error" className="text-xs font-medium text-destructive" role="alert">{apiKeyError}</p> : null}
@@ -112,7 +111,7 @@ export function ApiKeySection({ hasStoredKey, storedKeyTail, onKeyChanged }: Api
         </Button>
       </form>
       <div className={cn("flex flex-wrap items-center justify-between text-xs text-muted-foreground", spacing.gap.sm)}>
-        <p>Keys are encrypted locally in your browser. Remove the key to stop using OpenRouter.</p>
+        <p>Keys are encrypted in your browser before being stored in your account database and synced across devices. Once stored, keys cannot be viewed.</p>
         {hasStoredKey ? (
           <Button type="button" variant="ghost" size="sm" onClick={handleRemoveApiKey} disabled={removingKey} aria-label="Remove OpenRouter API key" aria-busy={removingKey}>
             {removingKey ? <Loader2 className={cn("mr-1 animate-spin", iconSize.xs)} aria-hidden="true" /> : null}
