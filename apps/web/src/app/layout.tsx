@@ -100,7 +100,7 @@ posthog.init('phc_hWOxd18YQVTr0cSQ8X5OC3mfZY29cAthAXkxAPxiuqy', {
 					{children}
 				</Providers>
 				<SpeedInsights />
-			<Analytics mode="production" />
+				<Analytics mode="production" />
 			</body>
 		</html>
 	);
