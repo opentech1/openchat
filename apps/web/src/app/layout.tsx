@@ -6,6 +6,7 @@ import { GeistMono } from "geist/font/mono";
 import { cn } from "@/lib/utils";
 import { RouteFocusManager } from "@/components/route-focus-manager";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -99,6 +100,7 @@ posthog.init('phc_hWOxd18YQVTr0cSQ8X5OC3mfZY29cAthAXkxAPxiuqy', {
 					{children}
 				</Providers>
 				<SpeedInsights />
+			<Analytics />
 			</body>
 		</html>
 	);
