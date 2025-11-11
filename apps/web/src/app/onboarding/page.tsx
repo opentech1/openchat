@@ -27,9 +27,16 @@ const TONE_OPTIONS = [
 export default function OnboardingPage() {
 	const router = useRouter();
 	const { data: session, isPending: isSessionLoading } = authClient.useSession();
-	const { hasKey, saveKey, userId } = useOpenRouterKey();
+	const { hasKey, saveKey } = useOpenRouterKey();
 	const completeOnboarding = useMutation(api.users.completeOnboarding);
-	const user = useQuery(api.users.getById, userId ? { userId } : "skip");
+
+	// Get Convex user ID from Better Auth session
+	const convexUser = useQuery(
+		api.users.getByExternalId,
+		session?.user?.id ? { externalId: session.user.id } : "skip"
+	);
+	const userId = convexUser?._id;
+	const user = convexUser;
 
 	const [currentStep, setCurrentStep] = useState(1);
 	const [loading, setLoading] = useState(false);
