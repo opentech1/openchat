@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { borderRadius, spacing, iconSize } from "@/styles/design-tokens";
+import { spacing, iconSize } from "@/styles/design-tokens";
 
 const TONE_OPTIONS = [
 	{ value: "casual", label: "Casual / Friendly", description: "Conversational and relaxed" },
@@ -60,21 +60,21 @@ export default function OnboardingPage() {
 
 	// Skip to step 2 if already authenticated
 	useEffect(() => {
-		if (!isSessionLoading && session?.user) {
+		if (!isSessionLoading && session?.user && currentStep === 1) {
 			setCurrentStep(2);
 			// Pre-fill display name with account name
 			if (session.user.name) {
 				setDisplayName(session.user.name);
 			}
 		}
-	}, [session, isSessionLoading]);
+	}, [session, isSessionLoading, currentStep]);
 
-	// Skip to step 3 if already has API key
+	// Skip to step 3 if already has API key (only run once when hasKey becomes true on step 2)
 	useEffect(() => {
 		if (currentStep === 2 && hasKey) {
 			setCurrentStep(3);
 		}
-	}, [hasKey, currentStep]);
+	}, [hasKey]); // Removed currentStep from deps to prevent re-running on step changes
 
 	const handleGitHubSignIn = async () => {
 		setError("");
@@ -109,8 +109,8 @@ export default function OnboardingPage() {
 		}
 	};
 
-	const handlePreferencesSubmit = async (e: React.FormEvent) => {
-		e.preventDefault();
+	const handlePreferencesSubmit = async (e?: React.FormEvent) => {
+		e?.preventDefault();
 		if (!userId) {
 			toast.error("User not found");
 			return;
@@ -315,10 +315,7 @@ export default function OnboardingPage() {
 								<Button
 									type="button"
 									variant="outline"
-									onClick={() => {
-										// Skip with defaults
-										handlePreferencesSubmit(new Event("submit") as any);
-									}}
+									onClick={() => handlePreferencesSubmit()}
 									disabled={loading}
 									className="flex-1"
 								>
