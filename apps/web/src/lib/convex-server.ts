@@ -74,6 +74,12 @@ export async function ensureConvexUser(sessionUser: SessionUser) {
 	return userId;
 }
 
+export async function getUserById(userId: Id<"users">) {
+	const client = getClient();
+	const user = await client.query(api.users.getById, { userId });
+	return user;
+}
+
 export async function listChats(userId: Id<"users">) {
 	const client = getClient();
 	return client.query(api.chats.list, { userId });

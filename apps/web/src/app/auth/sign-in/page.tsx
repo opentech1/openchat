@@ -16,7 +16,7 @@ export default function LoginPage() {
 		try {
 			await authClient.signIn.social({
 				provider: "github",
-				callbackURL: "/dashboard",
+				callbackURL: "/onboarding",
 			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with GitHub");
