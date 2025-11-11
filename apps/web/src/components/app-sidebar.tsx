@@ -285,7 +285,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="px-1">
           <Button
             type="button"
             variant="outline"
