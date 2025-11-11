@@ -8,6 +8,7 @@ const userDoc = v.object({
 	email: v.optional(v.string()),
 	name: v.optional(v.string()),
 	avatarUrl: v.optional(v.string()),
+	encryptedOpenRouterKey: v.optional(v.string()),
 	createdAt: v.number(),
 	updatedAt: v.number(),
 });
@@ -64,5 +65,45 @@ export const getByExternalId = query({
 			.withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
 			.unique();
 		return existing ?? null;
+	},
+});
+
+export const saveOpenRouterKey = mutation({
+	args: {
+		userId: v.id("users"),
+		encryptedKey: v.string(),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.userId, {
+			encryptedOpenRouterKey: args.encryptedKey,
+			updatedAt: Date.now(),
+		});
+		return { success: true };
+	},
+});
+
+export const getOpenRouterKey = query({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const user = await ctx.db.get(args.userId);
+		return user?.encryptedOpenRouterKey ?? null;
+	},
+});
+
+export const removeOpenRouterKey = mutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		await ctx.db.patch(args.userId, {
+			encryptedOpenRouterKey: undefined,
+			updatedAt: Date.now(),
+		});
+		return { success: true };
 	},
 });

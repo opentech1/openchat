@@ -129,6 +129,8 @@ export async function streamUpsertMessage(args: {
 	clientMessageId?: string;
 	role: "user" | "assistant";
 	content: string;
+	reasoning?: string;
+	thinkingTimeMs?: number;
 	status?: "streaming" | "completed";
 	createdAt?: number;
 }) {
@@ -140,6 +142,8 @@ export async function streamUpsertMessage(args: {
 		clientMessageId: args.clientMessageId,
 		role: args.role,
 		content: args.content,
+		reasoning: args.reasoning,
+		thinkingTimeMs: args.thinkingTimeMs,
 		status: args.status,
 		createdAt: args.createdAt,
 	});

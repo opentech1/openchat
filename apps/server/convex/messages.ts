@@ -11,6 +11,8 @@ const messageDoc = v.object({
 	clientMessageId: v.optional(v.string()),
 	role: v.string(),
 	content: v.string(),
+	reasoning: v.optional(v.string()),
+	thinkingTimeMs: v.optional(v.number()),
 	createdAt: v.number(),
 	status: v.optional(v.string()),
 	userId: v.optional(v.id("users")),
@@ -113,6 +115,8 @@ export const streamUpsert = mutation({
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
 		content: v.string(),
+		reasoning: v.optional(v.string()),
+		thinkingTimeMs: v.optional(v.number()),
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
 	},
@@ -130,6 +134,8 @@ export const streamUpsert = mutation({
 			chatId: args.chatId,
 			role: args.role,
 			content: args.content,
+			reasoning: args.reasoning,
+			thinkingTimeMs: args.thinkingTimeMs,
 			createdAt: timestamp,
 			status: args.status ?? "streaming",
 			clientMessageId: args.clientMessageId,
@@ -173,6 +179,8 @@ async function insertOrUpdateMessage(
 		chatId: Id<"chats">;
 		role: string;
 		content: string;
+		reasoning?: string | null;
+		thinkingTimeMs?: number | null;
 		createdAt: number;
 		status: string;
 		clientMessageId?: string | null;
@@ -226,6 +234,8 @@ async function insertOrUpdateMessage(
 			clientMessageId: args.clientMessageId ?? undefined,
 			role: validatedRole,
 			content: args.content,
+			reasoning: args.reasoning ?? undefined,
+			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
@@ -235,6 +245,8 @@ async function insertOrUpdateMessage(
 			clientMessageId: args.clientMessageId ?? undefined,
 			role: validatedRole,
 			content: args.content,
+			reasoning: args.reasoning ?? undefined,
+			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,

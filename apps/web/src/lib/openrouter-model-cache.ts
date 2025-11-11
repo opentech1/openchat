@@ -4,10 +4,12 @@ import type { ModelSelectorOption } from "@/components/model-selector";
 
 const STORAGE_KEY = "openchat.openrouter.modelCache";
 const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_MODEL_CACHE_TTL_MS ?? 10 * 60 * 1000);
+const CACHE_VERSION = 8; // Increment this to invalidate old caches
 
 type CachedModels = {
 	models: ModelSelectorOption[];
 	expiresAt: number;
+	version?: number;
 };
 
 function getStorage() {
@@ -28,6 +30,13 @@ export function readCachedModels(): ModelSelectorOption[] | null {
 		const parsed = JSON.parse(raw) as CachedModels;
 		if (!Array.isArray(parsed.models)) return null;
 		if (typeof parsed.expiresAt !== "number") return null;
+
+		// Invalidate cache if version doesn't match
+		if (parsed.version !== CACHE_VERSION) {
+			storage.removeItem(STORAGE_KEY);
+			return null;
+		}
+
 		if (parsed.expiresAt < Date.now()) {
 			storage.removeItem(STORAGE_KEY);
 			return null;
@@ -45,6 +54,7 @@ export function writeCachedModels(models: ModelSelectorOption[]) {
 		const payload: CachedModels = {
 			models,
 			expiresAt: Date.now() + DEFAULT_TTL_MS,
+			version: CACHE_VERSION,
 		};
 		storage.setItem(STORAGE_KEY, JSON.stringify(payload));
 	} catch {

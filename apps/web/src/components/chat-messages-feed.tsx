@@ -16,6 +16,7 @@ export type ChatMessagesFeedProps = {
   paddingBottom: number;
   className?: string;
   loading?: boolean;
+  isStreaming?: boolean;
 };
 
 export function ChatMessagesFeed({
@@ -24,6 +25,7 @@ export function ChatMessagesFeed({
   paddingBottom,
   className,
   loading = false,
+  isStreaming = false,
 }: ChatMessagesFeedProps) {
   const optimisticNormalized = useMemo(
     () => optimisticMessages.map(normalizeUiMessage),
@@ -49,11 +51,22 @@ export function ChatMessagesFeed({
         previous.createdAt.getTime() === msg.createdAt.getTime();
       const prevUpdated = previous.updatedAt?.getTime() ?? null;
       const nextUpdated = msg.updatedAt?.getTime() ?? null;
+
+      // CRITICAL FIX: Compare parts array to detect reasoning changes
+      const sameParts =
+        (previous.parts === msg.parts) ||
+        (!previous.parts && !msg.parts) ||
+        (previous.parts?.length === msg.parts?.length &&
+         previous.parts?.every((p, i) =>
+           p.type === msg.parts![i]?.type && p.text === msg.parts![i]?.text
+         ));
+
       if (
         sameRole &&
         sameContent &&
         sameCreated &&
-        prevUpdated === nextUpdated
+        prevUpdated === nextUpdated &&
+        sameParts
       ) {
         return previous;
       }
@@ -70,10 +83,13 @@ export function ChatMessagesFeed({
         id: msg.id,
         role: msg.role,
         content: msg.content,
+        parts: msg.parts,
+        thinkingTimeMs: msg.thinkingTimeMs,
       }))}
       paddingBottom={paddingBottom}
       className={className}
       loading={loading}
+      isStreaming={isStreaming}
     />
   );
 }

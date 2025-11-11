@@ -9,6 +9,7 @@ export default defineSchema({
 		email: v.optional(v.string()),
 		name: v.optional(v.string()),
 		avatarUrl: v.optional(v.string()),
+		encryptedOpenRouterKey: v.optional(v.string()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -16,6 +17,7 @@ export default defineSchema({
 		.index("by_email", ["email"]),
 	chats: defineTable({
 		userId: v.id("users"),
+		// Title can be encrypted (prefixed with enc_v1:)
 		title: v.string(),
 		createdAt: v.number(),
 		updatedAt: v.number(),
@@ -28,8 +30,12 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
-		// Max length: 100KB (102400 bytes)
+		// Content can be encrypted (prefixed with enc_v1:). Max length: 100KB (102400 bytes)
 		content: v.string(),
+		// Reasoning content from models with reasoning capabilities (e.g., Claude 4, GPT-5, DeepSeek R1)
+		reasoning: v.optional(v.string()),
+		// Time spent thinking in milliseconds (for reasoning models)
+		thinkingTimeMs: v.optional(v.number()),
 		createdAt: v.number(),
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),

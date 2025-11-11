@@ -14,17 +14,27 @@ import {
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
-import { Message } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { SafeStreamdown } from "@/components/safe-streamdown";
 import { throttleRAF } from "@/lib/throttle";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+
+type MessagePart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string };
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  parts?: MessagePart[];
+  thinkingTimeMs?: number;
 };
 
 type ChatMessagesPanelProps = {
@@ -33,6 +43,7 @@ type ChatMessagesPanelProps = {
   className?: string;
   loading?: boolean;
   autoStick?: boolean;
+  isStreaming?: boolean;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
@@ -43,6 +54,7 @@ function ChatMessagesPanelComponent({
   className,
   autoStick = true,
   loading = false,
+  isStreaming = false,
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -137,9 +149,11 @@ function ChatMessagesPanelComponent({
     if (!tailSignature) return;
     if (!initialSyncDoneRef.current) return;
     if (lastSignatureRef.current === tailSignature) return;
+    // Don't auto-scroll during streaming - let user control scroll position
+    if (isStreaming) return;
     lastSignatureRef.current = tailSignature;
     syncScrollPosition(false);
-  }, [autoStick, tailSignature, syncScrollPosition]);
+  }, [autoStick, tailSignature, syncScrollPosition, isStreaming]);
 
   useEffect(() => {
     if (tailSignature) return;
@@ -180,45 +194,57 @@ function ChatMessagesPanelComponent({
             style={{ paddingBottom }}
           >
             {hasMessages ? (
-              shouldVirtualize ? (
-                // Virtualized list for many messages
-                <div
-                  style={{
-                    height: `${virtualizer.getTotalSize()}px`,
-                    width: "100%",
-                    position: "relative",
-                  }}
-                >
-                  {virtualizer.getVirtualItems().map((virtualItem) => {
-                    const msg = messages[virtualItem.index];
-                    if (!msg) return null;
-                    return (
-                      <div
-                        key={virtualItem.key}
-                        data-index={virtualItem.index}
-                        ref={virtualizer.measureElement}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
-                          width: "100%",
-                          transform: `translateY(${virtualItem.start}px)`,
-                        }}
-                        className="pb-4"
-                      >
-                        <ChatMessageBubble message={msg} />
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                // Non-virtualized list for few messages
-                <div className="flex flex-col gap-4">
-                  {messages.map((msg) => (
-                    <ChatMessageBubble key={msg.id} message={msg} />
-                  ))}
-                </div>
-              )
+              <div className="w-full max-w-3xl mx-auto">
+                {shouldVirtualize ? (
+                  // Virtualized list for many messages
+                  <div
+                    style={{
+                      height: `${virtualizer.getTotalSize()}px`,
+                      width: "100%",
+                      position: "relative",
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((virtualItem) => {
+                      const msg = messages[virtualItem.index];
+                      if (!msg) return null;
+                      const isLastMsg = virtualItem.index === messages.length - 1;
+                      return (
+                        <div
+                          key={virtualItem.key}
+                          data-index={virtualItem.index}
+                          ref={virtualizer.measureElement}
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            transform: `translateY(${virtualItem.start}px)`,
+                          }}
+                          className="pb-4"
+                        >
+                          <ChatMessageBubble
+                            message={msg}
+                            isLastMessage={isLastMsg}
+                            isStreaming={isStreaming && isLastMsg}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // Non-virtualized list for few messages
+                  <div className="flex flex-col gap-4">
+                    {messages.map((msg, idx) => (
+                      <ChatMessageBubble
+                        key={msg.id}
+                        message={msg}
+                        isLastMessage={idx === messages.length - 1}
+                        isStreaming={isStreaming && idx === messages.length - 1}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : loading ? (
               <div className="flex flex-col gap-4" data-ph-no-capture>
                 <div className="flex gap-3 animate-pulse">
@@ -238,19 +264,17 @@ function ChatMessagesPanelComponent({
                 </div>
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm" data-ph-no-capture>
-                No messages yet. Say hi!
-              </p>
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-muted-foreground text-sm" data-ph-no-capture>
+                  No messages yet. Say hi!
+                </p>
+              </div>
             )}
           </div>
         </ScrollAreaPrimitive.Viewport>
-        <ScrollBar
-          orientation="vertical"
-          className="bg-muted/40 hover:bg-muted/60"
-        />
-        <ScrollAreaPrimitive.Corner className="bg-muted/40" />
+        <ScrollBar orientation="vertical" />
       </ScrollAreaPrimitive.Root>
-      {autoStick && !isAtBottom ? (
+      {!isAtBottom && hasMessages ? (
         <Button
           type="button"
           variant="outline"
@@ -260,7 +284,7 @@ function ChatMessagesPanelComponent({
             scrollToBottom("smooth");
           }}
           aria-label="Scroll to bottom of conversation"
-          className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 shadow-sm"
+          className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 shadow-lg"
         >
           <ArrowDownIcon className="size-4" />
         </Button>
@@ -274,41 +298,93 @@ ChatMessagesPanel.displayName = "ChatMessagesPanel";
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
+  isLastMessage?: boolean;
+  isStreaming?: boolean;
 };
 
 const ChatMessageBubble = memo(
-  ({ message }: ChatMessageBubbleProps) => {
+  ({ message, isLastMessage = false, isStreaming = false }: ChatMessageBubbleProps) => {
     const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
+    const isUser = message.role === "user";
+    const hasParts = message.parts && message.parts.length > 0;
+
     return (
-      <Message
-        from={message.role}
-        className={
-          message.role === "assistant" ? "justify-start flex-row" : undefined
-        }
+      <div
+        className={cn(
+          "flex w-full gap-2 py-4",
+          isUser ? "justify-end" : "justify-start"
+        )}
         aria-label={ariaLabel}
         role="article"
       >
-        {message.role === "assistant" ? (
-          <SafeStreamdown
-            className="text-foreground text-sm leading-6 whitespace-pre-wrap"
-            data-ph-no-capture
-          >
-            {message.content}
-          </SafeStreamdown>
-        ) : (
+        {isUser ? (
           <div
-            className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap"
+            className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[80%]"
             data-ph-no-capture
           >
             {message.content}
           </div>
+        ) : (
+          <div className="flex flex-col gap-2 max-w-full">
+            {hasParts ? (
+              message.parts!.map((part, index) => {
+                if (part.type === "reasoning") {
+                  // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
+                  const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;
+                  // Convert thinkingTimeMs to seconds for the Reasoning component
+                  const duration = message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined;
+                  return (
+                    <Reasoning
+                      key={`${message.id}-reasoning-${index}`}
+                      className="w-full"
+                      isStreaming={isReasoningStreaming}
+                      defaultOpen={isReasoningStreaming}
+                      duration={duration}
+                    >
+                      <ReasoningTrigger />
+                      <ReasoningContent>{part.text}</ReasoningContent>
+                    </Reasoning>
+                  );
+                }
+                return (
+                  <SafeStreamdown
+                    key={`${message.id}-text-${index}`}
+                    className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                    data-ph-no-capture
+                  >
+                    {part.text}
+                  </SafeStreamdown>
+                );
+              })
+            ) : (
+              <SafeStreamdown
+                className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                data-ph-no-capture
+              >
+                {message.content}
+              </SafeStreamdown>
+            )}
+          </div>
         )}
-      </Message>
+      </div>
     );
   },
-  (prev, next) =>
-    prev.message.id === next.message.id &&
-    prev.message.role === next.message.role &&
-    prev.message.content === next.message.content,
+  (prev, next) => {
+    // CRITICAL FIX: Compare parts array to detect reasoning changes
+    const sameParts =
+      prev.message.parts?.length === next.message.parts?.length &&
+      (prev.message.parts?.every((p, i) =>
+        p.type === next.message.parts![i]?.type &&
+        p.text === next.message.parts![i]?.text
+      ) ?? true);
+
+    return (
+      prev.message.id === next.message.id &&
+      prev.message.role === next.message.role &&
+      prev.message.content === next.message.content &&
+      prev.isStreaming === next.isStreaming &&
+      sameParts
+    );
+  },
 );
 ChatMessageBubble.displayName = "ChatMessageBubble";

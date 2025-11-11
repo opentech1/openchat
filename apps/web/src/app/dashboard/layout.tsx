@@ -8,7 +8,8 @@ import AppSidebar from "@/components/app-sidebar-wrapper";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
-import SidebarCollapseButton from "@/components/sidebar-collapse-button";
+import SidebarControlsWrapper from "@/components/sidebar-controls-wrapper";
+import { HelpButton } from "@/components/help-button";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +43,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 				</div>
 			</div>
             <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full" tabIndex={-1}>
-                <div className="pointer-events-auto absolute left-4 top-4 z-20 hidden md:block">
-                    <div className={`flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur`}>
-                        <SidebarCollapseButton />
-                    </div>
-                </div>
+                <SidebarControlsWrapper />
                 <div className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-3 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}>
                     <MobileDashboardNav initialChats={chats} />
                     <Link
@@ -61,6 +58,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 				<div className="flex h-full w-full flex-1 flex-col overflow-hidden min-h-0">
 					{children}
 				</div>
+				<HelpButton />
 			</main>
 		</div>
 	);

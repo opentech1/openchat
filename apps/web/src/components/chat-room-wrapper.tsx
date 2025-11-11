@@ -29,6 +29,7 @@ type ChatRoomProps = {
     id: string;
     role: string;
     content: string;
+    reasoning?: string;
     createdAt: string | Date;
   }>;
 };
@@ -43,6 +44,7 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
             id: message.id,
             role: message.role,
             content: message.content,
+            reasoning: message.reasoning,
             created_at: message.createdAt,
           }),
         ),

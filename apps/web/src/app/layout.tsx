@@ -11,12 +11,13 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
 	title: {
-		default: "OpenChat — Open-source AI Chat Platform",
-		template: "%s · OpenChat",
+		default: "osschat — Open-source AI Chat Platform",
+		template: "%s · osschat",
 	},
 	description:
 		"Embed a fast, secure, and fully customizable AI chat into your product.",
 	keywords: [
+		"osschat",
 		"OpenChat",
 		"AI chat",
 		"open source",
@@ -26,21 +27,21 @@ export const metadata: Metadata = {
 		"Next.js",
 	],
 	metadataBase: new URL(siteUrl),
-	applicationName: "OpenChat",
-	authors: [{ name: "OpenChat" }],
-	creator: "OpenChat",
+	applicationName: "osschat",
+	authors: [{ name: "osschat" }],
+	creator: "osschat",
 	openGraph: {
-		title: "OpenChat — Open-source AI Chat Platform",
+		title: "osschat — Open-source AI Chat Platform",
 		description:
 			"Embed a fast, secure, and fully customizable AI chat into your product.",
 		type: "website",
 		url: siteUrl,
-		siteName: "OpenChat",
+		siteName: "osschat",
 		locale: "en_US",
 	},
 	twitter: {
 		card: "summary_large_image",
-		title: "OpenChat — Open-source AI Chat Platform",
+		title: "osschat — Open-source AI Chat Platform",
 		description:
 			"Embed a fast, secure, and fully customizable AI chat into your product.",
 	},

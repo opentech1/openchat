@@ -17,11 +17,7 @@ import { toast } from "sonner";
 
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
-import {
-  loadOpenRouterKey,
-  removeOpenRouterKey,
-  saveOpenRouterKey,
-} from "@/lib/openrouter-key-storage";
+import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import {
@@ -50,6 +46,7 @@ type ChatRoomProps = {
     id: string;
     role: string;
     content: string;
+    reasoning?: string;
     createdAt: string | Date;
   }>;
 };
@@ -59,9 +56,8 @@ const MESSAGE_THROTTLE_MS = Number(
   process.env.NEXT_PUBLIC_CHAT_THROTTLE_MS ?? 80,
 );
 
-// OpenRouter state reducer
+// OpenRouter state reducer (apiKey now managed by useOpenRouterKey hook)
 type OpenRouterState = {
-  apiKey: string | null;
   savingApiKey: boolean;
   apiKeyError: string | null;
   modelsError: string | null;
@@ -73,7 +69,6 @@ type OpenRouterState = {
 };
 
 type OpenRouterAction =
-  | { type: "SET_API_KEY"; payload: string | null }
   | { type: "SET_SAVING_API_KEY"; payload: boolean }
   | { type: "SET_API_KEY_ERROR"; payload: string | null }
   | { type: "SET_MODELS_ERROR"; payload: string | null }
@@ -82,7 +77,7 @@ type OpenRouterAction =
   | { type: "SET_SELECTED_MODEL"; payload: string | null }
   | { type: "SET_CHECKED_API_KEY"; payload: boolean }
   | { type: "SET_KEY_PROMPT_DISMISSED"; payload: boolean }
-  | { type: "CLEAR_API_KEY" }
+  | { type: "CLEAR_MODELS" }
   | { type: "RESET_ERRORS" };
 
 function openRouterReducer(
@@ -90,8 +85,6 @@ function openRouterReducer(
   action: OpenRouterAction,
 ): OpenRouterState {
   switch (action.type) {
-    case "SET_API_KEY":
-      return { ...state, apiKey: action.payload };
     case "SET_SAVING_API_KEY":
       return { ...state, savingApiKey: action.payload };
     case "SET_API_KEY_ERROR":
@@ -108,10 +101,9 @@ function openRouterReducer(
       return { ...state, checkedApiKey: action.payload };
     case "SET_KEY_PROMPT_DISMISSED":
       return { ...state, keyPromptDismissed: action.payload };
-    case "CLEAR_API_KEY":
+    case "CLEAR_MODELS":
       return {
         ...state,
-        apiKey: null,
         modelOptions: [],
         selectedModel: null,
       };
@@ -127,7 +119,6 @@ function openRouterReducer(
 }
 
 const initialOpenRouterState: OpenRouterState = {
-  apiKey: null,
   savingApiKey: false,
   apiKeyError: null,
   modelsError: null,
@@ -147,13 +138,21 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const searchParams = useSearchParams();
   const searchParamsString = searchParams?.toString() ?? "";
 
-  // Use reducer for OpenRouter state management
+  // Use the OpenRouter key hook for key management
+  const {
+    apiKey,
+    isLoading: keyLoading,
+    error: keyError,
+    saveKey,
+    removeKey,
+  } = useOpenRouterKey();
+
+  // Use reducer for OpenRouter state management (excluding apiKey which comes from hook)
   const [openRouterState, dispatch] = useReducer(
     openRouterReducer,
     initialOpenRouterState,
   );
   const {
-    apiKey,
     savingApiKey,
     apiKeyError,
     modelsError,
@@ -164,9 +163,29 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     keyPromptDismissed,
   } = openRouterState;
 
-  const missingKeyToastRef = useRef<string | number | null>(null);
   const storedModelIdRef = useRef<string | null>(null);
   const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string>("");
+  const [shouldAutoSend, setShouldAutoSend] = useState(false);
+  const autoSendAttemptedRef = useRef(false);
+
+  // Check for pending message and model from dashboard on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pending = sessionStorage.getItem("pendingMessage");
+    if (pending) {
+      setPendingMessage(pending);
+      setShouldAutoSend(true);
+      sessionStorage.removeItem("pendingMessage");
+    }
+    const pendingModel = sessionStorage.getItem("pendingModel");
+    if (pendingModel) {
+      dispatch({ type: "SET_SELECTED_MODEL", payload: pendingModel });
+      setStorageItemSync(LAST_MODEL_STORAGE_KEY, pendingModel);
+      storedModelIdRef.current = pendingModel;
+      sessionStorage.removeItem("pendingModel");
+    }
+  }, []);
 
   // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
@@ -263,8 +282,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         const data = await response.json();
         if (!response.ok || !data?.ok) {
           if (response.status === 401) {
-            removeOpenRouterKey();
-            dispatch({ type: "CLEAR_API_KEY" });
+            void removeKey();
+            dispatch({ type: "CLEAR_MODELS" });
           }
           const errorMessage =
             typeof data?.message === "string" && data.message.length > 0
@@ -343,7 +362,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             has_api_key: Boolean(key),
           });
         }
-        dispatch({ type: "CLEAR_API_KEY" });
+        dispatch({ type: "CLEAR_MODELS" });
         dispatch({
           type: "SET_MODELS_ERROR",
           payload:
@@ -359,27 +378,21 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         }
       }
     },
-    [persistSelectedModel, selectedModel],
+    [persistSelectedModel, selectedModel, removeKey],
   );
 
+  // Fetch models when API key is loaded
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      try {
-        const stored = await loadOpenRouterKey();
-        if (!active) return;
-        if (stored) {
-          dispatch({ type: "SET_API_KEY", payload: stored });
-          await fetchModels(stored);
-        }
-      } finally {
-        if (active) dispatch({ type: "SET_CHECKED_API_KEY", payload: true });
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [fetchModels]);
+    // Mark that we've checked for API key once the hook finishes loading
+    if (!keyLoading) {
+      dispatch({ type: "SET_CHECKED_API_KEY", payload: true });
+    }
+
+    // Fetch models when key becomes available
+    if (apiKey && !keyLoading) {
+      void fetchModels(apiKey);
+    }
+  }, [apiKey, keyLoading, fetchModels]);
 
   useEffect(() => {
     if (modelOptions.length === 0) return;
@@ -391,27 +404,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     }
   }, [modelOptions, selectedModel]);
 
-  useEffect(() => {
-    if (!checkedApiKey) return;
-    if (!apiKey) {
-      if (missingKeyToastRef.current == null) {
-        missingKeyToastRef.current = toast.warning(
-          "Add your OpenRouter API key",
-          {
-            description: "Open settings to paste your key and start chatting.",
-            duration: 8000,
-            action: {
-              label: "Settings",
-              onClick: () => router.push("/dashboard/settings"),
-            },
-          },
-        );
-      }
-    } else if (missingKeyToastRef.current !== null) {
-      toast.dismiss(missingKeyToastRef.current);
-      missingKeyToastRef.current = null;
-    }
-  }, [apiKey, router, checkedApiKey]);
+  // No longer showing toast for missing API key - placeholder message is sufficient
 
   useEffect(() => {
     if (!apiKey) return;
@@ -423,8 +416,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       dispatch({ type: "SET_API_KEY_ERROR", payload: null });
       dispatch({ type: "SET_SAVING_API_KEY", payload: true });
       try {
-        await saveOpenRouterKey(key);
-        dispatch({ type: "SET_API_KEY", payload: key });
+        await saveKey(key);
         dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
         registerClientProperties({ has_openrouter_key: true });
         captureClientEvent("openrouter.key_saved", {
@@ -446,7 +438,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         dispatch({ type: "SET_SAVING_API_KEY", payload: false });
       }
     },
-    [fetchModels],
+    [saveKey, fetchModels],
   );
 
   const normalizedInitial = useMemo(
@@ -470,15 +462,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const handleMissingRequirement = useCallback((reason: "apiKey" | "model") => {
     if (reason === "apiKey") {
-      dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
-      dispatch({ type: "SET_MODELS_ERROR", payload: null });
-      dispatch({
-        type: "SET_API_KEY_ERROR",
-        payload: "Add your OpenRouter API key to start chatting.",
-      });
-      toast.error("OpenRouter API key required", {
-        description: "Add your API key to start chatting with OpenChat.",
-      });
+      // Don't force modal or show toast - let user add key from settings when ready
+      dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: true });
     } else {
       toast.error("Select an OpenRouter model to continue.");
     }
@@ -526,7 +511,68 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           handleMissingRequirement("model");
           return;
         }
+
+        // Handle provider overload/rate limit errors
+        const errorMessage = error.message.toLowerCase();
+        if (
+          errorMessage.includes("provider returned error") ||
+          errorMessage.includes("failed after") ||
+          errorMessage.includes("rate limit") ||
+          errorMessage.includes("too many requests") ||
+          errorMessage.includes("overloaded") ||
+          errorMessage.includes("high load")
+        ) {
+          toast.error("AI Provider Overloaded", {
+            description: "The model provider is experiencing high load. Try again in a moment.",
+            action: {
+              label: "Retry",
+              onClick: () => {
+                // Get the last user message and resend it
+                const lastUserMessage = messages.filter(m => m.role === "user").pop();
+                if (lastUserMessage) {
+                  const textContent = lastUserMessage.parts
+                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                    .map(p => p.text)
+                    .join("");
+                  if (textContent && selectedModel) {
+                    void sendMessage(
+                      {
+                        id: crypto.randomUUID(),
+                        role: "user",
+                        parts: [{ type: "text", text: textContent }],
+                        metadata: { createdAt: new Date().toISOString() },
+                      },
+                      {
+                        body: {
+                          chatId,
+                          modelId: selectedModel,
+                        },
+                      }
+                    );
+                  }
+                }
+              },
+            },
+            duration: 10000, // Show for 10 seconds
+          });
+          return;
+        }
+
+        // Handle generic errors with more helpful message
+        if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
+          toast.error("Connection Error", {
+            description: "Unable to reach the AI service. Check your connection and try again.",
+            duration: 5000,
+          });
+          return;
+        }
       }
+
+      // Fallback for unknown errors
+      toast.error("Something went wrong", {
+        description: "Failed to get a response from the AI. Please try again.",
+        duration: 5000,
+      });
       logError("Chat stream error", error);
     },
   });
@@ -680,8 +726,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             window_ms: windowHeader,
           });
         } else if (status === 401) {
-          await removeOpenRouterKey();
-          dispatch({ type: "CLEAR_API_KEY" });
+          await removeKey();
+          dispatch({ type: "CLEAR_MODELS" });
           dispatch({
             type: "SET_MODELS_ERROR",
             payload:
@@ -691,13 +737,13 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             description:
               "We cleared the saved key. Add a valid key to keep chatting.",
           });
-          handleMissingRequirement("apiKey");
+          // Don't call handleMissingRequirement here - toast above is sufficient
           return;
         }
         logError("Failed to send message", error);
       }
     },
-    [chatId, sendMessage, handleMissingRequirement],
+    [chatId, sendMessage, handleMissingRequirement, removeKey],
   );
 
   const handleModelSelection = useCallback(
@@ -707,16 +753,32 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     [applySelectedModel],
   );
 
+  // Auto-send pending message from dashboard
+  useEffect(() => {
+    if (!shouldAutoSend || autoSendAttemptedRef.current) return;
+    if (!pendingMessage || !selectedModel || !apiKey) return;
+    if (status !== "ready") return;
+
+    autoSendAttemptedRef.current = true;
+    setShouldAutoSend(false);
+
+    // Auto-send the message
+    void handleSend({
+      text: pendingMessage,
+      modelId: selectedModel,
+      apiKey: apiKey,
+    });
+  }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, status, handleSend]);
+
   const busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
   const shouldPromptForKey = !isLinked;
-  const shouldForceModal = Boolean(modelsError);
-  const showKeyModal =
-    checkedApiKey &&
-    (shouldForceModal || (shouldPromptForKey && !keyPromptDismissed));
+  // Never force modal - only show if user explicitly dismissed it as false (wants to add key)
+  const showKeyModal = checkedApiKey && shouldPromptForKey && !keyPromptDismissed;
   const composerDisabled = shouldPromptForKey;
+  // Don't disable send button when streaming - user needs to be able to click stop
   const sendDisabled =
-    busy || modelsLoading || shouldPromptForKey || !selectedModel;
+    (status === "submitted") || modelsLoading || shouldPromptForKey || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -729,7 +791,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4">
       <OpenRouterLinkModal
         open={showKeyModal}
         saving={savingApiKey || modelsLoading}
@@ -740,7 +802,6 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           if (apiKey) void fetchModels(apiKey);
         }}
         onClose={() => {
-          if (shouldForceModal) return;
           dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: true });
         }}
         hasApiKey={Boolean(apiKey)}
@@ -750,12 +811,17 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
+        isStreaming={status === "streaming"}
       />
 
-      <div className="pointer-events-none fixed bottom-4 left-6 right-6 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1.5rem)] md:right-6">
+      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
           <ChatComposer
-            placeholder="Ask OpenChat a question..."
+            placeholder={
+              !apiKey
+                ? "Add an OpenRouter API key in settings to start chatting..."
+                : "Type your message..."
+            }
             sendDisabled={sendDisabled}
             disabled={composerDisabled}
             onSend={handleSend}

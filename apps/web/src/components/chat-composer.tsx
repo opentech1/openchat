@@ -35,13 +35,14 @@ export type ChatComposerProps = {
   isStreaming?: boolean;
   onStop?: () => void;
   onMissingRequirement?: (reason: "apiKey" | "model") => void;
+  initialValue?: string;
 };
 
 function ChatComposer({
   onSend,
   disabled,
   sendDisabled,
-  placeholder = "Ask OpenChat a question...",
+  placeholder = "Type your message...",
   modelOptions = [],
   modelValue,
   onModelChange,
@@ -50,8 +51,9 @@ function ChatComposer({
   isStreaming = false,
   onStop,
   onMissingRequirement,
+  initialValue = "",
 }: ChatComposerProps) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue);
   const [isSending, setIsSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fallbackModelId, setFallbackModelId] = useState<string>("");
@@ -83,6 +85,13 @@ function ChatComposer({
     activeModelIdRef.current = activeModelId;
   }, [activeModelId]);
 
+  // Adjust height when initialValue is provided
+  useEffect(() => {
+    if (initialValue && textareaRef.current) {
+      adjustHeight();
+    }
+  }, [initialValue, adjustHeight, textareaRef]);
+
   const send = useCallback(async () => {
     const trimmed = value.trim();
     if (!trimmed || sendDisabled || isSending) return;
@@ -96,14 +105,20 @@ function ChatComposer({
       onMissingRequirement?.("apiKey");
       return;
     }
+
+    // Clear input INSTANTLY for responsive feel
+    setValue("");
+    adjustHeight(true);
+
     setErrorMessage(null);
     setIsSending(true);
     try {
       await onSend({ text: trimmed, modelId: currentModelId, apiKey });
-      setValue("");
-      adjustHeight(true);
     } catch (error) {
       logError("Failed to send message", error);
+      // Restore message if failed
+      setValue(trimmed);
+      adjustHeight();
       setErrorMessage(
         error instanceof Error && error.message
           ? error.message

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { GalleryVerticalEnd, Github } from "lucide-react";
+import { Github } from "lucide-react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import { Logo } from "@/components/logo";
 
 export default function LoginPage() {
 	const [error, setError] = useState("");
@@ -28,16 +29,13 @@ export default function LoginPage() {
 			<div className="flex flex-col gap-4 p-6 md:p-10">
 				<div className="flex justify-center gap-2 md:justify-start">
 					<Link href="/" className="flex items-center gap-2 font-medium">
-						<div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-md">
-							<GalleryVerticalEnd className="size-4" />
-						</div>
-						OpenChat
+						<Logo size="small" />
 					</Link>
 				</div>
 				<div className="flex flex-1 items-center justify-center">
 					<div className="w-full max-w-xs space-y-6">
 						<div className="space-y-1 text-center">
-							<h1 className="text-xl font-semibold tracking-tight">Welcome to OpenChat</h1>
+							<h1 className="text-xl font-semibold tracking-tight">Welcome to osschat</h1>
 							<p className="text-muted-foreground text-sm">
 								Sign in to access your workspace
 							</p>
@@ -71,7 +69,7 @@ export default function LoginPage() {
 			<div className="bg-muted relative hidden lg:block">
 				<img
 					src="/placeholder.svg"
-					alt="OpenChat"
+					alt="osschat"
 					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
 				/>
 			</div>

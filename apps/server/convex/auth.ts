@@ -22,8 +22,11 @@ export const createAuth = (
 	ctx: GenericCtx<DataModel>,
 	{ optionsOnly } = { optionsOnly: false },
 ) => {
-	// Validate environment variables on first auth creation
-	ensureValidated();
+	// Skip validation during static analysis (optionsOnly mode)
+	// Environment variables aren't available during Convex module analysis
+	if (!optionsOnly) {
+		ensureValidated();
+	}
 
 	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
 

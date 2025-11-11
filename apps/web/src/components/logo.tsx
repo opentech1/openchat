@@ -1,73 +1,68 @@
-import { useId } from 'react'
 import { cn } from '@/lib/utils'
-import { spacing } from '@/styles/design-tokens'
+import Image from 'next/image'
 
-const LogoMark = ({ className, uniColor }: { className?: string; uniColor?: boolean }) => {
-	const gradientId = useId()
+// Use the logo.png image
+const LogoIconImage = ({ className }: { className?: string }) => (
+	<Image
+		src="/logo.png"
+		alt="osschat logo"
+		width={24}
+		height={24}
+		className={className}
+		priority
+	/>
+)
+
+// Plain SVG version of "osschat" without effects
+export const LogoTextSvg = ({ className }: { className?: string }) => (
+	<svg
+		viewBox="0 0 120 24"
+		fill="none"
+		xmlns="http://www.w3.org/2000/svg"
+		className={className}
+		aria-label="osschat"
+	>
+		<text
+			x="0"
+			y="18"
+			fontFamily="monospace"
+			fontSize="20"
+			fontWeight="700"
+			fill="currentColor"
+		>
+			osschat
+		</text>
+	</svg>
+)
+
+// Plain Logo component without effects (for general use)
+export const Logo = ({
+	className,
+	size = 'default',
+}: {
+	className?: string;
+	size?: 'small' | 'default' | 'large';
+}) => {
+	const sizeClasses = {
+		small: { container: 'gap-1.5', logo: 'size-5', text: 'text-base' },
+		default: { container: 'gap-2', logo: 'size-6', text: 'text-lg' },
+		large: { container: 'gap-3', logo: 'size-8', text: 'text-2xl' },
+	}
+
+	const sizes = sizeClasses[size]
 
 	return (
-		<svg
-			width="22"
-			height="22"
-			viewBox="0 0 22 22"
-			fill="none"
-			xmlns="http://www.w3.org/2000/svg"
-			className={cn('size-6', className)}
-			aria-hidden>
-			<rect
-				x="1"
-				y="1"
-				width="20"
-				height="20"
-				rx="6"
-				fill={uniColor ? 'currentColor' : `url(#${gradientId})`}
-			/>
-			<path
-				d="M7.5 6.5H14.5V8.25H7.5V6.5ZM6 10.5H16V12.25H6V10.5ZM8.5 14.5H13.5V16.25H8.5V14.5Z"
-				className="fill-foreground/90 dark:fill-white/90"
-			/>
-			<defs>
-				<linearGradient
-					id={gradientId}
-					x1="3"
-					y1="3"
-					x2="19"
-					y2="19"
-					gradientUnits="userSpaceOnUse">
-					<stop stopColor="#9B99FE" />
-					<stop offset="1" stopColor="#2BC8B7" />
-				</linearGradient>
-			</defs>
-		</svg>
+		<span className={cn('inline-flex items-center font-semibold tracking-tight', sizes.container, className)}>
+			<LogoIconImage className={cn(sizes.logo)} />
+			<span className={cn('font-mono font-bold', sizes.text)}>
+				<span className="text-foreground">oss</span>
+				<span className="text-foreground">chat</span>
+			</span>
+		</span>
 	)
 }
 
-export const Logo = ({ className, uniColor }: { className?: string; uniColor?: boolean }) => (
-	<span className={cn('inline-flex items-center text-lg font-semibold tracking-tight', spacing.gap.sm, className)}>
-		<LogoMark uniColor={uniColor} />
-		<span className="text-foreground">OpenChat</span>
-	</span>
-)
-
-export const LogoIcon = ({
-	className,
-	uniColor,
-}: {
-	className?: string
-	uniColor?: boolean
-}) => <LogoMark className={className} uniColor={uniColor} />
-
-export const LogoStroke = ({ className }: { className?: string }) => (
-	<svg
-		className={cn('size-7 w-7', className)}
-		viewBox="0 0 71 25"
-		fill="none"
-		xmlns="http://www.w3.org/2000/svg">
-		<path
-			d="M61.25 1.625L70.75 1.5625C70.75 4.77083 70.25 7.79167 69.25 10.625C68.2917 13.4583 66.8958 15.9583 65.0625 18.125C63.2708 20.25 61.125 21.9375 58.625 23.1875C56.1667 24.3958 53.4583 25 50.5 25C46.875 25 43.6667 24.2708 40.875 22.8125C38.125 21.3542 35.125 19.2083 31.875 16.375C29.75 14.4167 27.7917 12.8958 26 11.8125C24.2083 10.7292 22.2708 10.1875 20.1875 10.1875C18.0625 10.1875 16.25 10.7083 14.75 11.75C13.25 12.75 12.0833 14.1875 11.25 16.0625C10.4583 17.9375 10.0625 20.1875 10.0625 22.8125L0 22.9375C0 19.6875 0.479167 16.6667 1.4375 13.875C2.4375 11.0833 3.83333 8.64583 5.625 6.5625C7.41667 4.47917 9.54167 2.875 12 1.75C14.5 0.583333 17.2292 0 20.1875 0C23.8542 0 27.1042 0.770833 29.9375 2.3125C32.8125 3.85417 35.7708 5.97917 38.8125 8.6875C41.1042 10.7708 43.1042 12.3333 44.8125 13.375C46.5625 14.375 48.4583 14.875 50.5 14.875C52.6667 14.875 54.5417 14.3125 56.125 13.1875C57.75 12.0625 59 10.5 59.875 8.5C60.7917 6.5 61.25 4.20833 61.25 1.625Z"
-			fill="none"
-			strokeWidth={0.5}
-			stroke="currentColor"
-		/>
-	</svg>
+// Icon-only version
+export const LogoIcon = ({ className }: { className?: string }) => (
+	<LogoIconImage className={cn('size-6', className)} />
 )

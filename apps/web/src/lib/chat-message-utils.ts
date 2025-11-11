@@ -8,16 +8,24 @@ export type MessageLike = {
 	id: string;
 	role: string;
 	content: string;
+	reasoning?: string;
+	thinkingTimeMs?: number;
 	created_at?: PrimitiveDate;
 	updated_at?: PrimitiveDate;
 	createdAt?: PrimitiveDate;
 	updatedAt?: PrimitiveDate;
 };
 
+export type MessagePart =
+	| { type: "text"; text: string }
+	| { type: "reasoning"; text: string };
+
 export type NormalizedMessage = {
 	id: string;
 	role: "assistant" | "user";
 	content: string;
+	parts?: MessagePart[];
+	thinkingTimeMs?: number;
 	createdAt: Date;
 	updatedAt: Date | null;
 };
@@ -57,33 +65,62 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 		parseDate(message.updated_at) ??
 		parseDate(message.updatedAt) ??
 		(null);
+
+	// Build parts array if reasoning exists
+	// IMPORTANT: Reasoning MUST come before text content in parts array
+	// UI components like chat-messages-panel.tsx rely on this ordering
+	const parts: MessagePart[] = [];
+	if (message.reasoning) {
+		parts.push({ type: "reasoning", text: message.reasoning });
+	}
+	if (message.content) {
+		parts.push({ type: "text", text: message.content });
+	}
+
 	return {
 		id: message.id,
 		role: normalizeRole(message.role),
 		content: message.content,
+		parts: parts.length > 0 ? parts : undefined,
+		thinkingTimeMs: message.thinkingTimeMs,
 		createdAt,
 		updatedAt,
 	};
 }
 
 export function normalizeUiMessage(message: UIMessage<{ createdAt?: string }>): NormalizedMessage {
+	// Extract text content for backward compatibility
 	const content = message.parts
 		.filter((part): part is { type: "text"; text: string } => part?.type === "text")
 		.map((part) => part.text)
 		.join("");
-	return normalizeMessage({
-		id: message.id,
-		role: message.role,
-		content,
-		created_at: message.metadata?.createdAt,
-	});
+
+	// Preserve all parts including reasoning
+	const parts: MessagePart[] = message.parts
+		.filter((part): part is { type: "text" | "reasoning"; text: string } =>
+			(part?.type === "text" || part?.type === "reasoning") && typeof (part as any).text === "string"
+		)
+		.map((part) => ({
+			type: part.type as "text" | "reasoning",
+			text: part.text,
+		}));
+
+	return {
+		...normalizeMessage({
+			id: message.id,
+			role: message.role,
+			content,
+			created_at: message.metadata?.createdAt,
+		}),
+		parts: parts.length > 0 ? parts : undefined,
+	};
 }
 
 export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: string }> {
 	return {
 		id: message.id,
 		role: message.role,
-		parts: [{ type: "text", text: message.content }],
+		parts: message.parts ?? [{ type: "text", text: message.content }],
 		metadata: { createdAt: message.createdAt.toISOString() },
 	};
 }
