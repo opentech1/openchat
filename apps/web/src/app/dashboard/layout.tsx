@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Settings } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { getUserContext } from "@/lib/auth-server";
-import { ensureConvexUser, listChats } from "@/lib/convex-server";
+import { ensureConvexUser, listChats, getUserById } from "@/lib/convex-server";
 import AppSidebar from "@/components/app-sidebar-wrapper";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import ThemeToggle from "@/components/theme-toggle";
@@ -21,6 +22,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 		name: session.name,
 		image: session.image,
 	});
+
+	// Check if user has completed onboarding
+	const user = await getUserById(convexUserId);
+	if (!user?.onboardingCompletedAt) {
+		redirect("/onboarding");
+	}
+
 	const { chats: rawChats } = await listChats(convexUserId);
 	const chats = rawChats.map((chat) => ({
 		id: chat._id,
