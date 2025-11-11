@@ -42,7 +42,14 @@ export const ModelSelectorContent = ({
 }: ModelSelectorContentProps) => (
   <DialogContent className={cn("p-0", className)} {...props}>
     <DialogTitle className="sr-only">{title}</DialogTitle>
-    <Command className="**:data-[slot=command-input-wrapper]:h-auto">
+    <Command
+      className="**:data-[slot=command-input-wrapper]:h-auto"
+      filter={(value, search) => {
+        // Custom filter that matches anywhere in the string
+        if (search && !value.toLowerCase().includes(search.toLowerCase())) return 0;
+        return 1;
+      }}
+    >
       {children}
     </Command>
   </DialogContent>

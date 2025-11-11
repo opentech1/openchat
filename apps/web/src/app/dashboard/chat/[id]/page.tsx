@@ -19,6 +19,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
 			id: message._id,
 			role: message.role,
 			content: message.content,
+			reasoning: message.reasoning,
 			createdAt: isoString,
 		};
 	});

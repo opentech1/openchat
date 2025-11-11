@@ -46,6 +46,7 @@ type ChatRoomProps = {
     id: string;
     role: string;
     content: string;
+    reasoning?: string;
     createdAt: string | Date;
   }>;
 };
@@ -510,7 +511,55 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           handleMissingRequirement("model");
           return;
         }
+
+        // Handle provider overload/rate limit errors
+        const errorMessage = error.message.toLowerCase();
+        if (
+          errorMessage.includes("provider returned error") ||
+          errorMessage.includes("failed after") ||
+          errorMessage.includes("rate limit") ||
+          errorMessage.includes("too many requests") ||
+          errorMessage.includes("overloaded") ||
+          errorMessage.includes("high load")
+        ) {
+          toast.error("AI Provider Overloaded", {
+            description: "The model provider is experiencing high load. Try again in a moment.",
+            action: {
+              label: "Retry",
+              onClick: () => {
+                // Get the last user message and resend it
+                const lastUserMessage = messages.filter(m => m.role === "user").pop();
+                if (lastUserMessage) {
+                  const textContent = lastUserMessage.parts
+                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+                    .map(p => p.text)
+                    .join("");
+                  if (textContent) {
+                    void handleSendMessage(textContent);
+                  }
+                }
+              },
+            },
+            duration: 10000, // Show for 10 seconds
+          });
+          return;
+        }
+
+        // Handle generic errors with more helpful message
+        if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
+          toast.error("Connection Error", {
+            description: "Unable to reach the AI service. Check your connection and try again.",
+            duration: 5000,
+          });
+          return;
+        }
       }
+
+      // Fallback for unknown errors
+      toast.error("Something went wrong", {
+        description: "Failed to get a response from the AI. Please try again.",
+        duration: 5000,
+      });
       logError("Chat stream error", error);
     },
   });

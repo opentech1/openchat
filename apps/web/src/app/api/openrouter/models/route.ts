@@ -21,6 +21,9 @@ type OpenRouterModelOption = {
 	};
 	popular?: boolean;
 	free?: boolean;
+	capabilities?: {
+		reasoning?: boolean;
+	};
 };
 
 // Popular models to feature at the top
@@ -47,6 +50,27 @@ const FREE_MODELS = new Set([
 	"mistralai/mistral-nemo:free",
 	"qwen/qwen-2.5-7b-instruct:free",
 ]);
+
+// Models with reasoning capabilities
+// Based on AI SDK docs: Claude 4, GPT-5, DeepSeek R1, Gemini 2.5, o1/o3, Cohere reasoning, Mistral magistral
+function hasReasoningCapability(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		lowerModelId.includes("claude-3-7-sonnet") ||
+		lowerModelId.includes("claude-opus-4") ||
+		lowerModelId.includes("claude-sonnet-4") ||
+		lowerModelId.includes("gpt-5") ||
+		lowerModelId.includes("deepseek-r1") ||
+		lowerModelId.includes("deepseek-reasoner") ||
+		lowerModelId.includes("gemini-2.5") ||
+		lowerModelId.includes("gemini-2.0-flash-thinking") ||
+		lowerModelId.includes("/o1") ||
+		lowerModelId.includes("/o3") ||
+		lowerModelId.includes("magistral") ||
+		lowerModelId.includes("command-a-reasoning") ||
+		lowerModelId.includes("qwen3") && lowerModelId.includes("thinking")
+	);
+}
 
 const parseNumericField = (candidate: unknown): number | null => {
 	if (typeof candidate === "number" && Number.isFinite(candidate)) {
@@ -124,6 +148,7 @@ export async function POST(request: Request) {
 				}
 				const isFree = FREE_MODELS.has(id);
 				const isPopular = POPULAR_MODELS.has(id);
+				const hasReasoning = hasReasoningCapability(id);
 
 				// Remove provider prefix (e.g., "Google: Gemini 2.5 Pro" -> "Gemini 2.5 Pro")
 				const cleanName = name.includes(":") ? name.split(":").slice(1).join(":").trim() : name;
@@ -139,6 +164,7 @@ export async function POST(request: Request) {
 					pricing,
 					popular: isPopular,
 					free: isFree,
+					capabilities: hasReasoning ? { reasoning: true } : undefined,
 				};
 			})
 			.filter((model): model is OpenRouterModelOption => Boolean(model))

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Info } from "lucide-react"
+import { Check, Info, Brain } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -37,11 +37,16 @@ export type ModelSelectorOption = {
 	icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
 	popular?: boolean
 	free?: boolean
+	capabilities?: {
+		reasoning?: boolean
+	}
 }
 
 // Format price per million tokens
 function formatPrice(price: number | null): string {
 	if (price === null || price === undefined || !Number.isFinite(price)) return "Free"
+	// Handle -1 or negative values (used for variable/dynamic pricing like Auto Router)
+	if (price < 0) return "Variable"
 	const perMillion = price * 1_000_000
 	if (perMillion === 0) return "Free"
 	if (perMillion < 0.01) return `$${perMillion.toFixed(4)}`
@@ -282,6 +287,7 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 									<ModelSelectorItem
 										key={option.value}
 										value={option.value}
+										keywords={[option.label, option.value, provider || ""]}
 										onSelect={(currentValue) => {
 											if (value === undefined) {
 												setInternalValue(currentValue)
@@ -293,6 +299,20 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 									>
 										{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
 										<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
+										{option.capabilities?.reasoning && (
+											<TooltipProvider delayDuration={100}>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<Brain className="size-3.5 shrink-0 text-purple-500" />
+													</TooltipTrigger>
+													<TooltipContent side="left" className="max-w-xs">
+														<div className="text-xs">
+															This model supports advanced reasoning capabilities
+														</div>
+													</TooltipContent>
+												</Tooltip>
+											</TooltipProvider>
+										)}
 										{hasPricing && (
 											<div className="flex items-center gap-1.5 shrink-0">
 												<TooltipProvider delayDuration={100}>
@@ -308,15 +328,11 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 																</span>
 															</div>
 														</TooltipTrigger>
-														<TooltipContent side="left" className="max-w-xs">
-															<div className="space-y-1 text-xs">
-																<div className="font-medium">Pricing per 1M tokens</div>
-																<div>Input: {formatPrice(option.pricing!.prompt)}</div>
-																<div>Output: {formatPrice(option.pricing!.completion)}</div>
-																<div className="pt-1 text-muted-foreground border-t">
-																	<Info className="inline-block size-3 mr-1" />
-																	Prices may vary by provider and are approximate
-																</div>
+														<TooltipContent side="left" className="text-xs px-2 py-1">
+															<div className="flex items-center gap-1 whitespace-nowrap">
+																<span>In: {formatPrice(option.pricing!.prompt)}</span>
+																<span>·</span>
+																<span>Out: {formatPrice(option.pricing!.completion)}</span>
 															</div>
 														</TooltipContent>
 													</Tooltip>

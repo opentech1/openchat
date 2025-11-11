@@ -89,6 +89,88 @@ const MAX_TOKENS = (() => {
 	return Math.min(parsed, 32768); // Cap at 32k to prevent excessive token usage
 })();
 
+// Helper to detect models with reasoning capabilities
+function supportsReasoning(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		lowerModelId.includes("claude-3-7-sonnet") ||
+		lowerModelId.includes("claude-opus-4") ||
+		lowerModelId.includes("claude-sonnet-4") ||
+		lowerModelId.includes("gpt-5") ||
+		lowerModelId.includes("deepseek-r1") ||
+		lowerModelId.includes("deepseek-reasoner") ||
+		lowerModelId.includes("gemini-2.5") ||
+		lowerModelId.includes("gemini-2.0-flash-thinking") ||
+		lowerModelId.includes("/o1") ||
+		lowerModelId.includes("/o3") ||
+		lowerModelId.includes("magistral") ||
+		lowerModelId.includes("command-a-reasoning") ||
+		(lowerModelId.includes("qwen3") && lowerModelId.includes("thinking"))
+	);
+}
+
+// Get provider options for reasoning models
+function getReasoningProviderOptions(modelId: string): Record<string, unknown> | undefined {
+	const lowerModelId = modelId.toLowerCase();
+
+	// Anthropic models (Claude 3.7, Claude 4)
+	if (
+		lowerModelId.includes("anthropic/") &&
+		(lowerModelId.includes("claude-3-7-sonnet") ||
+		 lowerModelId.includes("claude-opus-4") ||
+		 lowerModelId.includes("claude-sonnet-4"))
+	) {
+		return {
+			anthropic: {
+				thinking: { type: "enabled", budgetTokens: 12000 },
+			},
+		};
+	}
+
+	// OpenAI GPT-5 models
+	if (lowerModelId.includes("openai/gpt-5")) {
+		return {
+			openai: {
+				reasoningSummary: "detailed",
+			},
+		};
+	}
+
+	// OpenAI o1/o3 models
+	if (lowerModelId.includes("openai/o1") || lowerModelId.includes("openai/o3")) {
+		return {
+			openai: {
+				reasoningEffort: "medium",
+			},
+		};
+	}
+
+	// Google Gemini 2.5 models
+	if (lowerModelId.includes("google/gemini-2.5") || lowerModelId.includes("google/gemini-2.0-flash-thinking")) {
+		return {
+			google: {
+				thinkingConfig: {
+					includeThoughts: true,
+				},
+			},
+		};
+	}
+
+	// Cohere reasoning models
+	if (lowerModelId.includes("cohere/command-a-reasoning")) {
+		return {
+			cohere: {
+				thinking: {
+					type: "enabled",
+					tokenBudget: 8000,
+				},
+			},
+		};
+	}
+
+	return undefined;
+}
+
 // PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
 const OPENROUTER_TIMEOUT_MS = (() => {
 	const raw = process.env.OPENROUTER_TIMEOUT_MS;
@@ -104,6 +186,8 @@ type StreamPersistRequest = {
 	clientMessageId?: string | null;
 	role: "user" | "assistant";
 	content: string;
+	reasoning?: string;
+	thinkingTimeMs?: number;
 	createdAt: string;
 	status: "streaming" | "completed";
 };
@@ -236,6 +320,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				clientMessageId: input.clientMessageId ?? undefined,
 				role: input.role,
 				content: input.content,
+				reasoning: input.reasoning,
+				thinkingTimeMs: input.thinkingTimeMs,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
 			}));
@@ -535,7 +621,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		let assistantText = "";
+		let assistantReasoning = "";
 		let lastPersistedLength = 0;
+		let lastPersistedReasoningLength = 0;
 		let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 		let pendingFlush: Promise<void> | null = null;
 		let pendingResolve: (() => void) | null = null;
@@ -543,24 +631,51 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		let persistenceError: Error | null = null;
 		const startedAt = Date.now();
 		let streamStatus: "completed" | "aborted" | "error" = "completed";
+		let reasoningStartTime: number | null = null;
+		let reasoningEndTime: number | null = null;
 
 		const persistAssistant = async (status: "streaming" | "completed", force = false) => {
 			const pendingLength = assistantText.length;
+			const pendingReasoningLength = assistantReasoning.length;
 			const delta = pendingLength - lastPersistedLength;
+			const reasoningDelta = pendingReasoningLength - lastPersistedReasoningLength;
 			if (!force && status === "streaming") {
-				if (delta <= 0) return;
-				if (delta < STREAM_MIN_CHARS_PER_FLUSH) return;
+				if (delta <= 0 && reasoningDelta <= 0) return;
+				if (delta < STREAM_MIN_CHARS_PER_FLUSH && reasoningDelta < STREAM_MIN_CHARS_PER_FLUSH) return;
 			}
-			if (delta <= 0 && !force) {
+			if (delta <= 0 && reasoningDelta <= 0 && !force) {
 				return;
 			}
 			lastPersistedLength = pendingLength;
+			lastPersistedReasoningLength = pendingReasoningLength;
+
+			// CRITICAL: Only send reasoning if it's non-empty
+			const reasoningToSend = assistantReasoning.length > 0 ? assistantReasoning : undefined;
+
+			// Calculate thinking time duration
+			const thinkingTimeMs = reasoningStartTime && reasoningEndTime
+				? reasoningEndTime - reasoningStartTime
+				: undefined;
+
+			if (status === "completed") {
+				console.log("[Persist] ⚠️ FINAL SAVE - Reasoning status:", {
+					textLength: assistantText.length,
+					reasoningLength: reasoningToSend ? reasoningToSend.length : 0,
+					hasReasoning: !!reasoningToSend,
+					thinkingTimeMs,
+					thinkingTimeSec: thinkingTimeMs ? (thinkingTimeMs / 1000).toFixed(1) : 0,
+					reasoningPreview: reasoningToSend ? reasoningToSend.slice(0, 100) : "NONE"
+				});
+			}
+
 			const response = await persistMessageImpl({
 				userId: convexUserId,
 				chatId,
 				clientMessageId: assistantMessageId,
 				role: "assistant",
 				content: assistantText,
+				reasoning: reasoningToSend,
+				thinkingTimeMs,
 				createdAt: assistantCreatedAtIso,
 				status,
 			});
@@ -645,12 +760,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}, OPENROUTER_TIMEOUT_MS);
 
 			const model = config.provider.chat(config.modelId);
+			const hasReasoning = supportsReasoning(config.modelId);
+			const providerOptions = hasReasoning ? getReasoningProviderOptions(config.modelId) : undefined;
+
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
 				maxOutputTokens: MAX_TOKENS,
 				abortSignal: abortController.signal,
-				experimental_transform: smoothStream({
+				...(providerOptions && { providerOptions }),
+				// CRITICAL FIX: Don't apply smoothStream to reasoning models - it blocks reasoning chunks!
+				experimental_transform: hasReasoning ? undefined : smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
 				}),
@@ -658,11 +778,42 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
 						assistantText += chunk.text;
 						scheduleStreamFlush();
+					} else if (chunk.type === "reasoning-start") {
+						reasoningStartTime = Date.now();
+						console.log("[Reasoning] ✅ Started at", reasoningStartTime);
+					} else if (chunk.type === "reasoning-delta") {
+						// CRITICAL FIX: Start timer on FIRST reasoning chunk if not started
+						if (!reasoningStartTime) {
+							reasoningStartTime = Date.now();
+							console.log("[Reasoning] ✅ Auto-started timer at", reasoningStartTime);
+						}
+
+						const text = (chunk as any).text;
+						if (typeof text === "string" && text.length > 0) {
+							assistantReasoning += text;
+							// Update end time on EVERY chunk (captures last one)
+							reasoningEndTime = Date.now();
+							scheduleStreamFlush();
+						}
+					} else if (chunk.type === "reasoning-end") {
+						reasoningEndTime = Date.now();
+						const duration = reasoningStartTime ? reasoningEndTime - reasoningStartTime : 0;
+						console.log(`[Reasoning] ✅ Completed in ${duration}ms, FINAL LENGTH: ${assistantReasoning.length} chars`);
 					}
 				},
-				onFinish: async () => {
+				onFinish: async (event) => {
 					if (timeoutId) clearTimeout(timeoutId);
 					streamStatus = "completed";
+
+					// CRITICAL FIX: If we have reasoning but no end time, set it now
+					if (assistantReasoning.length > 0 && !reasoningEndTime) {
+						reasoningEndTime = Date.now();
+					}
+
+					const duration = reasoningStartTime && reasoningEndTime
+						? reasoningEndTime - reasoningStartTime
+						: 0;
+					console.log(`[Stream] Finished - Text: ${assistantText.length} chars, Reasoning: ${assistantReasoning.length} chars, ThinkTime: ${duration}ms`);
 					await finalize();
 				},
 				onAbort: async () => {
@@ -696,6 +847,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 			const aiResponse = result.toUIMessageStreamResponse({
 				generateMessageId: () => assistantMessageId,
+				sendReasoning: hasReasoning,
 			});
 			const headers = new Headers(aiResponse.headers);
 			headers.set("Cache-Control", "no-store, max-age=0");

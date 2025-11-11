@@ -19,11 +19,22 @@ import { ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { SafeStreamdown } from "@/components/safe-streamdown";
 import { throttleRAF } from "@/lib/throttle";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "@/components/ai-elements/reasoning";
+
+type MessagePart =
+  | { type: "text"; text: string }
+  | { type: "reasoning"; text: string };
 
 type ChatMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  parts?: MessagePart[];
+  thinkingTimeMs?: number;
 };
 
 type ChatMessagesPanelProps = {
@@ -196,6 +207,7 @@ function ChatMessagesPanelComponent({
                     {virtualizer.getVirtualItems().map((virtualItem) => {
                       const msg = messages[virtualItem.index];
                       if (!msg) return null;
+                      const isLastMsg = virtualItem.index === messages.length - 1;
                       return (
                         <div
                           key={virtualItem.key}
@@ -210,7 +222,11 @@ function ChatMessagesPanelComponent({
                           }}
                           className="pb-4"
                         >
-                          <ChatMessageBubble message={msg} />
+                          <ChatMessageBubble
+                            message={msg}
+                            isLastMessage={isLastMsg}
+                            isStreaming={isStreaming && isLastMsg}
+                          />
                         </div>
                       );
                     })}
@@ -218,8 +234,13 @@ function ChatMessagesPanelComponent({
                 ) : (
                   // Non-virtualized list for few messages
                   <div className="flex flex-col gap-4">
-                    {messages.map((msg) => (
-                      <ChatMessageBubble key={msg.id} message={msg} />
+                    {messages.map((msg, idx) => (
+                      <ChatMessageBubble
+                        key={msg.id}
+                        message={msg}
+                        isLastMessage={idx === messages.length - 1}
+                        isStreaming={isStreaming && idx === messages.length - 1}
+                      />
                     ))}
                   </div>
                 )}
@@ -277,12 +298,15 @@ ChatMessagesPanel.displayName = "ChatMessagesPanel";
 
 type ChatMessageBubbleProps = {
   message: ChatMessage;
+  isLastMessage?: boolean;
+  isStreaming?: boolean;
 };
 
 const ChatMessageBubble = memo(
-  ({ message }: ChatMessageBubbleProps) => {
+  ({ message, isLastMessage = false, isStreaming = false }: ChatMessageBubbleProps) => {
     const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
     const isUser = message.role === "user";
+    const hasParts = message.parts && message.parts.length > 0;
 
     return (
       <div
@@ -301,19 +325,66 @@ const ChatMessageBubble = memo(
             {message.content}
           </div>
         ) : (
-          <SafeStreamdown
-            className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
-            data-ph-no-capture
-          >
-            {message.content}
-          </SafeStreamdown>
+          <div className="flex flex-col gap-2 max-w-full">
+            {hasParts ? (
+              message.parts.map((part, index) => {
+                if (part.type === "reasoning") {
+                  // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
+                  const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;
+                  // Convert thinkingTimeMs to seconds for the Reasoning component
+                  const duration = message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined;
+                  return (
+                    <Reasoning
+                      key={`${message.id}-reasoning-${index}`}
+                      className="w-full"
+                      isStreaming={isReasoningStreaming}
+                      defaultOpen={isReasoningStreaming}
+                      duration={duration}
+                    >
+                      <ReasoningTrigger />
+                      <ReasoningContent>{part.text}</ReasoningContent>
+                    </Reasoning>
+                  );
+                }
+                return (
+                  <SafeStreamdown
+                    key={`${message.id}-text-${index}`}
+                    className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                    data-ph-no-capture
+                  >
+                    {part.text}
+                  </SafeStreamdown>
+                );
+              })
+            ) : (
+              <SafeStreamdown
+                className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                data-ph-no-capture
+              >
+                {message.content}
+              </SafeStreamdown>
+            )}
+          </div>
         )}
       </div>
     );
   },
-  (prev, next) =>
-    prev.message.id === next.message.id &&
-    prev.message.role === next.message.role &&
-    prev.message.content === next.message.content,
+  (prev, next) => {
+    // CRITICAL FIX: Compare parts array to detect reasoning changes
+    const sameParts =
+      prev.message.parts?.length === next.message.parts?.length &&
+      (prev.message.parts?.every((p, i) =>
+        p.type === next.message.parts![i]?.type &&
+        p.text === next.message.parts![i]?.text
+      ) ?? true);
+
+    return (
+      prev.message.id === next.message.id &&
+      prev.message.role === next.message.role &&
+      prev.message.content === next.message.content &&
+      prev.isStreaming === next.isStreaming &&
+      sameParts
+    );
+  },
 );
 ChatMessageBubble.displayName = "ChatMessageBubble";

@@ -32,6 +32,10 @@ export default defineSchema({
 		role: v.string(),
 		// Content can be encrypted (prefixed with enc_v1:). Max length: 100KB (102400 bytes)
 		content: v.string(),
+		// Reasoning content from models with reasoning capabilities (e.g., Claude 4, GPT-5, DeepSeek R1)
+		reasoning: v.optional(v.string()),
+		// Time spent thinking in milliseconds (for reasoning models)
+		thinkingTimeMs: v.optional(v.number()),
 		createdAt: v.number(),
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),
