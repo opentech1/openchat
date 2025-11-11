@@ -14,7 +14,7 @@ import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "@convex-server/api";
+import { api } from "@server/convex/_generated/api";
 import { borderRadius, spacing, iconSize } from "@/styles/design-tokens";
 
 const TONE_OPTIONS = [
