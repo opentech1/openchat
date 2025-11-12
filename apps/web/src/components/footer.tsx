@@ -1,5 +1,6 @@
 'use client';
 
+import type { Route } from 'next';
 import Link from 'next/link';
 import { spacing, transitions } from '@/styles/design-tokens';
 
@@ -55,7 +56,7 @@ export function Footer() {
 						return (
 						  <Link
 						    key={link.label}
-						    href={link.href as any}
+						    href={link.href as Route}
 						    className={`text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline ${transitions.normal}`}
 						  >
 						    {link.label}
