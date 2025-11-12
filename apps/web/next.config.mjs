@@ -25,6 +25,7 @@ const nextConfig = {
 		remotePatterns: [
 			{ protocol: "https", hostname: "ik.imagekit.io" },
 			{ protocol: "https", hostname: "github.com" },
+			{ protocol: "https", hostname: "models.dev" },
 		],
 	},
 	/**
@@ -80,7 +81,7 @@ const nextConfig = {
 		}
 		const scriptSrc = Array.from(scriptSrcSet);
 		const connectSrc = ["'self'", ...additionalConnect, "ws:", "wss:"];
-		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com"];
+		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com", "https://models.dev"];
 		const frameSrc = ["'self'"];
 		const csp = [
 			"default-src 'self'",

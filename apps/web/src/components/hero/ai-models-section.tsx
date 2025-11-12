@@ -5,14 +5,14 @@ import { Card } from '@/components/ui/card';
 import { spacing, opacity, borderRadius, transitions } from '@/styles/design-tokens';
 
 const AI_PROVIDERS = [
-	{ provider: 'openai', name: 'OpenAI', models: 'GPT-4, GPT-4 Turbo, o1' },
-	{ provider: 'anthropic', name: 'Anthropic', models: 'Claude 3.5 Sonnet, Claude 3 Opus' },
-	{ provider: 'google', name: 'Google', models: 'Gemini Pro, Gemini Ultra' },
-	{ provider: 'deepseek', name: 'DeepSeek', models: 'DeepSeek R1, DeepSeek Coder' },
-	{ provider: 'xai', name: 'xAI', models: 'Grok' },
-	{ provider: 'llama', name: 'Meta', models: 'Llama 3, Llama 3.1' },
-	{ provider: 'mistral', name: 'Mistral AI', models: 'Mistral Large, Mistral Medium' },
-	{ provider: 'perplexity', name: 'Perplexity', models: 'Perplexity models' },
+	{ provider: 'openai', name: 'OpenAI', models: 'GPT-4o, o3-mini, GPT-4 Turbo' },
+	{ provider: 'anthropic', name: 'Anthropic', models: 'Claude 3.5 Sonnet, Claude 3.5 Haiku' },
+	{ provider: 'google', name: 'Google', models: 'Gemini 2.0 Flash, Gemini 2.0 Pro' },
+	{ provider: 'deepseek', name: 'DeepSeek', models: 'DeepSeek R1, DeepSeek V3' },
+	{ provider: 'xai', name: 'xAI', models: 'Grok 2, Grok 2.5' },
+	{ provider: 'llama', name: 'Meta', models: 'Llama 3.3 70B, Llama 3.1' },
+	{ provider: 'mistral', name: 'Mistral AI', models: 'Mistral Small 3, Codestral 2501' },
+	{ provider: 'perplexity', name: 'Perplexity', models: 'Sonar, Sonar Pro' },
 ] as const;
 
 export function AIModelsSection() {
@@ -37,10 +37,10 @@ export function AIModelsSection() {
 						  key={item.provider}
 						  className={`group flex flex-col items-center justify-center border-border/60 bg-card/${opacity.medium} py-8 text-center shadow-none backdrop-blur transition-all hover:scale-105 hover:border-border hover:shadow-lg ${borderRadius.lg} ${transitions.slow}`}
 						>
-						  <div className="flex items-center justify-center">
+						  <div className="flex h-12 items-center justify-center">
 						    <ModelSelectorLogo
 						      provider={item.provider}
-						      className="size-12 dark:brightness-0 dark:invert"
+						      className="h-10 w-auto dark:brightness-0 dark:invert"
 						    />
 						  </div>
 						  <h3 className="mt-4 font-semibold text-foreground">{item.name}</h3>
