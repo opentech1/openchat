@@ -22,7 +22,10 @@ const nextConfig = {
 	// Vercel has its own runtime and doesn't need standalone mode
 	// Keeping this enabled adds 150MB+ to builds and increases build time
 	images: {
-		remotePatterns: [{ protocol: "https", hostname: "ik.imagekit.io" }],
+		remotePatterns: [
+			{ protocol: "https", hostname: "ik.imagekit.io" },
+			{ protocol: "https", hostname: "github.com" },
+		],
 	},
 	/**
 	 * SECURITY: Request body size limits
@@ -77,7 +80,7 @@ const nextConfig = {
 		}
 		const scriptSrc = Array.from(scriptSrcSet);
 		const connectSrc = ["'self'", ...additionalConnect, "ws:", "wss:"];
-		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io"];
+		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com"];
 		const frameSrc = ["'self'"];
 		const csp = [
 			"default-src 'self'",

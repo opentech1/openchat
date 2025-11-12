@@ -6,9 +6,12 @@ import { authClient } from '@/lib/auth-client';
 import { HeroHeader } from './header';
 import Features from '@/components/features-1';
 import { HeroContent } from '@/components/hero/hero-content';
-import { TrustedBrands } from '@/components/hero/trusted-brands';
-import { IntegrationsSection } from '@/components/hero/integrations-section';
-import { PricingSection } from '@/components/hero/pricing-section';
+import { AIModelsSection } from '@/components/hero/ai-models-section';
+import { RealtimeSection } from '@/components/hero/realtime-section';
+import { ComparisonSection } from '@/components/hero/comparison-section';
+import { SponsorsSection } from '@/components/hero/sponsors-section';
+import { VersionsSection } from '@/components/hero/versions-section';
+import { Footer } from '@/components/footer';
 import { captureClientEvent } from '@/lib/posthog';
 import { borderRadius } from '@/styles/design-tokens';
 
@@ -83,11 +86,14 @@ export default function HeroSection() {
           <div className="absolute inset-x-0 bottom-[-35%] h-[40rem] bg-[radial-gradient(60%_50%_at_50%_50%,theme(colors.background/0%)0%,theme(colors.background)70%)]" />
         </div>
         <HeroContent onCtaClick={handleCtaClick} />
-        <TrustedBrands />
         <Features />
-        <IntegrationsSection />
-        <PricingSection />
+        <AIModelsSection />
+        <RealtimeSection />
+        <ComparisonSection />
+        <SponsorsSection />
+        <VersionsSection />
       </main>
+      <Footer />
     </>
   );
 }

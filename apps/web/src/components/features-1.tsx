@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { GaugeCircle, Palette, Users } from "lucide-react";
+import { Zap, Wrench, Heart } from "lucide-react";
 import type { ReactNode } from "react";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 
@@ -23,42 +23,42 @@ export default function Features() {
                     <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <GaugeCircle className={iconSize.lg} aria-hidden />
+                                <Zap className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
-                            <h3 className="mt-6 font-semibold text-foreground">Blazing-fast UI</h3>
+                            <h3 className="mt-6 font-semibold text-foreground">Blazing Performance</h3>
                         </CardHeader>
 
                         <CardContent>
-                            <p className="text-sm text-muted-foreground">Next.js 15 + Bun deliver sub-second interactions, realtime streaming, and zero client jank out of the box.</p>
+                            <p className="text-sm text-muted-foreground">Next.js 15 + Bun deliver sub-second streaming, realtime updates, and zero lag. Built for speed from the ground up.</p>
                         </CardContent>
                     </Card>
 
                     <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <Palette className={iconSize.lg} aria-hidden />
+                                <Wrench className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
-                            <h3 className="mt-6 font-semibold text-foreground">Made to customize</h3>
+                            <h3 className="mt-6 font-semibold text-foreground">Fully Customizable</h3>
                         </CardHeader>
 
                         <CardContent>
-                            <p className="mt-3 text-sm text-muted-foreground">Tailwind v4, shadcn primitives, and config-driven theming let you bend every pixel to match your product’s brand.</p>
+                            <p className="mt-3 text-sm text-muted-foreground">Tailwind v4, shadcn, and open source code. Bend every pixel to match your brand. White-label ready.</p>
                         </CardContent>
                     </Card>
 
                     <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>
-                                <Users className={iconSize.lg} aria-hidden />
+                                <Heart className={iconSize.lg} aria-hidden />
                             </CardDecorator>
 
-                            <h3 className="mt-6 font-semibold text-foreground">Community-led roadmap</h3>
+                            <h3 className="mt-6 font-semibold text-foreground">Community-Driven</h3>
                         </CardHeader>
 
                         <CardContent>
-                            <p className="mt-3 text-sm text-muted-foreground">Active Discord, weekly feature drops, and plug-and-play add-ons mean you’re shipping alongside hundreds of builders.</p>
+                            <p className="mt-3 text-sm text-muted-foreground">Active development, weekly features, and plug-and-play add-ons. Built with the community, for the community.</p>
                         </CardContent>
                     </Card>
                 </div>
