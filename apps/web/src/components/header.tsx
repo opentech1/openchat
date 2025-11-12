@@ -11,11 +11,16 @@ import { captureClientEvent } from '@/lib/posthog'
 import { throttleRAF } from '@/lib/throttle'
 import { borderRadius, iconSize, shadows, spacing } from '@/styles/design-tokens';
 
-const menuItems = [
+type MenuItem = {
+    name: string;
+    href: string;
+    external?: boolean;
+};
+
+const menuItems: MenuItem[] = [
     { name: 'Features', href: '#features' },
-    { name: 'Integrations', href: '#integrations' },
     { name: 'Pricing', href: '#pricing' },
-    { name: 'Docs', href: '/docs' },
+    { name: 'GitHub', href: 'https://github.com/opentech1/openchat', external: true },
 ]
 
 export const HeroHeader = () => {
@@ -26,8 +31,8 @@ export const HeroHeader = () => {
     const handleHeaderCtaClick = useCallback(() => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 0
         captureClientEvent('marketing.cta_clicked', {
-            cta_id: 'header_try_osschat',
-            cta_copy: 'Try osschat',
+            cta_id: 'header_start_chatting',
+            cta_copy: 'Start Chatting Free',
             section: 'header',
             screen_width_bucket: width < 640 ? 'xs' : width < 768 ? 'sm' : width < 1024 ? 'md' : width < 1280 ? 'lg' : 'xl',
         })
@@ -85,6 +90,7 @@ export const HeroHeader = () => {
 										<li key={item.name}>
 											<a
 												href={item.href}
+												{...(item.external && { target: '_blank', rel: 'noopener noreferrer' })}
 												onClick={(event) => {
 													closeMenu();
 													if (item.href.startsWith("#")) {
@@ -94,7 +100,7 @@ export const HeroHeader = () => {
 														window.history.replaceState(null, "", item.href);
 													}
 												}}
-												className="text-muted-foreground hover:text-accent-foreground block duration-150"
+												className="text-muted-foreground hover:text-foreground block transition-colors duration-150"
 											>
 												<span>{item.name}</span>
 											</a>
@@ -113,6 +119,7 @@ export const HeroHeader = () => {
 										<li key={item.name}>
 											<a
 												href={item.href}
+												{...(item.external && { target: '_blank', rel: 'noopener noreferrer' })}
 												onClick={(event) => {
 													closeMenu();
 													if (item.href.startsWith("#")) {
@@ -122,7 +129,7 @@ export const HeroHeader = () => {
 														window.history.replaceState(null, "", item.href);
 													}
 												}}
-												className="text-muted-foreground hover:text-accent-foreground block duration-150"
+												className="text-muted-foreground hover:text-foreground block transition-colors duration-150"
 											>
 												<span>{item.name}</span>
 											</a>
@@ -159,7 +166,7 @@ export const HeroHeader = () => {
                                                     handleHeaderCtaClick()
                                                     closeMenu()
                                                 }}>
-                                                <span>Try osschat</span>
+                                                <span>Start Chatting Free</span>
                                             </Link>
                                         </Button>
                                     </>
