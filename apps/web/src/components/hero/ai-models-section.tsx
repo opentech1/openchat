@@ -5,12 +5,12 @@ import { Card } from '@/components/ui/card';
 import { spacing, opacity, borderRadius, transitions } from '@/styles/design-tokens';
 
 const AI_PROVIDERS = [
-	{ provider: 'openai', name: 'OpenAI', models: 'GPT-5, GPT-5 Pro, GPT-4o' },
-	{ provider: 'anthropic', name: 'Anthropic', models: 'Claude 4.5 Sonnet, Claude 3.5 Haiku' },
-	{ provider: 'google', name: 'Google', models: 'Gemini 2.5 Flash, Gemini 2.5 Pro' },
+	{ provider: 'openai', name: 'OpenAI', models: 'GPT-4o, o3-mini, GPT-4 Turbo' },
+	{ provider: 'anthropic', name: 'Anthropic', models: 'Claude 3.5 Sonnet, Claude 3.5 Haiku' },
+	{ provider: 'google', name: 'Google', models: 'Gemini 2.0 Flash, Gemini 2.0 Pro' },
 	{ provider: 'deepseek', name: 'DeepSeek', models: 'DeepSeek R1, DeepSeek V3' },
-	{ provider: 'xai', name: 'xAI', models: 'Grok 4, Grok 4 Fast' },
-	{ provider: 'llama', name: 'Meta', models: 'Llama 4, Llama 3.3 70B, Llama 3.1' },
+	{ provider: 'xai', name: 'xAI', models: 'Grok 2, Grok 2.5' },
+	{ provider: 'llama', name: 'Meta', models: 'Llama 3.3 70B, Llama 3.1' },
 	{ provider: 'mistral', name: 'Mistral AI', models: 'Mistral Small 3, Codestral 2501' },
 	{ provider: 'perplexity', name: 'Perplexity', models: 'Sonar, Sonar Pro' },
 ] as const;
