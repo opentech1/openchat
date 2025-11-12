@@ -5,13 +5,13 @@ import { Card } from '@/components/ui/card';
 import { spacing, opacity, borderRadius, transitions } from '@/styles/design-tokens';
 
 const AI_PROVIDERS = [
-	{ provider: 'openai', name: 'OpenAI', models: 'GPT-4o, GPT-4.1, o3-mini' },
+	{ provider: 'openai', name: 'OpenAI', models: 'GPT-4o, o3-mini, GPT-4 Turbo' },
 	{ provider: 'anthropic', name: 'Anthropic', models: 'Claude 3.5 Sonnet, Claude 3.5 Haiku' },
 	{ provider: 'google', name: 'Google', models: 'Gemini 2.0 Flash, Gemini 2.0 Pro' },
 	{ provider: 'deepseek', name: 'DeepSeek', models: 'DeepSeek R1, DeepSeek V3' },
 	{ provider: 'xai', name: 'xAI', models: 'Grok 2, Grok 2.5' },
 	{ provider: 'llama', name: 'Meta', models: 'Llama 3.3 70B, Llama 3.1' },
-	{ provider: 'mistral', name: 'Mistral AI', models: 'Mistral Small 3, Codestral 25.01' },
+	{ provider: 'mistral', name: 'Mistral AI', models: 'Mistral Small 3, Codestral 2501' },
 	{ provider: 'perplexity', name: 'Perplexity', models: 'Sonar, Sonar Pro' },
 ] as const;
 
