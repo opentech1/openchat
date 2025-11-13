@@ -49,9 +49,9 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
     </td>
     <td align="center" width="20%">
       <picture>
-        <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-black.png">
-        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-white.png">
-        <img width="180" height="90" alt="Graphite" src="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-black.png">
+        <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/apps/web/public/sponsors/graphite-black.png">
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/apps/web/public/sponsors/graphite-white.png">
+        <img width="180" height="90" alt="Graphite" src="https://raw.githubusercontent.com/opentech1/openchat/main/apps/web/public/sponsors/graphite-black.png">
       </picture>
     </td>
   </tr>
