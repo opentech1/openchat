@@ -1,5 +1,9 @@
 import { withSentryConfig } from "@sentry/nextjs";
 import bundleAnalyzer from "@next/bundle-analyzer";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const convexReactEntry = require.resolve("convex/react");
 
 const withBundleAnalyzer = bundleAnalyzer({
 	enabled: process.env.ANALYZE === "true",
@@ -115,6 +119,12 @@ const nextConfig = {
 		];
 	},
 	webpack(config, { dev, isServer }) {
+		config.resolve = config.resolve ?? {};
+		config.resolve.alias = {
+			...(config.resolve.alias ?? {}),
+			// Ensure all imports use the same Convex React entry so the provider context isn't duplicated
+			"convex/react": convexReactEntry,
+		};
 		if (dev) {
 			config.cache = { type: "memory" };
 		}

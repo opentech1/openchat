@@ -17,3 +17,4 @@ better-auth_migrations/
 .vercel
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
+/.playwright-mcp/
