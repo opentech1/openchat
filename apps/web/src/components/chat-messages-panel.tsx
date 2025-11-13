@@ -329,6 +329,15 @@ const ChatMessageBubble = memo(
             {hasParts ? (
               message.parts!.map((part, index) => {
                 if (part.type === "reasoning") {
+                  // Only show reasoning if there are text parts with content
+                  const hasTextOutput = message.parts!.some(
+                    p => p.type === "text" && p.text.trim().length > 0
+                  );
+
+                  if (!hasTextOutput) {
+                    return null; // Don't render reasoning if no text output
+                  }
+
                   // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
                   const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;
                   // Convert thinkingTimeMs to seconds for the Reasoning component
