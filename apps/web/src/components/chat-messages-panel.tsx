@@ -307,6 +307,10 @@ const ChatMessageBubble = memo(
     const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
     const isUser = message.role === "user";
     const hasParts = message.parts && message.parts.length > 0;
+    // Only show reasoning if there are text parts with content
+    const hasTextOutput = hasParts && message.parts!.some(
+      p => p.type === "text" && p.text.trim().length > 0
+    );
 
     return (
       <div
@@ -329,11 +333,6 @@ const ChatMessageBubble = memo(
             {hasParts ? (
               message.parts!.map((part, index) => {
                 if (part.type === "reasoning") {
-                  // Only show reasoning if there are text parts with content
-                  const hasTextOutput = message.parts!.some(
-                    p => p.type === "text" && p.text.trim().length > 0
-                  );
-
                   if (!hasTextOutput) {
                     return null; // Don't render reasoning if no text output
                   }
