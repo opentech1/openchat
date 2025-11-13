@@ -38,6 +38,13 @@ const SPONSORS: Sponsor[] = [
 		href: 'https://sentry.io',
 		logo: 'https://github.com/user-attachments/assets/26266fa9-67a0-4256-9530-614f7ca4d2f5',
 	},
+	{
+		name: 'Graphite',
+		subtitle: 'Stacked PRs',
+		href: 'https://graphite.dev',
+		logoLight: '/sponsors/graphite-black.png',
+		logoDark: '/sponsors/graphite-white.png',
+	},
 ];
 
 export function SponsorsSection() {
