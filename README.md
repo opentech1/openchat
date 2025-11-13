@@ -31,21 +31,28 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
 ## Sponsors
 <table>
   <tr>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <picture>
         <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/d80d057b-e651-49c3-a0eb-ee324274d549">
         <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/04dee790-d23a-4aed-93bb-5943e7f9cd5c">
         <img width="180" height="90" alt="Convex" src="https://github.com/user-attachments/assets/a7de908f-4226-44eb-a7c3-4fe7beb76897">
       </picture>
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <img width="180" height="90" alt="Greptile" src="https://github.com/user-attachments/assets/0dc5a5c7-2196-4270-b609-ea5a40f7e13e">
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <img width="180" height="90" alt="Gitbook" src="https://github.com/user-attachments/assets/ef2d2c18-0b94-424c-af39-cd40e0238665">
     </td>
-    <td align="center" width="25%">
+    <td align="center" width="20%">
       <img width="180" height="90" alt="Sentry" src="https://github.com/user-attachments/assets/26266fa9-67a0-4256-9530-614f7ca4d2f5">
+    </td>
+    <td align="center" width="20%">
+      <picture>
+        <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-black.png">
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-white.png">
+        <img width="180" height="90" alt="Graphite" src="https://raw.githubusercontent.com/opentech1/openchat/main/graphite-black.png">
+      </picture>
     </td>
   </tr>
 </table>
