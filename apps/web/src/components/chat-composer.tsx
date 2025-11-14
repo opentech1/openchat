@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
+import { SendIcon, LoaderIcon, SquareIcon, Upload } from "lucide-react";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -17,12 +17,26 @@ import {
   iconSize,
 } from "@/styles/design-tokens";
 import * as React from "react";
+import { FileUploadButton } from "./file-upload-button";
+import { FilePreview } from "./file-preview";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@server/convex/_generated/api";
+import { toast } from "sonner";
+import type { Id } from "@server/convex/_generated/dataModel";
+
+type FileAttachment = {
+  storageId: Id<"_storage">;
+  filename: string;
+  contentType: string;
+  size: number;
+};
 
 export type ChatComposerProps = {
   onSend: (payload: {
     text: string;
     modelId: string;
     apiKey: string;
+    attachments?: FileAttachment[];
   }) => void | Promise<void>;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -36,6 +50,8 @@ export type ChatComposerProps = {
   onStop?: () => void;
   onMissingRequirement?: (reason: "apiKey" | "model") => void;
   initialValue?: string;
+  userId?: Id<"users"> | null;
+  chatId?: Id<"chats"> | null;
 };
 
 function ChatComposer({
@@ -52,6 +68,8 @@ function ChatComposer({
   onStop,
   onMissingRequirement,
   initialValue = "",
+  userId,
+  chatId,
 }: ChatComposerProps) {
   const [value, setValue] = useState(initialValue);
   const [isSending, setIsSending] = useState(false);
@@ -60,6 +78,18 @@ function ChatComposer({
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
+
+  // File upload state
+  const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([]);
+
+  // Convex mutations and queries
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const saveFileMetadata = useMutation(api.files.saveFileMetadata);
+  const quota = useQuery(
+    api.files.getUserQuota,
+    userId ? { userId } : "skip"
+  );
 
   useEffect(() => {
     if (modelValue) {
@@ -92,6 +122,89 @@ function ChatComposer({
     }
   }, [initialValue, adjustHeight, textareaRef]);
 
+  // File upload handler
+  const handleFileSelect = useCallback(
+    async (file: File) => {
+      // Check if we have userId and chatId
+      if (!userId || !chatId) {
+        toast.error("Unable to upload file. Please try again.");
+        return;
+      }
+
+      // Check quota first
+      if (quota && quota.used >= quota.limit) {
+        toast.error("You've reached your file upload limit", { duration: 5000 });
+        return;
+      }
+
+      // Add to uploading state
+      setUploadingFiles((prev) => [...prev, file]);
+
+      try {
+        // Step 1: Generate upload URL
+        const uploadUrl = await generateUploadUrl({ userId, chatId });
+
+        // Step 2: Upload file to Convex storage
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error("Failed to upload file");
+        }
+
+        const { storageId } = (await uploadResponse.json()) as {
+          storageId: Id<"_storage">;
+        };
+
+        // Step 3: Save file metadata
+        const { filename: sanitizedFilename } = await saveFileMetadata({
+          userId,
+          chatId,
+          storageId,
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+        });
+
+        // Add to uploaded files
+        setUploadedFiles((prev) => [
+          ...prev,
+          {
+            storageId,
+            filename: sanitizedFilename,
+            contentType: file.type,
+            size: file.size,
+          },
+        ]);
+
+        toast.success(`${sanitizedFilename} uploaded successfully`);
+      } catch (error) {
+        logError("Failed to upload file", error);
+
+        // Check if it's a quota error
+        if (error instanceof Error && error.message.includes("quota exceeded")) {
+          toast.error("You've reached your file upload limit", { duration: 5000 });
+        } else {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to upload file"
+          );
+        }
+      } finally {
+        // Remove from uploading state
+        setUploadingFiles((prev) => prev.filter((f) => f !== file));
+      }
+    },
+    [userId, chatId, quota, generateUploadUrl, saveFileMetadata]
+  );
+
+  // Remove uploaded file
+  const handleRemoveFile = useCallback((index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const send = useCallback(async () => {
     const trimmed = value.trim();
     if (!trimmed || sendDisabled || isSending) return;
@@ -106,18 +219,28 @@ function ChatComposer({
       return;
     }
 
-    // Clear input INSTANTLY for responsive feel
+    // Clear input and files INSTANTLY for responsive feel
     setValue("");
     adjustHeight(true);
+    const attachmentsToSend = uploadedFiles.length > 0 ? uploadedFiles : undefined;
+    setUploadedFiles([]);
 
     setErrorMessage(null);
     setIsSending(true);
     try {
-      await onSend({ text: trimmed, modelId: currentModelId, apiKey });
+      await onSend({
+        text: trimmed,
+        modelId: currentModelId,
+        apiKey,
+        attachments: attachmentsToSend
+      });
     } catch (error) {
       logError("Failed to send message", error);
-      // Restore message if failed
+      // Restore message and files if failed
       setValue(trimmed);
+      if (attachmentsToSend) {
+        setUploadedFiles(attachmentsToSend);
+      }
       adjustHeight();
       setErrorMessage(
         error instanceof Error && error.message
@@ -135,6 +258,7 @@ function ChatComposer({
     onMissingRequirement,
     onSend,
     value,
+    uploadedFiles,
   ]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -143,6 +267,27 @@ function ChatComposer({
       void send();
     }
   };
+
+  // Handle paste events for images
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        // Check if the pasted item is an image
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            await handleFileSelect(file);
+          }
+          break;
+        }
+      }
+    },
+    [handleFileSelect]
+  );
 
   const isBusy = isSending || isStreaming;
 
@@ -164,6 +309,7 @@ function ChatComposer({
             debouncedAdjustHeight();
           }}
           onKeyDown={onKeyDown}
+          onPaste={handlePaste}
           placeholder={placeholder}
           className={cn(
             "w-full px-4 py-3",
@@ -182,6 +328,35 @@ function ChatComposer({
           aria-describedby={errorMessage ? "composer-error" : undefined}
           data-ph-no-capture
         />
+
+        {/* File Previews */}
+        {(uploadedFiles.length > 0 || uploadingFiles.length > 0) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {uploadedFiles.map((file, index) => (
+              <FilePreview
+                key={`uploaded-${index}`}
+                file={file}
+                onRemove={() => handleRemoveFile(index)}
+                showRemove={true}
+              />
+            ))}
+            {uploadingFiles.map((file, index) => (
+              <div key={`uploading-${index}`} className="relative">
+                <FilePreview
+                  file={{
+                    filename: file.name,
+                    contentType: file.type,
+                    size: file.size,
+                  }}
+                  showRemove={false}
+                />
+                <div className="absolute inset-0 bg-background/50 rounded flex items-center justify-center">
+                  <LoaderIcon className="size-4 animate-spin text-primary" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div
@@ -191,7 +366,7 @@ function ChatComposer({
           spacing.padding.lg,
         )}
       >
-        <div className={cn("flex items-center", spacing.gap.sm)}>
+        <div className={cn("flex items-center flex-wrap", spacing.gap.sm)}>
           <ModelSelector
             options={modelOptions}
             value={
@@ -207,6 +382,27 @@ function ChatComposer({
             disabled={disabled || isBusy || modelOptions.length === 0}
             loading={modelsLoading}
           />
+          {userId && chatId && (
+            <FileUploadButton
+              onFileSelect={handleFileSelect}
+              disabled={disabled || isBusy || uploadingFiles.length > 0}
+              modelCapabilities={
+                modelOptions.find(m => m.value === (modelValue ?? fallbackModelId))?.capabilities
+              }
+              onUnsupportedModel={() => {
+                // Find a model with file support
+                const fileModel = modelOptions.find(m =>
+                  m.capabilities?.image || m.capabilities?.audio || m.capabilities?.video
+                );
+                if (fileModel && onModelChange) {
+                  onModelChange(fileModel.value);
+                  toast.success(`Switched to ${fileModel.label}`);
+                } else {
+                  toast.error("No models with file support available");
+                }
+              }}
+            />
+          )}
         </div>
 
         <div className={cn("flex flex-col items-end", spacing.gap.xs)}>

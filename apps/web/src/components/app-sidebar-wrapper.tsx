@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import AppSidebar, { type AppSidebarProps } from "@/components/app-sidebar";
+import dynamicImport from "next/dynamic";
+import type { AppSidebarProps } from "@/components/app-sidebar";
+
+// Dynamically import AppSidebar with ssr: false to prevent server-side rendering
+// This is necessary because AppSidebar uses useOpenRouterKey hook which requires ConvexProvider
+const AppSidebar = dynamicImport(() => import("@/components/app-sidebar"), {
+  ssr: false,
+  loading: () => <SidebarSkeleton />,
+});
 
 function SidebarSkeleton() {
   return (
@@ -12,10 +19,5 @@ function SidebarSkeleton() {
 }
 
 export default function AppSidebarWrapper(props: AppSidebarProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  if (!mounted) return <SidebarSkeleton />;
   return <AppSidebar {...props} />;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -16,20 +16,6 @@ import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 // Create singleton clients at module scope to prevent recreation on re-renders
 const queryClient = new QueryClient();
 const posthogClient = initPosthog();
-
-function getConvexClient() {
-	const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-	if (!url) {
-		// During build time, use a placeholder URL
-		if (typeof window === "undefined") {
-			return new ConvexReactClient("http://localhost:3210");
-		}
-		throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured");
-	}
-	return new ConvexReactClient(url);
-}
-
-const convexClient = getConvexClient();
 
 function PosthogPageViewTracker() {
 	const pathname = usePathname();
@@ -72,7 +58,22 @@ function PosthogPageViewTracker() {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-	// Use module-scoped singleton clients instead of creating new instances on each render
+	// Lazy initialize Convex client inside component to avoid module-level errors
+	// This follows the pattern from Convex docs: https://docs.convex.dev/quickstart/remix
+	const [convexClient] = useState(() => {
+		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+		if (!url) {
+			// During build time or SSR, use a placeholder URL
+			if (typeof window === "undefined") {
+				return new ConvexReactClient("http://localhost:3210");
+			}
+			// Provide a helpful error message for client-side
+			throw new Error(
+				"NEXT_PUBLIC_CONVEX_URL is not configured. Please add it to your .env.local file and restart the dev server with: bun run dev"
+			);
+		}
+		return new ConvexReactClient(url);
+	});
 
 	const appTree = (
 		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>

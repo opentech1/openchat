@@ -32,6 +32,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
 				content: message.content,
 				reasoning: message.reasoning,
 				createdAt: isoString,
+				attachments: message.attachments,
 			};
 		});
 
