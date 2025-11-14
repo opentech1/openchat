@@ -337,7 +337,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				thinkingTimeMs: input.thinkingTimeMs,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
-				attachments: input.attachments,
+				attachments: input.attachments as any,
 			}));
 
 	const buckets = new Map<string, RateBucket>();
