@@ -141,7 +141,6 @@ export function normalizeUiMessage(message: UIMessage<{
 			role: message.role,
 			content,
 			created_at: message.metadata?.createdAt,
-			attachments: message.metadata?.attachments,
 		}),
 		parts: parts.length > 0 ? parts : undefined,
 	};

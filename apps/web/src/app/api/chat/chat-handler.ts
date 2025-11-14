@@ -191,7 +191,7 @@ type StreamPersistRequest = {
 	createdAt: string;
 	status: "streaming" | "completed";
 	attachments?: Array<{
-		storageId: string;
+		storageId: Id<"_storage">;
 		filename: string;
 		contentType: string;
 		size: number;
@@ -206,7 +206,7 @@ type ChatRequestPayload = {
 	messages?: AnyUIMessage[];
 	assistantMessageId?: string;
 	attachments?: Array<{
-		storageId: string;
+		storageId: Id<"_storage">;
 		filename: string;
 		contentType: string;
 		size: number;
