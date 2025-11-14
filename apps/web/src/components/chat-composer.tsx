@@ -122,6 +122,20 @@ function ChatComposer({
     }
   }, [initialValue, adjustHeight, textareaRef]);
 
+  // Add keyboard shortcut to focus input (Ctrl+L or Cmd+L)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Ctrl+L (Windows/Linux) or Cmd+L (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [textareaRef]);
+
   // File upload handler
   const handleFileSelect = useCallback(
     async (file: File) => {
