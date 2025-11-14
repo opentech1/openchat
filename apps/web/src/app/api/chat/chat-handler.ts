@@ -191,7 +191,7 @@ type StreamPersistRequest = {
 	createdAt: string;
 	status: "streaming" | "completed";
 	attachments?: Array<{
-		storageId: string;
+		storageId: Id<"_storage">;
 		filename: string;
 		contentType: string;
 		size: number;
@@ -206,7 +206,7 @@ type ChatRequestPayload = {
 	messages?: AnyUIMessage[];
 	assistantMessageId?: string;
 	attachments?: Array<{
-		storageId: string;
+		storageId: Id<"_storage">;
 		filename: string;
 		contentType: string;
 		size: number;
@@ -337,7 +337,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				thinkingTimeMs: input.thinkingTimeMs,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
-				attachments: input.attachments as any,
+				attachments: input.attachments,
 			}));
 
 	const buckets = new Map<string, RateBucket>();
