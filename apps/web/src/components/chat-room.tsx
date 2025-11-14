@@ -706,7 +706,6 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             parts: [{ type: "text", text: content }],
             metadata: {
               createdAt,
-              attachments,
             },
           },
           {
