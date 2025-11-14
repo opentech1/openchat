@@ -86,7 +86,8 @@ const nextConfig = {
 		}
 		const scriptSrc = Array.from(scriptSrcSet);
 		const connectSrc = ["'self'", ...additionalConnect, "ws:", "wss:"];
-		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com", "https://models.dev"];
+		// Add convexUrl to imgSrc for file attachment image previews
+		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com", "https://models.dev", convexUrl].filter(Boolean);
 		const frameSrc = ["'self'"];
 		const csp = [
 			"default-src 'self'",
