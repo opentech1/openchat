@@ -59,11 +59,12 @@ const nextConfig = {
 		const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 		const electricUrl = process.env.NEXT_PUBLIC_ELECTRIC_URL || "http://localhost:3010";
 		const authUrl = process.env.BETTER_AUTH_URL;
+		const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL;
 		const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
 		const posthogAssetsHost = "https://us-assets.i.posthog.com";
 		const sentryIngest = "https://*.ingest.sentry.io";
 		const additionalConnectSet = new Set(
-			[serverUrl, electricUrl, authUrl, posthogHost]
+			[serverUrl, electricUrl, authUrl, convexUrl, posthogHost]
 			.filter(Boolean)
 			.map((url) => {
 				try {
