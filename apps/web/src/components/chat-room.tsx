@@ -33,6 +33,8 @@ import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
 import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
 import type { ModelSelectorOption } from "@/components/model-selector";
 import { logError } from "@/lib/logger";
+import { useQuery } from "convex/react";
+import { api } from "@server/convex/_generated/api";
 import {
   getStorageItemSync,
   setStorageItemSync,
@@ -48,6 +50,13 @@ type ChatRoomProps = {
     content: string;
     reasoning?: string;
     createdAt: string | Date;
+    attachments?: Array<{
+      storageId: string;
+      filename: string;
+      contentType: string;
+      size: number;
+      uploadedAt: number;
+    }>;
   }>;
 };
 
@@ -133,6 +142,14 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const workspaceId = user?.id ?? null;
+
+  // Get Convex user ID from Better Auth external ID
+  const convexUser = useQuery(
+    api.users.getByExternalId,
+    workspaceId ? { externalId: workspaceId } : "skip"
+  );
+  const convexUserId = convexUser?._id ?? null;
+
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -662,10 +679,12 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       text,
       modelId,
       apiKey: requestApiKey,
+      attachments,
     }: {
       text: string;
       modelId: string;
       apiKey: string;
+      attachments?: any[];
     }) => {
       const content = text.trim();
       if (!content) return;
@@ -685,13 +704,17 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             id,
             role: "user",
             parts: [{ type: "text", text: content }],
-            metadata: { createdAt },
+            metadata: {
+              createdAt,
+              attachments,
+            },
           },
           {
             body: {
               chatId,
               modelId,
               apiKey: requestApiKey,
+              attachments,
             },
           },
         );
@@ -700,6 +723,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           model_id: modelId,
           characters: content.length,
           has_api_key: Boolean(requestApiKey),
+          has_attachments: Boolean(attachments && attachments.length > 0),
+          attachment_count: attachments?.length || 0,
         });
       } catch (error) {
         const status =
@@ -750,6 +775,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           return;
         }
         logError("Failed to send message", error);
+        // Re-throw error so chat-composer can restore the message
+        throw error;
       }
     },
     [chatId, sendMessage, handleMissingRequirement, removeKey],
@@ -821,6 +848,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
         isStreaming={status === "streaming"}
+        userId={convexUserId as string | null}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
@@ -838,6 +866,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
             isStreaming={status === "streaming"}
             onStop={() => stop()}
             onMissingRequirement={handleMissingRequirement}
+            userId={convexUserId as any}
+            chatId={chatId as any}
           />
         </div>
       </div>

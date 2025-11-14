@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
-
-import AppSidebarWrapper from "@/components/app-sidebar-wrapper";
+import AppSidebar from "@/components/app-sidebar";
 import type { AppSidebarProps } from "@/components/app-sidebar";
 import { opacity, iconSize } from "@/styles/design-tokens";
 export default function MobileDashboardNav(props: AppSidebarProps) {
@@ -42,7 +41,7 @@ export default function MobileDashboardNav(props: AppSidebarProps) {
 							</button>
 						</div>
 					<div className="ml-auto h-full w-full max-w-xs border-l border-sidebar-border bg-sidebar shadow-xl">
-							<AppSidebarWrapper {...props} />
+							<AppSidebar {...props} />
 						</div>
 					</div>
 				</div>

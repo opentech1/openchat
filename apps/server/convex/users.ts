@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+// User document validator with all fields including fileUploadCount
 const userDoc = v.object({
 	_id: v.id("users"),
 	_creationTime: v.number(),
@@ -13,6 +14,7 @@ const userDoc = v.object({
 	preferredTone: v.optional(v.string()),
 	customInstructions: v.optional(v.string()),
 	onboardingCompletedAt: v.optional(v.number()),
+	fileUploadCount: v.optional(v.number()),
 	createdAt: v.number(),
 	updatedAt: v.number(),
 });

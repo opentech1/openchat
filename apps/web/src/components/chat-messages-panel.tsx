@@ -13,6 +13,8 @@ import {
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useQuery } from "convex/react";
+import { authClient } from "@/lib/auth-client";
 
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
@@ -24,6 +26,8 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
+import { FilePreview } from "@/components/file-preview";
+import { api } from "@server/convex/_generated/api";
 
 type MessagePart =
   | { type: "text"; text: string }
@@ -35,6 +39,13 @@ type ChatMessage = {
   content: string;
   parts?: MessagePart[];
   thinkingTimeMs?: number;
+  attachments?: Array<{
+    storageId: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    uploadedAt: number;
+  }>;
 };
 
 type ChatMessagesPanelProps = {
@@ -44,6 +55,7 @@ type ChatMessagesPanelProps = {
   loading?: boolean;
   autoStick?: boolean;
   isStreaming?: boolean;
+  userId?: string | null;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
@@ -55,6 +67,7 @@ function ChatMessagesPanelComponent({
   autoStick = true,
   loading = false,
   isStreaming = false,
+  userId,
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -226,6 +239,7 @@ function ChatMessagesPanelComponent({
                             message={msg}
                             isLastMessage={isLastMsg}
                             isStreaming={isStreaming && isLastMsg}
+                            userId={userId}
                           />
                         </div>
                       );
@@ -240,6 +254,7 @@ function ChatMessagesPanelComponent({
                         message={msg}
                         isLastMessage={idx === messages.length - 1}
                         isStreaming={isStreaming && idx === messages.length - 1}
+                        userId={userId}
                       />
                     ))}
                   </div>
@@ -296,21 +311,86 @@ function ChatMessagesPanelComponent({
 export const ChatMessagesPanel = memo(ChatMessagesPanelComponent);
 ChatMessagesPanel.displayName = "ChatMessagesPanel";
 
+type MessageAttachmentsProps = {
+  attachments: Array<{
+    storageId: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    uploadedAt: number;
+  }>;
+  userId?: string | null;
+};
+
+const MessageAttachmentItem = ({
+  attachment,
+  userId
+}: {
+  attachment: MessageAttachmentsProps['attachments'][0];
+  userId?: string | null;
+}) => {
+  const fileUrl = useQuery(
+    api.files.getFileUrl,
+    userId && attachment.storageId
+      ? {
+          storageId: attachment.storageId as any,
+          userId: userId as any,
+        }
+      : "skip"
+  );
+
+  return (
+    <FilePreview
+      file={{
+        storageId: attachment.storageId,
+        filename: attachment.filename,
+        contentType: attachment.contentType,
+        size: attachment.size,
+        url: fileUrl || undefined,
+      }}
+      showRemove={false}
+    />
+  );
+};
+
+const MessageAttachments = memo(({ attachments, userId }: MessageAttachmentsProps) => {
+  if (!userId) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {attachments.map((attachment) => (
+        <MessageAttachmentItem
+          key={attachment.storageId}
+          attachment={attachment}
+          userId={userId}
+        />
+      ))}
+    </div>
+  );
+});
+MessageAttachments.displayName = "MessageAttachments";
+
 type ChatMessageBubbleProps = {
   message: ChatMessage;
   isLastMessage?: boolean;
   isStreaming?: boolean;
+  userId?: string | null;
 };
 
+/**
+ * Removes attachment placeholder text from message content.
+ * Attachment placeholders like "[Attachment: image.png (image/png)]" are meant for AI consumption,
+ * not for display. The actual attachments are rendered separately by the FilePreview component.
+ */
+function stripAttachmentPlaceholders(content: string): string {
+  return content.replace(/\[Attachment: [^\]]+\]/g, '').trim();
+}
+
 const ChatMessageBubble = memo(
-  ({ message, isLastMessage = false, isStreaming = false }: ChatMessageBubbleProps) => {
+  ({ message, isLastMessage = false, isStreaming = false, userId }: ChatMessageBubbleProps) => {
     const ariaLabel = `${message.role === "assistant" ? "Assistant" : "User"} message`;
     const isUser = message.role === "user";
     const hasParts = message.parts && message.parts.length > 0;
-    // Only show reasoning if there are text parts with content
-    const hasTextOutput = hasParts && message.parts!.some(
-      p => p.type === "text" && p.text.trim().length > 0
-    );
 
     return (
       <div
@@ -322,21 +402,32 @@ const ChatMessageBubble = memo(
         role="article"
       >
         {isUser ? (
-          <div
-            className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap max-w-[80%]"
-            data-ph-no-capture
-          >
-            {message.content}
+          <div className="flex flex-col gap-2 max-w-[80%]">
+            {(() => {
+              // Strip attachment placeholders from content if message has attachments
+              const displayContent = message.attachments && message.attachments.length > 0
+                ? stripAttachmentPlaceholders(message.content)
+                : message.content;
+
+              // Only render content div if there's actual text to display
+              return displayContent.length > 0 ? (
+                <div
+                  className="border border-border rounded-lg px-4 py-2 text-sm whitespace-pre-wrap"
+                  data-ph-no-capture
+                >
+                  {displayContent}
+                </div>
+              ) : null;
+            })()}
+            {message.attachments && message.attachments.length > 0 && (
+              <MessageAttachments attachments={message.attachments} userId={userId} />
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-2 max-w-full">
             {hasParts ? (
               message.parts!.map((part, index) => {
                 if (part.type === "reasoning") {
-                  if (!hasTextOutput) {
-                    return null; // Don't render reasoning if no text output
-                  }
-
                   // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
                   const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;
                   // Convert thinkingTimeMs to seconds for the Reasoning component
@@ -386,12 +477,20 @@ const ChatMessageBubble = memo(
         p.text === next.message.parts![i]?.text
       ) ?? true);
 
+    // Compare attachments
+    const sameAttachments =
+      prev.message.attachments?.length === next.message.attachments?.length &&
+      (prev.message.attachments?.every((a, i) =>
+        a.storageId === next.message.attachments![i]?.storageId
+      ) ?? true);
+
     return (
       prev.message.id === next.message.id &&
       prev.message.role === next.message.role &&
       prev.message.content === next.message.content &&
       prev.isStreaming === next.isStreaming &&
-      sameParts
+      sameParts &&
+      sameAttachments
     );
   },
 );

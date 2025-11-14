@@ -139,6 +139,13 @@ export async function streamUpsertMessage(args: {
 	thinkingTimeMs?: number;
 	status?: "streaming" | "completed";
 	createdAt?: number;
+	attachments?: Array<{
+		storageId: Id<"_storage">;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+	}>;
 }) {
 	const client = getClient();
 	return client.mutation(api.messages.streamUpsert, {
@@ -152,6 +159,7 @@ export async function streamUpsertMessage(args: {
 		thinkingTimeMs: args.thinkingTimeMs,
 		status: args.status,
 		createdAt: args.createdAt,
+		attachments: args.attachments,
 	});
 }
 
@@ -171,6 +179,14 @@ export async function getConvexUserFromSession(): Promise<[SessionUser, Id<"user
 	};
 	const convexUserId = await ensureConvexUser(sessionUser);
 	return [sessionUser, convexUserId];
+}
+
+/**
+ * Get file URL from Convex storage
+ */
+export async function getFileUrl(storageId: Id<"_storage">, userId: Id<"users">) {
+	const client = getClient();
+	return client.query(api.files.getFileUrl, { storageId, userId });
 }
 
 export type ChatDoc = Doc<"chats">;

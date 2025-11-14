@@ -10,6 +10,13 @@ export type MessageLike = {
 	content: string;
 	reasoning?: string;
 	thinkingTimeMs?: number;
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+	}>;
 	created_at?: PrimitiveDate;
 	updated_at?: PrimitiveDate;
 	createdAt?: PrimitiveDate;
@@ -26,6 +33,13 @@ export type NormalizedMessage = {
 	content: string;
 	parts?: MessagePart[];
 	thinkingTimeMs?: number;
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+	}>;
 	createdAt: Date;
 	updatedAt: Date | null;
 };
@@ -77,18 +91,34 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 		parts.push({ type: "text", text: message.content });
 	}
 
+	// Ensure attachments have uploadedAt field (fallback to createdAt if missing)
+	const normalizedAttachments = message.attachments?.map((attachment) => ({
+		...attachment,
+		uploadedAt: attachment.uploadedAt ?? createdAt.getTime(),
+	}));
+
 	return {
 		id: message.id,
 		role: normalizeRole(message.role),
 		content: message.content,
 		parts: parts.length > 0 ? parts : undefined,
 		thinkingTimeMs: message.thinkingTimeMs,
+		attachments: normalizedAttachments,
 		createdAt,
 		updatedAt,
 	};
 }
 
-export function normalizeUiMessage(message: UIMessage<{ createdAt?: string }>): NormalizedMessage {
+export function normalizeUiMessage(message: UIMessage<{
+	createdAt?: string;
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt?: number;
+	}>;
+}>): NormalizedMessage {
 	// Extract text content for backward compatibility
 	const content = message.parts
 		.filter((part): part is { type: "text"; text: string } => part?.type === "text")
@@ -111,6 +141,7 @@ export function normalizeUiMessage(message: UIMessage<{ createdAt?: string }>): 
 			role: message.role,
 			content,
 			created_at: message.metadata?.createdAt,
+			attachments: message.metadata?.attachments,
 		}),
 		parts: parts.length > 0 ? parts : undefined,
 	};

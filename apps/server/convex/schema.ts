@@ -15,6 +15,8 @@ export default defineSchema({
 		preferredTone: v.optional(v.string()),
 		customInstructions: v.optional(v.string()),
 		onboardingCompletedAt: v.optional(v.number()),
+		// File upload quota tracking
+		fileUploadCount: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
@@ -43,6 +45,18 @@ export default defineSchema({
 		reasoning: v.optional(v.string()),
 		// Time spent thinking in milliseconds (for reasoning models)
 		thinkingTimeMs: v.optional(v.number()),
+		// File attachments
+		attachments: v.optional(
+			v.array(
+				v.object({
+					storageId: v.id("_storage"),
+					filename: v.string(),
+					contentType: v.string(),
+					size: v.number(),
+					uploadedAt: v.number(),
+				})
+			)
+		),
 		createdAt: v.number(),
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),
@@ -53,4 +67,18 @@ export default defineSchema({
 		.index("by_user", ["userId"])
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"]),
+	fileUploads: defineTable({
+		userId: v.id("users"),
+		chatId: v.id("chats"),
+		storageId: v.id("_storage"),
+		filename: v.string(),
+		contentType: v.string(),
+		size: v.number(),
+		uploadedAt: v.number(),
+		deletedAt: v.optional(v.number()),
+	})
+		.index("by_user", ["userId", "uploadedAt"])
+		.index("by_chat", ["chatId", "uploadedAt"])
+		.index("by_storage", ["storageId"])
+		.index("by_user_not_deleted", ["userId", "deletedAt", "uploadedAt"]),
 });

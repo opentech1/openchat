@@ -13,6 +13,17 @@ const messageDoc = v.object({
 	content: v.string(),
 	reasoning: v.optional(v.string()),
 	thinkingTimeMs: v.optional(v.number()),
+	attachments: v.optional(
+		v.array(
+			v.object({
+				storageId: v.id("_storage"),
+				filename: v.string(),
+				contentType: v.string(),
+				size: v.number(),
+				uploadedAt: v.number(),
+			})
+		)
+	),
 	createdAt: v.number(),
 	status: v.optional(v.string()),
 	userId: v.optional(v.id("users")),
@@ -48,6 +59,16 @@ export const send = mutation({
 			content: v.string(),
 			createdAt: v.optional(v.number()),
 			clientMessageId: v.optional(v.string()),
+			attachments: v.optional(
+				v.array(
+					v.object({
+						storageId: v.id("_storage"),
+						filename: v.string(),
+						contentType: v.string(),
+						size: v.number(),
+					})
+				)
+			),
 		}),
 		assistantMessage: v.optional(
 			v.object({
@@ -77,6 +98,10 @@ export const send = mutation({
 			clientMessageId: args.userMessage.clientMessageId,
 			status: "completed",
 			userId: args.userId,
+			attachments: args.userMessage.attachments?.map(a => ({
+				...a,
+				uploadedAt: Date.now(),
+			})),
 		});
 
 		let assistantMessageId: Id<"messages"> | null = null;
@@ -119,6 +144,17 @@ export const streamUpsert = mutation({
 		thinkingTimeMs: v.optional(v.number()),
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
+		attachments: v.optional(
+			v.array(
+				v.object({
+					storageId: v.id("_storage"),
+					filename: v.string(),
+					contentType: v.string(),
+					size: v.number(),
+					uploadedAt: v.number(),
+				})
+			)
+		),
 	},
 	returns: v.object({
 		ok: v.boolean(),
@@ -141,6 +177,7 @@ export const streamUpsert = mutation({
 			clientMessageId: args.clientMessageId,
 			overrideId: args.messageId ?? undefined,
 			userId: args.userId,
+			attachments: args.attachments,
 		});
 
 		if (args.status === "completed" && (args.role === "assistant" || args.role === "user")) {
@@ -186,6 +223,13 @@ async function insertOrUpdateMessage(
 		clientMessageId?: string | null;
 		overrideId?: Id<"messages">;
 		userId?: Id<"users">;
+		attachments?: Array<{
+			storageId: Id<"_storage">;
+			filename: string;
+			contentType: string;
+			size: number;
+			uploadedAt: number;
+		}>;
 	},
 ) {
 	// SECURITY: Validate role is exactly "user" or "assistant"
@@ -239,6 +283,7 @@ async function insertOrUpdateMessage(
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
+			attachments: args.attachments ?? undefined,
 		});
 	} else {
 		await ctx.db.patch(targetId, {
@@ -250,6 +295,7 @@ async function insertOrUpdateMessage(
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
+			attachments: args.attachments ?? undefined,
 		});
 	}
 	return targetId;

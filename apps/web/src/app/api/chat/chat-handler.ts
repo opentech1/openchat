@@ -190,6 +190,13 @@ type StreamPersistRequest = {
 	thinkingTimeMs?: number;
 	createdAt: string;
 	status: "streaming" | "completed";
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+	}>;
 };
 
 type ChatRequestPayload = {
@@ -198,6 +205,12 @@ type ChatRequestPayload = {
 	chatId?: string;
 	messages?: AnyUIMessage[];
 	assistantMessageId?: string;
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+	}>;
 };
 
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
@@ -324,6 +337,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				thinkingTimeMs: input.thinkingTimeMs,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
+				attachments: input.attachments,
 			}));
 
 	const buckets = new Map<string, RateBucket>();
@@ -559,6 +573,39 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		}
 
+		// Convert Convex attachments to AI SDK file parts
+		if (payload.attachments && payload.attachments.length > 0) {
+			const { getFileUrl } = await import("@/lib/convex-server");
+
+			// Fetch URLs for all attachments
+			const fileParts = await Promise.all(
+				payload.attachments.map(async (attachment) => {
+					const url = await getFileUrl(
+						attachment.storageId as Id<"_storage">,
+						convexUserId,
+					);
+					if (!url) {
+						throw new Error(`Failed to get URL for file: ${attachment.filename}`);
+					}
+					return {
+						type: "file" as const,
+						mediaType: attachment.contentType,
+						url,
+						filename: attachment.filename,
+					};
+				}),
+			);
+
+			// Add file parts to the last user message
+			const lastUserMessage = rawMessages[rawMessages.length - 1];
+			if (lastUserMessage && lastUserMessage.role === "user") {
+				lastUserMessage.parts = [
+					...(lastUserMessage.parts || []),
+					...fileParts,
+				];
+			}
+		}
+
 		const safeMessages = rawMessages.map(clampUserText);
 		const userMessageIndex = [...rawMessages].reverse().findIndex((msg) => msg.role === "user");
 		if (userMessageIndex === -1) {
@@ -591,6 +638,13 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				content: userContent,
 				createdAt: userCreatedAtIso,
 				status: "completed",
+				attachments: payload.attachments?.map(a => ({
+					storageId: a.storageId as Id<"_storage">,
+					filename: a.filename,
+					contentType: a.contentType,
+					size: a.size,
+					uploadedAt: Date.now(),
+				})),
 			});
 			if (!userResult.ok) {
 				throw new Error("user streamUpsert rejected");

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Info, Brain } from "lucide-react"
+import { Check, Info, Brain, Image, Mic, Video } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -39,6 +39,9 @@ export type ModelSelectorOption = {
 	free?: boolean
 	capabilities?: {
 		reasoning?: boolean
+		image?: boolean
+		audio?: boolean
+		video?: boolean
 	}
 }
 
@@ -299,19 +302,61 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 									>
 										{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
 										<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
-										{option.capabilities?.reasoning && (
-											<TooltipProvider delayDuration={100}>
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<Brain className="size-3.5 shrink-0 text-purple-500" />
-													</TooltipTrigger>
-													<TooltipContent side="left" className="max-w-xs">
-														<div className="text-xs">
-															This model supports advanced reasoning capabilities
-														</div>
-													</TooltipContent>
-												</Tooltip>
-											</TooltipProvider>
+
+										{/* Capabilities icons with tooltips */}
+										{option.capabilities && (
+											<div className="flex items-center gap-1 shrink-0">
+												<TooltipProvider delayDuration={100}>
+													{option.capabilities.reasoning && (
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Brain className="size-3.5 text-purple-500" />
+															</TooltipTrigger>
+															<TooltipContent side="left" className="max-w-xs">
+																<div className="text-xs">
+																	This model supports advanced reasoning and thinking capabilities
+																</div>
+															</TooltipContent>
+														</Tooltip>
+													)}
+													{option.capabilities.image && (
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Image className="size-3.5 text-blue-500" />
+															</TooltipTrigger>
+															<TooltipContent side="left" className="max-w-xs">
+																<div className="text-xs">
+																	This model can process and understand images
+																</div>
+															</TooltipContent>
+														</Tooltip>
+													)}
+													{option.capabilities.audio && (
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Mic className="size-3.5 text-green-500" />
+															</TooltipTrigger>
+															<TooltipContent side="left" className="max-w-xs">
+																<div className="text-xs">
+																	This model can process and understand audio files
+																</div>
+															</TooltipContent>
+														</Tooltip>
+													)}
+													{option.capabilities.video && (
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Video className="size-3.5 text-red-500" />
+															</TooltipTrigger>
+															<TooltipContent side="left" className="max-w-xs">
+																<div className="text-xs">
+																	This model can process and understand video files
+																</div>
+															</TooltipContent>
+														</Tooltip>
+													)}
+												</TooltipProvider>
+											</div>
 										)}
 										{hasPricing && (
 											<div className="flex items-center gap-1.5 shrink-0">

@@ -17,6 +17,7 @@ export type ChatMessagesFeedProps = {
   className?: string;
   loading?: boolean;
   isStreaming?: boolean;
+  userId?: string | null;
 };
 
 export function ChatMessagesFeed({
@@ -26,6 +27,7 @@ export function ChatMessagesFeed({
   className,
   loading = false,
   isStreaming = false,
+  userId,
 }: ChatMessagesFeedProps) {
   const optimisticNormalized = useMemo(
     () => optimisticMessages.map(normalizeUiMessage),
@@ -61,12 +63,22 @@ export function ChatMessagesFeed({
            p.type === msg.parts![i]?.type && p.text === msg.parts![i]?.text
          ));
 
+      // Compare attachments
+      const sameAttachments =
+        (previous.attachments === msg.attachments) ||
+        (!previous.attachments && !msg.attachments) ||
+        (previous.attachments?.length === msg.attachments?.length &&
+         previous.attachments?.every((a, i) =>
+           a.storageId === msg.attachments![i]?.storageId
+         ));
+
       if (
         sameRole &&
         sameContent &&
         sameCreated &&
         prevUpdated === nextUpdated &&
-        sameParts
+        sameParts &&
+        sameAttachments
       ) {
         return previous;
       }
@@ -85,11 +97,13 @@ export function ChatMessagesFeed({
         content: msg.content,
         parts: msg.parts,
         thinkingTimeMs: msg.thinkingTimeMs,
+        attachments: msg.attachments,
       }))}
       paddingBottom={paddingBottom}
       className={className}
       loading={loading}
       isStreaming={isStreaming}
+      userId={userId}
     />
   );
 }

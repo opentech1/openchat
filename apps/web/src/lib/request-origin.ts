@@ -72,6 +72,13 @@ export function resolveAllowedOrigins(extra?: string | string[]) {
 
 export function validateRequestOrigin(request: Request, allowedOrigins: Set<string>) {
 	const originSet = new Set(allowedOrigins);
+
+	// In development, auto-allow localhost origins for better DX
+	if (process.env.NODE_ENV === "development") {
+		originSet.add("http://localhost:3000");
+		originSet.add("http://127.0.0.1:3000");
+	}
+
 	let requestOrigin: string | null = null;
 
 	// Extract request origin for logging/reference, but DO NOT auto-add to allowed list
@@ -82,6 +89,8 @@ export function validateRequestOrigin(request: Request, allowedOrigins: Set<stri
 	}
 
 	const originHeader = request.headers.get("origin");
+	const refererHeader = request.headers.get("referer");
+
 	if (originHeader) {
 		const normalized = normalizeOrigin(originHeader);
 		if (normalized && originSet.has(normalized)) {
@@ -90,7 +99,6 @@ export function validateRequestOrigin(request: Request, allowedOrigins: Set<stri
 		return { ok: false as const };
 	}
 
-	const refererHeader = request.headers.get("referer");
 	if (refererHeader) {
 		const normalized = (() => {
 			try {

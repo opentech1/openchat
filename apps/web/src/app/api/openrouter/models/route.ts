@@ -23,6 +23,9 @@ type OpenRouterModelOption = {
 	free?: boolean;
 	capabilities?: {
 		reasoning?: boolean;
+		image?: boolean;
+		audio?: boolean;
+		video?: boolean;
 	};
 };
 
@@ -69,6 +72,61 @@ function hasReasoningCapability(modelId: string): boolean {
 		lowerModelId.includes("magistral") ||
 		lowerModelId.includes("command-a-reasoning") ||
 		(lowerModelId.includes("qwen3") && lowerModelId.includes("thinking"))
+	);
+}
+
+// Models with image input capabilities
+function hasImageCapability(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		// OpenAI Vision models
+		lowerModelId.includes("gpt-4-vision") ||
+		lowerModelId.includes("gpt-4-turbo") ||
+		lowerModelId.includes("gpt-4o") ||
+		lowerModelId.includes("gpt-5") ||
+		// Claude models with vision
+		lowerModelId.includes("claude-3") ||
+		lowerModelId.includes("claude-4") ||
+		// Google models with vision
+		lowerModelId.includes("gemini") ||
+		// Other vision models
+		lowerModelId.includes("vision") ||
+		lowerModelId.includes("llava") ||
+		lowerModelId.includes("bakllava") ||
+		// Anthropic's newer models
+		lowerModelId.includes("claude-sonnet") ||
+		lowerModelId.includes("claude-haiku") ||
+		lowerModelId.includes("claude-opus") ||
+		// Qwen VL models
+		lowerModelId.includes("qwen-vl") ||
+		lowerModelId.includes("qwen2-vl") ||
+		// Mistral vision
+		lowerModelId.includes("pixtral")
+	);
+}
+
+// Models with audio input capabilities
+function hasAudioCapability(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		// Gemini 2.0 Flash and later support audio
+		(lowerModelId.includes("gemini-2") && lowerModelId.includes("flash")) ||
+		// GPT-4 with audio/whisper
+		lowerModelId.includes("gpt-4o-audio") ||
+		// Specific audio models
+		lowerModelId.includes("whisper") ||
+		lowerModelId.includes("audio")
+	);
+}
+
+// Models with video input capabilities
+function hasVideoCapability(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		// Gemini 2.0 Flash supports video
+		(lowerModelId.includes("gemini-2") && lowerModelId.includes("flash")) ||
+		// Specific video models
+		lowerModelId.includes("video")
 	);
 }
 
@@ -149,12 +207,22 @@ export async function POST(request: Request) {
 				const isFree = FREE_MODELS.has(id);
 				const isPopular = POPULAR_MODELS.has(id);
 				const hasReasoning = hasReasoningCapability(id);
+				const hasImage = hasImageCapability(id);
+				const hasAudio = hasAudioCapability(id);
+				const hasVideo = hasVideoCapability(id);
 
 				// Remove provider prefix (e.g., "Google: Gemini 2.5 Pro" -> "Gemini 2.5 Pro")
 				const cleanName = name.includes(":") ? name.split(":").slice(1).join(":").trim() : name;
 
 				// Don't add "(free)" if the name already contains it
 				const displayLabel = isFree && !cleanName.toLowerCase().includes("(free)") ? `${cleanName} (free)` : cleanName;
+
+				// Build capabilities object only if there are any capabilities
+				const capabilities: OpenRouterModelOption["capabilities"] = {};
+				if (hasReasoning) capabilities.reasoning = true;
+				if (hasImage) capabilities.image = true;
+				if (hasAudio) capabilities.audio = true;
+				if (hasVideo) capabilities.video = true;
 
 				return {
 					value: id,
@@ -164,7 +232,7 @@ export async function POST(request: Request) {
 					pricing,
 					popular: isPopular,
 					free: isFree,
-					capabilities: hasReasoning ? { reasoning: true } : undefined,
+					capabilities: Object.keys(capabilities).length > 0 ? capabilities : undefined,
 				};
 			})
 			.filter((model): model is OpenRouterModelOption => Boolean(model))
