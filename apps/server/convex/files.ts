@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 // Constants & Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes (default)
@@ -167,7 +168,7 @@ function validateFileSize(size: number, contentType: string): void {
  */
 async function checkUploadRateLimit(
 	ctx: MutationCtx,
-	userId: string
+	userId: Id<"users">
 ): Promise<void> {
 	const now = Date.now();
 	const windowStart = now - UPLOAD_RATE_LIMIT_WINDOW;
@@ -175,7 +176,7 @@ async function checkUploadRateLimit(
 	// Query recent uploads within the rate limit window
 	const recentUploads = await ctx.db
 		.query("fileUploads")
-		.withIndex("by_user", (q) => q.eq("userId", userId as any))
+		.withIndex("by_user", (q) => q.eq("userId", userId))
 		.filter((q) => q.gte(q.field("uploadedAt"), windowStart))
 		.collect();
 
