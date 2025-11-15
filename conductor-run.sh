@@ -4,10 +4,9 @@ set -e
 echo "Starting OpenChat for Conductor..."
 echo ""
 
-# Run Convex codegen once for backend
+# Try to run Convex codegen once for backend (skip if not configured yet)
 echo "Running Convex codegen..."
-cd apps/server && bunx convex dev --local --once
-cd ../..
+(cd apps/server && bunx convex dev --local --once) || echo "⚠️  Skipping Convex codegen (not configured yet)"
 
 echo ""
 echo "Starting dev servers..."
