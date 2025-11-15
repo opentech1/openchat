@@ -56,13 +56,8 @@ fi
 # Set up Convex
 echo ""
 echo "Setting up Convex..."
-echo "⚠️  You'll need to run 'bun run convex:dev' to initialize Convex"
-echo "   This will:"
-echo "   - Connect to your Convex project (or create a new one)"
-echo "   - Generate TypeScript types"
-echo "   - Set CONVEX_URL and NEXT_PUBLIC_CONVEX_URL in your .env.local"
-echo ""
-echo "   After running 'convex:dev' once, your workspace will be ready!"
+cd apps/server && bunx convex dev --local --once
+cd ../..
 
 echo ""
 echo "======================================"
@@ -71,6 +66,5 @@ echo "======================================"
 echo ""
 echo "Next steps:"
 echo "  1. Review your .env.local file and add any missing secrets"
-echo "  2. Run 'bun run convex:dev' to initialize Convex (first time only)"
-echo "  3. Click the 'Run' button to start the dev servers"
+echo "  2. Click the 'Run' button to start the dev servers"
 echo ""
