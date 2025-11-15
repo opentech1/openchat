@@ -21,6 +21,7 @@ const messageDoc = v.object({
 				contentType: v.string(),
 				size: v.number(),
 				uploadedAt: v.number(),
+				url: v.optional(v.string()),
 			})
 		)
 	),
@@ -66,6 +67,7 @@ export const send = mutation({
 						filename: v.string(),
 						contentType: v.string(),
 						size: v.number(),
+						url: v.optional(v.string()),
 					})
 				)
 			),
@@ -152,6 +154,7 @@ export const streamUpsert = mutation({
 					contentType: v.string(),
 					size: v.number(),
 					uploadedAt: v.number(),
+					url: v.optional(v.string()),
 				})
 			)
 		),

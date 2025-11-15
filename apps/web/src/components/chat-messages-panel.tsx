@@ -318,6 +318,7 @@ type MessageAttachmentsProps = {
     contentType: string;
     size: number;
     uploadedAt: number;
+    url?: string;
   }>;
   userId?: string | null;
 };
@@ -329,15 +330,20 @@ const MessageAttachmentItem = ({
   attachment: MessageAttachmentsProps['attachments'][0];
   userId?: string | null;
 }) => {
+  // Use URL from attachment if available, otherwise query for it
   const fileUrl = useQuery(
     api.files.getFileUrl,
-    userId && attachment.storageId
+    // Only query if we don't have a URL and have userId
+    userId && attachment.storageId && !attachment.url
       ? {
           storageId: attachment.storageId as any,
           userId: userId as any,
         }
       : "skip"
   );
+
+  // Prefer attachment URL, fall back to queried URL
+  const displayUrl = attachment.url || fileUrl || undefined;
 
   return (
     <FilePreview
@@ -346,7 +352,7 @@ const MessageAttachmentItem = ({
         filename: attachment.filename,
         contentType: attachment.contentType,
         size: attachment.size,
-        url: fileUrl || undefined,
+        url: displayUrl,
       }}
       showRemove={false}
     />

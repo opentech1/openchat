@@ -260,6 +260,7 @@ export const saveFileMetadata = mutation({
 	returns: v.object({
 		fileId: v.id("fileUploads"),
 		filename: v.string(),
+		url: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
 		// Validate file size
@@ -300,9 +301,13 @@ export const saveFileMetadata = mutation({
 			});
 		}
 
+		// Get the storage URL immediately
+		const url = await ctx.storage.getUrl(args.storageId);
+
 		return {
 			fileId,
 			filename: sanitizedFilename,
+			url,
 		};
 	},
 });

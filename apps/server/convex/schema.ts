@@ -54,6 +54,7 @@ export default defineSchema({
 					contentType: v.string(),
 					size: v.number(),
 					uploadedAt: v.number(),
+					url: v.optional(v.string()),
 				})
 			)
 		),
