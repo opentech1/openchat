@@ -29,6 +29,7 @@ type FileAttachment = {
   filename: string;
   contentType: string;
   size: number;
+  url?: string;
 };
 
 export type ChatComposerProps = {
@@ -159,8 +160,8 @@ function ChatComposer({
           storageId: Id<"_storage">;
         };
 
-        // Step 3: Save file metadata
-        const { filename: sanitizedFilename } = await saveFileMetadata({
+        // Step 3: Save file metadata and get URL
+        const { filename: sanitizedFilename, url } = await saveFileMetadata({
           userId,
           chatId,
           storageId,
@@ -169,7 +170,7 @@ function ChatComposer({
           size: file.size,
         });
 
-        // Add to uploaded files
+        // Add to uploaded files with URL
         setUploadedFiles((prev) => [
           ...prev,
           {
@@ -177,6 +178,7 @@ function ChatComposer({
             filename: sanitizedFilename,
             contentType: file.type,
             size: file.size,
+            url: url || undefined,
           },
         ]);
 

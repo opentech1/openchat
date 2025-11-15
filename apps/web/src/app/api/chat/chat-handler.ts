@@ -196,6 +196,7 @@ type StreamPersistRequest = {
 		contentType: string;
 		size: number;
 		uploadedAt: number;
+		url?: string;
 	}>;
 };
 
@@ -210,6 +211,7 @@ type ChatRequestPayload = {
 		filename: string;
 		contentType: string;
 		size: number;
+		url?: string;
 	}>;
 };
 
