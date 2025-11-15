@@ -1,7 +1,7 @@
 {
   "scripts": {
     "setup": "./conductor-setup.sh",
-    "run": "bun run dev",
+    "run": "./conductor-run.sh",
     "archive": ""
   },
   "runScriptMode": "nonconcurrent"
