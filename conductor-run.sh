@@ -1,14 +1,15 @@
 #!/bin/bash
-set -e
 
 echo "Starting OpenChat for Conductor..."
 echo ""
 
-# Try to run Convex codegen once for backend (skip if not configured yet)
-echo "Running Convex codegen..."
-(cd apps/server && bunx convex dev --local --once) || echo "⚠️  Skipping Convex codegen (not configured yet)"
+# Check if Convex is configured by looking for deployment URL
+if [ -f ".env.local" ] && grep -q "CONVEX_URL" .env.local 2>/dev/null; then
+  echo "Running Convex codegen..."
+  cd apps/server && bunx convex dev --local --once && cd ../..
+  echo ""
+fi
 
-echo ""
 echo "Starting dev servers..."
-# Run dev without Turborepo UI (plain output)
-turbo -F web -F server dev --no-ui
+# Use bun run dev which calls turbo with proper setup
+FORCE_COLOR=1 bun run dev
