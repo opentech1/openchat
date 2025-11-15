@@ -55,9 +55,8 @@ fi
 
 # Set up Convex
 echo ""
-echo "Setting up Convex..."
-cd apps/server && bunx convex dev --local --once
-cd ../..
+echo "⚠️  Convex will be initialized when you run the dev servers"
+echo "   The run script will handle codegen automatically"
 
 echo ""
 echo "======================================"
