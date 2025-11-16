@@ -18,6 +18,22 @@ type SessionCacheEntry = {
 const sessionCache = new Map<string, SessionCacheEntry>();
 const SESSION_CACHE_TTL_MS = 30_000; // 30 seconds
 
+/**
+ * Invalidates a session from the cache
+ * Should be called on logout to prevent serving stale sessions
+ */
+export function invalidateSessionCache(sessionToken: string): void {
+	sessionCache.delete(sessionToken);
+}
+
+/**
+ * Clears the entire session cache
+ * Useful for security-critical operations
+ */
+export function clearSessionCache(): void {
+	sessionCache.clear();
+}
+
 // Get session from better-auth API
 // Using React cache() to avoid duplicate fetches within the same request across server components
 // Also implements Map-based caching with 30-second TTL to eliminate repeated HTTP calls

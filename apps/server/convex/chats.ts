@@ -211,7 +211,7 @@ export const remove = mutation({
 
 		// PERFORMANCE OPTIMIZATION: Update stats counters when soft-deleting
 		await incrementStat(ctx, STAT_KEYS.CHATS_SOFT_DELETED);
-		await decrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED, messages.length);
+		await incrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED, messages.length);
 
 		return { ok: true } as const;
 	},

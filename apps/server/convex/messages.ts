@@ -331,6 +331,7 @@ async function insertOrUpdateMessage(
 		// PERFORMANCE OPTIMIZATION: Use messageCount field from chat document instead of counting
 		// This avoids expensive query that loads all messages just to count them
 		// Before: O(n) query loading all messages, After: O(1) field lookup
+		// RACE CONDITION FIX: Fetch chat once and reuse for both check and increment
 		const chat = await ctx.db.get(args.chatId);
 		const messageCount = chat?.messageCount ?? 0;
 
@@ -339,8 +340,7 @@ async function insertOrUpdateMessage(
 				`Chat has reached maximum message limit of ${MAX_MESSAGES_PER_CHAT}. Please create a new chat.`,
 			);
 		}
-	}
-	if (!targetId) {
+
 		targetId = await ctx.db.insert("messages", {
 			chatId: args.chatId,
 			clientMessageId: args.clientMessageId ?? undefined,
@@ -355,11 +355,10 @@ async function insertOrUpdateMessage(
 		});
 
 		// PERFORMANCE OPTIMIZATION: Increment messageCount when creating new message
-		// This maintains an accurate count without expensive queries
-		const chat = await ctx.db.get(args.chatId);
+		// Reuse the chat we already fetched to avoid redundant db.get() call
 		if (chat) {
 			await ctx.db.patch(args.chatId, {
-				messageCount: (chat.messageCount ?? 0) + 1,
+				messageCount: messageCount + 1,
 			});
 		}
 

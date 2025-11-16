@@ -24,10 +24,6 @@ export function generateWebSiteSchema(config: StructuredDataConfig): WithContext
 		name: siteName,
 		url: siteUrl,
 		description,
-		potentialAction: {
-			"@type": "SearchAction",
-			target: `${siteUrl}/search?q={search_term_string}`,
-		},
 		inLanguage: "en-US",
 	};
 }
@@ -79,13 +75,6 @@ export function generateSoftwareApplicationSchema(
 			price: "0",
 			priceCurrency: "USD",
 			availability: "https://schema.org/InStock",
-		},
-		aggregateRating: {
-			"@type": "AggregateRating",
-			ratingValue: "4.8",
-			ratingCount: "1000",
-			bestRating: "5",
-			worstRating: "1",
 		},
 		permissions: "No special permissions required",
 		softwareVersion: "1.0",
