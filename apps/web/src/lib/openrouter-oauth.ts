@@ -44,7 +44,7 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
 
 /**
  * Encodes data to base64url format (URL-safe base64)
- * Replaces +/= with -_~ as per RFC 7636
+ * Replaces + with -, / with _, and removes = padding as per RFC 7636
  */
 function base64URLEncode(buffer: Uint8Array): string {
   const base64 = btoa(String.fromCharCode(...buffer));

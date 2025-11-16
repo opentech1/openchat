@@ -97,6 +97,10 @@ jobs:
           echo "Running backfillMessageCounts migration..."
           bunx convex run migrations:backfillMessageCounts '{"skipExisting": true}' || echo "⚠️  backfillMessageCounts migration skipped or already completed"
 
+          # Run onboarding fields removal migration (idempotent)
+          echo "Running removeOnboardingFields migration..."
+          bunx convex run migrations:removeOnboardingFields || echo "⚠️  removeOnboardingFields migration skipped or already completed"
+
           echo "✅ Migrations complete!"
 
       - name: Verify data consistency
