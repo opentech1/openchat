@@ -94,66 +94,55 @@ const MAX_TOKENS = (() => {
 })();
 
 
-// Get provider options for reasoning models
-function getReasoningProviderOptions(modelId: string): Record<string, Record<string, any>> | undefined {
-	const lowerModelId = modelId.toLowerCase();
-
-	// Anthropic models (Claude 3.7, Claude 4)
-	if (
-		lowerModelId.includes("anthropic/") &&
-		(lowerModelId.includes("claude-3-7-sonnet") ||
-		 lowerModelId.includes("claude-opus-4") ||
-		 lowerModelId.includes("claude-sonnet-4"))
-	) {
-		return {
-			anthropic: {
-				thinking: { type: "enabled", budgetTokens: 12000 },
-			},
-		};
+/**
+ * Convert reasoning config from client to OpenRouter API format
+ *
+ * OpenRouter unified reasoning API supports:
+ * - reasoning.enabled: boolean - Enable reasoning with defaults
+ * - reasoning.effort: "low" | "medium" | "high" - For OpenAI/Grok models
+ * - reasoning.max_tokens: number - For Anthropic/Gemini models
+ * - reasoning.exclude: boolean - Use reasoning but don't include in response
+ *
+ * Based on: https://openrouter.ai/docs/use-cases/reasoning-tokens
+ */
+/**
+ * Convert reasoning config from client to OpenRouter API format
+ *
+ * When disabled: Returns undefined - no reasoning parameter sent at all
+ * When enabled: Returns reasoning object with either:
+ * - effort: "medium" | "high" for OpenAI/Grok models
+ * - max_tokens: number for Anthropic/Gemini models
+ */
+function buildReasoningParam(
+	config: ChatRequestPayload["reasoningConfig"],
+	modelId: string
+): Record<string, unknown> | undefined {
+	// When disabled, don't send any reasoning parameter at all
+	// This prevents the model from thinking/reasoning entirely
+	if (!config || !config.enabled) {
+		return undefined;
 	}
 
-	// OpenAI GPT-5 models
-	if (lowerModelId.includes("openai/gpt-5")) {
-		return {
-			openai: {
-				reasoningSummary: "detailed",
-			},
-		};
+	const reasoning: Record<string, unknown> = {};
+
+	if (config.effort !== undefined) {
+		reasoning.effort = config.effort;
 	}
 
-	// OpenAI o1/o3 models
-	if (lowerModelId.includes("openai/o1") || lowerModelId.includes("openai/o3")) {
-		return {
-			openai: {
-				reasoningEffort: "medium",
-			},
-		};
+	if (config.max_tokens !== undefined) {
+		reasoning.max_tokens = config.max_tokens;
 	}
 
-	// Google Gemini 2.5 models
-	if (lowerModelId.includes("google/gemini-2.5") || lowerModelId.includes("google/gemini-2.0-flash-thinking")) {
-		return {
-			google: {
-				thinkingConfig: {
-					includeThoughts: true,
-				},
-			},
-		};
+	if (config.exclude !== undefined) {
+		reasoning.exclude = config.exclude;
 	}
 
-	// Cohere reasoning models
-	if (lowerModelId.includes("cohere/command-a-reasoning")) {
-		return {
-			cohere: {
-				thinking: {
-					type: "enabled",
-					tokenBudget: 8000,
-				},
-			},
-		};
+	// If enabled but no specific config, just enable with defaults
+	if (Object.keys(reasoning).length === 0) {
+		reasoning.enabled = true;
 	}
 
-	return undefined;
+	return reasoning;
 }
 
 // PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
@@ -198,6 +187,12 @@ type ChatRequestPayload = {
 		size: number;
 		url?: string;
 	}>;
+	reasoningConfig?: {
+		enabled: boolean;
+		effort?: "medium" | "high";
+		max_tokens?: number;
+		exclude?: boolean;
+	};
 };
 
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
@@ -799,18 +794,37 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				abortController.abort(new Error(`Request timeout after ${OPENROUTER_TIMEOUT_MS}ms`));
 			}, OPENROUTER_TIMEOUT_MS);
 
-			const model = config.provider.chat(config.modelId);
 			const hasReasoning = hasReasoningCapability(config.modelId);
-			const providerOptions = hasReasoning ? getReasoningProviderOptions(config.modelId) : undefined;
+
+			// Build reasoning parameter from client configuration using OpenRouter unified API
+			const reasoning = buildReasoningParam(payload.reasoningConfig, config.modelId);
+
+			// DEBUG: Log reasoning config to understand what's being sent
+			logger.debug("Reasoning configuration", {
+				modelId: config.modelId,
+				hasReasoningCapability: hasReasoning,
+				reasoningConfigFromClient: payload.reasoningConfig,
+				reasoningParamBuilt: reasoning,
+				willPassExtraBody: !!reasoning,
+			});
+
+			// CRITICAL: Pass reasoning via extraBody when creating the model per OpenRouter AI SDK docs
+			// When reasoning is undefined (disabled), NO extraBody is passed at all
+			const model = config.provider.chat(config.modelId, {
+				...(reasoning && {
+					extraBody: {
+						reasoning
+					}
+				})
+			});
 
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(safeMessages),
 				maxOutputTokens: MAX_TOKENS,
 				abortSignal: abortController.signal,
-				...(providerOptions && { providerOptions }),
 				// CRITICAL FIX: Don't apply smoothStream to reasoning models - it blocks reasoning chunks!
-				experimental_transform: hasReasoning ? undefined : smoothStream({
+				experimental_transform: hasReasoning && reasoning ? undefined : smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
 				}),
@@ -849,7 +863,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					logger.debug("Stream finished", {
 						textLength: assistantText.length,
 						reasoningLength: assistantReasoning.length,
-						thinkingTimeMs: duration
+						hasReasoning: assistantReasoning.length > 0,
+						thinkingTimeMs: duration,
 					});
 					await finalize();
 				},

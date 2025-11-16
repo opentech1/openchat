@@ -20,6 +20,7 @@
  * Models with reasoning:
  * - Anthropic: Claude 3.7 Sonnet, Claude 4 (Opus/Sonnet)
  * - OpenAI: GPT-5, o1, o3
+ * - xAI: Grok models (Grok 2, Grok Fast, etc.)
  * - DeepSeek: R1, Reasoner
  * - Google: Gemini 2.5, Gemini 2.0 Flash Thinking
  * - Cohere: Command-A Reasoning
@@ -45,6 +46,7 @@ export function hasReasoningCapability(modelId: string): boolean {
 		lowerModelId.includes("claude-opus-4") ||
 		lowerModelId.includes("claude-sonnet-4") ||
 		lowerModelId.includes("gpt-5") ||
+		lowerModelId.includes("grok") ||
 		lowerModelId.includes("deepseek-r1") ||
 		lowerModelId.includes("deepseek-reasoner") ||
 		lowerModelId.includes("gemini-2.5") ||
@@ -217,6 +219,40 @@ export function hasVideoCapability(modelId: string): boolean {
 }
 
 /**
+ * Detect if a model has mandatory reasoning that cannot be disabled.
+ *
+ * Some models like GPT-5, O1, O3, and Grok series have built-in reasoning
+ * that is always active and cannot be turned off via API parameters.
+ *
+ * Models with mandatory reasoning:
+ * - OpenAI: GPT-5, o1, o3 series
+ * - xAI: Grok models
+ *
+ * @param modelId - Full model identifier
+ * @returns true if model always uses reasoning (cannot be disabled)
+ *
+ * @example
+ * ```typescript
+ * if (hasMandatoryReasoning("x-ai/grok-4-fast")) {
+ *   // Show warning that reasoning cannot be disabled
+ *   // Reset to default reasoning level instead
+ * }
+ * ```
+ */
+export function hasMandatoryReasoning(modelId: string): boolean {
+	const lowerModelId = modelId.toLowerCase();
+	return (
+		lowerModelId.includes("gpt-5") ||
+		lowerModelId.includes("/o1") ||
+		lowerModelId.includes("/o3") ||
+		lowerModelId.includes("o1-pro") ||
+		lowerModelId.includes("o1-mini") ||
+		lowerModelId.includes("o3-mini") ||
+		lowerModelId.includes("grok")
+	);
+}
+
+/**
  * Get all capabilities for a model as an object.
  *
  * This is useful for UI rendering and feature enablement.
@@ -239,12 +275,14 @@ export function getModelCapabilities(modelId: string): {
 	image: boolean;
 	audio: boolean;
 	video: boolean;
+	mandatoryReasoning: boolean;
 } {
 	return {
 		reasoning: hasReasoningCapability(modelId),
 		image: hasImageCapability(modelId),
 		audio: hasAudioCapability(modelId),
 		video: hasVideoCapability(modelId),
+		mandatoryReasoning: hasMandatoryReasoning(modelId),
 	};
 }
 
