@@ -37,7 +37,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
 		});
 
 		return (
-			<div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-0 overflow-hidden min-h-0">
+			<div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-0 min-h-0">
 				<ChatRoomClient chatId={chatIdParam} initialMessages={initialMessages} />
 			</div>
 		);
