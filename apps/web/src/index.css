@@ -370,19 +370,28 @@ html, body {
     box-shadow: none !important;
   }
 
-  /* Aggressively remove ALL div focus outlines */
-  div:focus,
-  div:focus-visible,
-  div:focus-within {
+  /* Remove focus outlines from div elements (non-interactive containers) */
+  div:focus:not([role="button"]):not([role="link"]):not([role="tab"]) {
     outline: none !important;
     box-shadow: none !important;
     border-color: inherit !important;
   }
 
-  /* Override any default browser focus styles */
-  *:focus:not(input):not(textarea):not(select) {
+  /* Override focus styles for non-interactive elements only */
+  /* Keep focus visible for interactive elements for accessibility (WCAG 2.4.7) */
+  *:focus:not(input):not(textarea):not(select):not(button):not(a):not([role="button"]):not([role="link"]):not([tabindex="0"]) {
     outline: 0 !important;
     outline-offset: 0 !important;
+  }
+
+  /* Add keyboard-only focus styles for better accessibility */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  [role="link"]:focus-visible,
+  [tabindex="0"]:focus-visible {
+    outline: 2px solid hsl(var(--ring)) !important;
+    outline-offset: 2px !important;
   }
 
   /* Disable selection on UI elements (buttons, icons, etc) */

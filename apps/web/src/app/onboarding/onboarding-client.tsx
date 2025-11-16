@@ -78,7 +78,10 @@ export default function OnboardingPage() {
 				setCurrentStep(2); // No key, go to API key step
 			}
 		}
-	}, [session, isSessionLoading, isUserLoading, isKeyLoading, hasKey, currentStep]);
+		// Note: currentStep is intentionally NOT in dependencies to prevent infinite loop
+		// This effect only runs on initial load when other dependencies change
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [session, isSessionLoading, isUserLoading, isKeyLoading, hasKey]);
 
 	const handleGitHubSignIn = async () => {
 		setError("");
