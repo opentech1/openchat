@@ -4,7 +4,7 @@
  * Tests file upload validation, type checking, size limits, and attachment handling.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // File type constants from file-upload-button.tsx
 const IMAGE_TYPES = [

@@ -90,7 +90,22 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 							<PosthogPageViewTracker />
 						</Suspense>
 						{children}
-						<Toaster richColors position="bottom-right" />
+						<Toaster
+							richColors
+							position="bottom-right"
+							closeButton
+							theme="system"
+							toastOptions={{
+								classNames: {
+									toast: 'backdrop-blur-xl bg-background/95 border-border shadow-lg',
+									title: 'text-foreground font-medium',
+									description: 'text-muted-foreground',
+									actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
+									cancelButton: 'bg-muted text-muted-foreground hover:bg-muted/80',
+									closeButton: 'bg-background border-border hover:bg-muted',
+								},
+							}}
+						/>
 					</QueryClientProvider>
 				</BrandThemeProvider>
 			</ThemeProvider>

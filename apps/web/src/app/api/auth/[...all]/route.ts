@@ -14,9 +14,13 @@ const { GET: originalGET, POST: originalPOST } = nextJsHandler(
 );
 
 // Rate limiter for auth endpoints to prevent brute force attacks
-// More restrictive than general API endpoints
+// More restrictive in production, generous in development for smooth UX
+const isDev = process.env.NODE_ENV === "development";
 const authRateLimiter = new RateLimiter({
-	limit: parseInt(process.env.AUTH_RATE_LIMIT ?? "10", 10), // 10 requests
+	limit: parseInt(
+		process.env.AUTH_RATE_LIMIT ?? (isDev ? "1000" : "30"), // 1000 in dev, 30 in prod
+		10
+	),
 	windowMs: parseInt(process.env.AUTH_RATE_WINDOW_MS ?? "60000", 10), // per minute
 	maxBuckets: 5000,
 });

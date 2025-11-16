@@ -14,7 +14,6 @@ import {
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useQuery } from "convex/react";
-import { authClient } from "@/lib/auth-client";
 
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
@@ -202,7 +201,6 @@ function ChatMessagesPanelComponent({
             role="log"
             aria-live="polite"
             aria-relevant="additions"
-            tabIndex={0}
             data-ph-no-capture
             style={{ paddingBottom }}
           >

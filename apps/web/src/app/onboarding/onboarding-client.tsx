@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Github, ArrowLeft, LoaderIcon, ExternalLink } from "lucide-react";
-import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Stepper } from "@/components/ui/stepper";
+import { NiceLoader } from "@/components/ui/nice-loader";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ const TONE_OPTIONS = [
 export default function OnboardingPage() {
 	const router = useRouter();
 	const { data: session, isPending: isSessionLoading } = authClient.useSession();
-	const { hasKey, saveKey } = useOpenRouterKey();
+	const { hasKey, saveKey, isLoading: isKeyLoading } = useOpenRouterKey();
 	const completeOnboarding = useMutation(api.users.completeOnboarding);
 
 	// Get Convex user ID from Better Auth session
@@ -41,6 +41,7 @@ export default function OnboardingPage() {
 	const [currentStep, setCurrentStep] = useState(1);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
+	const [isRedirecting, setIsRedirecting] = useState(false);
 
 	// Step 2: API Key
 	const [apiKey, setApiKey] = useState("");
@@ -51,30 +52,33 @@ export default function OnboardingPage() {
 	const [preferredTone, setPreferredTone] = useState("casual");
 	const [customInstructions, setCustomInstructions] = useState("");
 
+	// Check if we're waiting for user data to load
+	const isUserLoading = session?.user?.id && !user;
+
 	// Redirect to dashboard if onboarding is already completed
 	useEffect(() => {
 		if (user?.onboardingCompletedAt) {
+			setIsRedirecting(true);
 			router.push("/dashboard");
 		}
 	}, [user, router]);
 
-	// Skip to step 2 if already authenticated
+	// Initialize to the correct step once all data is loaded
 	useEffect(() => {
-		if (!isSessionLoading && session?.user && currentStep === 1) {
-			setCurrentStep(2);
+		if (!isSessionLoading && !isUserLoading && !isKeyLoading && session?.user && currentStep === 1) {
 			// Pre-fill display name with account name
 			if (session.user.name) {
 				setDisplayName(session.user.name);
 			}
-		}
-	}, [session, isSessionLoading, currentStep]);
 
-	// Skip to step 3 if already has API key (only run once when hasKey becomes true on step 2)
-	useEffect(() => {
-		if (currentStep === 2 && hasKey) {
-			setCurrentStep(3);
+			// Determine starting step based on what they've completed
+			if (hasKey) {
+				setCurrentStep(3); // Has key, go to preferences
+			} else {
+				setCurrentStep(2); // No key, go to API key step
+			}
 		}
-	}, [hasKey]); // Removed currentStep from deps to prevent re-running on step changes
+	}, [session, isSessionLoading, isUserLoading, isKeyLoading, hasKey, currentStep]);
 
 	const handleGitHubSignIn = async () => {
 		setError("");
@@ -342,12 +346,9 @@ export default function OnboardingPage() {
 		}
 	};
 
-	if (isSessionLoading) {
-		return (
-			<div className="flex min-h-svh items-center justify-center">
-				<LoaderIcon className="size-8 animate-spin text-muted-foreground" />
-			</div>
-		);
+	// Show nice loading spinner while checking user status
+	if (isSessionLoading || isUserLoading || isKeyLoading || isRedirecting) {
+		return <NiceLoader message="Loading onboarding..." size="md" fullScreen />;
 	}
 
 	return (
@@ -375,10 +376,13 @@ export default function OnboardingPage() {
 				</div>
 			</div>
 			<div className="bg-muted relative hidden lg:block">
-				<img
+				<Image
 					src="/placeholder.svg"
 					alt="OpenChat"
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+					fill
+					className="object-cover dark:brightness-[0.2] dark:grayscale"
+					loading="lazy"
+					priority={false}
 				/>
 			</div>
 		</div>

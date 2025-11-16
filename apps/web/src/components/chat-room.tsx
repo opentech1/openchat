@@ -159,7 +159,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const {
     apiKey,
     isLoading: keyLoading,
-    error: keyError,
+    error: _keyError,
     saveKey,
     removeKey,
   } = useOpenRouterKey();
@@ -397,6 +397,16 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     },
     [persistSelectedModel, selectedModel, removeKey],
   );
+
+  // Cleanup: abort pending requests on unmount
+  useEffect(() => {
+    return () => {
+      if (fetchModelsAbortControllerRef.current) {
+        fetchModelsAbortControllerRef.current.abort();
+        fetchModelsAbortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   // Fetch models when API key is loaded
   useEffect(() => {
@@ -805,7 +815,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     });
   }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, status, handleSend]);
 
-  const busy = status === "submitted" || status === "streaming";
+  const _busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
   // Only show modal when user explicitly wants to add key (via toast action or settings)
   const showKeyModal = !keyPromptDismissed && checkedApiKey && !isLinked;
@@ -826,7 +836,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 focus:outline-none focus-visible:outline-none">
       <OpenRouterLinkModal
         open={showKeyModal}
         saving={savingApiKey || modelsLoading}

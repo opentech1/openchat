@@ -1,18 +1,14 @@
 "use client";
 
 import dynamicImport from "next/dynamic";
-import { LoaderIcon } from "lucide-react";
+import { PageLoader } from "@/components/ui/nice-loader";
 
 // Dynamically import onboarding client component with ssr: false
 // This is necessary because OnboardingPage uses useOpenRouterKey hook
 // which requires ConvexProvider to be available (client-side only)
 const OnboardingClient = dynamicImport(() => import("./onboarding-client"), {
   ssr: false,
-  loading: () => (
-    <div className="flex min-h-svh items-center justify-center">
-      <LoaderIcon className="size-8 animate-spin text-muted-foreground" />
-    </div>
-  ),
+  loading: () => <PageLoader message="Loading onboarding..." />,
 });
 
 export default function OnboardingPage() {

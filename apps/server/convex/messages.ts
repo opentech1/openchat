@@ -40,13 +40,15 @@ export const list = query({
 	handler: async (ctx, args) => {
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
 		if (!chat) return [];
-		// PERFORMANCE FIX: Filter soft-deleted messages at database level before collecting
-		// This prevents loading all messages into memory and filtering in JavaScript
+		// PERFORMANCE OPTIMIZATION: Use by_chat_not_deleted index to filter soft-deleted messages at index level
+		// This is much faster than loading all messages and filtering in JavaScript
+		// Index structure: [chatId, deletedAt, createdAt] allows efficient filtering and ordering
 		const messages = await ctx.db
 			.query("messages")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
 			.order("asc")
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
 			.collect();
 		return messages;
 	},
@@ -262,10 +264,12 @@ async function insertOrUpdateMessage(
 	// SECURITY: Check message count limit before inserting new message
 	// Only check if we're creating a new message (not updating existing)
 	if (!targetId) {
+		// PERFORMANCE OPTIMIZATION: Use by_chat_not_deleted index for faster counting
 		const messageCount = await ctx.db
 			.query("messages")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
 			.collect()
 			.then((messages) => messages.length);
 

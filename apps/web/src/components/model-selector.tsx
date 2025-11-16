@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Info, Brain, Image, Mic, Video } from "lucide-react"
+import { Check, Brain, Image, Mic, Video } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { registerClientProperties } from "@/lib/posthog"
+
 
 export type ModelSelectorOption = {
 	value: string

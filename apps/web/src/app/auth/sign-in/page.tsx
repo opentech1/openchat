@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Github } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { authClient } from "@/lib/auth-client";
 import { Logo } from "@/components/logo";
 
@@ -67,10 +68,13 @@ export default function LoginPage() {
 				</div>
 			</div>
 			<div className="bg-muted relative hidden lg:block">
-				<img
+				<Image
 					src="/placeholder.svg"
 					alt="osschat"
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+					fill
+					className="object-cover dark:brightness-[0.2] dark:grayscale"
+					loading="lazy"
+					priority={false}
 				/>
 			</div>
 		</div>

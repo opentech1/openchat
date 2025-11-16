@@ -70,12 +70,15 @@ export const list = query({
 			limit = MAX_CHAT_LIST_LIMIT;
 		}
 
-		// Filter out soft-deleted chats in the query, then use paginate
+		// PERFORMANCE OPTIMIZATION: Use by_user_not_deleted index to filter soft-deleted chats at index level
+		// This is much faster than loading all chats and filtering in JavaScript
+		// Index structure: [userId, deletedAt, updatedAt] allows efficient filtering
 		const results = await ctx.db
 			.query("chats")
-			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.withIndex("by_user_not_deleted", (q) =>
+				q.eq("userId", args.userId).eq("deletedAt", undefined)
+			)
 			.order("desc")
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
 			.paginate({
 				cursor: args.cursor ?? null,
 				numItems: limit,
@@ -157,13 +160,14 @@ export const remove = mutation({
 		await ctx.db.patch(args.chatId, {
 			deletedAt: now,
 		});
-		// PERFORMANCE FIX: Cascade soft delete to all messages in the chat
-		// Filter at database level to avoid loading already-deleted messages
+		// PERFORMANCE OPTIMIZATION: Cascade soft delete to all messages in the chat
+		// Use by_chat_not_deleted index to filter at database level (much faster)
 		// Use Promise.all for parallel execution to minimize total time
 		const messages = await ctx.db
 			.query("messages")
-			.withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
 			.collect();
 		await Promise.all(
 			messages.map((message) =>

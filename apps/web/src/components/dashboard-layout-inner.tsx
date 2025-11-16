@@ -39,7 +39,7 @@ export default function DashboardLayoutClient({
       </div>
       <main
         id="main-content"
-        className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full"
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:ml-[var(--sb-width)] transition-[margin] duration-300 ease-in-out w-full focus:outline-none focus-visible:outline-none"
         tabIndex={-1}
       >
         <DashboardControls />

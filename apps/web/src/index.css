@@ -339,6 +339,83 @@ html, body {
   [role="button"]:not([disabled]) {
     cursor: pointer;
   }
+
+  /* Remove blue highlight on shift-click and prevent unwanted text selection */
+  *:not(input):not(textarea):not([contenteditable="true"]) {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  /* Remove all focus outlines except on interactive elements */
+  *:focus:not(input):not(textarea):not(button):not([role="button"]):not(a):not([tabindex="0"]) {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Remove focus-visible ring from non-interactive elements */
+  *:focus-visible:not(input):not(textarea):not(button):not([role="button"]):not(a):not([tabindex="0"]) {
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+  }
+
+  /* Explicitly remove focus outline from main and dialog elements */
+  main:focus,
+  main:focus-visible,
+  [role="dialog"]:focus,
+  [role="dialog"]:focus-visible,
+  [tabindex="-1"]:focus,
+  [tabindex="-1"]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Aggressively remove ALL div focus outlines */
+  div:focus,
+  div:focus-visible,
+  div:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: inherit !important;
+  }
+
+  /* Override any default browser focus styles */
+  *:focus:not(input):not(textarea):not(select) {
+    outline: 0 !important;
+    outline-offset: 0 !important;
+  }
+
+  /* Disable selection on UI elements (buttons, icons, etc) */
+  button,
+  [role="button"],
+  svg,
+  img,
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Allow selection only in content areas */
+  p,
+  pre,
+  code,
+  textarea,
+  input,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* Custom selection color to match theme */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
+
+  ::-moz-selection {
+    background-color: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
 }
 
 @layer utilities {
@@ -353,7 +430,7 @@ html, body {
     white-space: nowrap;
     border-width: 0;
   }
-  
+
   .not-sr-only {
     position: static;
     width: auto;
@@ -363,5 +440,99 @@ html, body {
     overflow: visible;
     clip: auto;
     white-space: normal;
+  }
+
+  /* Smooth transitions for UI elements */
+  .transition-smooth {
+    transition-property: opacity, transform, background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+  }
+
+  /* Performance optimizations for frequently animated elements */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  .will-change-opacity {
+    will-change: opacity;
+  }
+
+  .will-change-scroll {
+    will-change: scroll-position;
+  }
+
+  /* GPU acceleration for smooth animations */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* Prevent layout shift during loading */
+  .content-visibility-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 500px;
+  }
+
+  /* Smooth scroll with reduced motion support */
+  @media (prefers-reduced-motion: no-preference) {
+    .smooth-scroll {
+      scroll-behavior: smooth;
+    }
+  }
+
+  /* Prevent flicker on page transitions */
+  .view-transition-element {
+    view-transition-name: var(--view-transition-name);
+  }
+
+  /* Page transition animations for smooth navigation */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes skeleton-pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-slide-in-up {
+    animation: slide-in-up 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .skeleton {
+    animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted) / 0.7) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
   }
 }

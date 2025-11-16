@@ -184,7 +184,7 @@ export type ErrorResponse = {
  */
 export function errorToResponse(
 	error: unknown,
-	includeStack = false,
+	_includeStack = false,
 ): Response {
 	const isDevelopment = process.env.NODE_ENV === "development";
 

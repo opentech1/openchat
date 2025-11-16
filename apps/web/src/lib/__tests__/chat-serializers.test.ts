@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { serializeChat, type SerializedChat } from "../chat-serializers";
+import { serializeChat } from "../chat-serializers";
 import type { Doc } from "@server/convex/_generated/dataModel";
 
 describe("serializeChat", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SendIcon, LoaderIcon, SquareIcon, Upload } from "lucide-react";
+import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -14,7 +14,6 @@ import {
   shadows,
   spacing,
   opacity,
-  iconSize,
 } from "@/styles/design-tokens";
 import * as React from "react";
 import { FileUploadButton } from "./file-upload-button";

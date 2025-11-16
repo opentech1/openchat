@@ -77,6 +77,14 @@ export const createAuth = (
 			// Production keeps CSRF enabled for security
 			disableCSRFCheck: !isProduction(),
 		},
+		// PERFORMANCE: Configure rate limiting for smooth UX
+		// In development, use generous limits to prevent blocking fast navigation
+		// In production, use stricter limits for security
+		rateLimit: {
+			enabled: isProduction(), // Disable rate limiting in dev entirely
+			window: 60, // 60 seconds
+			max: isProduction() ? 100 : 10000, // 100 req/min in prod, unlimited in dev
+		},
 		session: {
 			expiresIn: 60 * 60 * 24 * 7, // 7 days
 			freshAge: 60 * 60, // 1 hour

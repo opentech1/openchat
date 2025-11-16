@@ -1,11 +1,9 @@
 'use client';
 
-import type { Route } from 'next';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { ModelSelectorLogo } from '@/components/ai-elements/model-selector';
-import { spacing, borderRadius, opacity, transitions } from '@/styles/design-tokens';
+import { spacing, borderRadius, transitions } from '@/styles/design-tokens';
 
 type HeroContentProps = {
 	onCtaClick: (ctaId: string, ctaCopy: string, section: string) => () => void;

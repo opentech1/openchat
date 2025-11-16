@@ -1,22 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import dynamicImport from "next/dynamic";
-import { LoaderIcon } from "lucide-react";
-
-// Dynamically import the inner dashboard layout with ssr: false
-// This ensures all Convex hooks are only called client-side where ConvexProvider is available
-const DashboardLayoutInner = dynamicImport(
-  () => import("@/components/dashboard-layout-inner"),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex min-h-svh items-center justify-center">
-        <LoaderIcon className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    ),
-  }
-);
+import DashboardLayoutInner from "@/components/dashboard-layout-inner";
 
 type DashboardLayoutClientProps = {
   children: ReactNode;

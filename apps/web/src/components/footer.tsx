@@ -2,7 +2,7 @@
 
 import type { Route } from 'next';
 import Link from 'next/link';
-import { spacing, transitions } from '@/styles/design-tokens';
+import { transitions } from '@/styles/design-tokens';
 
 const FOOTER_LINKS = [
 	{

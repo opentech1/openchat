@@ -13,8 +13,23 @@ const withBundleAnalyzer = bundleAnalyzer({
 const nextConfig = {
 	experimental: {
 		externalDir: true,
+		// Completely disable Next.js devtools in Bun to prevent SegmentViewNode errors
+		...(process.env.BUN_VERSION && {
+			devOverlays: false,
+			// @ts-ignore - undocumented option to disable devtools entirely
+			disableDevtools: true,
+		}),
 	},
 	serverExternalPackages: ["better-sqlite3"],
+	// Optimize webpack for better HMR with Bun
+	...(process.env.NODE_ENV === 'development' && {
+		onDemandEntries: {
+			// Keep pages in memory for 60 seconds (default is 60s)
+			maxInactiveAge: 60 * 1000,
+			// Keep at most 10 pages in memory
+			pagesBufferLength: 10,
+		},
+	}),
 	// SECURITY: Only expose non-sensitive variables to client
 	// Secrets (GITHUB_CLIENT_SECRET, BETTER_AUTH_SECRET, etc.) should NOT be in env block
 	// They are automatically available server-side via process.env
@@ -123,12 +138,28 @@ const nextConfig = {
 	webpack(config, { dev, isServer }) {
 		config.resolve = config.resolve ?? {};
 		config.resolve.alias = {
-			...(config.resolve.alias ?? {}),
+			...config.resolve.alias,
 			// Ensure all imports use the same Convex React entry so the provider context isn't duplicated
 			"convex/react": convexReactEntry,
+			// Completely stub out Next.js devtools when using Bun to prevent SegmentViewNode errors
+			...(process.env.BUN_VERSION && dev && {
+				"next/dist/next-devtools": false,
+				"next/dist/next-devtools/userspace/app/segment-explorer-node": false,
+			}),
 		};
 		if (dev) {
-			config.cache = { type: "memory" };
+			config.cache = {
+				type: "memory",
+				// Increase cache efficiency
+				maxGenerations: 1,
+			};
+			// Better HMR configuration for Bun
+			config.watchOptions = {
+				...config.watchOptions,
+				poll: false, // Don't poll, use native file watching
+				aggregateTimeout: 300, // Delay rebuild after first change
+				ignored: /node_modules/, // Don't watch node_modules
+			};
 		}
 		// Reduce memory usage in production builds
 		if (!dev) {
@@ -202,12 +233,15 @@ const nextConfig = {
 			}
 		}
 
-		// Suppress warnings from Sentry and OpenTelemetry dynamic requires
+		// Suppress warnings from Sentry, OpenTelemetry, and Next.js devtools
 		config.ignoreWarnings = [
 			...(config.ignoreWarnings || []),
 			/Critical dependency:/,
 			/@opentelemetry/,
 			/require-in-the-middle/,
+			/next-devtools/,
+			/segment-explorer-node/,
+			/SegmentViewNode/,
 		];
 
 		// Suppress infrastructure logging warnings

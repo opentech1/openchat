@@ -77,7 +77,7 @@ export function ComparisonSection() {
 						    </tr>
 						  </thead>
 						  <tbody>
-						    {COMPARISON_DATA.map((row, index) => (
+						    {COMPARISON_DATA.map((row, _index) => (
 						      <tr
 						        key={row.feature}
 						        className={`border-b border-border/60 transition-colors ${transitions.normal} last:border-b-0 hover:bg-accent/30`}
