@@ -863,7 +863,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         initialMessages={normalizedInitial}
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
-        className="flex-1 rounded-xl bg-background/40 shadow-inner overflow-hidden"
+        className="flex-1 rounded-xl bg-background/40 shadow-inner"
         isStreaming={status === "streaming"}
         userId={convexUserId as string | null}
       />
