@@ -153,7 +153,7 @@ export function ReasoningControls({
 				setOpen(false);
 			}
 		},
-		[modelId, onChange]
+		[modelId, onChange, capabilities]
 	);
 
 	return (
