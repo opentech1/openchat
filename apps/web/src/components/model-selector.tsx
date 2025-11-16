@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Brain, Image, Mic, Video } from "lucide-react"
+import { Check, Brain, Image, Mic, Video } from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { registerClientProperties } from "@/lib/posthog"
+import { LiveRegion } from "@/components/ui/live-region"
 
 
 export type ModelSelectorOption = {
@@ -205,6 +206,124 @@ const providerNames: Record<string, string> = {
 	"amazon": "Amazon",
 }
 
+// Memoized ModelSelectorItem component for better performance
+const MemoizedModelSelectorItem = React.memo(function MemoizedModelSelectorItem({
+	option,
+	selectedValue,
+	onSelect,
+}: {
+	option: ModelSelectorOption;
+	selectedValue: string;
+	onSelect: (value: string) => void;
+}) {
+	const isSelected = option.value === selectedValue;
+	const provider = getProviderFromModelId(option.value);
+	const hasPricing = option.pricing && (option.pricing.prompt !== null || option.pricing.completion !== null);
+	const priceTier = hasPricing ? getPriceTier(option.pricing!) : 0;
+
+	// Check if model is free (both input and output are 0)
+	const isFreeModel = hasPricing &&
+		((option.pricing!.prompt ?? 0) === 0 && (option.pricing!.completion ?? 0) === 0);
+
+	return (
+		<ModelSelectorItem
+			key={option.value}
+			value={option.value}
+			keywords={[option.label, option.value, provider || ""]}
+			onSelect={onSelect}
+			className="flex items-center gap-2"
+		>
+			{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
+			<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
+
+			{/* Capabilities icons with tooltips */}
+			{option.capabilities && (
+				<div className="flex items-center gap-1 shrink-0">
+					<TooltipProvider delayDuration={100}>
+						{option.capabilities.reasoning && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Brain className="size-3.5 text-purple-500" />
+								</TooltipTrigger>
+								<TooltipContent side="left" className="max-w-xs">
+									<div className="text-xs">
+										This model supports advanced reasoning and thinking capabilities
+									</div>
+								</TooltipContent>
+							</Tooltip>
+						)}
+						{option.capabilities.image && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Image className="size-3.5 text-blue-500" />
+								</TooltipTrigger>
+								<TooltipContent side="left" className="max-w-xs">
+									<div className="text-xs">
+										This model can process and understand images
+									</div>
+								</TooltipContent>
+							</Tooltip>
+						)}
+						{option.capabilities.audio && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Mic className="size-3.5 text-green-500" />
+								</TooltipTrigger>
+								<TooltipContent side="left" className="max-w-xs">
+									<div className="text-xs">
+										This model can process and understand audio files
+									</div>
+								</TooltipContent>
+							</Tooltip>
+						)}
+						{option.capabilities.video && (
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<Video className="size-3.5 text-red-500" />
+								</TooltipTrigger>
+								<TooltipContent side="left" className="max-w-xs">
+									<div className="text-xs">
+										This model can process and understand video files
+									</div>
+								</TooltipContent>
+							</Tooltip>
+						)}
+					</TooltipProvider>
+				</div>
+			)}
+			{hasPricing && (
+				<div className="flex items-center gap-1.5 shrink-0">
+					<TooltipProvider delayDuration={100}>
+						<Tooltip>
+							<TooltipTrigger asChild>
+								<div className="flex items-center gap-1 text-xs text-muted-foreground">
+									<PriceIndicator tier={priceTier} />
+									<span className="tabular-nums">
+										{isFreeModel
+											? "Free"
+											: `${formatPrice(option.pricing!.prompt)}/${formatPrice(option.pricing!.completion)}`
+										}
+									</span>
+								</div>
+							</TooltipTrigger>
+							<TooltipContent side="left" className="text-xs px-2 py-1">
+								<div className="flex items-center gap-1 whitespace-nowrap">
+									<span>In: {formatPrice(option.pricing!.prompt)}</span>
+									<span>·</span>
+									<span>Out: {formatPrice(option.pricing!.completion)}</span>
+								</div>
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
+				</div>
+			)}
+			{isSelected && (
+				<Check className="size-4 shrink-0" />
+			)}
+		</ModelSelectorItem>
+	);
+});
+
 function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
 	const [open, setOpen] = React.useState(false)
 	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
@@ -249,8 +368,25 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 	// Group options with Popular and Free sections first
 	const groupedOptions = React.useMemo(() => groupModels(options), [options])
 
+	// Memoized selection handler for better performance
+	const handleSelect = React.useCallback(
+		(currentValue: string) => {
+			if (value === undefined) {
+				setInternalValue(currentValue);
+			}
+			onChange?.(currentValue);
+			setOpen(false);
+		},
+		[value, onChange]
+	);
+
 	return (
 		<AIModelSelector open={open} onOpenChange={setOpen}>
+			{/* Screen reader announcements for loading states */}
+			<LiveRegion
+				message={loading ? "Loading models..." : ""}
+				politeness="polite"
+			/>
 			<ModelSelectorTrigger asChild>
 				<Button
 					variant="outline"
@@ -277,120 +413,14 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 							key={groupName}
 							heading={groupName === "Popular" || groupName === "Free Models" ? groupName : (providerNames[groupName] || groupName)}
 						>
-							{groupModels.map((option) => {
-								const isSelected = option.value === selectedValue
-								const provider = getProviderFromModelId(option.value)
-								const hasPricing = option.pricing && (option.pricing.prompt !== null || option.pricing.completion !== null)
-								const priceTier = hasPricing ? getPriceTier(option.pricing!) : 0
-
-								// Check if model is free (both input and output are 0)
-								const isFreeModel = hasPricing &&
-									((option.pricing!.prompt ?? 0) === 0 && (option.pricing!.completion ?? 0) === 0)
-
-								return (
-									<ModelSelectorItem
-										key={option.value}
-										value={option.value}
-										keywords={[option.label, option.value, provider || ""]}
-										onSelect={(currentValue) => {
-											if (value === undefined) {
-												setInternalValue(currentValue)
-											}
-											onChange?.(currentValue)
-											setOpen(false)
-										}}
-										className="flex items-center gap-2"
-									>
-										{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
-										<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
-
-										{/* Capabilities icons with tooltips */}
-										{option.capabilities && (
-											<div className="flex items-center gap-1 shrink-0">
-												<TooltipProvider delayDuration={100}>
-													{option.capabilities.reasoning && (
-														<Tooltip>
-															<TooltipTrigger asChild>
-																<Brain className="size-3.5 text-purple-500" />
-															</TooltipTrigger>
-															<TooltipContent side="left" className="max-w-xs">
-																<div className="text-xs">
-																	This model supports advanced reasoning and thinking capabilities
-																</div>
-															</TooltipContent>
-														</Tooltip>
-													)}
-													{option.capabilities.image && (
-														<Tooltip>
-															<TooltipTrigger asChild>
-																<Image className="size-3.5 text-blue-500" />
-															</TooltipTrigger>
-															<TooltipContent side="left" className="max-w-xs">
-																<div className="text-xs">
-																	This model can process and understand images
-																</div>
-															</TooltipContent>
-														</Tooltip>
-													)}
-													{option.capabilities.audio && (
-														<Tooltip>
-															<TooltipTrigger asChild>
-																<Mic className="size-3.5 text-green-500" />
-															</TooltipTrigger>
-															<TooltipContent side="left" className="max-w-xs">
-																<div className="text-xs">
-																	This model can process and understand audio files
-																</div>
-															</TooltipContent>
-														</Tooltip>
-													)}
-													{option.capabilities.video && (
-														<Tooltip>
-															<TooltipTrigger asChild>
-																<Video className="size-3.5 text-red-500" />
-															</TooltipTrigger>
-															<TooltipContent side="left" className="max-w-xs">
-																<div className="text-xs">
-																	This model can process and understand video files
-																</div>
-															</TooltipContent>
-														</Tooltip>
-													)}
-												</TooltipProvider>
-											</div>
-										)}
-										{hasPricing && (
-											<div className="flex items-center gap-1.5 shrink-0">
-												<TooltipProvider delayDuration={100}>
-													<Tooltip>
-														<TooltipTrigger asChild>
-															<div className="flex items-center gap-1 text-xs text-muted-foreground">
-																<PriceIndicator tier={priceTier} />
-																<span className="tabular-nums">
-																	{isFreeModel
-																		? "Free"
-																		: `${formatPrice(option.pricing!.prompt)}/${formatPrice(option.pricing!.completion)}`
-																	}
-																</span>
-															</div>
-														</TooltipTrigger>
-														<TooltipContent side="left" className="text-xs px-2 py-1">
-															<div className="flex items-center gap-1 whitespace-nowrap">
-																<span>In: {formatPrice(option.pricing!.prompt)}</span>
-																<span>·</span>
-																<span>Out: {formatPrice(option.pricing!.completion)}</span>
-															</div>
-														</TooltipContent>
-													</Tooltip>
-												</TooltipProvider>
-											</div>
-										)}
-										{isSelected && (
-											<Check className="size-4 shrink-0" />
-										)}
-									</ModelSelectorItem>
-								)
-							})}
+							{groupModels.map((option) => (
+								<MemoizedModelSelectorItem
+									key={option.value}
+									option={option}
+									selectedValue={selectedValue}
+									onSelect={handleSelect}
+								/>
+							))}
 						</ModelSelectorGroup>
 					))}
 					{!loading && groupedOptions.length > 0 && (

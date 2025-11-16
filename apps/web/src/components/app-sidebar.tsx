@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,8 @@ import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
 import { Logo } from "@/components/logo";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { LiveRegion } from "@/components/ui/live-region";
 
 export type ChatListItem = {
   id: string;
@@ -231,6 +233,14 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     }
   }, []);
 
+  const handleHoverChat = useCallback(
+    (chatId: string) => {
+      router.prefetch(`/dashboard/chat/${chatId}`);
+      void prefetchChat(chatId);
+    },
+    [router],
+  );
+
   const userDisplayLabel = useMemo(() => {
     if (!user) return "";
     return user.name || user.email || user.id || "";
@@ -267,6 +277,11 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
 
   return (
     <Sidebar defaultCollapsed {...sidebarProps}>
+      {/* Screen reader announcements for loading states */}
+      <LiveRegion
+        message={isCreating ? "Creating new chat..." : deletingChatId ? "Deleting chat..." : ""}
+        politeness="polite"
+      />
       <SidebarHeader className="px-2 py-3">
         <div className="flex items-center justify-center">
           <Link
@@ -299,16 +314,15 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
               Chats
             </h3>
           </div>
-          <ChatList
-            chats={chats}
-            activePath={pathname}
-            onDelete={handleDelete}
-            deletingId={deletingChatId}
-            onHoverChat={(chatId) => {
-              router.prefetch(`/dashboard/chat/${chatId}`);
-              void prefetchChat(chatId);
-            }}
-          />
+          <ErrorBoundary level="section">
+            <ChatList
+              chats={chats}
+              activePath={pathname}
+              onDelete={handleDelete}
+              deletingId={deletingChatId}
+              onHoverChat={handleHoverChat}
+            />
+          </ErrorBoundary>
         </SidebarGroup>
       </SidebarContent>
       <div className="mt-auto w-full px-2 pb-3 pt-2">
@@ -384,6 +398,16 @@ function ChatList({
     enabled: shouldVirtualize,
   });
 
+  // PERFORMANCE FIX: Memoize inline styles for virtualized list
+  const virtualListContainerStyle = useMemo(
+    () => ({
+      height: `${virtualizer.getTotalSize()}px`,
+      width: "100%",
+      position: "relative" as const,
+    }),
+    [virtualizer]
+  );
+
   if (chats.length === 0)
     return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
 
@@ -413,28 +437,24 @@ function ChatList({
       style={{ maxHeight: "calc(100vh - 280px)" }}
       data-ph-no-capture
     >
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
+      <div style={virtualListContainerStyle}>
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const chat = chats[virtualItem.index];
           if (!chat) return null;
+          // PERFORMANCE FIX: Create stable style object
+          const itemStyle = {
+            position: "absolute" as const,
+            top: 0,
+            left: 0,
+            width: "100%",
+            transform: `translateY(${virtualItem.start}px)`,
+          };
           return (
             <div
               key={virtualItem.key}
               data-index={virtualItem.index}
               ref={virtualizer.measureElement}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
+              style={itemStyle}
               className="pb-1"
             >
               <ChatListItem

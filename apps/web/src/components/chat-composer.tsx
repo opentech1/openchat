@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { SendIcon, LoaderIcon, SquareIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { SendIcon, LoaderIcon, SquareIcon } from "@/lib/icons";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -30,6 +30,128 @@ type FileAttachment = {
   size: number;
   url?: string;
 };
+
+// Extracted textarea component for performance optimization
+interface ChatComposerTextareaProps {
+  value: string;
+  onChange: (value: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPaste: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  placeholder: string;
+  disabled?: boolean;
+  errorMessage: string | null;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+}
+
+const ChatComposerTextarea = React.memo(
+  ({
+    value,
+    onChange,
+    onKeyDown,
+    onPaste,
+    placeholder,
+    disabled,
+    errorMessage,
+    textareaRef,
+  }: ChatComposerTextareaProps) => {
+    return (
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        placeholder={placeholder}
+        className={cn(
+          "w-full px-4 py-3",
+          "resize-none",
+          "bg-transparent",
+          "border-none",
+          "text-foreground text-sm",
+          "focus:outline-none",
+          "placeholder:text-muted-foreground",
+          "min-h-[60px]",
+        )}
+        style={{ overflow: "hidden" }}
+        disabled={disabled}
+        aria-label="Message input"
+        aria-invalid={!!errorMessage}
+        aria-describedby={errorMessage ? "composer-error" : undefined}
+        data-ph-no-capture
+      />
+    );
+  }
+);
+
+ChatComposerTextarea.displayName = "ChatComposerTextarea";
+
+// Consolidated composer state
+type ComposerState = {
+  value: string;
+  isSending: boolean;
+  errorMessage: string | null;
+  fallbackModelId: string;
+};
+
+type ComposerAction =
+  | { type: "SET_VALUE"; payload: string }
+  | { type: "SET_SENDING"; payload: boolean }
+  | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_FALLBACK_MODEL"; payload: string }
+  | { type: "CLEAR_INPUT" }
+  | { type: "RESTORE_MESSAGE"; payload: string };
+
+function composerReducer(state: ComposerState, action: ComposerAction): ComposerState {
+  switch (action.type) {
+    case "SET_VALUE":
+      return { ...state, value: action.payload };
+    case "SET_SENDING":
+      return { ...state, isSending: action.payload };
+    case "SET_ERROR":
+      return { ...state, errorMessage: action.payload };
+    case "SET_FALLBACK_MODEL":
+      return { ...state, fallbackModelId: action.payload };
+    case "CLEAR_INPUT":
+      return { ...state, value: "", errorMessage: null };
+    case "RESTORE_MESSAGE":
+      return { ...state, value: action.payload };
+    default:
+      return state;
+  }
+}
+
+// Consolidated file upload state
+type FileUploadState = {
+  uploadingFiles: File[];
+  uploadedFiles: FileAttachment[];
+};
+
+type FileUploadAction =
+  | { type: "ADD_UPLOADING"; payload: File }
+  | { type: "REMOVE_UPLOADING"; payload: File }
+  | { type: "ADD_UPLOADED"; payload: FileAttachment }
+  | { type: "REMOVE_UPLOADED"; payload: number }
+  | { type: "CLEAR_UPLOADED" }
+  | { type: "RESTORE_UPLOADED"; payload: FileAttachment[] };
+
+function fileUploadReducer(state: FileUploadState, action: FileUploadAction): FileUploadState {
+  switch (action.type) {
+    case "ADD_UPLOADING":
+      return { ...state, uploadingFiles: [...state.uploadingFiles, action.payload] };
+    case "REMOVE_UPLOADING":
+      return { ...state, uploadingFiles: state.uploadingFiles.filter(f => f !== action.payload) };
+    case "ADD_UPLOADED":
+      return { ...state, uploadedFiles: [...state.uploadedFiles, action.payload] };
+    case "REMOVE_UPLOADED":
+      return { ...state, uploadedFiles: state.uploadedFiles.filter((_, i) => i !== action.payload) };
+    case "CLEAR_UPLOADED":
+      return { ...state, uploadedFiles: [] };
+    case "RESTORE_UPLOADED":
+      return { ...state, uploadedFiles: action.payload };
+    default:
+      return state;
+  }
+}
 
 export type ChatComposerProps = {
   onSend: (payload: {
@@ -71,17 +193,25 @@ function ChatComposer({
   userId,
   chatId,
 }: ChatComposerProps) {
-  const [value, setValue] = useState(initialValue);
-  const [isSending, setIsSending] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [fallbackModelId, setFallbackModelId] = useState<string>("");
+  // Consolidated composer state with useReducer
+  const [composerState, dispatchComposer] = useReducer(composerReducer, {
+    value: initialValue,
+    isSending: false,
+    errorMessage: null,
+    fallbackModelId: "",
+  });
+  const { value, isSending, errorMessage, fallbackModelId } = composerState;
+
+  // Consolidated file upload state with useReducer
+  const [fileUploadState, dispatchFileUpload] = useReducer(fileUploadReducer, {
+    uploadingFiles: [],
+    uploadedFiles: [],
+  });
+  const { uploadingFiles, uploadedFiles } = fileUploadState;
+
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
-
-  // File upload state
-  const [uploadingFiles, setUploadingFiles] = useState<File[]>([]);
-  const [uploadedFiles, setUploadedFiles] = useState<FileAttachment[]>([]);
 
   // Convex mutations and queries
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -93,18 +223,18 @@ function ChatComposer({
 
   useEffect(() => {
     if (modelValue) {
-      setFallbackModelId(modelValue);
+      dispatchComposer({ type: "SET_FALLBACK_MODEL", payload: modelValue });
       return;
     }
     if (modelOptions.length === 0) {
-      setFallbackModelId("");
+      dispatchComposer({ type: "SET_FALLBACK_MODEL", payload: "" });
       return;
     }
     const hasCurrent =
       fallbackModelId &&
       modelOptions.some((option) => option.value === fallbackModelId);
     if (!hasCurrent) {
-      setFallbackModelId(modelOptions[0]!.value);
+      dispatchComposer({ type: "SET_FALLBACK_MODEL", payload: modelOptions[0]!.value });
     }
   }, [modelValue, modelOptions, fallbackModelId]);
 
@@ -114,6 +244,12 @@ function ChatComposer({
   useEffect(() => {
     activeModelIdRef.current = activeModelId;
   }, [activeModelId]);
+
+  // PERFORMANCE FIX: Memoize model capabilities to prevent unstable reference
+  const selectedModelCapabilities = useMemo(
+    () => modelOptions.find(m => m.value === activeModelId)?.capabilities,
+    [modelOptions, activeModelId]
+  );
 
   // Adjust height when initialValue is provided
   useEffect(() => {
@@ -138,7 +274,7 @@ function ChatComposer({
       }
 
       // Add to uploading state
-      setUploadingFiles((prev) => [...prev, file]);
+      dispatchFileUpload({ type: "ADD_UPLOADING", payload: file });
 
       try {
         // Step 1: Generate upload URL
@@ -170,16 +306,16 @@ function ChatComposer({
         });
 
         // Add to uploaded files with URL
-        setUploadedFiles((prev) => [
-          ...prev,
-          {
+        dispatchFileUpload({
+          type: "ADD_UPLOADED",
+          payload: {
             storageId,
             filename: sanitizedFilename,
             contentType: file.type,
             size: file.size,
             url: url || undefined,
           },
-        ]);
+        });
 
         toast.success(`${sanitizedFilename} uploaded successfully`);
       } catch (error) {
@@ -195,7 +331,7 @@ function ChatComposer({
         }
       } finally {
         // Remove from uploading state
-        setUploadingFiles((prev) => prev.filter((f) => f !== file));
+        dispatchFileUpload({ type: "REMOVE_UPLOADING", payload: file });
       }
     },
     [userId, chatId, quota, generateUploadUrl, saveFileMetadata]
@@ -203,7 +339,7 @@ function ChatComposer({
 
   // Remove uploaded file
   const handleRemoveFile = useCallback((index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+    dispatchFileUpload({ type: "REMOVE_UPLOADED", payload: index });
   }, []);
 
   const send = useCallback(async () => {
@@ -221,13 +357,12 @@ function ChatComposer({
     }
 
     // Clear input and files INSTANTLY for responsive feel
-    setValue("");
+    dispatchComposer({ type: "CLEAR_INPUT" });
     adjustHeight(true);
     const attachmentsToSend = uploadedFiles.length > 0 ? uploadedFiles : undefined;
-    setUploadedFiles([]);
+    dispatchFileUpload({ type: "CLEAR_UPLOADED" });
 
-    setErrorMessage(null);
-    setIsSending(true);
+    dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
       await onSend({
         text: trimmed,
@@ -238,18 +373,19 @@ function ChatComposer({
     } catch (error) {
       logError("Failed to send message", error);
       // Restore message and files if failed
-      setValue(trimmed);
+      dispatchComposer({ type: "RESTORE_MESSAGE", payload: trimmed });
       if (attachmentsToSend) {
-        setUploadedFiles(attachmentsToSend);
+        dispatchFileUpload({ type: "RESTORE_UPLOADED", payload: attachmentsToSend });
       }
       adjustHeight();
-      setErrorMessage(
-        error instanceof Error && error.message
+      dispatchComposer({
+        type: "SET_ERROR",
+        payload: error instanceof Error && error.message
           ? error.message
           : "Failed to send message. Try again.",
-      );
+      });
     } finally {
-      setIsSending(false);
+      dispatchComposer({ type: "SET_SENDING", payload: false });
     }
   }, [
     adjustHeight,
@@ -262,12 +398,27 @@ function ChatComposer({
     uploadedFiles,
   ]);
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      void send();
-    }
-  };
+  // Memoize event handlers to prevent unnecessary re-renders of ChatComposerTextarea
+  const handleTextareaChange = useCallback(
+    (newValue: string) => {
+      dispatchComposer({ type: "SET_VALUE", payload: newValue });
+      if (errorMessage) {
+        dispatchComposer({ type: "SET_ERROR", payload: null });
+      }
+      debouncedAdjustHeight();
+    },
+    [errorMessage, debouncedAdjustHeight]
+  );
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        void send();
+      }
+    },
+    [send]
+  );
 
   // Handle paste events for images
   const handlePaste = useCallback(
@@ -301,33 +452,15 @@ function ChatComposer({
       )}
     >
       <div className={spacing.padding.lg}>
-        <textarea
-          ref={textareaRef}
+        <ChatComposerTextarea
           value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            if (errorMessage) setErrorMessage(null);
-            debouncedAdjustHeight();
-          }}
+          onChange={handleTextareaChange}
           onKeyDown={onKeyDown}
           onPaste={handlePaste}
           placeholder={placeholder}
-          className={cn(
-            "w-full px-4 py-3",
-            "resize-none",
-            "bg-transparent",
-            "border-none",
-            "text-foreground text-sm",
-            "focus:outline-none",
-            "placeholder:text-muted-foreground",
-            "min-h-[60px]",
-          )}
-          style={{ overflow: "hidden" }}
           disabled={disabled}
-          aria-label="Message input"
-          aria-invalid={!!errorMessage}
-          aria-describedby={errorMessage ? "composer-error" : undefined}
-          data-ph-no-capture
+          errorMessage={errorMessage}
+          textareaRef={textareaRef}
         />
 
         {/* File Previews */}
@@ -377,7 +510,7 @@ function ChatComposer({
               if (onModelChange) {
                 onModelChange(next);
               } else {
-                setFallbackModelId(next);
+                dispatchComposer({ type: "SET_FALLBACK_MODEL", payload: next });
               }
             }}
             disabled={disabled || isBusy || modelOptions.length === 0}
@@ -387,9 +520,7 @@ function ChatComposer({
             <FileUploadButton
               onFileSelect={handleFileSelect}
               disabled={disabled || isBusy || uploadingFiles.length > 0}
-              modelCapabilities={
-                modelOptions.find(m => m.value === (modelValue ?? fallbackModelId))?.capabilities
-              }
+              modelCapabilities={selectedModelCapabilities}
               onUnsupportedModel={() => {
                 // Find a model with file support
                 const fileModel = modelOptions.find(m =>

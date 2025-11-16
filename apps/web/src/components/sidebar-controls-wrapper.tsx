@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PanelLeftClose } from "lucide-react";
+import { PanelLeftClose } from "@/lib/icons";
 import { opacity } from "@/styles/design-tokens";
+import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 
 export default function SidebarControlsWrapper() {
 	const [collapsed, setCollapsed] = useState(false);
 
 	const updateCollapsedState = useCallback(() => {
 		try {
-			const value = localStorage.getItem("oc:sb:collapsed");
+			const value = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
 			setCollapsed(value === "1");
 		} catch {
 			setCollapsed(false);
@@ -22,7 +23,7 @@ export default function SidebarControlsWrapper() {
 
 		// Listen for storage changes
 		const handleStorage = (e: StorageEvent) => {
-			if (e.key === "oc:sb:collapsed") {
+			if (e.key === LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED) {
 				updateCollapsedState();
 			}
 		};

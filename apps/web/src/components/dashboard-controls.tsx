@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import SidebarCollapseButton from "@/components/sidebar-collapse-button";
 import { CommandPalette, useCommandPalette } from "@/components/command-palette";
 import { opacity, spacing } from "@/styles/design-tokens";
+import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 
 export function DashboardControls() {
 	const { open, setOpen } = useCommandPalette();
@@ -11,7 +12,7 @@ export function DashboardControls() {
 
 	const updateCollapsedState = useCallback(() => {
 		try {
-			const value = localStorage.getItem("oc:sb:collapsed");
+			const value = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
 			setCollapsed(value === "1");
 		} catch {
 			setCollapsed(false);
@@ -22,7 +23,7 @@ export function DashboardControls() {
 		updateCollapsedState();
 
 		const handleStorage = (e: StorageEvent) => {
-			if (e.key === "oc:sb:collapsed") {
+			if (e.key === LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED) {
 				updateCollapsedState();
 			}
 		};

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { LogoWithEffect } from '@/components/logo-with-effect'
-import { Menu, X } from 'lucide-react'
+import { Menu, X } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import React, { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -66,7 +66,7 @@ export const HeroHeader = () => {
                                 href="/"
                                 aria-label="home"
                                 className="flex items-center space-x-2">
-                                <LogoWithEffect />
+                                <LogoWithEffect priority />
                             </Link>
 
                             <button

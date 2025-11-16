@@ -1,6 +1,7 @@
 "use client";
 
 import { logError } from "@/lib/logger";
+import { getClientEnv } from "./env";
 
 export type PrefetchMessage = {
 	id: string;
@@ -15,9 +16,33 @@ export type PrefetchEntry = {
 	lastAccessedAt: number; // When entry was last accessed (for LRU eviction)
 };
 
+/**
+ * Type guard to validate prefetch entry structure
+ * Prevents app crashes from corrupted sessionStorage data
+ */
+function isPrefetchEntry(value: unknown): value is PrefetchEntry {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"messages" in value &&
+		Array.isArray((value as any).messages) &&
+		"fetchedAt" in value &&
+		typeof (value as any).fetchedAt === "number"
+	);
+}
+
+/**
+ * Type guard to validate entire cache structure
+ */
+function isPrefetchCache(value: unknown): value is Record<string, PrefetchEntry> {
+	if (typeof value !== "object" || value === null) return false;
+	return Object.values(value).every((entry) => isPrefetchEntry(entry));
+}
+
+const env = getClientEnv();
 const STORAGE_KEY = "openchat.chat-prefetch";
-const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
-const MAX_CACHE_SIZE = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
+const DEFAULT_TTL_MS = Number(env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
+const MAX_CACHE_SIZE = Number(env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
 
 declare global {
 	// eslint-disable-next-line no-var, vars-on-top
@@ -39,11 +64,27 @@ function getGlobalState() {
 			try {
 				const raw = window.sessionStorage?.getItem(STORAGE_KEY);
 				if (raw) {
-					const parsed = JSON.parse(raw) as Record<string, Partial<PrefetchEntry>>;
+					// Parse with try-catch to handle corrupted JSON
+					let parsed: unknown;
+					try {
+						parsed = JSON.parse(raw);
+					} catch (error) {
+						// Invalid JSON - clear corrupted cache and continue with empty state
+						window.sessionStorage?.removeItem(STORAGE_KEY);
+						return globalThis.__OPENCHAT_CHAT_PREFETCH__;
+					}
+
+					// Validate basic structure first
+					if (!isPrefetchCache(parsed)) {
+						// Invalid structure - clear corrupted cache and continue with empty state
+						window.sessionStorage?.removeItem(STORAGE_KEY);
+						return globalThis.__OPENCHAT_CHAT_PREFETCH__;
+					}
+
 					// Migrate old cache entries that lack lastAccessedAt field
 					const migrated: Record<string, PrefetchEntry> = {};
 					for (const [chatId, entry] of Object.entries(parsed)) {
-						if (entry.messages && typeof entry.fetchedAt === 'number') {
+						if (entry.messages && typeof entry.fetchedAt === "number") {
 							migrated[chatId] = {
 								messages: entry.messages,
 								fetchedAt: entry.fetchedAt,

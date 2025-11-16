@@ -89,16 +89,23 @@ export function ChatMessagesFeed({
     return stabilized;
   }, [initialMessages, optimisticNormalized]);
 
-  return (
-    <ChatMessagesPanel
-      messages={merged.map((msg) => ({
+  // PERFORMANCE FIX: Memoize message mapping to prevent ChatMessagesPanel re-renders
+  const mappedMessages = useMemo(
+    () =>
+      merged.map((msg) => ({
         id: msg.id,
         role: msg.role,
         content: msg.content,
         parts: msg.parts,
         thinkingTimeMs: msg.thinkingTimeMs,
         attachments: msg.attachments,
-      }))}
+      })),
+    [merged]
+  );
+
+  return (
+    <ChatMessagesPanel
+      messages={mappedMessages}
       paddingBottom={paddingBottom}
       className={className}
       loading={loading}

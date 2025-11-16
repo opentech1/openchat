@@ -5,6 +5,7 @@ import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
 import dynamic from "next/dynamic";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ChatLoader } from "@/components/ui/nice-loader";
+import { ChatErrorBoundary } from "@/components/chat-error-boundary";
 
 // Lazy load the heavy ChatRoom component (600+ lines)
 const ChatRoom = dynamic(() => import("@/components/chat-room"), {
@@ -48,9 +49,11 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
   if (!mounted) return <ChatLoader />;
   return (
     <div className="animate-fade-in">
-      <ChatStoreProvider initialMessages={initialUiMessages}>
-        <ChatRoom {...props} />
-      </ChatStoreProvider>
+      <ChatErrorBoundary chatId={props.chatId}>
+        <ChatStoreProvider initialMessages={initialUiMessages}>
+          <ChatRoom {...props} />
+        </ChatStoreProvider>
+      </ChatErrorBoundary>
     </div>
   );
 }

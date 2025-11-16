@@ -28,28 +28,29 @@ export const createAuth = (
 		ensureValidated();
 	}
 
-	const siteUrl = getEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+	const env = validateConvexEnv();
+	const siteUrl = env.NEXT_PUBLIC_APP_URL;
 
 	// Build socialProviders object dynamically based on available credentials
 	const socialProviders: Record<string, any> = {};
 
 	// GitHub OAuth
-	if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+	if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
 		socialProviders.github = {
-			clientId: process.env.GITHUB_CLIENT_ID,
-			clientSecret: process.env.GITHUB_CLIENT_SECRET,
+			clientId: env.GITHUB_CLIENT_ID,
+			clientSecret: env.GITHUB_CLIENT_SECRET,
 		};
 	}
 
 	// Google OAuth
-	if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+	if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
 		socialProviders.google = {
-			clientId: process.env.GOOGLE_CLIENT_ID,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+			clientId: env.GOOGLE_CLIENT_ID,
+			clientSecret: env.GOOGLE_CLIENT_SECRET,
 		};
 	}
 
-	const authSecret = getEnv("BETTER_AUTH_SECRET", "dev-secret");
+	const authSecret = env.BETTER_AUTH_SECRET;
 
 	// Warn if using dev-secret in production
 	if (authSecret === "dev-secret" && isProduction()) {

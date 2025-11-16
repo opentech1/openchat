@@ -28,6 +28,83 @@ import { ZodError } from "zod";
  */
 
 /**
+ * Type guards for error handling
+ */
+
+/**
+ * API Error type
+ *
+ * Represents errors from API calls with tracking and status information
+ */
+export type ApiError = {
+	__posthogTracked?: boolean;
+	status?: number;
+	providerUrl?: string;
+	message?: string;
+	cause?: unknown;
+};
+
+/**
+ * Type guard for API errors
+ *
+ * @param error - Value to check
+ * @returns True if error is an object with API error properties
+ */
+export function isApiError(error: unknown): error is ApiError {
+	return typeof error === "object" && error !== null;
+}
+
+/**
+ * Message Part types for chat messages
+ */
+export type MessagePart = TextPart | FilePart;
+
+export type TextPart = {
+	type: "text";
+	text: string;
+};
+
+export type FilePart = {
+	type: "file";
+	data?: string;
+	url?: string;
+	filename?: string;
+	mediaType?: string;
+};
+
+/**
+ * Type guard for text message parts
+ *
+ * @param part - Value to check
+ * @returns True if part is a text message part
+ */
+export function isTextPart(part: unknown): part is TextPart {
+	return (
+		typeof part === "object" &&
+		part !== null &&
+		"type" in part &&
+		part.type === "text" &&
+		"text" in part &&
+		typeof part.text === "string"
+	);
+}
+
+/**
+ * Type guard for file message parts
+ *
+ * @param part - Value to check
+ * @returns True if part is a file message part
+ */
+export function isFilePart(part: unknown): part is FilePart {
+	return (
+		typeof part === "object" &&
+		part !== null &&
+		"type" in part &&
+		part.type === "file"
+	);
+}
+
+/**
  * Application Error
  *
  * Base error class for all application errors.
@@ -349,7 +426,7 @@ export async function withRetry<T>(
 	maxRetries = 3,
 	delayMs = 1000,
 ): Promise<T> {
-	let lastError: Error;
+	let lastError: Error | undefined;
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
@@ -372,7 +449,8 @@ export async function withRetry<T>(
 		}
 	}
 
-	throw lastError!;
+	// This should never happen (loop always assigns lastError), but handle it safely
+	throw lastError ?? new Error("Operation failed with unknown error");
 }
 
 /**
@@ -441,22 +519,17 @@ export function reportError(
 	error: unknown,
 	context?: Record<string, unknown>,
 ): void {
-	// Log to console in development
-	if (process.env.NODE_ENV === "development") {
-		console.error("Error reported:", error, context);
-		return;
-	}
+	// Always log with our structured logger
+	// This handles environment differences automatically
+	logError("Error reported", error, context);
 
-	// In production, send to monitoring service
+	// In production, additional reporting to monitoring service
 	// TODO: Integrate with Sentry or similar
 	// if (typeof window !== 'undefined' && window.Sentry) {
 	//   window.Sentry.captureException(error, {
 	//     extra: context,
 	//   });
 	// }
-
-	// Always log to server
-	logError("Error reported", error, context);
 }
 
 /**

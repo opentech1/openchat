@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownIcon } from "lucide-react";
+import { ArrowDownIcon } from "@/lib/icons";
 import {
   memo,
   useCallback,
@@ -13,7 +13,6 @@ import {
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useQuery } from "convex/react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
@@ -26,7 +25,6 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { FilePreview } from "@/components/file-preview";
-import { api } from "@server/convex/_generated/api";
 
 type MessagePart =
   | { type: "text"; text: string }
@@ -88,9 +86,19 @@ function ChatMessagesPanelComponent({
     count: messages.length,
     getScrollElement: () => viewportRef.current,
     estimateSize: () => 120, // Estimated height for each message
-    overscan: 5, // Render 5 extra items above and below viewport for smooth scrolling
+    overscan: 2, // Reduced from 5 to 2 for better performance
     enabled: shouldVirtualize,
   });
+
+  // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
+  const virtualListContainerStyle = useMemo(
+    () => ({
+      height: `${virtualizer.getTotalSize()}px`,
+      width: "100%",
+      position: "relative" as const,
+    }),
+    [virtualizer]
+  );
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
     return (
@@ -208,29 +216,25 @@ function ChatMessagesPanelComponent({
               <div className="w-full max-w-3xl mx-auto">
                 {shouldVirtualize ? (
                   // Virtualized list for many messages
-                  <div
-                    style={{
-                      height: `${virtualizer.getTotalSize()}px`,
-                      width: "100%",
-                      position: "relative",
-                    }}
-                  >
+                  <div style={virtualListContainerStyle}>
                     {virtualizer.getVirtualItems().map((virtualItem) => {
                       const msg = messages[virtualItem.index];
                       if (!msg) return null;
                       const isLastMsg = virtualItem.index === messages.length - 1;
+                      // PERFORMANCE FIX: Create stable style object
+                      const itemStyle = {
+                        position: "absolute" as const,
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualItem.start}px)`,
+                      };
                       return (
                         <div
                           key={virtualItem.key}
                           data-index={virtualItem.index}
                           ref={virtualizer.measureElement}
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            width: "100%",
-                            transform: `translateY(${virtualItem.start}px)`,
-                          }}
+                          style={itemStyle}
                           className="pb-4"
                         >
                           <ChatMessageBubble
@@ -328,21 +332,9 @@ const MessageAttachmentItem = ({
   attachment: MessageAttachmentsProps['attachments'][0];
   userId?: string | null;
 }) => {
-  // Use URL from attachment if available, otherwise query for it
-  const fileUrl = useQuery(
-    api.files.getFileUrl,
-    // Only query if we don't have a URL and have userId
-    userId && attachment.storageId && !attachment.url
-      ? {
-          storageId: attachment.storageId as any,
-          userId: userId as any,
-        }
-      : "skip"
-  );
-
-  // Prefer attachment URL, fall back to queried URL
-  const displayUrl = attachment.url || fileUrl || undefined;
-
+  // PERFORMANCE FIX: Use pre-fetched URL from attachment instead of individual queries
+  // URLs are now batch-fetched at the message level in the messages.list query
+  // This eliminates the N+1 query pattern (N individual queries for N attachments)
   return (
     <FilePreview
       file={{
@@ -350,7 +342,7 @@ const MessageAttachmentItem = ({
         filename: attachment.filename,
         contentType: attachment.contentType,
         size: attachment.size,
-        url: displayUrl,
+        url: attachment.url,
       }}
       showRemove={false}
     />

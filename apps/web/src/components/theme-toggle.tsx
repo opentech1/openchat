@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "@/lib/icons";
 import { useTheme } from "next-themes";
 import { borderRadius, iconSize } from "@/styles/design-tokens";
 
@@ -17,7 +17,7 @@ export default function ThemeToggle() {
 			type="button"
 			aria-label="Toggle theme"
 			onClick={() => setTheme(isDark ? "light" : "dark")}
-			className={`hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center ${borderRadius.sm} transition-colors`}
+			className={`hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center ${borderRadius.sm} transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
 		>
 			{mounted ? (isDark ? <Sun className={iconSize.sm} /> : <Moon className={iconSize.sm} />) : <Moon className={iconSize.sm} />}
 		</button>

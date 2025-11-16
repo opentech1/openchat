@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2 } from "@/lib/icons";
 import { authClient } from "@/lib/auth-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -15,10 +15,10 @@ import {
   hasOpenRouterKey,
   removeOpenRouterKey,
 } from "@/lib/openrouter-key-storage";
-import { useConvex, useQuery } from "convex/react";
-import { api } from "@server/convex/_generated/api";
+import { useConvex } from "convex/react";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
+import { useConvexUser } from "@/contexts/convex-user-context";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -46,11 +46,8 @@ export function AccountSettingsModal({
   const user = session?.user;
   const convex = useConvex();
 
-  // Get Convex user - only query when modal is open
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    open && user?.id ? { externalId: user.id } : "skip"
-  );
+  // Get Convex user from shared context
+  const { convexUser } = useConvexUser();
 
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);

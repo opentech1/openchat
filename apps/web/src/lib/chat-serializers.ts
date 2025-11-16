@@ -1,4 +1,4 @@
-import type { Doc, Id } from "@server/convex/_generated/dataModel";
+import type { Id } from "@server/convex/_generated/dataModel";
 
 export type SerializedChat = {
 	id: Id<"chats">;
@@ -7,7 +7,16 @@ export type SerializedChat = {
 	lastMessageAt: string | null;
 };
 
-export function serializeChat(chat: Doc<"chats">): SerializedChat {
+// Chat type returned by chats.list query (optimized, without redundant fields)
+export type ListChat = {
+	_id: Id<"chats">;
+	title: string;
+	createdAt: number;
+	updatedAt: number;
+	lastMessageAt?: number;
+};
+
+export function serializeChat(chat: ListChat): SerializedChat {
 	return {
 		id: chat._id,
 		title: chat.title,

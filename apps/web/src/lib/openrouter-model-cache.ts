@@ -9,8 +9,25 @@ const CACHE_VERSION = 8; // Increment this to invalidate old caches
 type CachedModels = {
 	models: ModelSelectorOption[];
 	expiresAt: number;
-	version?: number;
+	version: number;
 };
+
+/**
+ * Type guard to validate cache structure
+ * Prevents app crashes from corrupted localStorage data
+ */
+function isCachedModels(value: unknown): value is CachedModels {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"models" in value &&
+		Array.isArray((value as any).models) &&
+		"expiresAt" in value &&
+		typeof (value as any).expiresAt === "number" &&
+		"version" in value &&
+		typeof (value as any).version === "number"
+	);
+}
 
 function getStorage() {
 	if (typeof window === "undefined") return null;
@@ -24,14 +41,29 @@ function getStorage() {
 export function readCachedModels(): ModelSelectorOption[] | null {
 	const storage = getStorage();
 	if (!storage) return null;
+
 	try {
 		const raw = storage.getItem(STORAGE_KEY);
 		if (!raw) return null;
-		const parsed = JSON.parse(raw) as CachedModels;
-		if (!Array.isArray(parsed.models)) return null;
-		if (typeof parsed.expiresAt !== "number") return null;
 
-		// Invalidate cache if version doesn't match
+		// Parse with try-catch to handle corrupted JSON
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(raw);
+		} catch (error) {
+			// Invalid JSON - clear corrupted cache and return null
+			storage.removeItem(STORAGE_KEY);
+			return null;
+		}
+
+		// Validate structure with type guard
+		if (!isCachedModels(parsed)) {
+			// Invalid structure - clear corrupted cache and return null
+			storage.removeItem(STORAGE_KEY);
+			return null;
+		}
+
+		// Validate version and expiry
 		if (parsed.version !== CACHE_VERSION) {
 			storage.removeItem(STORAGE_KEY);
 			return null;
@@ -41,8 +73,10 @@ export function readCachedModels(): ModelSelectorOption[] | null {
 			storage.removeItem(STORAGE_KEY);
 			return null;
 		}
+
 		return parsed.models;
-	} catch {
+	} catch (error) {
+		// Catch any other unexpected errors
 		return null;
 	}
 }

@@ -19,6 +19,21 @@
  */
 
 import { logInfo, logWarn, logError } from "./logger-server";
+import { createHash } from "crypto";
+
+/**
+ * Hash a value using SHA-256 and return first 12 characters
+ * This provides anonymization while maintaining correlation capability
+ * Consistent with logger.ts hashing strategy
+ */
+function hashValue(value: string): string {
+	try {
+		const hash = createHash("sha256").update(value).digest("hex");
+		return hash.substring(0, 12); // First 12 chars for brevity
+	} catch {
+		return "hash_error";
+	}
+}
 
 export type AuditEventType =
 	| "chat.delete"
@@ -229,16 +244,18 @@ export async function auditLog(params: {
  * - Falls back to X-Real-IP header
  * - Finally uses URL hostname as last resort
  * - Always takes leftmost IP in X-Forwarded-For chain (original client)
+ * - Hashes IP address for privacy (SHA-256, first 12 chars)
  *
  * SECURITY NOTES:
  * - X-Forwarded-For can be spoofed if not behind trusted proxy
  * - Ensure your reverse proxy/load balancer sets these headers correctly
  * - Direct client connections should use connection socket IP instead
  * - Consider using rate-limit.ts getClientIp() for rate limiting
+ * - IP addresses are hashed before logging to protect user privacy
  *
  * @param request - HTTP request object
- * @returns Object containing IP address and user agent
- * @returns ipAddress - Client IP address (never empty, defaults to "unknown")
+ * @returns Object containing hashed IP address and user agent
+ * @returns ipAddress - Hashed client IP address (SHA-256, 12 chars)
  * @returns userAgent - Client user agent string (optional)
  *
  * @example
@@ -251,7 +268,7 @@ export async function auditLog(params: {
  *     event: "chat.create",
  *     userId,
  *     resourceId: chatId,
- *     ipAddress,
+ *     ipAddress, // Already hashed
  *     userAgent,
  *     status: "success"
  *   });
@@ -263,23 +280,26 @@ export function getRequestMetadata(request: Request): {
 	userAgent?: string;
 } {
 	// Extract IP (prefer x-forwarded-for if behind proxy)
-	let ipAddress = "unknown";
+	let rawIpAddress = "unknown";
 	const forwarded = request.headers.get("x-forwarded-for");
 	if (forwarded) {
-		ipAddress = forwarded.split(",")[0]!.trim();
+		rawIpAddress = forwarded.split(",")[0]!.trim();
 	} else {
 		const realIp = request.headers.get("x-real-ip");
 		if (realIp) {
-			ipAddress = realIp.trim();
+			rawIpAddress = realIp.trim();
 		} else {
 			try {
 				const url = new URL(request.url);
-				ipAddress = url.hostname;
+				rawIpAddress = url.hostname;
 			} catch {
-				ipAddress = "unknown";
+				rawIpAddress = "unknown";
 			}
 		}
 	}
+
+	// Hash IP address for privacy (consistent with logger.ts and chat-handler.ts)
+	const ipAddress = rawIpAddress === "unknown" ? "unknown" : hashValue(rawIpAddress);
 
 	const userAgent = request.headers.get("user-agent") ?? undefined;
 
@@ -322,6 +342,17 @@ export async function auditChatCreate(params: {
 	});
 }
 
+/**
+ * Log user creation event
+ *
+ * PRIVACY: Email is hashed (SHA-256, 12 chars) before logging
+ * to protect user privacy while maintaining correlation capability
+ *
+ * @param params.userId - ID of the created user
+ * @param params.ipAddress - Client IP address (should already be hashed)
+ * @param params.userAgent - Client user agent string
+ * @param params.email - User email (will be hashed before logging)
+ */
 export async function auditUserCreate(params: {
 	userId: string;
 	ipAddress?: string;
@@ -334,7 +365,8 @@ export async function auditUserCreate(params: {
 		ipAddress: params.ipAddress,
 		userAgent: params.userAgent,
 		status: "success",
-		metadata: params.email ? { email: params.email } : undefined,
+		// Hash email for privacy (consistent with logger.ts)
+		metadata: params.email ? { emailHash: hashValue(params.email) } : undefined,
 	});
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Github } from "lucide-react";
+import { Github } from "@/lib/icons";
 import Link from "next/link";
 import Image from "next/image";
 import { authClient } from "@/lib/auth-client";

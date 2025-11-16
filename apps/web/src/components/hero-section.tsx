@@ -2,21 +2,44 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { authClient } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { PageLoader } from '@/components/ui/nice-loader';
 
 import { HeroHeader } from './header';
-import Features from '@/components/features-1';
 import { HeroContent } from '@/components/hero/hero-content';
-import { AIModelsSection } from '@/components/hero/ai-models-section';
-import { RealtimeSection } from '@/components/hero/realtime-section';
-import { ComparisonSection } from '@/components/hero/comparison-section';
-import { SponsorsSection } from '@/components/hero/sponsors-section';
-import { VersionsSection } from '@/components/hero/versions-section';
-import { Footer } from '@/components/footer';
 import { captureClientEvent } from '@/lib/posthog';
 import { borderRadius } from '@/styles/design-tokens';
+
+// Lazy load below-fold sections to reduce initial bundle size
+const Features = dynamic(() => import('@/components/features-1'), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const AIModelsSection = dynamic(() => import('@/components/hero/ai-models-section').then(mod => ({ default: mod.AIModelsSection })), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const RealtimeSection = dynamic(() => import('@/components/hero/realtime-section').then(mod => ({ default: mod.RealtimeSection })), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const ComparisonSection = dynamic(() => import('@/components/hero/comparison-section').then(mod => ({ default: mod.ComparisonSection })), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const SponsorsSection = dynamic(() => import('@/components/hero/sponsors-section').then(mod => ({ default: mod.SponsorsSection })), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const VersionsSection = dynamic(() => import('@/components/hero/versions-section').then(mod => ({ default: mod.VersionsSection })), {
+  loading: () => <div className="h-96 animate-pulse bg-muted/20" />,
+});
+
+const Footer = dynamic(() => import('@/components/footer').then(mod => ({ default: mod.Footer })), {
+  loading: () => <div className="h-64 animate-pulse bg-muted/20" />,
+});
 
 function screenWidthBucket(width: number) {
   if (width < 640) return 'xs';

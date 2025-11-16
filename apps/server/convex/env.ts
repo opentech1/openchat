@@ -3,19 +3,30 @@
  * Convex doesn't support external validation libraries, so we do manual validation
  */
 
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("EnvValidation");
+
 export interface ConvexEnv {
 	// Required
 	NEXT_PUBLIC_APP_URL: string;
 	BETTER_AUTH_SECRET: string;
-	
+
 	// Required for OAuth (at least one provider)
 	GITHUB_CLIENT_ID?: string;
 	GITHUB_CLIENT_SECRET?: string;
 	GOOGLE_CLIENT_ID?: string;
 	GOOGLE_CLIENT_SECRET?: string;
-	
-	// Optional
+
+	// Optional - Configuration
 	AUTH_COOKIE_PREFIX?: string;
+	CONVEX_SITE_URL?: string;
+
+	// Optional - Metadata
+	NEXT_PUBLIC_DEPLOYMENT?: string;
+	NEXT_PUBLIC_APP_VERSION?: string;
+
+	// Optional - Environment
 	NODE_ENV?: "development" | "production" | "test";
 }
 
@@ -75,18 +86,18 @@ export function validateConvexEnv(): ConvexEnv {
 
 	// Print warnings
 	if (warnings.length > 0 && !isProd) {
-		console.warn("⚠️  Convex environment warnings:");
-		warnings.forEach((warning) => console.warn(`  - ${warning}`));
-		console.warn("\nYou can set these via: npx convex env set KEY value");
-		console.warn("Or add them to apps/server/.env.local and restart.\n");
+		logger.warn("Convex environment warnings detected", {
+			warningCount: warnings.length,
+			warnings
+		});
 	}
 
 	// Only throw errors in production or if critical errors exist
 	if (errors.length > 0) {
-		console.error("❌ Invalid environment variables for Convex:");
-		errors.forEach((error) => console.error(`  - ${error}`));
-		console.error("\nPlease check your Convex environment variables.");
-		console.error("See .env.example for reference.\n");
+		logger.error("Invalid environment variables for Convex", new Error("Convex environment validation failed"), {
+			errorCount: errors.length,
+			errors
+		});
 		throw new Error("Convex environment validation failed");
 	}
 
@@ -98,6 +109,9 @@ export function validateConvexEnv(): ConvexEnv {
 		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
 		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
 		AUTH_COOKIE_PREFIX: process.env.AUTH_COOKIE_PREFIX,
+		CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
+		NEXT_PUBLIC_DEPLOYMENT: process.env.NEXT_PUBLIC_DEPLOYMENT,
+		NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
 		NODE_ENV: process.env.NODE_ENV as "development" | "production" | "test" | undefined,
 	};
 }

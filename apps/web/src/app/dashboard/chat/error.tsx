@@ -21,7 +21,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ArrowLeft, RefreshCw, MessageSquare } from "lucide-react";
+import { AlertCircle, ArrowLeft, RefreshCw, MessageSquare } from "@/lib/icons";
 import { logError } from "@/lib/logger";
 
 /**

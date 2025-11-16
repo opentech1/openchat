@@ -1,31 +1,42 @@
 /**
  * Rate Limiting Utility
  *
- * Provides IP-based rate limiting for API endpoints.
- * Suitable for single-instance deployments. For production multi-instance/serverless,
- * consider using Redis or a distributed rate limiter.
+ * Provides IP-based rate limiting for API endpoints with automatic Redis/in-memory selection.
  *
  * DEPLOYMENT MODES:
  *
- * Single Instance (default): Uses in-memory rate limiting
- * - Fast and simple
- * - No external dependencies
- * - Rate limits are per-instance (not shared across servers)
- * - Memory usage is bounded by maxBuckets config
+ * 1. In-Memory (default): Uses in-memory rate limiting
+ *    - Fast and simple
+ *    - No external dependencies
+ *    - Rate limits are per-instance (not shared across servers)
+ *    - Memory usage is bounded by maxBuckets config
+ *    - Ideal for: Development, single-instance deployments
  *
- * Multi Instance: Set REDIS_URL env var to enable Redis-based rate limiting
- * - Distributed rate limiting across all instances
- * - Requires Redis server and ioredis package
- * - Rate limits are globally enforced
- * - See rate-limit-redis.ts for implementation details
+ * 2. Redis (production): Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+ *    - Distributed rate limiting across all instances
+ *    - Requires Upstash Redis and @upstash/redis package
+ *    - Rate limits are globally enforced
+ *    - Serverless-friendly (REST API, no persistent connections)
+ *    - Ideal for: Production, multi-instance, serverless deployments
+ *
+ * Environment Variables:
+ * - UPSTASH_REDIS_REST_URL: Upstash Redis REST endpoint
+ * - UPSTASH_REDIS_REST_TOKEN: Upstash Redis REST token
+ * - RATE_LIMIT_MODE: Override mode ("redis" | "memory") - optional
+ * - RATE_LIMIT_FAIL_OPEN: If "true", allow requests on Redis errors (default: true)
  *
  * Example:
  * ```bash
- * # Single instance (default)
+ * # Development (in-memory)
  * bun run start
  *
- * # Multi instance with Redis
- * REDIS_URL=redis://localhost:6379 bun run start
+ * # Production (Redis)
+ * UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
+ * UPSTASH_REDIS_REST_TOKEN=xxx
+ * bun run start
+ *
+ * # Force in-memory even with Redis configured
+ * RATE_LIMIT_MODE=memory bun run start
  * ```
  */
 
@@ -460,12 +471,14 @@ export interface IRateLimiter {
  * Create a rate limiter instance
  *
  * Automatically selects the appropriate implementation based on environment:
- * - If REDIS_URL is set: Uses distributed Redis-based rate limiting
+ * - If UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set: Uses distributed Redis-based rate limiting
+ * - If RATE_LIMIT_MODE=redis: Forces Redis mode (will error if credentials missing)
+ * - If RATE_LIMIT_MODE=memory: Forces in-memory mode (ignores Redis credentials)
  * - Otherwise: Uses in-memory rate limiting (single instance only)
  *
  * USAGE:
  * ```typescript
- * // Basic usage
+ * // Basic usage (auto-detects based on env vars)
  * const limiter = await createRateLimiter({
  *   limit: 10,
  *   windowMs: 60000, // 1 minute
@@ -476,41 +489,73 @@ export interface IRateLimiter {
  *   return new Response("Too many requests", { status: 429 });
  * }
  *
- * // With custom Redis URL
+ * // Force Redis mode with custom credentials
  * const limiter = await createRateLimiter(
  *   { limit: 100, windowMs: 60000 },
- *   "redis://custom-host:6379"
+ *   { mode: "redis", redisUrl: "https://...", redisToken: "..." }
+ * );
+ *
+ * // Force in-memory mode (ignore env vars)
+ * const limiter = await createRateLimiter(
+ *   { limit: 100, windowMs: 60000 },
+ *   { mode: "memory" }
  * );
  * ```
  *
  * TESTING:
  * ```typescript
- * // Force in-memory for tests (ignore REDIS_URL)
- * const limiter = new RateLimiter({ limit: 10, windowMs: 60000 });
- *
- * // Force Redis for tests
- * const { RedisRateLimiter } = await import("./rate-limit-redis");
- * const limiter = new RedisRateLimiter(
+ * // Force in-memory for tests (ignore env vars)
+ * const limiter = await createRateLimiter(
  *   { limit: 10, windowMs: 60000 },
- *   "redis://localhost:6379"
+ *   { mode: "memory" }
+ * );
+ *
+ * // Force Redis for tests with custom credentials
+ * const limiter = await createRateLimiter(
+ *   { limit: 10, windowMs: 60000 },
+ *   { mode: "redis", redisUrl: "https://...", redisToken: "..." }
  * );
  * ```
  *
  * @param config - Rate limit configuration
- * @param redisUrl - Optional Redis URL (defaults to REDIS_URL env var)
+ * @param options - Optional configuration for Redis mode
  * @returns Rate limiter instance (in-memory or Redis-based)
  */
 export async function createRateLimiter(
 	config: RateLimitConfig,
-	redisUrl?: string,
+	options?: {
+		mode?: "redis" | "memory";
+		redisUrl?: string;
+		redisToken?: string;
+		failOpen?: boolean;
+	},
 ): Promise<IRateLimiter> {
-	const useRedis = redisUrl || process.env.REDIS_URL;
+	// Determine mode based on options or environment
+	const explicitMode = options?.mode || process.env.RATE_LIMIT_MODE;
+	const hasRedisCredentials =
+		(options?.redisUrl && options?.redisToken) ||
+		(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+	// Determine failOpen behavior
+	const failOpen = options?.failOpen ?? (process.env.RATE_LIMIT_FAIL_OPEN === "true" || process.env.RATE_LIMIT_FAIL_OPEN === "1");
+
+	// Force memory mode
+	if (explicitMode === "memory") {
+		return new RateLimiter(config);
+	}
+
+	// Force Redis mode or auto-detect
+	const useRedis = explicitMode === "redis" || hasRedisCredentials;
 
 	if (useRedis) {
 		// Lazy load Redis limiter only if needed
 		try {
 			const { RedisRateLimiter } = await import("./rate-limit-redis");
-			return new RedisRateLimiter(config, redisUrl);
+			return new RedisRateLimiter(
+				{ ...config, failOpen },
+				options?.redisUrl,
+				options?.redisToken
+			);
 		} catch (error) {
 			console.error(
 				"Failed to load Redis rate limiter, falling back to in-memory:",
@@ -533,9 +578,9 @@ export async function createRateLimiter(
  * @deprecated Use createRateLimiter instead
  */
 export function createRateLimiterSync(config: RateLimitConfig): RateLimiter {
-	if (process.env.REDIS_URL) {
+	if (process.env.UPSTASH_REDIS_REST_URL || process.env.RATE_LIMIT_MODE === "redis") {
 		console.warn(
-			"REDIS_URL is set but createRateLimiterSync was called. " +
+			"Redis credentials are set but createRateLimiterSync was called. " +
 				"Use createRateLimiter (async) for Redis support. " +
 				"Falling back to in-memory rate limiting.",
 		);
