@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { createLogger } from "./lib/logger";
 
 // Constants & Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes (default)
@@ -205,8 +206,19 @@ export const generateUploadUrl = mutation({
 	},
 	returns: v.string(),
 	handler: async (ctx, args) => {
+		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel to reduce latency
+		// This reduces total wait time from T(user) + T(chat) to max(T(user), T(chat))
+		const [user, chat] = await Promise.all([
+			ctx.db.get(args.userId),
+			ctx.db.get(args.chatId),
+		]);
+
+		// Verify user exists
+		if (!user) {
+			throw new Error("User not found");
+		}
+
 		// Verify the chat exists and belongs to the user
-		const chat = await ctx.db.get(args.chatId);
 		if (!chat) {
 			throw new Error("Chat not found");
 		}
@@ -215,11 +227,6 @@ export const generateUploadUrl = mutation({
 		}
 
 		// Check if user has exceeded their file quota
-		const user = await ctx.db.get(args.userId);
-		if (!user) {
-			throw new Error("User not found");
-		}
-
 		const currentFileCount = user.fileUploadCount || 0;
 		if (currentFileCount >= MAX_USER_FILES) {
 			throw new Error(
@@ -269,8 +276,19 @@ export const saveFileMetadata = mutation({
 		// Validate file type
 		validateFileType(args.contentType);
 
+		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel
+		// This eliminates duplicate user lookup (was fetched again after file insert)
+		const [user, chat] = await Promise.all([
+			ctx.db.get(args.userId),
+			ctx.db.get(args.chatId),
+		]);
+
+		// Verify user exists
+		if (!user) {
+			throw new Error("User not found");
+		}
+
 		// Verify the chat exists and belongs to the user
-		const chat = await ctx.db.get(args.chatId);
 		if (!chat) {
 			throw new Error("Chat not found");
 		}
@@ -292,14 +310,12 @@ export const saveFileMetadata = mutation({
 			uploadedAt: Date.now(),
 		});
 
-		// Increment user's file upload count
-		const user = await ctx.db.get(args.userId);
-		if (user) {
-			await ctx.db.patch(args.userId, {
-				fileUploadCount: (user.fileUploadCount || 0) + 1,
-				updatedAt: Date.now(),
-			});
-		}
+		// PERFORMANCE OPTIMIZATION: Use the user object we already fetched
+		// This avoids a second database lookup for the same user
+		await ctx.db.patch(args.userId, {
+			fileUploadCount: (user.fileUploadCount || 0) + 1,
+			updatedAt: Date.now(),
+		});
 
 		// Get the storage URL immediately
 		const url = await ctx.storage.getUrl(args.storageId);
@@ -353,6 +369,81 @@ export const getFileUrl = query({
 });
 
 /**
+ * Batch retrieves temporary URLs for multiple stored files.
+ * This is more efficient than calling getFileUrl multiple times (N+1 query optimization).
+ * Verifies that the user owns all files before providing access.
+ *
+ * @param storageIds - Array of storage IDs to fetch URLs for
+ * @param userId - The ID of the user requesting access
+ * @returns Array of objects with storageId and url (or null if not found/unauthorized/deleted)
+ */
+export const getBatchFileUrls = query({
+	args: {
+		storageIds: v.array(v.id("_storage")),
+		userId: v.id("users"),
+	},
+	returns: v.array(
+		v.object({
+			storageId: v.id("_storage"),
+			url: v.union(v.string(), v.null()),
+		})
+	),
+	handler: async (ctx, args) => {
+		// If no storage IDs provided, return empty array
+		if (args.storageIds.length === 0) {
+			return [];
+		}
+
+		// Remove duplicates
+		const uniqueStorageIds = Array.from(new Set(args.storageIds));
+
+		// Fetch all file records in parallel
+		const filePromises = uniqueStorageIds.map(async (storageId) => {
+			const file = await ctx.db
+				.query("fileUploads")
+				.withIndex("by_storage", (q) => q.eq("storageId", storageId))
+				.unique();
+			return { storageId, file };
+		});
+
+		const fileResults = await Promise.all(filePromises);
+
+		// Filter to only files that exist, belong to user, and aren't deleted
+		const validFiles = fileResults.filter(({ file }) => {
+			if (!file) return false;
+			if (file.userId !== args.userId) return false;
+			if (file.deletedAt) return false;
+			return true;
+		});
+
+		// Fetch URLs for valid files in parallel
+		const urlPromises = validFiles.map(async ({ storageId }) => {
+			try {
+				const url = await ctx.storage.getUrl(storageId);
+				return { storageId, url };
+			} catch (error) {
+				// If storage.getUrl fails, return null
+				return { storageId, url: null };
+			}
+		});
+
+		const urlResults = await Promise.all(urlPromises);
+
+		// Create a map for quick lookup
+		const urlMap = new Map<Id<"_storage">, string | null>();
+		for (const { storageId, url } of urlResults) {
+			urlMap.set(storageId, url);
+		}
+
+		// Return results in the same order as input, with null for unauthorized/deleted files
+		return uniqueStorageIds.map((storageId) => ({
+			storageId,
+			url: urlMap.get(storageId) ?? null,
+		}));
+	},
+});
+
+/**
  * Deletes a file from both the database and storage.
  * Performs a soft delete in the database and hard delete from storage.
  * Decrements the user's file upload count.
@@ -399,7 +490,11 @@ export const deleteFile = mutation({
 		} catch (error) {
 			// Log error but don't fail the operation
 			// File might already be deleted from storage
-			console.error("Error deleting file from storage:", error);
+			const logger = createLogger("deleteFile");
+			logger.error("Failed to delete file from storage", error, {
+				storageId: args.storageId,
+				fileId: file._id
+			});
 		}
 
 		// Decrement user's file upload count

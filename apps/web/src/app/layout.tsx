@@ -8,6 +8,8 @@ import { RouteFocusManager } from "@/components/route-focus-manager";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { generateCombinedStructuredData, stringifyStructuredData } from "@/lib/structured-data";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -47,12 +49,21 @@ export const metadata: Metadata = {
 		url: siteUrl,
 		siteName: "OpenChat",
 		locale: "en_US",
+		images: [
+			{
+				url: "/og-image.png",
+				width: 1200,
+				height: 630,
+				alt: "OpenChat - Fast AI Chat",
+			},
+		],
 	},
 	twitter: {
 		card: "summary_large_image",
 		title: "OpenChat - Fast AI Chat",
 		description:
 			"Fast, open source AI chat with 100+ models. ChatGPT alternative with GPT-4, Claude, Gemini & more. Free, customizable, self-hostable.",
+		images: ["/og-image.png"],
 	},
 	icons: {
 		icon: "/favicon.ico",
@@ -85,6 +96,17 @@ export default function RootLayout({
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
+	const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+	const convexDomain = convexUrl ? new URL(convexUrl).hostname : null;
+
+	// Generate structured data for SEO
+	const structuredData = generateCombinedStructuredData({
+		siteUrl,
+		siteName: "OpenChat",
+		description:
+			"Fast, open source AI chat with 100+ models. ChatGPT alternative with GPT-4, Claude, Gemini & more. Free, customizable, self-hostable.",
+	});
+
 	return (
 		<html
 			lang="en"
@@ -92,7 +114,37 @@ export default function RootLayout({
 			data-brand-theme="blue"
 			className={`${GeistSans.variable} ${GeistMono.variable}`}>
 			<head>
-				<Script id="posthog" strategy="lazyOnload">
+				{/* Resource hints for faster DNS resolution and connections */}
+				{convexDomain && (
+					<>
+						{/* DNS prefetch for Convex domain */}
+						<link rel="dns-prefetch" href={`https://${convexDomain}`} />
+						{/* Preconnect for critical Convex endpoints */}
+						<link rel="preconnect" href={`https://${convexDomain}`} crossOrigin="anonymous" />
+					</>
+				)}
+				{/* DNS prefetch for PostHog analytics */}
+				<link rel="dns-prefetch" href="https://us.i.posthog.com" />
+				<link rel="dns-prefetch" href="https://us-assets.i.posthog.com" />
+				{/* JSON-LD Structured Data for SEO */}
+				<script
+					type="application/ld+json"
+					dangerouslySetInnerHTML={{
+						__html: stringifyStructuredData(structuredData),
+					}}
+				/>
+			</head>
+			<body className={cn("font-sans antialiased", GeistSans.className)}>
+				<ErrorBoundary level="app">
+					<Providers>
+						<RouteFocusManager />
+						{children}
+					</Providers>
+				</ErrorBoundary>
+				<SpeedInsights />
+				<Analytics mode="production" />
+				{/* PostHog analytics - loaded after interactive to prevent blocking render */}
+				<Script id="posthog" strategy="afterInteractive">
 					{`!function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init Rr Mr fi Or Ar ci Tr Cr capture Mi calculateEventProperties Lr register register_once register_for_session unregister unregister_for_session Hr getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey displaySurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Ur jr createPersonProfile zr kr Br opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing get_explicit_consent_status is_capturing clear_opt_in_out_capturing Dr debug M Nr getPageViewId captureTraceFeedback captureTraceMetric $r".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
 posthog.init('phc_hWOxd18YQVTr0cSQ8X5OC3mfZY29cAthAXkxAPxiuqy', {
     api_host: 'https://us.i.posthog.com',
@@ -100,14 +152,6 @@ posthog.init('phc_hWOxd18YQVTr0cSQ8X5OC3mfZY29cAthAXkxAPxiuqy', {
     person_profiles: 'identified_only',
 })`}
 				</Script>
-			</head>
-			<body className={cn("font-sans antialiased", GeistSans.className)}>
-				<Providers>
-					<RouteFocusManager />
-					{children}
-				</Providers>
-				<SpeedInsights />
-				<Analytics mode="production" />
 			</body>
 		</html>
 	);

@@ -127,9 +127,12 @@ export function normalizeUiMessage(message: UIMessage<{
 
 	// Preserve all parts including reasoning
 	const parts: MessagePart[] = message.parts
-		.filter((part): part is { type: "text" | "reasoning"; text: string } =>
-			(part?.type === "text" || part?.type === "reasoning") && typeof (part as any).text === "string"
-		)
+		.filter((part): part is { type: "text" | "reasoning"; text: string } => {
+			if (!part || typeof part !== "object") return false;
+			const hasType = part.type === "text" || part.type === "reasoning";
+			const hasText = "text" in part && typeof part.text === "string";
+			return hasType && hasText;
+		})
 		.map((part) => ({
 			type: part.type as "text" | "reasoning",
 			text: part.text,

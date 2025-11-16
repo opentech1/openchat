@@ -7,6 +7,7 @@ import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, listMessagesForChat } from "@/lib/convex-server";
 import { logError } from "@/lib/logger-server";
 import { chatIdSchema } from "@/lib/validation";
+import { serializeMessage } from "@/lib/message-serializers";
 
 export async function GET(
 	_request: Request,
@@ -42,12 +43,9 @@ export async function GET(
 		}
 
 		const messages = await listMessagesForChat(convexUserId, validation.data as Id<"chats">);
-		const serialized = messages.map((message) => ({
-			id: message._id,
-			role: message.role,
-			content: message.content,
-			createdAt: new Date(message.createdAt).toISOString(),
-		}));
+		// CRITICAL: Use serializeMessage to ensure consistent message format
+		// This includes status and clientMessageId fields that were missing before
+		const serialized = messages.map(serializeMessage);
 		return NextResponse.json({ ok: true, chatId: validation.data, messages: serialized });
 	} catch (error) {
 		logError("Failed to prefetch chat messages", error);

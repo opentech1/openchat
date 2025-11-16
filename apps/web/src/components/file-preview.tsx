@@ -1,4 +1,5 @@
-import { X, File, Image as ImageIcon } from 'lucide-react';
+import { memo } from 'react';
+import { X, File, ImageIcon } from '@/lib/icons';
 
 interface FilePreviewProps {
   file: {
@@ -13,7 +14,7 @@ interface FilePreviewProps {
   showRemove?: boolean;
 }
 
-export function FilePreview({ file, onRemove, showRemove = true }: FilePreviewProps) {
+function FilePreviewComponent({ file, onRemove, showRemove = true }: FilePreviewProps) {
   const isImage = file.contentType.startsWith('image/');
   const fileSizeKB = (file.size / 1024).toFixed(1);
 
@@ -57,3 +58,20 @@ export function FilePreview({ file, onRemove, showRemove = true }: FilePreviewPr
     </div>
   );
 }
+
+// PERFORMANCE FIX: Memoize with custom comparison to prevent re-renders in message lists
+export const FilePreview = memo(FilePreviewComponent, (prev, next) => {
+  // Compare by storageId if available (most reliable), otherwise by other props
+  if (prev.file.storageId && next.file.storageId) {
+    return prev.file.storageId === next.file.storageId && prev.showRemove === next.showRemove;
+  }
+  // Fallback: compare all file properties
+  return (
+    prev.file.filename === next.file.filename &&
+    prev.file.contentType === next.file.contentType &&
+    prev.file.size === next.file.size &&
+    prev.file.url === next.file.url &&
+    prev.showRemove === next.showRemove &&
+    prev.onRemove === next.onRemove
+  );
+});

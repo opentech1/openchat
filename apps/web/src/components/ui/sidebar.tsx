@@ -4,6 +4,7 @@ import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 import { spacing } from "@/styles/design-tokens";
+import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 
 type SidebarContextValue = {
   collapsed: boolean;
@@ -30,7 +31,7 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 	// Load persisted state
 	React.useEffect(() => {
 		try {
-			const v = localStorage.getItem("oc:sb:collapsed");
+			const v = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
 			if (v === "1") setCollapsed(true);
 			if (v === "0") setCollapsed(false);
 		} catch {}
@@ -53,14 +54,19 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 		}
 		// Persist user preference after hydration without clobbering the stored value on first render.
 		try {
-			localStorage.setItem("oc:sb:collapsed", collapsed ? "1" : "0");
+			localStorage.setItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED, collapsed ? "1" : "0");
 			// Dispatch custom event to notify sidebar collapse button
 			window.dispatchEvent(new CustomEvent("sidebar-toggled"));
 		} catch {}
 	}, [collapsed]);
 
+	const contextValue = React.useMemo(
+		() => ({ collapsed, setCollapsed }),
+		[collapsed, setCollapsed]
+	);
+
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
+    <SidebarContext.Provider value={contextValue}>
       <aside
         data-collapsed={collapsed || undefined}
 		className={cn(

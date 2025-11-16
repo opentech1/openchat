@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X } from "@/lib/icons";
 import AppSidebar from "@/components/app-sidebar";
 import type { AppSidebarProps } from "@/components/app-sidebar";
 import { opacity, iconSize } from "@/styles/design-tokens";

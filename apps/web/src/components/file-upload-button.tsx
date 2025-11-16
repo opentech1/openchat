@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Paperclip } from "lucide-react";
+import { Paperclip } from "@/lib/icons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {

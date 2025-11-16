@@ -21,13 +21,15 @@ type UserCacheEntry = {
 const userCache = new Map<string, UserCacheEntry>();
 const CACHE_TTL_MS = 5000; // 5 seconds - short TTL to keep data fresh
 
-function getConvexUrl() {
-	return process.env.CONVEX_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
+async function getConvexUrl() {
+	const { getServerEnv } = await import("./env");
+	const env = getServerEnv();
+	return env.CONVEX_URL ?? env.NEXT_PUBLIC_CONVEX_URL;
 }
 
-function getClient() {
+async function getClient() {
 	if (!cachedClient) {
-		const url = getConvexUrl();
+		const url = await getConvexUrl();
 		if (!url) {
 			throw new Error("CONVEX_URL is not configured. Set CONVEX_URL or NEXT_PUBLIC_CONVEX_URL.");
 		}
@@ -55,7 +57,7 @@ export async function ensureConvexUser(sessionUser: SessionUser) {
 		}
 	}
 
-	const client = getClient();
+	const client = await getClient();
 	const result = await client.mutation(api.users.ensure, {
 		externalId: sessionUser.id,
 		email: sessionUser.email ?? undefined,
@@ -75,18 +77,18 @@ export async function ensureConvexUser(sessionUser: SessionUser) {
 }
 
 export async function getUserById(userId: Id<"users">) {
-	const client = getClient();
+	const client = await getClient();
 	const user = await client.query(api.users.getById, { userId });
 	return user;
 }
 
 export async function listChats(userId: Id<"users">) {
-	const client = getClient();
+	const client = await getClient();
 	return client.query(api.chats.list, { userId });
 }
 
 export async function createChatForUser(userId: Id<"users">, title: string) {
-	const client = getClient();
+	const client = await getClient();
 	const { chatId } = await client.mutation(api.chats.create, { userId, title });
 	const chat = await client.query(api.chats.get, { chatId, userId });
 	if (!chat) throw new Error("Chat not found after creation");
@@ -94,12 +96,12 @@ export async function createChatForUser(userId: Id<"users">, title: string) {
 }
 
 export async function deleteChatForUser(userId: Id<"users">, chatId: Id<"chats">) {
-	const client = getClient();
+	const client = await getClient();
 	return client.mutation(api.chats.remove, { userId, chatId });
 }
 
 export async function listMessagesForChat(userId: Id<"users">, chatId: Id<"chats">) {
-	const client = getClient();
+	const client = await getClient();
 	return client.query(api.messages.list, { userId, chatId });
 }
 
@@ -109,7 +111,7 @@ export async function sendMessagePair(args: {
 	user: { content: string; createdAt?: number; clientMessageId?: string };
 	assistant?: { content: string; createdAt?: number; clientMessageId?: string };
 }) {
-	const client = getClient();
+	const client = await getClient();
 	return client.mutation(api.messages.send, {
 		userId: args.userId,
 		chatId: args.chatId,
@@ -147,7 +149,7 @@ export async function streamUpsertMessage(args: {
 		uploadedAt: number;
 	}>;
 }) {
-	const client = getClient();
+	const client = await getClient();
 	return client.mutation(api.messages.streamUpsert, {
 		userId: args.userId,
 		chatId: args.chatId,
@@ -185,7 +187,7 @@ export async function getConvexUserFromSession(): Promise<[SessionUser, Id<"user
  * Get file URL from Convex storage
  */
 export async function getFileUrl(storageId: Id<"_storage">, userId: Id<"users">) {
-	const client = getClient();
+	const client = await getClient();
 	return client.query(api.files.getFileUrl, { storageId, userId });
 }
 

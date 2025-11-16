@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { SendIcon, XIcon, LoaderIcon } from "lucide-react";
+import { SendIcon, XIcon, LoaderIcon } from "@/lib/icons";
 import * as React from "react";
 import { useAutoResizeTextarea } from "@/components/ui/auto-resize-textarea";
 import {

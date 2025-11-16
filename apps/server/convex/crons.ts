@@ -15,6 +15,7 @@
 import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { decrementStat, getStats, STAT_KEYS } from "./lib/dbStats";
 
 const crons = cronJobs();
 
@@ -94,6 +95,9 @@ export const cleanupSoftDeletedRecords = internalMutation({
 					);
 				} else {
 					await ctx.db.delete(chat._id);
+					// PERFORMANCE OPTIMIZATION: Update stats counters instead of recalculating
+					await decrementStat(ctx, STAT_KEYS.CHATS_TOTAL);
+					await decrementStat(ctx, STAT_KEYS.CHATS_SOFT_DELETED);
 					console.log(
 						`[Cron] Hard deleted chat: ${chat._id} (deleted at: ${new Date(chat.deletedAt!).toISOString()})`,
 					);
@@ -115,6 +119,9 @@ export const cleanupSoftDeletedRecords = internalMutation({
 					);
 				} else {
 					await ctx.db.delete(message._id);
+					// PERFORMANCE OPTIMIZATION: Update stats counters instead of recalculating
+					await decrementStat(ctx, STAT_KEYS.MESSAGES_TOTAL);
+					await decrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED);
 					console.log(
 						`[Cron] Hard deleted message: ${message._id} (deleted at: ${new Date(message.deletedAt!).toISOString()})`,
 					);
@@ -201,46 +208,39 @@ export const generateDatabaseStats = internalMutation({
 		console.log("[Cron] Generate database stats - Started");
 
 		try {
-			// Count records in each table
-			const chatsCount = await ctx.db.query("chats").collect().then((c) => c.length);
-			const messagesCount = await ctx.db.query("messages").collect().then((m) => m.length);
-			const usersCount = await ctx.db.query("users").collect().then((u) => u.length);
-
-			// Count soft-deleted records
-			const softDeletedChats = await ctx.db
-				.query("chats")
-				.filter((q) => q.neq(q.field("deletedAt"), undefined))
-				.collect()
-				.then((c) => c.length);
-
-			const softDeletedMessages = await ctx.db
-				.query("messages")
-				.filter((q) => q.neq(q.field("deletedAt"), undefined))
-				.collect()
-				.then((m) => m.length);
+			// PERFORMANCE OPTIMIZATION: Read from stats counters instead of full table scans
+			// This is O(1) instead of O(n) where n = total records in table
+			// Before: Multiple .collect() calls loading all records into memory
+			// After: Direct lookup of pre-calculated counters
+			const statValues = await getStats(ctx, [
+				STAT_KEYS.CHATS_TOTAL,
+				STAT_KEYS.CHATS_SOFT_DELETED,
+				STAT_KEYS.MESSAGES_TOTAL,
+				STAT_KEYS.MESSAGES_SOFT_DELETED,
+				STAT_KEYS.USERS_TOTAL,
+			]);
 
 			const stats = {
 				timestamp: new Date().toISOString(),
 				tables: {
 					chats: {
-						total: chatsCount,
-						softDeleted: softDeletedChats,
-						active: chatsCount - softDeletedChats,
+						total: statValues[STAT_KEYS.CHATS_TOTAL],
+						softDeleted: statValues[STAT_KEYS.CHATS_SOFT_DELETED],
+						active: statValues[STAT_KEYS.CHATS_TOTAL] - statValues[STAT_KEYS.CHATS_SOFT_DELETED],
 					},
 					messages: {
-						total: messagesCount,
-						softDeleted: softDeletedMessages,
-						active: messagesCount - softDeletedMessages,
+						total: statValues[STAT_KEYS.MESSAGES_TOTAL],
+						softDeleted: statValues[STAT_KEYS.MESSAGES_SOFT_DELETED],
+						active: statValues[STAT_KEYS.MESSAGES_TOTAL] - statValues[STAT_KEYS.MESSAGES_SOFT_DELETED],
 					},
 					users: {
-						total: usersCount,
+						total: statValues[STAT_KEYS.USERS_TOTAL],
 					},
 				},
 			};
 
 			console.log("[Cron] Database statistics:", JSON.stringify(stats, null, 2));
 
-			// TODO: Store stats in a separate table for trend analysis
 			// TODO: Send alerts if any metrics exceed thresholds
 
 			console.log("[Cron] Generate database stats - Completed");

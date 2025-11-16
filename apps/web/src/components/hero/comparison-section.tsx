@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, X } from 'lucide-react';
+import { Check, X } from '@/lib/icons';
 import { borderRadius, spacing, opacity, transitions } from '@/styles/design-tokens';
 
 const COMPARISON_DATA = [

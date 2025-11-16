@@ -10,11 +10,16 @@
 
 import type * as auth from "../auth.js";
 import type * as chats from "../chats.js";
+import type * as config_constants from "../config/constants.js";
 import type * as crons from "../crons.js";
 import type * as env from "../env.js";
 import type * as files from "../files.js";
 import type * as http from "../http.js";
+import type * as lib_batchFileUrls from "../lib/batchFileUrls.js";
+import type * as lib_dbStats from "../lib/dbStats.js";
+import type * as lib_logger from "../lib/logger.js";
 import type * as messages from "../messages.js";
+import type * as migrations from "../migrations.js";
 import type * as previewSeed from "../previewSeed.js";
 import type * as users from "../users.js";
 
@@ -27,11 +32,16 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   chats: typeof chats;
+  "config/constants": typeof config_constants;
   crons: typeof crons;
   env: typeof env;
   files: typeof files;
   http: typeof http;
+  "lib/batchFileUrls": typeof lib_batchFileUrls;
+  "lib/dbStats": typeof lib_dbStats;
+  "lib/logger": typeof lib_logger;
   messages: typeof messages;
+  migrations: typeof migrations;
   previewSeed: typeof previewSeed;
   users: typeof users;
 }>;

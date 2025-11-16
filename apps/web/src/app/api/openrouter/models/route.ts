@@ -2,8 +2,24 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { logError } from "@/lib/logger-server";
 import { apiKeySchema, createValidationErrorResponse } from "@/lib/validation";
+import { getServerEnv } from "@/lib/env";
+import {
+	hasReasoningCapability,
+	hasImageCapability,
+	hasAudioCapability,
+	hasVideoCapability,
+} from "@/lib/model-capabilities";
 
-const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+const env = getServerEnv();
+const OPENROUTER_BASE_URL = (env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+
+// PERFORMANCE FIX: Cache for transformed model data
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+type CacheEntry = {
+	data: OpenRouterModelOption[];
+	timestamp: number;
+};
+const modelCache = new Map<string, CacheEntry>();
 
 // Validation schema for the request body
 const modelsRequestSchema = z.object({
@@ -54,81 +70,6 @@ const FREE_MODELS = new Set([
 	"qwen/qwen-2.5-7b-instruct:free",
 ]);
 
-// Models with reasoning capabilities
-// Based on AI SDK docs: Claude 4, GPT-5, DeepSeek R1, Gemini 2.5, o1/o3, Cohere reasoning, Mistral magistral
-function hasReasoningCapability(modelId: string): boolean {
-	const lowerModelId = modelId.toLowerCase();
-	return (
-		lowerModelId.includes("claude-3-7-sonnet") ||
-		lowerModelId.includes("claude-opus-4") ||
-		lowerModelId.includes("claude-sonnet-4") ||
-		lowerModelId.includes("gpt-5") ||
-		lowerModelId.includes("deepseek-r1") ||
-		lowerModelId.includes("deepseek-reasoner") ||
-		lowerModelId.includes("gemini-2.5") ||
-		lowerModelId.includes("gemini-2.0-flash-thinking") ||
-		lowerModelId.includes("/o1") ||
-		lowerModelId.includes("/o3") ||
-		lowerModelId.includes("magistral") ||
-		lowerModelId.includes("command-a-reasoning") ||
-		(lowerModelId.includes("qwen3") && lowerModelId.includes("thinking"))
-	);
-}
-
-// Models with image input capabilities
-function hasImageCapability(modelId: string): boolean {
-	const lowerModelId = modelId.toLowerCase();
-	return (
-		// OpenAI Vision models
-		lowerModelId.includes("gpt-4-vision") ||
-		lowerModelId.includes("gpt-4-turbo") ||
-		lowerModelId.includes("gpt-4o") ||
-		lowerModelId.includes("gpt-5") ||
-		// Claude models with vision
-		lowerModelId.includes("claude-3") ||
-		lowerModelId.includes("claude-4") ||
-		// Google models with vision
-		lowerModelId.includes("gemini") ||
-		// Other vision models
-		lowerModelId.includes("vision") ||
-		lowerModelId.includes("llava") ||
-		lowerModelId.includes("bakllava") ||
-		// Anthropic's newer models
-		lowerModelId.includes("claude-sonnet") ||
-		lowerModelId.includes("claude-haiku") ||
-		lowerModelId.includes("claude-opus") ||
-		// Qwen VL models
-		lowerModelId.includes("qwen-vl") ||
-		lowerModelId.includes("qwen2-vl") ||
-		// Mistral vision
-		lowerModelId.includes("pixtral")
-	);
-}
-
-// Models with audio input capabilities
-function hasAudioCapability(modelId: string): boolean {
-	const lowerModelId = modelId.toLowerCase();
-	return (
-		// Gemini 2.0 Flash and later support audio
-		(lowerModelId.includes("gemini-2") && lowerModelId.includes("flash")) ||
-		// GPT-4 with audio/whisper
-		lowerModelId.includes("gpt-4o-audio") ||
-		// Specific audio models
-		lowerModelId.includes("whisper") ||
-		lowerModelId.includes("audio")
-	);
-}
-
-// Models with video input capabilities
-function hasVideoCapability(modelId: string): boolean {
-	const lowerModelId = modelId.toLowerCase();
-	return (
-		// Gemini 2.0 Flash supports video
-		(lowerModelId.includes("gemini-2") && lowerModelId.includes("flash")) ||
-		// Specific video models
-		lowerModelId.includes("video")
-	);
-}
 
 const parseNumericField = (candidate: unknown): number | null => {
 	if (typeof candidate === "number" && Number.isFinite(candidate)) {
@@ -163,6 +104,24 @@ export async function POST(request: Request) {
 		}
 
 		const { apiKey } = validation.data;
+
+		// PERFORMANCE FIX: Check cache first
+		const cacheKey = apiKey.substring(0, 16); // Use partial key for cache lookup
+		const now = Date.now();
+		const cached = modelCache.get(cacheKey);
+
+		if (cached && (now - cached.timestamp) < CACHE_TTL_MS) {
+			// Return cached data with cache headers
+			return NextResponse.json(
+				{ ok: true, models: cached.data },
+				{
+					headers: {
+						'Cache-Control': 'private, max-age=300', // 5 minutes
+						'X-Cache': 'HIT',
+					},
+				}
+			);
+		}
 
 		const response = await fetch(`${OPENROUTER_BASE_URL}/models`, {
 			headers: {
@@ -238,7 +197,27 @@ export async function POST(request: Request) {
 			.filter((model): model is OpenRouterModelOption => Boolean(model))
 			.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
 
-		return NextResponse.json({ ok: true, models });
+		// PERFORMANCE FIX: Store in cache
+		modelCache.set(cacheKey, {
+			data: models,
+			timestamp: now,
+		});
+
+		// Limit cache size (simple LRU by deleting oldest entries)
+		if (modelCache.size > 100) {
+			const firstKey = modelCache.keys().next().value;
+			if (firstKey) modelCache.delete(firstKey);
+		}
+
+		return NextResponse.json(
+			{ ok: true, models },
+			{
+				headers: {
+					'Cache-Control': 'private, max-age=300', // 5 minutes
+					'X-Cache': 'MISS',
+				},
+			}
+		);
 	} catch (error) {
 		logError("Failed to fetch OpenRouter models", error);
 		return NextResponse.json({ ok: false, error: "Failed to fetch models" }, { status: 500 });

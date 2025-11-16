@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { getConvexUserFromSession, sendMessagePair } from "@/lib/convex-server";
-import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
-import { validateCsrfToken, CSRF_COOKIE_NAME } from "@/lib/csrf";
 import { z } from "zod";
-import { logError, logWarn } from "@/lib/logger-server";
+import { logError } from "@/lib/logger-server";
+import { createValidationErrorResponse } from "@/lib/validation";
+import { validateRequestSecurity } from "@/lib/api/security-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -22,41 +21,32 @@ const payloadSchema = z.object({
 	assistantMessage: messageSchema.optional(),
 });
 
-const allowedOrigins = resolveAllowedOrigins();
-
 export async function POST(req: Request) {
 	// PERFORMANCE FIX: Validate input FIRST before any expensive operations
 	let validatedPayload: z.infer<typeof payloadSchema>;
 	try {
-		validatedPayload = payloadSchema.parse(await req.json());
-	} catch (error) {
-		if (error instanceof z.ZodError) {
-			return NextResponse.json({ ok: false, issues: error.issues }, { status: 422 });
+		const body = await req.json().catch(() => ({}));
+		const validation = payloadSchema.safeParse(body);
+
+		if (!validation.success) {
+			// Use standardized validation error response
+			return createValidationErrorResponse(validation.error);
 		}
+
+		validatedPayload = validation.data;
+	} catch (error) {
 		return NextResponse.json({ ok: false, error: "Invalid request body" }, { status: 400 });
 	}
 
-	const originResult = validateRequestOrigin(req, allowedOrigins);
-	if (!originResult.ok) {
-		return NextResponse.json({ ok: false, error: "Invalid request origin" }, { status: 403 });
-	}
-	const allowOrigin = originResult.origin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN ?? null;
-	const corsHeaders: HeadersInit | undefined = allowOrigin
-		? { "Access-Control-Allow-Origin": allowOrigin, Vary: "Origin" }
-		: undefined;
-
-	// CSRF protection
-	const cookieStore = await cookies();
-	const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
-	const csrfValidation = validateCsrfToken(req, csrfCookie?.value);
-
-	if (!csrfValidation.valid) {
-		logWarn(`CSRF validation failed: ${csrfValidation.error}`);
+	// Validate security (CSRF + Origin)
+	const securityResult = await validateRequestSecurity(req);
+	if (!securityResult.csrfValid || !securityResult.originValid) {
 		return NextResponse.json(
-			{ ok: false, error: "CSRF validation failed" },
-			{ status: 403, headers: corsHeaders },
+			{ ok: false, error: securityResult.error },
+			{ status: 403, headers: securityResult.corsHeaders },
 		);
 	}
+	const corsHeaders = securityResult.corsHeaders;
 
 	try {
 		// PERFORMANCE FIX: Use combined helper to eliminate redundant getUserContext call

@@ -30,11 +30,15 @@ export default defineSchema({
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
 		deletedAt: v.optional(v.number()),
+		// PERFORMANCE OPTIMIZATION: Track message count to avoid expensive queries
+		// This field is maintained by message insert/delete operations
+		messageCount: v.optional(v.number()),
 	})
 		.index("by_user", ["userId", "updatedAt"])
 		.index("by_user_created", ["userId", "createdAt"])
 		.index("by_user_last_message", ["userId", "lastMessageAt"])
-		.index("by_user_not_deleted", ["userId", "deletedAt", "updatedAt"]),
+		.index("by_user_not_deleted", ["userId", "deletedAt", "updatedAt"])
+		.index("by_user_title", ["userId", "title"]),
 	messages: defineTable({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
@@ -66,6 +70,7 @@ export default defineSchema({
 		.index("by_chat", ["chatId", "createdAt"])
 		.index("by_client_id", ["chatId", "clientMessageId"])
 		.index("by_user", ["userId"])
+		.index("by_user_status", ["userId", "status", "createdAt"])
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"]),
 	fileUploads: defineTable({
@@ -82,4 +87,20 @@ export default defineSchema({
 		.index("by_chat", ["chatId", "uploadedAt"])
 		.index("by_storage", ["storageId"])
 		.index("by_user_not_deleted", ["userId", "deletedAt", "uploadedAt"]),
+	// PERFORMANCE OPTIMIZATION: Database statistics table for efficient monitoring
+	// Stores aggregated counts to avoid expensive full-table scans
+	dbStats: defineTable({
+		// Unique key for each stat (e.g., "chats_total", "chats_soft_deleted", etc.)
+		key: v.string(),
+		// Numeric value of the stat
+		value: v.number(),
+		// Timestamp of last update
+		updatedAt: v.number(),
+		// Optional metadata for the stat
+		metadata: v.optional(v.object({
+			description: v.optional(v.string()),
+			category: v.optional(v.string()),
+		})),
+	})
+		.index("by_key", ["key"]),
 });

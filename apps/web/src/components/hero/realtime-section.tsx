@@ -1,7 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Zap, RefreshCw, Link as LinkIcon, Rocket } from 'lucide-react';
+import { Zap, RefreshCw, LinkIcon, Rocket } from '@/lib/icons';
 import type { ReactNode } from 'react';
 import { spacing, opacity, iconSize, borderRadius, transitions } from '@/styles/design-tokens';
 

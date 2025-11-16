@@ -7,7 +7,11 @@ import { captureServerEvent } from "@/lib/posthog-server";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
-import { logError } from "@/lib/logger-server";
+import { createLogger } from "@/lib/logger";
+import { toConvexUserId, toConvexChatId, toConvexStorageId } from "@/lib/type-converters";
+import type { IRateLimiter } from "@/lib/rate-limit";
+import { hasReasoningCapability } from "@/lib/model-capabilities";
+import { isTextPart, isFilePart } from "@/lib/error-handling";
 
 type AnyUIMessage = UIMessage<Record<string, unknown>>;
 
@@ -89,25 +93,6 @@ const MAX_TOKENS = (() => {
 	return Math.min(parsed, 32768); // Cap at 32k to prevent excessive token usage
 })();
 
-// Helper to detect models with reasoning capabilities
-function supportsReasoning(modelId: string): boolean {
-	const lowerModelId = modelId.toLowerCase();
-	return (
-		lowerModelId.includes("claude-3-7-sonnet") ||
-		lowerModelId.includes("claude-opus-4") ||
-		lowerModelId.includes("claude-sonnet-4") ||
-		lowerModelId.includes("gpt-5") ||
-		lowerModelId.includes("deepseek-r1") ||
-		lowerModelId.includes("deepseek-reasoner") ||
-		lowerModelId.includes("gemini-2.5") ||
-		lowerModelId.includes("gemini-2.0-flash-thinking") ||
-		lowerModelId.includes("/o1") ||
-		lowerModelId.includes("/o3") ||
-		lowerModelId.includes("magistral") ||
-		lowerModelId.includes("command-a-reasoning") ||
-		(lowerModelId.includes("qwen3") && lowerModelId.includes("thinking"))
-	);
-}
 
 // Get provider options for reasoning models
 function getReasoningProviderOptions(modelId: string): Record<string, Record<string, any>> | undefined {
@@ -236,14 +221,13 @@ function extractMessageText(message: AnyUIMessage): string {
 	const segments: string[] = [];
 	for (const part of message.parts ?? []) {
 		if (!part) continue;
-		if ((part as any).type === "text" && typeof (part as any).text === "string") {
-			segments.push((part as any).text);
+		if (isTextPart(part)) {
+			segments.push(part.text);
 			continue;
 		}
-		if ((part as any).type === "file") {
-			const filePart = part as { filename?: string; mediaType?: string };
-			const name = filePart.filename && filePart.filename.length > 0 ? filePart.filename : "attachment";
-			const media = filePart.mediaType && filePart.mediaType.length > 0 ? ` (${filePart.mediaType})` : "";
+		if (isFilePart(part)) {
+			const name = part.filename && part.filename.length > 0 ? part.filename : "attachment";
+			const media = part.mediaType && part.mediaType.length > 0 ? ` (${part.mediaType})` : "";
 			segments.push(`[Attachment: ${name}${media}]`);
 			continue;
 		}
@@ -318,6 +302,7 @@ export type ChatHandlerOptions = {
 };
 
 export function createChatHandler(options: ChatHandlerOptions = {}) {
+	const logger = createLogger("ChatHandler");
 	const streamTextImpl = options.streamTextImpl ?? streamText;
 	const convertToCoreMessagesImpl = options.convertToCoreMessagesImpl ?? convertToCoreMessages;
 	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS };
@@ -330,8 +315,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		options.persistMessage ??
 		((input: StreamPersistRequest) =>
 			streamUpsertMessage({
-				userId: input.userId as Id<"users">,
-				chatId: input.chatId as Id<"chats">,
+				userId: toConvexUserId(input.userId),
+				chatId: toConvexChatId(input.chatId),
 				clientMessageId: input.clientMessageId ?? undefined,
 				role: input.role,
 				content: input.content,
@@ -484,7 +469,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				config = { provider, modelId: modelIdFromPayload };
 			}
 		} catch (error) {
-			logError("Failed to resolve model", error);
+			logger.error("Failed to resolve model", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const messageText = error instanceof Error ? error.message : String(error ?? "");
 			const isProduction = process.env.NODE_ENV === "production";
@@ -537,8 +522,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				if (!part) continue;
 
 				// Validate text content length
-				if ((part as any).type === "text" && typeof (part as any).text === "string") {
-					const textLength = (part as any).text.length;
+				if (isTextPart(part)) {
+					const textLength = part.text.length;
 					if (textLength > MAX_MESSAGE_CONTENT_LENGTH) {
 						const headers = buildCorsHeaders(request, allowOrigin);
 						return new Response(
@@ -549,18 +534,17 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				}
 
 				// Validate attachment size - check combined size to prevent bypass
-				if ((part as any).type === "file") {
-					const filePart = part as any;
+				if (isFilePart(part)) {
 					let totalAttachmentSize = 0;
 
 					// Add data URL size if present
-					if (typeof filePart.data === "string") {
-						totalAttachmentSize += new TextEncoder().encode(filePart.data).length;
+					if (typeof part.data === "string") {
+						totalAttachmentSize += new TextEncoder().encode(part.data).length;
 					}
 
 					// Add url content size if it's a data URL
-					if (typeof filePart.url === "string" && filePart.url.startsWith("data:")) {
-						totalAttachmentSize += new TextEncoder().encode(filePart.url).length;
+					if (typeof part.url === "string" && part.url.startsWith("data:")) {
+						totalAttachmentSize += new TextEncoder().encode(part.url).length;
 					}
 
 					// Check combined size to prevent bypass by splitting content
@@ -583,7 +567,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const fileParts = await Promise.all(
 				payload.attachments.map(async (attachment) => {
 					const url = await getFileUrl(
-						attachment.storageId as Id<"_storage">,
+						toConvexStorageId(attachment.storageId),
 						convexUserId,
 					);
 					if (!url) {
@@ -641,7 +625,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				createdAt: userCreatedAtIso,
 				status: "completed",
 				attachments: payload.attachments?.map(a => ({
-					storageId: a.storageId as Id<"_storage">,
+					storageId: toConvexStorageId(a.storageId),
 					filename: a.filename,
 					contentType: a.contentType,
 					size: a.size,
@@ -652,7 +636,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				throw new Error("user streamUpsert rejected");
 			}
 		} catch (error) {
-			logError("Failed to persist user message", error);
+			logger.error("Failed to persist user message", error, { chatId, messageId: userMessageId });
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist message", { status: 502, headers });
 		}
@@ -671,7 +655,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				throw new Error("assistant streamUpsert rejected");
 			}
 		} catch (error) {
-			logError("Failed to bootstrap assistant message", error);
+			logger.error("Failed to bootstrap assistant message", error, { chatId, messageId: assistantMessageId });
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist assistant", { status: 502, headers });
 		}
@@ -714,7 +698,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				: undefined;
 
 			if (status === "completed") {
-				console.log("[Persist] ⚠️ FINAL SAVE - Reasoning status:", {
+				logger.debug("Final save - Reasoning status", {
 					textLength: assistantText.length,
 					reasoningLength: reasoningToSend ? reasoningToSend.length : 0,
 					hasReasoning: !!reasoningToSend,
@@ -751,7 +735,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				try {
 					await persistAssistant("streaming");
 				} catch (error) {
-					logError("Failed to persist assistant chunk", error);
+					logger.error("Failed to persist assistant chunk", error);
 					if (!persistenceError) {
 						persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant chunk");
 					}
@@ -787,7 +771,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			try {
 				await persistAssistant("completed", true);
 			} catch (error) {
-				logError("Failed to persist assistant completion", error);
+				logger.error("Failed to persist assistant completion", error);
 				if (!persistenceError) {
 					persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant completion");
 				}
@@ -811,12 +795,12 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 		try {
 			timeoutId = setTimeout(() => {
-				logError(`OpenRouter stream timeout after ${OPENROUTER_TIMEOUT_MS}ms`, new Error("Stream timeout"));
+				logger.error(`OpenRouter stream timeout after ${OPENROUTER_TIMEOUT_MS}ms`, new Error("Stream timeout"));
 				abortController.abort(new Error(`Request timeout after ${OPENROUTER_TIMEOUT_MS}ms`));
 			}, OPENROUTER_TIMEOUT_MS);
 
 			const model = config.provider.chat(config.modelId);
-			const hasReasoning = supportsReasoning(config.modelId);
+			const hasReasoning = hasReasoningCapability(config.modelId);
 			const providerOptions = hasReasoning ? getReasoningProviderOptions(config.modelId) : undefined;
 
 			const result = await streamTextImpl({
@@ -838,7 +822,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 						// Start timer on FIRST reasoning chunk if not started
 						if (!reasoningStartTime) {
 							reasoningStartTime = Date.now();
-							console.log("[Reasoning] ✅ Started timer at", reasoningStartTime);
+							logger.debug("Reasoning started", { startTime: reasoningStartTime });
 						}
 
 						const text = (chunk as any).text;
@@ -862,7 +846,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					const duration = reasoningStartTime && reasoningEndTime
 						? reasoningEndTime - reasoningStartTime
 						: 0;
-					console.log(`[Stream] Finished - Text: ${assistantText.length} chars, Reasoning: ${assistantReasoning.length} chars, ThinkTime: ${duration}ms`);
+					logger.debug("Stream finished", {
+						textLength: assistantText.length,
+						reasoningLength: assistantReasoning.length,
+						thinkingTimeMs: duration
+					});
 					await finalize();
 				},
 				onAbort: async () => {
@@ -872,7 +860,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				},
 				onError: async ({ error }) => {
 					if (timeoutId) clearTimeout(timeoutId);
-					logError("Chat stream error", error);
+					logger.error("Chat stream error", error);
 					streamStatus = "error";
 					await finalize();
 				},
@@ -919,11 +907,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		} catch (error) {
 			// Ensure timeout is cleared even if error occurs before callbacks
 			if (timeoutId) clearTimeout(timeoutId);
-			logError("Chat handler error", error);
+			logger.error("Chat handler error", error, { chatId, modelId: config.modelId });
 			try {
 				await finalize();
 			} catch (finalizeError) {
-				logError("Chat finalize error", finalizeError);
+				logger.error("Chat finalize error", finalizeError);
 				if (!persistenceError) {
 					persistenceError =
 						finalizeError instanceof Error
