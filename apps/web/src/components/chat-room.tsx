@@ -686,11 +686,13 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       modelId,
       apiKey: requestApiKey,
       attachments,
+      reasoningConfig,
     }: {
       text: string;
       modelId: string;
       apiKey: string;
       attachments?: any[];
+      reasoningConfig?: any;
     }) => {
       const content = text.trim();
       if (!content) return;
@@ -720,6 +722,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               modelId,
               apiKey: requestApiKey,
               attachments,
+              reasoningConfig,
             },
           },
         );

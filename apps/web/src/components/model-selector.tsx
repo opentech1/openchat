@@ -44,6 +44,7 @@ export type ModelSelectorOption = {
 		image?: boolean
 		audio?: boolean
 		video?: boolean
+		mandatoryReasoning?: boolean
 	}
 }
 

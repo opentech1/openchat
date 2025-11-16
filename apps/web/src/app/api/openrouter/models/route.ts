@@ -8,6 +8,7 @@ import {
 	hasImageCapability,
 	hasAudioCapability,
 	hasVideoCapability,
+	hasMandatoryReasoning,
 } from "@/lib/model-capabilities";
 
 const env = getServerEnv();
@@ -42,6 +43,7 @@ type OpenRouterModelOption = {
 		image?: boolean;
 		audio?: boolean;
 		video?: boolean;
+		mandatoryReasoning?: boolean;
 	};
 };
 
@@ -165,10 +167,14 @@ export async function POST(request: Request) {
 				}
 				const isFree = FREE_MODELS.has(id);
 				const isPopular = POPULAR_MODELS.has(id);
-				const hasReasoning = hasReasoningCapability(id);
-				const hasImage = hasImageCapability(id);
-				const hasAudio = hasAudioCapability(id);
-				const hasVideo = hasVideoCapability(id);
+
+				// HYBRID: Try OpenRouter API data first, fallback to static detection
+				// This ensures we always show capabilities even if OpenRouter doesn't provide the flags
+				const hasReasoning = candidate?.supports_reasoning === true || hasReasoningCapability(id);
+				const hasImage = candidate?.supports_images === true || hasImageCapability(id);
+				const hasAudio = candidate?.supports_audio === true || hasAudioCapability(id);
+				const hasVideo = candidate?.supports_video === true || hasVideoCapability(id);
+				const isMandatoryReasoning = candidate?.is_mandatory_reasoning === true || hasMandatoryReasoning(id);
 
 				// Remove provider prefix (e.g., "Google: Gemini 2.5 Pro" -> "Gemini 2.5 Pro")
 				const cleanName = name.includes(":") ? name.split(":").slice(1).join(":").trim() : name;
@@ -182,6 +188,7 @@ export async function POST(request: Request) {
 				if (hasImage) capabilities.image = true;
 				if (hasAudio) capabilities.audio = true;
 				if (hasVideo) capabilities.video = true;
+				if (isMandatoryReasoning) capabilities.mandatoryReasoning = true;
 
 				return {
 					value: id,

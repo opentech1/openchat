@@ -109,7 +109,24 @@ export function BrandThemeProvider({
 export function useBrandTheme() {
   const context = React.useContext(BrandThemeContext);
   if (!context) {
-    throw new Error("useBrandTheme must be used within a BrandThemeProvider");
+    // During SSR or dynamic import hydration, context might not be available yet
+    // Return a safe default instead of throwing to prevent hydration errors
+    if (typeof window === "undefined") {
+      // SSR: return default
+      return {
+        theme: DEFAULT_BRAND_THEME,
+        themes: BRAND_THEMES,
+        setTheme: () => {},
+      } as const;
+    }
+    // Client-side but outside provider - this shouldn't happen in production
+    // but can occur during dynamic imports with ssr: false
+    console.warn("useBrandTheme used outside BrandThemeProvider, using default theme");
+    return {
+      theme: DEFAULT_BRAND_THEME,
+      themes: BRAND_THEMES,
+      setTheme: () => {},
+    } as const;
   }
   return context;
 }

@@ -22,6 +22,13 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
+import { ReasoningControls } from "./reasoning-controls";
+import {
+  type ReasoningConfig,
+  DEFAULT_REASONING_CONFIG,
+  getDefaultReasoningForModel,
+} from "@/lib/reasoning-config";
+import { getModelCapabilities } from "@/lib/model-capabilities";
 
 type FileAttachment = {
   storageId: Id<"_storage">;
@@ -159,6 +166,7 @@ export type ChatComposerProps = {
     modelId: string;
     apiKey: string;
     attachments?: FileAttachment[];
+    reasoningConfig?: ReasoningConfig;
   }) => void | Promise<void>;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -174,6 +182,8 @@ export type ChatComposerProps = {
   initialValue?: string;
   userId?: Id<"users"> | null;
   chatId?: Id<"chats"> | null;
+  reasoningConfig?: ReasoningConfig;
+  onReasoningConfigChange?: (config: ReasoningConfig) => void;
 };
 
 function ChatComposer({
@@ -192,6 +202,8 @@ function ChatComposer({
   initialValue = "",
   userId,
   chatId,
+  reasoningConfig: externalReasoningConfig,
+  onReasoningConfigChange,
 }: ChatComposerProps) {
   // Consolidated composer state with useReducer
   const [composerState, dispatchComposer] = useReducer(composerReducer, {
@@ -208,6 +220,11 @@ function ChatComposer({
     uploadedFiles: [],
   });
   const { uploadingFiles, uploadedFiles } = fileUploadState;
+
+  // Reasoning configuration state
+  const [internalReasoningConfig, setInternalReasoningConfig] = useState<ReasoningConfig>(
+    () => externalReasoningConfig ?? DEFAULT_REASONING_CONFIG
+  );
 
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
@@ -250,6 +267,32 @@ function ChatComposer({
     () => modelOptions.find(m => m.value === activeModelId)?.capabilities,
     [modelOptions, activeModelId]
   );
+
+  // Sync external reasoning config
+  useEffect(() => {
+    if (externalReasoningConfig !== undefined) {
+      setInternalReasoningConfig(externalReasoningConfig);
+    }
+  }, [externalReasoningConfig]);
+
+  // Reset reasoning config when model changes (and it's a new reasoning-capable model)
+  useEffect(() => {
+    if (!activeModelId) return;
+
+    const capabilities = getModelCapabilities(activeModelId);
+    if (capabilities.reasoning) {
+      // Only reset if external config is not provided
+      if (externalReasoningConfig === undefined) {
+        setInternalReasoningConfig(getDefaultReasoningForModel(activeModelId));
+      }
+    } else {
+      // Non-reasoning model selected, disable reasoning
+      setInternalReasoningConfig(DEFAULT_REASONING_CONFIG);
+    }
+  }, [activeModelId, externalReasoningConfig]);
+
+  // Memoize the active reasoning config
+  const activeReasoningConfig = externalReasoningConfig ?? internalReasoningConfig;
 
   // Adjust height when initialValue is provided
   useEffect(() => {
@@ -368,7 +411,8 @@ function ChatComposer({
         text: trimmed,
         modelId: currentModelId,
         apiKey,
-        attachments: attachmentsToSend
+        attachments: attachmentsToSend,
+        reasoningConfig: activeReasoningConfig,
       });
     } catch (error) {
       logError("Failed to send message", error);
@@ -396,7 +440,20 @@ function ChatComposer({
     onSend,
     value,
     uploadedFiles,
+    activeReasoningConfig,
   ]);
+
+  // Handler for reasoning config changes
+  const handleReasoningConfigChange = useCallback(
+    (config: ReasoningConfig) => {
+      if (onReasoningConfigChange) {
+        onReasoningConfigChange(config);
+      } else {
+        setInternalReasoningConfig(config);
+      }
+    },
+    [onReasoningConfigChange]
+  );
 
   // Memoize event handlers to prevent unnecessary re-renders of ChatComposerTextarea
   const handleTextareaChange = useCallback(
@@ -533,6 +590,15 @@ function ChatComposer({
                   toast.error("No models with file support available");
                 }
               }}
+            />
+          )}
+          {selectedModelCapabilities?.reasoning && (
+            <ReasoningControls
+              value={activeReasoningConfig}
+              onChange={handleReasoningConfigChange}
+              modelId={activeModelId}
+              capabilities={selectedModelCapabilities}
+              disabled={disabled || isBusy}
             />
           )}
         </div>
