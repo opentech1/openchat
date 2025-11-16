@@ -77,7 +77,7 @@ export function hasReasoningCapability(modelId: string): boolean {
  * - Open source: LLaVA, BakLLaVA, MiniCPM, Moondream, Yi-VL, InternVL, CogVLM
  * - xAI: Grok Vision
  * - Cohere: Command R+ Vision
- * - DeepSeek: V3 and later
+ * - DeepSeek: Vision models (Note: V3 is text-only)
  *
  * @param modelId - Full model identifier
  * @returns true if model supports image input
@@ -120,11 +120,10 @@ export function hasImageCapability(modelId: string): boolean {
 		lowerModelId.includes("qwq-vl") ||
 		// Mistral vision
 		lowerModelId.includes("pixtral") ||
-		// DeepSeek vision models
-		lowerModelId.includes("deepseek-v3") ||
+		// DeepSeek vision models (Note: DeepSeek V3 is text-only, not vision)
 		lowerModelId.includes("deepseek-vision") ||
-		// Cohere vision
-		lowerModelId.includes("command-r") && lowerModelId.includes("vision") ||
+		// Cohere vision (need parentheses for correct operator precedence)
+		(lowerModelId.includes("command-r") && lowerModelId.includes("vision")) ||
 		// Generic vision indicator
 		lowerModelId.includes("vision") ||
 		// Open source vision models
@@ -176,8 +175,8 @@ export function hasAudioCapability(modelId: string): boolean {
 		lowerModelId.includes("qwen2-audio") ||
 		// Specific audio models
 		lowerModelId.includes("whisper") ||
-		// Generic audio indicator (but not just the word "audio" alone)
-		(lowerModelId.includes("audio") && !lowerModelId.endsWith("audio"))
+		// Generic audio indicator
+		lowerModelId.includes("audio")
 	);
 }
 
