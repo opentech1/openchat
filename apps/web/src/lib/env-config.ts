@@ -242,11 +242,13 @@ export const env = {
 			description: "Backend server URL",
 		}),
 
-	// API Keys (required in production)
+	// API Keys (optional - validated at runtime when needed)
+	// Note: Making this optional at build time because env validation can run during
+	// Next.js build phase, but this key is only needed at runtime when API routes are called
 	openrouterApiKey: () =>
 		getEnvVar("OPENROUTER_API_KEY", {
-			required: process.env.NODE_ENV === "production",
-			description: "OpenRouter API key",
+			required: false,
+			description: "OpenRouter API key (optional at build time, validated at runtime)",
 		}),
 
 	// Authentication

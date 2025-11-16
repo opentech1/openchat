@@ -22,10 +22,10 @@ const serverEnvSchema = z.object({
 	NEXT_PUBLIC_SERVER_URL: z.string().url("NEXT_PUBLIC_SERVER_URL must be a valid URL"),
 	NEXT_PUBLIC_CONVEX_URL: z.string().url("NEXT_PUBLIC_CONVEX_URL must be a valid URL"),
 
-	// API Keys - Required in production
-	OPENROUTER_API_KEY: isProdEnv
-		? z.string().min(1, "OPENROUTER_API_KEY is required in production")
-		: z.string().optional(),
+	// API Keys - Optional (validated at runtime when used)
+	// Note: Making this optional at build time because env validation runs during
+	// Next.js build/page-data-collection, but API keys are only needed at runtime
+	OPENROUTER_API_KEY: z.string().optional(),
 
 	// Optional - URLs
 	CONVEX_URL: z.string().url().optional(),
