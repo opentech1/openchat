@@ -305,3 +305,126 @@ export const fixMessageCounts = internalMutation({
 		}
 	},
 });
+
+/**
+ * Remove deprecated onboarding fields from users table
+ *
+ * Removes the following fields from all user records:
+ * - onboardingCompletedAt
+ * - displayName
+ * - preferredTone
+ * - customInstructions
+ *
+ * These fields were part of the initial onboarding flow but are no longer used.
+ * This migration safely removes them from existing user records.
+ *
+ * IMPORTANT: This migration is idempotent - safe to run multiple times.
+ * If a user already has these fields removed, they will be skipped.
+ *
+ * @example
+ * ```bash
+ * # Run via Convex CLI:
+ * npx convex run migrations:removeOnboardingFields
+ * ```
+ */
+export const removeOnboardingFields = internalMutation({
+	args: {
+		// Process in batches to avoid overwhelming the database
+		batchSize: v.optional(v.number()),
+		// Dry run mode - log what would be changed without making changes
+		dryRun: v.optional(v.boolean()),
+	},
+	handler: async (ctx, args) => {
+		const batchSize = args.batchSize ?? 100;
+		const dryRun = args.dryRun ?? false;
+
+		console.log("[Migration] Remove onboarding fields - Started");
+		console.log(`[Migration] Batch size: ${batchSize}, Dry run: ${dryRun}`);
+
+		try {
+			// Get all users
+			const users = await ctx.db.query("users").collect();
+
+			console.log(`[Migration] Processing ${users.length} users...`);
+
+			let processed = 0;
+			let updated = 0;
+			const errors: Array<{ userId: string; error: string }> = [];
+
+			// Process in batches
+			for (let i = 0; i < users.length; i += batchSize) {
+				const batch = users.slice(i, i + batchSize);
+
+				await Promise.all(
+					batch.map(async (user) => {
+						try {
+							// Check if user has any onboarding fields to remove
+							const hasOnboardingFields =
+								"onboardingCompletedAt" in user ||
+								"displayName" in user ||
+								"preferredTone" in user ||
+								"customInstructions" in user;
+
+							if (hasOnboardingFields) {
+								if (dryRun) {
+									console.log(
+										`[Migration] [DRY RUN] Would remove onboarding fields from user ${user._id}`
+									);
+								} else {
+									// Remove onboarding fields by setting them to undefined
+									await ctx.db.patch(user._id, {
+										onboardingCompletedAt: undefined,
+										displayName: undefined,
+										preferredTone: undefined,
+										customInstructions: undefined,
+										updatedAt: Date.now(),
+									});
+									console.log(
+										`[Migration] Removed onboarding fields from user ${user._id}`
+									);
+								}
+								updated++;
+							}
+						} catch (error) {
+							const errorMessage = error instanceof Error ? error.message : String(error);
+							console.error(
+								`[Migration] Error processing user ${user._id}:`,
+								errorMessage
+							);
+							errors.push({
+								userId: user._id,
+								error: errorMessage,
+							});
+						}
+					})
+				);
+
+				processed += batch.length;
+				console.log(`[Migration] Processed ${processed}/${users.length} users...`);
+			}
+
+			const message = dryRun
+				? `[Migration] Remove onboarding fields - Dry run completed (${updated} users would be updated)`
+				: `[Migration] Remove onboarding fields - Completed (${updated} users updated)`;
+
+			console.log(message);
+
+			if (errors.length > 0) {
+				console.error(`[Migration] Encountered ${errors.length} errors:`, errors);
+			}
+
+			return {
+				success: true,
+				dryRun,
+				totalUsers: users.length,
+				processed,
+				updated,
+				errors: errors.length,
+				errorDetails: errors.slice(0, 10), // Return first 10 errors
+			};
+		} catch (error) {
+			console.error("[Migration] Remove onboarding fields - Failed", error);
+			throw error;
+		}
+	},
+});

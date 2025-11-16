@@ -109,7 +109,9 @@ export {
 export {
   Cloud,
   Heart,
+  Key,
   Link as LinkIcon,
+  LogIn,
   Rocket,
   Server,
   Wrench,

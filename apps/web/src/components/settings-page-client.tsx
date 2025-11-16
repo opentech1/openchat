@@ -5,12 +5,20 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "@/lib/icons";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
+import { ApiKeySectionWithOAuth } from "@/components/settings/api-key-section-with-oauth";
+import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { Button } from "@/components/ui/button";
 import { spacing } from "@/styles/design-tokens";
 
 export default function SettingsPageClient() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { hasKey, isLoading } = useOpenRouterKey();
+  const [keyChangeCounter, setKeyChangeCounter] = useState(0);
+
+  function handleKeyChanged() {
+    setKeyChangeCounter((prev) => prev + 1);
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-6 space-y-6 overflow-y-auto h-full min-h-0">
@@ -38,23 +46,19 @@ export default function SettingsPageClient() {
           </div>
         </section>
 
-        <section className="rounded-xl border p-4">
-          <h2 className="text-sm font-medium">OpenRouter API</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Generate an API key at
-            {" "}
-            <a
-              href="https://openrouter.ai/keys"
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary font-medium underline-offset-4 hover:underline"
-            >
-              openrouter.ai/keys
-            </a>
-            {" "}
-            and save it when prompted in the chat composer. Keys are encrypted in your browser before being stored in your account database.
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">We&apos;ll keep asking until a key is added.</p>
+        <section className="rounded-xl border p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-medium">OpenRouter API</h2>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Connect your OpenRouter account to access AI models. You can use OAuth (recommended) or manually enter your API key.
+            </p>
+          </div>
+          {!isLoading && (
+            <ApiKeySectionWithOAuth
+              hasStoredKey={hasKey}
+              onKeyChanged={handleKeyChanged}
+            />
+          )}
         </section>
 
         <section className="rounded-xl border p-4">

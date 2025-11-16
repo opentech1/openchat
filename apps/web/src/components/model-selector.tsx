@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Brain, Image, Mic, Video } from "@/lib/icons"
+import { Check, Brain, Image, Mic, Video, LogIn, Settings, Loader2 } from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/tooltip"
 import { registerClientProperties } from "@/lib/posthog"
 import { LiveRegion } from "@/components/ui/live-region"
+import { useOpenRouterKey } from "@/hooks/use-openrouter-key"
+import { useOpenRouterOAuth } from "@/hooks/use-openrouter-oauth"
 
 
 export type ModelSelectorOption = {
@@ -207,6 +209,63 @@ const providerNames: Record<string, string> = {
 	"amazon": "Amazon",
 }
 
+// OpenRouter OAuth sign-in banner component
+function OpenRouterSignInBanner() {
+	const { initiateLogin, isLoading } = useOpenRouterOAuth();
+
+	return (
+		<div className="px-2 py-3 mb-2 border-b">
+			<div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-4">
+				<div className="flex flex-col gap-3">
+					<div className="flex items-start gap-3">
+						<div className="shrink-0 mt-0.5">
+							<LogIn className="size-5 text-blue-500" />
+						</div>
+						<div className="flex-1 min-w-0">
+							<h3 className="font-medium text-sm mb-1">
+								Sign in with OpenRouter
+							</h3>
+							<p className="text-xs text-muted-foreground">
+								Connect your OpenRouter account to access AI models from leading providers
+							</p>
+						</div>
+					</div>
+					<div className="flex flex-col gap-2">
+						<Button
+							onClick={initiateLogin}
+							disabled={isLoading}
+							className="w-full"
+							size="sm"
+						>
+							{isLoading ? (
+								<>
+									<Loader2 className="mr-2 size-4 animate-spin" />
+									Connecting...
+								</>
+							) : (
+								<>
+									<LogIn className="mr-2 size-4" />
+									Sign in with OpenRouter
+								</>
+							)}
+						</Button>
+						<div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+							<span>or</span>
+							<a
+								href="/dashboard/settings"
+								className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+							>
+								<Settings className="size-3" />
+								enter API key manually
+							</a>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 // Memoized ModelSelectorItem component for better performance
 const MemoizedModelSelectorItem = React.memo(function MemoizedModelSelectorItem({
 	option,
@@ -329,6 +388,9 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 	const [open, setOpen] = React.useState(false)
 	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
 
+	// Check if user has OpenRouter key
+	const { hasKey, isLoading: isKeyLoading } = useOpenRouterKey()
+
 	React.useEffect(() => {
 		if (value !== undefined) {
 			setInternalValue(value ?? "")
@@ -381,6 +443,9 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 		[value, onChange]
 	);
 
+	// Show sign-in banner if user doesn't have a key and we're not still loading
+	const showSignInBanner = !isKeyLoading && !hasKey;
+
 	return (
 		<AIModelSelector open={open} onOpenChange={setOpen}>
 			{/* Screen reader announcements for loading states */}
@@ -406,6 +471,9 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 			<ModelSelectorContent>
 				<ModelSelectorInput placeholder="Search models..." />
 				<ModelSelectorList>
+					{/* Show sign-in banner if user doesn't have a key */}
+					{showSignInBanner && <OpenRouterSignInBanner />}
+
 					<ModelSelectorEmpty>
 						{loading ? "Loading models..." : "No models found."}
 					</ModelSelectorEmpty>
