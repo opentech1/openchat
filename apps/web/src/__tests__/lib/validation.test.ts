@@ -14,8 +14,6 @@
 import { describe, test, expect } from "vitest";
 import {
 	convexIdSchema,
-	chatIdSchema,
-	messageIdSchema,
 	chatTitleSchema,
 	messageContentSchema,
 	modelIdSchema,

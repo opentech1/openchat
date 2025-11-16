@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import Image from 'next/image';
 import { spacing, opacity, borderRadius, transitions } from '@/styles/design-tokens';
 
@@ -47,7 +48,7 @@ const SPONSORS: Sponsor[] = [
 	},
 ];
 
-export function SponsorsSection() {
+export const SponsorsSection = memo(function SponsorsSection() {
 	return (
 		<section className="bg-muted/30 relative py-20 md:py-36">
 			<div className="@container mx-auto max-w-5xl px-6">
@@ -75,7 +76,7 @@ export function SponsorsSection() {
 						          width={240}
 						          height={90}
 						          className="h-auto w-full object-contain dark:hidden"
-						          priority
+						          loading="lazy"
 						        />
 						        <Image
 						          src={sponsor.logoDark}
@@ -83,7 +84,7 @@ export function SponsorsSection() {
 						          width={240}
 						          height={90}
 						          className="hidden h-auto w-full object-contain dark:block"
-						          priority
+						          loading="lazy"
 						        />
 						      </>
 						    ) : (
@@ -93,7 +94,7 @@ export function SponsorsSection() {
 						        width={240}
 						        height={90}
 						        className="h-auto w-full object-contain"
-						        priority
+						        loading="lazy"
 						      />
 						    )}
 						  </div>
@@ -104,4 +105,4 @@ export function SponsorsSection() {
 			</div>
 		</section>
 	);
-}
+});

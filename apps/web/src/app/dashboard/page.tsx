@@ -1,6 +1,7 @@
 "use client";
 
 import dynamicImport from "next/dynamic";
+import { NiceLoader } from "@/components/ui/nice-loader";
 
 // Dynamically import ChatPreview with ssr: false to prevent server-side rendering
 // This is necessary because ChatPreview uses Convex hooks which require ConvexProvider,
@@ -8,8 +9,8 @@ import dynamicImport from "next/dynamic";
 const ChatPreview = dynamicImport(() => import("@/components/chat-preview"), {
 	ssr: false,
 	loading: () => (
-		<div className="w-full h-[200px] flex items-center justify-center text-muted-foreground">
-			Loading...
+		<div className="w-full h-[200px] flex items-center justify-center">
+			<NiceLoader message="Loading chat..." size="sm" />
 		</div>
 	),
 });

@@ -34,7 +34,7 @@ try {
 	const module = await import("../../lib/rate-limit-redis");
 	RedisRateLimiter = module.RedisRateLimiter;
 	redisAvailable = true;
-} catch (error) {
+} catch (_error) {
 	console.warn("Redis rate limiter not available, skipping Redis tests");
 }
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
 import type { ModelSelectorOption } from "@/components/model-selector";
 // import { saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import {

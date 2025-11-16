@@ -47,7 +47,7 @@
   "devDependencies": {
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.8",
-    "convex": "^1.29.0",
+    "convex": "^1.29.1",
     "oxlint": "^1.28.0",
     "turbo": "^2.6.1",
     "vitest": "^4.0.8",

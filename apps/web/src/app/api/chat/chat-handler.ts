@@ -850,7 +850,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 						}
 					}
 				},
-				onFinish: async (event) => {
+				onFinish: async (_event) => {
 					if (timeoutId) clearTimeout(timeoutId);
 					streamStatus = "completed";
 

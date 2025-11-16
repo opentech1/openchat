@@ -1,27 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
 import dynamic from "next/dynamic";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
-import { borderRadius, spacing } from "@/styles/design-tokens";
+import { ChatLoader } from "@/components/ui/nice-loader";
 
 // Lazy load the heavy ChatRoom component (600+ lines)
 const ChatRoom = dynamic(() => import("@/components/chat-room"), {
   ssr: false,
-  loading: () => <ChatRoomSkeleton />,
+  loading: () => <ChatLoader />,
 });
-
-function ChatRoomSkeleton() {
-  return (
-    <div className="mx-auto max-w-5xl px-3">
-      <div className="animate-pulse space-y-4">
-        <div className={`h-4 w-1/3 ${borderRadius.sm} bg-muted`} />
-        <div className={`h-24 ${borderRadius.lg} bg-muted`} />
-      </div>
-    </div>
-  );
-}
 
 type ChatRoomProps = {
   chatId: string;
@@ -56,10 +45,12 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
     setMounted(true);
   }, []);
 
-  if (!mounted) return <ChatRoomSkeleton />;
+  if (!mounted) return <ChatLoader />;
   return (
-    <ChatStoreProvider initialMessages={initialUiMessages}>
-      <ChatRoom {...props} />
-    </ChatStoreProvider>
+    <div className="animate-fade-in">
+      <ChatStoreProvider initialMessages={initialUiMessages}>
+        <ChatRoom {...props} />
+      </ChatStoreProvider>
+    </div>
   );
 }

@@ -4,7 +4,7 @@
  * Tests audit event logging, request metadata extraction, and convenience functions.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
 	auditLog,
 	setAuditLogStore,

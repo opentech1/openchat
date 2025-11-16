@@ -4,7 +4,7 @@
  * Tests IP-based rate limiting, bucket management, and bot detection.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
 	RateLimiter,
 	getClientIp,

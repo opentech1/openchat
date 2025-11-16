@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { removeOpenRouterKey, saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
 import { spacing, iconSize } from "@/styles/design-tokens";

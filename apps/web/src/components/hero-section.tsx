@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { authClient } from '@/lib/auth-client';
+import { toast } from 'sonner';
+import { PageLoader } from '@/components/ui/nice-loader';
 
 import { HeroHeader } from './header';
 import Features from '@/components/features-1';
@@ -24,9 +27,48 @@ function screenWidthBucket(width: number) {
 }
 
 export default function HeroSection() {
-  const { data: session } = authClient.useSession();
+  const router = useRouter();
+  const { data: session, isPending: isSessionLoading } = authClient.useSession();
   const user = session?.user;
   const visitTrackedRef = useRef(false);
+  const redirectCheckedRef = useRef(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Auto-redirect to dashboard if logged in
+  useEffect(() => {
+    if (redirectCheckedRef.current) return;
+    if (isSessionLoading) return;
+
+    // Check session storage to see if user dismissed the redirect notification
+    const dismissedRedirect = sessionStorage.getItem('openchat:dismissed-auto-redirect');
+
+    if (user && !dismissedRedirect) {
+      redirectCheckedRef.current = true;
+      setIsRedirecting(true);
+
+      // Show toast with option to dismiss for session
+      const toastId = toast.info('Redirecting to dashboard...', {
+        duration: 2000,
+        action: {
+          label: 'Stay here',
+          onClick: () => {
+            sessionStorage.setItem('openchat:dismissed-auto-redirect', 'true');
+            setIsRedirecting(false);
+            toast.dismiss(toastId);
+          },
+        },
+      });
+
+      // Redirect after a short delay for smooth transition
+      const timeoutId = setTimeout(() => {
+        router.push('/dashboard');
+      }, 2000);
+
+      return () => clearTimeout(timeoutId);
+    } else if (user && dismissedRedirect) {
+      redirectCheckedRef.current = true;
+    }
+  }, [user, isSessionLoading, router]);
 
   const handleCtaClick = useCallback((ctaId: string, ctaCopy: string, section: string) => {
     return () => {
@@ -72,6 +114,11 @@ export default function HeroSection() {
       session_is_guest: !user,
     });
   }, [user]);
+
+  // Show nice loading state during redirect
+  if (isRedirecting) {
+    return <PageLoader message="Taking you to your dashboard..." />;
+  }
 
   return (
     <>

@@ -19,12 +19,6 @@ import { useConvex, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
-import {
-  borderRadius,
-  shadows,
-  spacing,
-  iconSize,
-} from "@/styles/design-tokens";
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -261,7 +255,7 @@ export function AccountSettingsModal({
       />
       <div
         ref={dialogRef}
-        className="relative bg-background w-full max-w-md rounded-2xl shadow-2xl border animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300"
+        className="relative bg-background w-full max-w-md rounded-2xl shadow-2xl border animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300 focus:outline-none focus-visible:outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-settings-title"

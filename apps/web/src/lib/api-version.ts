@@ -174,24 +174,19 @@ export async function withApiVersionCheck(
 		});
 	}
 
-	try {
-		// Call the handler
-		const response = await handler(versionInfo);
+	// Call the handler
+	const response = await handler(versionInfo);
 
-		// Add version headers to response
-		const versionHeaders = createApiVersionHeaders(versionInfo);
+	// Add version headers to response
+	const versionHeaders = createApiVersionHeaders(versionInfo);
 
-		// Clone response to add headers
-		const newResponse = new Response(response.body, response);
-		for (const [key, value] of Object.entries(versionHeaders)) {
-			newResponse.headers.set(key, value);
-		}
-
-		return newResponse;
-	} catch (error) {
-		// Re-throw to let error handler deal with it
-		throw error;
+	// Clone response to add headers
+	const newResponse = new Response(response.body, response);
+	for (const [key, value] of Object.entries(versionHeaders)) {
+		newResponse.headers.set(key, value);
 	}
+
+	return newResponse;
 }
 
 /**

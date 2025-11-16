@@ -5,7 +5,7 @@
  * These tests ensure the Double Submit Cookie pattern is correctly implemented.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
 	generateCsrfToken,
 	validateCsrfToken,
@@ -15,7 +15,6 @@ import {
 	responseWithCsrfToken,
 	CSRF_COOKIE_NAME,
 	CSRF_HEADER_NAME,
-	CSRF_TOKEN_LENGTH,
 } from "../csrf";
 
 describe("generateCsrfToken", () => {

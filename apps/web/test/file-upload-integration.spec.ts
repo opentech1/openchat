@@ -4,7 +4,7 @@
  * Tests the complete file upload workflow from user interaction to storage.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 describe("File Upload Integration", () => {
 	describe("Upload Workflow", () => {
@@ -112,8 +112,8 @@ describe("File Upload Integration", () => {
 
 		it("should handle quota exceeded", async () => {
 			// Arrange
-			const mockUserId = "test-user-id";
-			const mockChatId = "test-chat-id";
+			const _mockUserId = "test-user-id";
+			const _mockChatId = "test-chat-id";
 			const mockQuota = { used: 150, limit: 150 };
 
 			// Act
@@ -423,7 +423,7 @@ describe("File Upload Integration", () => {
 
 		it("should always allow document uploads", () => {
 			// Arrange
-			const modelCapabilities = {
+			const _modelCapabilities = {
 				image: false,
 				audio: false,
 				video: false,

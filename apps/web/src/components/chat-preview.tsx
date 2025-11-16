@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Paperclip, SendIcon, XIcon, LoaderIcon } from "lucide-react";
+import { SendIcon, XIcon, LoaderIcon } from "lucide-react";
 import * as React from "react";
 import { useAutoResizeTextarea } from "@/components/ui/auto-resize-textarea";
 import {
@@ -12,7 +12,6 @@ import {
   shadows,
   spacing,
   opacity,
-  iconSize,
 } from "@/styles/design-tokens";
 import { fetchWithCsrf } from "@/lib/csrf-client";
 import {
@@ -164,7 +163,7 @@ function ChatPreview({ className }: { className?: string }) {
     setStorageItemSync(LAST_MODEL_STORAGE_KEY, modelId);
   };
 
-  const handleAttachFile = () => {
+  const _handleAttachFile = () => {
     const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
     setAttachments((prev) => [...prev, mockFileName]);
   };

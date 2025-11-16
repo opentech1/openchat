@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { getUserContext } from "@/lib/auth-server";
 import { ensureConvexUser, createChatForUser, sendMessagePair } from "@/lib/convex-server";
 

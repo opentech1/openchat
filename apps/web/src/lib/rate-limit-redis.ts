@@ -46,7 +46,7 @@ async function loadRedis() {
 		try {
 			const ioredis = await import("ioredis");
 			Redis = ioredis.Redis;
-		} catch (error) {
+		} catch (_error) {
 			throw new Error(
 				"ioredis package not found. Install it with: bun add ioredis\n" +
 					"Or remove REDIS_URL from environment to use in-memory rate limiting.",
@@ -175,9 +175,9 @@ export class RedisRateLimiter {
 				count,
 				resetAt,
 			};
-		} catch (error) {
+		} catch (_error) {
 			// Log error but don't block requests on Redis failures
-			console.error("Redis rate limit check failed:", error);
+			console.error("Redis rate limit check failed:", _error);
 			// Fail open: allow request if Redis is down
 			// Alternative: fail closed by returning { limited: true }
 			return {
@@ -203,8 +203,8 @@ export class RedisRateLimiter {
 
 		try {
 			await redis.del(key);
-		} catch (error) {
-			console.error("Redis rate limit reset failed:", error);
+		} catch (_error) {
+			console.error("Redis rate limit reset failed:", _error);
 			// Don't throw - reset is not critical
 		}
 	}
@@ -230,9 +230,9 @@ export class RedisRateLimiter {
 					await redis.del(...batch);
 				}
 			}
-		} catch (error) {
-			console.error("Redis rate limit clear failed:", error);
-			throw error;
+		} catch (_error) {
+			console.error("Redis rate limit clear failed:", _error);
+			throw _error;
 		}
 	}
 
@@ -254,8 +254,8 @@ export class RedisRateLimiter {
 				totalBuckets: keys.length,
 				config: this.config,
 			};
-		} catch (error) {
-			console.error("Redis rate limit stats failed:", error);
+		} catch (_error) {
+			console.error("Redis rate limit stats failed:", _error);
 			return {
 				totalBuckets: 0,
 				config: this.config,
@@ -274,8 +274,8 @@ export class RedisRateLimiter {
 			try {
 				await this.redis.quit();
 				this.redis = null;
-			} catch (error) {
-				console.error("Redis rate limiter close failed:", error);
+			} catch (_error) {
+				console.error("Redis rate limiter close failed:", _error);
 				// Force disconnect if graceful quit fails
 				this.redis?.disconnect();
 				this.redis = null;
