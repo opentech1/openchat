@@ -10,11 +10,6 @@ export default defineSchema({
 		name: v.optional(v.string()),
 		avatarUrl: v.optional(v.string()),
 		encryptedOpenRouterKey: v.optional(v.string()),
-		// Onboarding preferences
-		displayName: v.optional(v.string()),
-		preferredTone: v.optional(v.string()),
-		customInstructions: v.optional(v.string()),
-		onboardingCompletedAt: v.optional(v.number()),
 		// File upload quota tracking
 		fileUploadCount: v.optional(v.number()),
 		createdAt: v.number(),

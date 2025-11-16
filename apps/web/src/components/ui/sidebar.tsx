@@ -13,52 +13,50 @@ type SidebarContextValue = {
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
 
+export function useSidebar() {
+  const context = React.useContext(SidebarContext);
+  if (!context) {
+    throw new Error("useSidebar must be used within a Sidebar component");
+  }
+  return context;
+}
+
 export function Sidebar({ className, children, defaultCollapsed = false, ...props }: React.ComponentProps<"aside"> & { defaultCollapsed?: boolean }) {
-	const [collapsed, setCollapsed] = React.useState(defaultCollapsed);
-	const [mounted, setMounted] = React.useState(false);
-	const hasPersistedRef = React.useRef(false);
-	React.useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && (e.key === "b" || e.key === "B")) {
-				e.preventDefault();
-				setCollapsed((v) => !v);
-			}
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+	// State management with localStorage persistence
+	const [collapsed, setCollapsedState] = React.useState(() => {
+		if (typeof window === "undefined") return defaultCollapsed;
+		const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
+		// If no stored value, use defaultCollapsed (false for new users = auto-open)
+		if (stored === null) return defaultCollapsed;
+		return stored === "1";
+	});
+
+	const setCollapsed = React.useCallback((value: boolean) => {
+		setCollapsedState(value);
+		if (typeof window !== "undefined") {
+			localStorage.setItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED, value ? "1" : "0");
+		}
 	}, []);
 
-	// Load persisted state
+	// Update CSS variable for sidebar width
 	React.useEffect(() => {
-		try {
-			const v = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
-			if (v === "1") setCollapsed(true);
-			if (v === "0") setCollapsed(false);
-		} catch {}
-		// avoid animating on first paint
-		const t = setTimeout(() => setMounted(true), 0);
-		return () => clearTimeout(t);
-	}, []);
-
-	React.useEffect(() => {
-		const width = collapsed ? "0px" : "16rem"; // expanded width
 		if (typeof document !== "undefined") {
+			const width = collapsed ? "0rem" : "16rem";
 			document.documentElement.style.setProperty("--sb-width", width);
 		}
 	}, [collapsed]);
 
+	// Keyboard shortcut (Cmd/Ctrl+B)
 	React.useEffect(() => {
-		if (!hasPersistedRef.current) {
-			hasPersistedRef.current = true;
-			return;
-		}
-		// Persist user preference after hydration without clobbering the stored value on first render.
-		try {
-			localStorage.setItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED, collapsed ? "1" : "0");
-			// Dispatch custom event to notify sidebar collapse button
-			window.dispatchEvent(new CustomEvent("sidebar-toggled"));
-		} catch {}
-	}, [collapsed]);
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+				e.preventDefault();
+				setCollapsed((prev) => !prev);
+			}
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [setCollapsed]);
 
 	const contextValue = React.useMemo(
 		() => ({ collapsed, setCollapsed }),
@@ -68,18 +66,15 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
   return (
     <SidebarContext.Provider value={contextValue}>
       <aside
-        data-collapsed={collapsed || undefined}
 		className={cn(
 			// Light mode now uses dedicated sidebar tokens so the chrome stays legible without feeling stark.
-			"bg-sidebar/95 text-sidebar-foreground backdrop-blur supports-backdrop-blur:border-sidebar-border/50 group/sidebar sticky top-0 h-svh w-64 border-r border-sidebar-border/80 overflow-hidden will-change-transform translate-z-0",
-          mounted ? "transition-transform duration-300 ease-[cubic-bezier(.2,.8,.2,1)]" : "duration-0",
-          collapsed ? "-translate-x-full pointer-events-none" : "translate-x-0",
+			"bg-sidebar/95 text-sidebar-foreground backdrop-blur supports-backdrop-blur:border-sidebar-border/50 group/sidebar sticky top-0 h-svh border-r border-sidebar-border/80 overflow-hidden translate-z-0 transition-all duration-300 ease-in-out",
+			collapsed ? "w-0 border-r-0" : "w-64",
           className,
         )}
-        style={{ transitionDuration: mounted ? undefined : "0s" }}
         {...props}
       >
-        <div className={cn("flex h-full flex-col", collapsed && "items-center")}>{children}</div>
+        <div className="flex h-full flex-col">{children}</div>
       </aside>
     </SidebarContext.Provider>
   );
@@ -146,22 +141,47 @@ export function SidebarMenuSubButton({ className, isActive, asChild, type = "but
 }
 
 export function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-	const ctx = React.useContext(SidebarContext);
-	const collapsed = !!ctx?.collapsed;
+	const { collapsed, setCollapsed } = useSidebar();
+
 	return (
 		<button
 			type="button"
-			aria-label="Toggle sidebar"
-			aria-expanded={!collapsed}
-			onClick={() => ctx?.setCollapsed(!collapsed)}
+			onClick={() => setCollapsed(!collapsed)}
 			className={cn(
-				collapsed
-					? "hover:bg-accent/40 fixed left-0 top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full"
-					: "hover:bg-accent/40 absolute right-0 top-1/2 z-10 -mr-2 h-10 w-2 -translate-y-1/2 cursor-col-resize rounded-full",
-				"hidden md:block",
-				className,
+				"fixed z-30 flex h-9 w-9 items-center justify-center rounded-md border bg-background text-foreground shadow-md transition-all hover:bg-accent hover:text-accent-foreground",
+				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+				collapsed ? "left-4 top-4" : "left-60 top-4",
+				className
 			)}
+			aria-label={collapsed ? "Open sidebar" : "Close sidebar"}
+			title={collapsed ? "Open sidebar (Cmd+B)" : "Close sidebar (Cmd+B)"}
 			{...props}
-		/>
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				width="18"
+				height="18"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			>
+				{collapsed ? (
+					// Menu icon (hamburger)
+					<>
+						<line x1="4" y1="6" x2="20" y2="6" />
+						<line x1="4" y1="12" x2="20" y2="12" />
+						<line x1="4" y1="18" x2="20" y2="18" />
+					</>
+				) : (
+					// Chevron left (close)
+					<>
+						<polyline points="15 18 9 12 15 6" />
+					</>
+				)}
+			</svg>
+		</button>
 	);
 }

@@ -19,7 +19,6 @@ test_page() {
 
 # Test all pages
 test_page "http://localhost:3000/" "Landing Page"
-test_page "http://localhost:3000/onboarding" "Onboarding Page"
 test_page "http://localhost:3000/auth/sign-in" "Sign-in Page"
 test_page "http://localhost:3000/auth/sign-up" "Sign-up Page"
 test_page "http://localhost:3000/dashboard" "Dashboard (expects redirect)"

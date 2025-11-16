@@ -11,10 +11,6 @@ const userDoc = v.object({
 	name: v.optional(v.string()),
 	avatarUrl: v.optional(v.string()),
 	encryptedOpenRouterKey: v.optional(v.string()),
-	displayName: v.optional(v.string()),
-	preferredTone: v.optional(v.string()),
-	customInstructions: v.optional(v.string()),
-	onboardingCompletedAt: v.optional(v.number()),
 	fileUploadCount: v.optional(v.number()),
 	createdAt: v.number(),
 	updatedAt: v.number(),
@@ -124,26 +120,6 @@ export const removeOpenRouterKey = mutation({
 	handler: async (ctx, args) => {
 		await ctx.db.patch(args.userId, {
 			encryptedOpenRouterKey: undefined,
-			updatedAt: Date.now(),
-		});
-		return { success: true };
-	},
-});
-
-export const completeOnboarding = mutation({
-	args: {
-		userId: v.id("users"),
-		displayName: v.optional(v.string()),
-		preferredTone: v.optional(v.string()),
-		customInstructions: v.optional(v.string()),
-	},
-	returns: v.object({ success: v.boolean() }),
-	handler: async (ctx, args) => {
-		await ctx.db.patch(args.userId, {
-			displayName: args.displayName,
-			preferredTone: args.preferredTone,
-			customInstructions: args.customInstructions,
-			onboardingCompletedAt: Date.now(),
 			updatedAt: Date.now(),
 		});
 		return { success: true };

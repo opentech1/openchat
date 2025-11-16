@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
 
 import { getUserContext } from "@/lib/auth-server";
-import { ensureConvexUser, listChats, getUserById } from "@/lib/convex-server";
+import { ensureConvexUser, listChats } from "@/lib/convex-server";
 import DashboardLayoutClient from "@/components/dashboard-layout-client";
 
 export const dynamic = "force-dynamic";
@@ -15,21 +14,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 		name: session.name,
 		image: session.image,
 	});
-
-	// Check if user has completed onboarding with error handling
-	let user;
-	try {
-		user = await getUserById(convexUserId);
-		if (!user?.onboardingCompletedAt) {
-			redirect("/onboarding");
-		}
-	} catch (error) {
-		// Log the error for debugging but don't crash the page
-		console.error("[Dashboard Layout] Failed to fetch user:", error);
-		// If we can't verify onboarding status, allow access but log it
-		// This prevents the entire dashboard from crashing
-		console.warn("[Dashboard Layout] Unable to verify onboarding status, allowing access");
-	}
 
 	// Fetch chats with error handling and graceful fallback
 	let chats: Array<{

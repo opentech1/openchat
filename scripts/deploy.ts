@@ -83,8 +83,10 @@ NEXT_PUBLIC_CONVEX_URL=${deploymentUrl}
 
 	console.log("\n🎉 Deployment complete!");
 	console.log("\nNext steps:");
-	console.log("1. Vercel will auto-deploy on git push to main");
-	console.log("2. Or manually redeploy: vercel --prod");
+	console.log("1. Run migrations: bun run convex:migrate");
+	console.log("2. Verify data: bun run convex:verify");
+	console.log("3. Vercel will auto-deploy on git push to main");
+	console.log("4. Or manually redeploy: vercel --prod");
 }
 
 main().catch((error) => {

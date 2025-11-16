@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X } from "@/lib/icons";
+import { X, LogIn, Check, Key, LoaderIcon } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/posthog";
 import { AccountSettingsModalLazy as AccountSettingsModal } from "@/components/lazy/account-settings-modal-lazy";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
+import { useOpenRouterOAuth } from "@/hooks/use-openrouter-oauth";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
@@ -150,9 +151,11 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   const user = session?.user;
   const { theme: brandTheme } = useBrandTheme();
   const { hasKey: hasOpenRouterKey } = useOpenRouterKey();
+  const { initiateLogin, isLoading: isOAuthLoading, error: oauthError } = useOpenRouterOAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+
   // PERFORMANCE FIX: Move dedupeChats to useMemo to avoid recalculation on every render
   const dedupedInitialChats = useMemo(
     () => dedupeChats(initialChats),
@@ -172,6 +175,14 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     });
     registerClientProperties({ auth_state: "member", workspace_id: user.id });
   }, [user?.id]);
+
+  useEffect(() => {
+    if (oauthError) {
+      toast.error("Failed to connect to OpenRouter", {
+        description: oauthError.message,
+      });
+    }
+  }, [oauthError]);
 
   const handleCreateChat = useCallback(async () => {
     if (isCreating) return;
@@ -276,7 +287,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   }, [brandTheme, chats.length, user?.id, hasOpenRouterKey]);
 
   return (
-    <Sidebar defaultCollapsed {...sidebarProps}>
+    <Sidebar {...sidebarProps}>
       {/* Screen reader announcements for loading states */}
       <LiveRegion
         message={isCreating ? "Creating new chat..." : deletingChatId ? "Deleting chat..." : ""}
@@ -293,6 +304,43 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent>
+        {/* OpenRouter OAuth Section */}
+        <SidebarGroup className="px-2 pb-2">
+          {!hasOpenRouterKey ? (
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="default"
+                className="w-full justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium shadow-md"
+                onClick={initiateLogin}
+                disabled={isOAuthLoading}
+                aria-label="Sign in with OpenRouter"
+              >
+                {isOAuthLoading ? (
+                  <LoaderIcon className="size-4 animate-spin" />
+                ) : (
+                  <LogIn className="size-4" />
+                )}
+                {isOAuthLoading ? "Signing in..." : "Sign in with OpenRouter"}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center px-1">
+                Recommended - Get access to all models
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 text-sm">
+              <div className="flex size-8 items-center justify-center rounded-full bg-green-500/10">
+                <Check className="size-4 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">Connected to OpenRouter</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  All models available
+                </p>
+              </div>
+            </div>
+          )}
+        </SidebarGroup>
         <SidebarGroup className="px-2">
           <Button
             type="button"

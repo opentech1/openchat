@@ -13,10 +13,6 @@ type ConvexUser = {
   email?: string;
   name?: string;
   image?: string;
-  onboardingCompletedAt?: number;
-  displayName?: string;
-  preferredTone?: string;
-  customInstructions?: string;
 };
 
 type ConvexUserContextValue = {

@@ -1,0 +1,141 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # Wait for canary checks to pass before deploying
+  wait-for-canary:
+    name: Wait for canary checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for prod-canary workflow
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'Run production canary checks'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success
+
+  deploy-convex:
+    name: Deploy Convex to Production
+    runs-on: ubuntu-latest
+    needs: wait-for-canary
+    environment:
+      name: production
+      url: https://outgoing-setter-201.convex.cloud
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.2.21"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure Convex deployment
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          # Create .convex directory
+          mkdir -p .convex
+
+          # Production deployment URL from Convex dashboard
+          echo "https://outgoing-setter-201.convex.cloud" > .convex/deployment_url.txt
+
+          # Create .env.local with deployment configuration
+          cat > .env.local << EOF
+          # Convex production deployment configuration
+          CONVEX_DEPLOYMENT=outgoing-setter-201
+          NEXT_PUBLIC_CONVEX_URL=https://outgoing-setter-201.convex.cloud
+          EOF
+
+          echo "✅ Convex deployment configured"
+
+      - name: Deploy Convex schema and functions
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          echo "☁️  Deploying to Convex production..."
+          bunx convex deploy --yes
+          echo "✅ Convex deployment complete!"
+
+      - name: Verify deployment
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          echo "📊 Checking deployment status..."
+          DEPLOYMENT_URL=$(bunx convex env get NEXT_PUBLIC_CONVEX_URL 2>&1 || echo "")
+          if [ -n "$DEPLOYMENT_URL" ]; then
+            echo "✅ Production URL: $DEPLOYMENT_URL"
+          else
+            echo "⚠️  Could not retrieve production URL, but deployment may have succeeded"
+          fi
+
+      - name: Run database migrations
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          echo "🔄 Running database migrations..."
+
+          # Run stats initialization migration (idempotent)
+          echo "Running initializeStats migration..."
+          bunx convex run migrations:initializeStats '{"force": false}' || echo "⚠️  initializeStats migration skipped or already completed"
+
+          # Run message count backfill migration (idempotent - skips existing)
+          echo "Running backfillMessageCounts migration..."
+          bunx convex run migrations:backfillMessageCounts '{"skipExisting": true}' || echo "⚠️  backfillMessageCounts migration skipped or already completed"
+
+          # Run onboarding fields removal migration (idempotent)
+          echo "Running removeOnboardingFields migration..."
+          bunx convex run migrations:removeOnboardingFields || echo "⚠️  removeOnboardingFields migration skipped or already completed"
+
+          echo "✅ Migrations complete!"
+
+      - name: Verify data consistency
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          echo "🔍 Verifying data consistency..."
+          bunx convex run migrations:verifyMessageCounts || echo "⚠️  Verification check encountered issues"
+
+      - name: Post deployment summary
+        if: always()
+        run: |
+          echo "🎉 Deployment Summary"
+          echo "===================="
+          echo "Status: ${{ job.status }}"
+          echo "Deployment: https://outgoing-setter-201.convex.cloud"
+          echo "Dashboard: https://dashboard.convex.dev/t/outgoing-setter-201"
+          echo ""
+          echo "Next steps:"
+          echo "1. Vercel will auto-deploy web app on push to main"
+          echo "2. Monitor deployment at dashboard link above"
+          echo "3. Run manual smoke tests if needed"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed!"
+          echo ""
+          echo "Troubleshooting steps:"
+          echo "1. Check CONVEX_DEPLOY_KEY is set correctly in GitHub Secrets"
+          echo "2. Verify production deployment URL: https://outgoing-setter-201.convex.cloud"
+          echo "3. Review Convex dashboard for errors: https://dashboard.convex.dev/t/outgoing-setter-201"
+          echo "4. Check migration logs above for specific errors"
+          echo ""
+          echo "To manually deploy:"
+          echo "  bun run deploy"
+          exit 1

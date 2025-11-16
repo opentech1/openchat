@@ -31,6 +31,8 @@
     "generate:secrets": "bun run scripts/generate-secrets.ts",
     "convex:dev": "cd apps/server && convex dev",
     "convex:codegen": "cd apps/server && convex codegen",
+    "convex:migrate": "bun ./scripts/run-migrations.ts",
+    "convex:verify": "bun ./scripts/run-migrations.ts --verify-only",
     "verify:build": "rm -rf apps/web/.next && (cd apps/web && bunx next build) && bunx turbo run build --filter=web --filter=server"
   },
   "dependencies": {
