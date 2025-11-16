@@ -1,12 +1,12 @@
 /**
- * Redis-based distributed rate limiter
+ * Redis-based distributed rate limiter using Upstash Redis REST API
  *
  * Use this for multi-instance deployments where rate limits need to be
- * shared across multiple servers.
+ * shared across multiple servers. Optimized for serverless environments.
  *
  * Setup:
- * 1. Install: bun add ioredis
- * 2. Set REDIS_URL environment variable
+ * 1. Install: bun add @upstash/redis
+ * 2. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables
  * 3. Update rate-limit.ts to use this implementation
  *
  * ALGORITHM:
@@ -22,86 +22,89 @@
  * - Redis single-threaded nature ensures atomicity
  *
  * PERFORMANCE:
+ * - REST API ideal for serverless (no persistent connections)
  * - Pipeline operations minimize round trips (4 commands in 1 request)
  * - Sorted set operations are O(log N) where N = requests in window
  * - Memory usage is bounded by window size and request rate
- * - Typical latency: 1-5ms for local Redis, 10-50ms for remote
+ * - Typical latency: 50-150ms for Upstash global edge network
  *
  * RELIABILITY:
- * - Redis connection failures will throw errors (handle in caller)
- * - Consider connection pooling for high-throughput scenarios
- * - Set appropriate Redis maxmemory-policy (allkeys-lru recommended)
- * - Monitor Redis memory usage and eviction rates
+ * - Redis connection failures will fail open (allow request) or fail closed (deny request) based on configuration
+ * - Upstash provides automatic backups and high availability
+ * - No connection pooling needed (REST API is stateless)
+ * - Graceful degradation on Redis unavailability
+ *
+ * UPSTASH REDIS BENEFITS:
+ * - Serverless-native (pay per request)
+ * - Global edge network for low latency
+ * - No connection limits (REST API)
+ * - Automatic scaling and high availability
+ * - Built-in metrics and monitoring
  *
  * @see rate-limit.ts for single-instance in-memory implementation
  */
 
 import type { RateLimitConfig, RateLimitResult } from "./rate-limit";
 
-// Lazy load Redis to avoid import errors when not installed
-let Redis: typeof import("ioredis").Redis;
+// Lazy load Upstash Redis to avoid import errors when not installed
+let UpstashRedis: typeof import("@upstash/redis").Redis;
 
-async function loadRedis() {
-	if (!Redis) {
+async function loadUpstashRedis() {
+	if (!UpstashRedis) {
 		try {
-			const ioredis = await import("ioredis");
-			Redis = ioredis.Redis;
+			const upstashModule = await import("@upstash/redis");
+			UpstashRedis = upstashModule.Redis;
 		} catch (_error) {
 			throw new Error(
-				"ioredis package not found. Install it with: bun add ioredis\n" +
-					"Or remove REDIS_URL from environment to use in-memory rate limiting.",
+				"@upstash/redis package not found. Install it with: bun add @upstash/redis\n" +
+					"Or remove UPSTASH_REDIS_REST_URL from environment to use in-memory rate limiting.",
 			);
 		}
 	}
-	return Redis;
+	return UpstashRedis;
 }
 
 export class RedisRateLimiter {
-	private redis: InstanceType<typeof Redis> | null = null;
-	private config: Required<RateLimitConfig>;
+	private redis: InstanceType<typeof UpstashRedis> | null = null;
+	private config: Required<RateLimitConfig> & { failOpen: boolean };
 	private initPromise: Promise<void> | null = null;
 
-	constructor(config: RateLimitConfig, redisUrl?: string) {
+	constructor(config: RateLimitConfig & { failOpen?: boolean }, redisUrl?: string, redisToken?: string) {
 		this.config = {
 			limit: Math.max(1, config.limit),
 			windowMs: Math.max(1000, config.windowMs),
 			maxBuckets: config.maxBuckets ?? 10_000, // Not used in Redis (no memory limit)
+			failOpen: config.failOpen ?? true, // Default to fail-open for better user experience
 		};
 
 		// Initialize Redis asynchronously
-		this.initPromise = this.initRedis(redisUrl);
+		this.initPromise = this.initRedis(redisUrl, redisToken);
 	}
 
-	private async initRedis(redisUrl?: string): Promise<void> {
-		const RedisClass = await loadRedis();
-		const url = redisUrl || process.env.REDIS_URL || "redis://localhost:6379";
+	private async initRedis(redisUrl?: string, redisToken?: string): Promise<void> {
+		const RedisClass = await loadUpstashRedis();
+		const url = redisUrl || process.env.UPSTASH_REDIS_REST_URL;
+		const token = redisToken || process.env.UPSTASH_REDIS_REST_TOKEN;
 
-		this.redis = new RedisClass(url, {
-			// Connection options for reliability
-			maxRetriesPerRequest: 3,
-			retryStrategy(times: number) {
-				// Exponential backoff: 50ms, 100ms, 200ms, etc.
-				const delay = Math.min(times * 50, 2000);
-				return delay;
-			},
-			// Reconnect on error
-			reconnectOnError(err: Error) {
-				const targetError = "READONLY";
-				if (err.message.includes(targetError)) {
-					// Reconnect on READONLY errors (Redis replica promoted to master)
-					return true;
-				}
-				return false;
-			},
-		});
+		if (!url || !token) {
+			throw new Error(
+				"Missing Upstash Redis credentials. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables.\n" +
+					"Get credentials from: https://console.upstash.com/redis"
+			);
+		}
 
-		// Handle connection errors
-		this.redis.on("error", (err: Error) => {
-			console.error("Redis rate limiter connection error:", err);
+		this.redis = new RedisClass({
+			url,
+			token,
+			// Upstash REST API options
+			retry: {
+				retries: 3,
+				backoff: (retryCount) => Math.min(50 * Math.pow(2, retryCount), 2000),
+			},
 		});
 	}
 
-	private async ensureReady(): Promise<InstanceType<typeof Redis>> {
+	private async ensureReady(): Promise<InstanceType<typeof UpstashRedis>> {
 		if (this.initPromise) {
 			await this.initPromise;
 			this.initPromise = null;
@@ -143,7 +146,7 @@ export class RedisRateLimiter {
 
 			// Add current request with unique member (timestamp + random)
 			// This allows multiple requests at the same millisecond
-			pipeline.zadd(key, now, `${now}-${Math.random()}`);
+			pipeline.zadd(key, { score: now, member: `${now}-${Math.random()}` });
 
 			// Count requests in current window
 			pipeline.zcard(key);
@@ -154,9 +157,9 @@ export class RedisRateLimiter {
 
 			const results = await pipeline.exec();
 
-			// Pipeline returns array of [error, result] tuples
-			// We need the ZCARD result (index 2)
-			const count = (results?.[2]?.[1] as number) || 0;
+			// Upstash Redis pipeline returns array of results directly
+			// Extract the ZCARD result (index 2)
+			const count = (typeof results[2] === "number" ? results[2] : 0);
 
 			const limited = count > this.config.limit;
 			const resetAt = now + this.config.windowMs;
@@ -175,16 +178,29 @@ export class RedisRateLimiter {
 				count,
 				resetAt,
 			};
-		} catch (_error) {
-			// Log error but don't block requests on Redis failures
-			console.error("Redis rate limit check failed:", _error);
-			// Fail open: allow request if Redis is down
-			// Alternative: fail closed by returning { limited: true }
-			return {
-				limited: false,
-				count: 1,
-				resetAt: now + this.config.windowMs,
-			};
+		} catch (error) {
+			// Log error with details
+			console.error("Redis rate limit check failed:", error);
+
+			// Graceful degradation based on failOpen configuration
+			if (this.config.failOpen) {
+				// Fail open: allow request if Redis is down
+				console.warn("Rate limiter failing open due to Redis error");
+				return {
+					limited: false,
+					count: 1,
+					resetAt: now + this.config.windowMs,
+				};
+			} else {
+				// Fail closed: deny request if Redis is down
+				console.warn("Rate limiter failing closed due to Redis error");
+				return {
+					limited: true,
+					retryAfter: Math.ceil(this.config.windowMs / 1000),
+					count: this.config.limit + 1,
+					resetAt: now + this.config.windowMs,
+				};
+			}
 		}
 	}
 
@@ -266,20 +282,13 @@ export class RedisRateLimiter {
 	/**
 	 * Close Redis connection
 	 *
-	 * Call this on application shutdown to gracefully close connections.
-	 * In serverless environments, connections will be reused across invocations.
+	 * Note: Upstash Redis uses REST API (stateless), so there's no persistent
+	 * connection to close. This method is provided for API compatibility.
+	 * In serverless environments, the client is automatically cleaned up.
 	 */
 	async close(): Promise<void> {
-		if (this.redis) {
-			try {
-				await this.redis.quit();
-				this.redis = null;
-			} catch (_error) {
-				console.error("Redis rate limiter close failed:", _error);
-				// Force disconnect if graceful quit fails
-				this.redis?.disconnect();
-				this.redis = null;
-			}
-		}
+		// Upstash Redis uses REST API - no persistent connection to close
+		// Just clear the reference to allow garbage collection
+		this.redis = null;
 	}
 }

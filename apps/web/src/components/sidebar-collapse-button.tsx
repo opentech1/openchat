@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PanelLeft, Plus } from "lucide-react";
+import { PanelLeft, Plus } from "@/lib/icons";
 import { useRouter } from "next/navigation";
+import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 
 export default function SidebarCollapseButton() {
 	const [collapsed, setCollapsed] = useState(false);
@@ -10,7 +11,7 @@ export default function SidebarCollapseButton() {
 
 	const updateCollapsedState = useCallback(() => {
 		try {
-			const value = localStorage.getItem("oc:sb:collapsed");
+			const value = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
 			setCollapsed(value === "1");
 		} catch {
 			setCollapsed(false);
@@ -23,7 +24,7 @@ export default function SidebarCollapseButton() {
 
 		// Listen for storage changes (in case sidebar is toggled from another tab or by custom event)
 		const handleStorage = (e: StorageEvent) => {
-			if (e.key === "oc:sb:collapsed") {
+			if (e.key === LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED) {
 				updateCollapsedState();
 			}
 		};

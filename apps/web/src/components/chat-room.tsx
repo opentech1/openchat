@@ -20,11 +20,13 @@ import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
+import { ErrorBoundary } from "@/components/error-boundary";
 import {
   captureClientEvent,
   identifyClient,
   registerClientProperties,
 } from "@/lib/posthog";
+import { LiveRegion } from "@/components/ui/live-region";
 import {
   readCachedModels,
   writeCachedModels,
@@ -33,14 +35,17 @@ import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
 import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
 import type { ModelSelectorOption } from "@/components/model-selector";
 import { logError } from "@/lib/logger";
-import { useQuery } from "convex/react";
-import { api } from "@server/convex/_generated/api";
+import { isApiError } from "@/lib/error-handling";
 import {
   getStorageItemSync,
   setStorageItemSync,
   removeStorageItemSync,
 } from "@/lib/storage";
 import { fetchWithCsrf } from "@/lib/csrf-client";
+import { toConvexUserId, toConvexChatId } from "@/lib/type-converters";
+import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from "@/config/storage-keys";
+import { getMessageThrottle } from "@/config/constants";
+import { useConvexUser } from "@/contexts/convex-user-context";
 
 type ChatRoomProps = {
   chatId: string;
@@ -60,10 +65,7 @@ type ChatRoomProps = {
   }>;
 };
 
-const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
-const MESSAGE_THROTTLE_MS = Number(
-  process.env.NEXT_PUBLIC_CHAT_THROTTLE_MS ?? 80,
-);
+const MESSAGE_THROTTLE_MS = getMessageThrottle();
 
 // OpenRouter state reducer (apiKey now managed by useOpenRouterKey hook)
 type OpenRouterState = {
@@ -143,11 +145,8 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const user = session?.user;
   const workspaceId = user?.id ?? null;
 
-  // Get Convex user ID from Better Auth external ID
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    workspaceId ? { externalId: workspaceId } : "skip"
-  );
+  // Get Convex user from shared context
+  const { convexUser } = useConvexUser();
   const convexUserId = convexUser?._id ?? null;
 
   const router = useRouter();
@@ -189,18 +188,18 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   // Check for pending message and model from dashboard on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const pending = sessionStorage.getItem("pendingMessage");
+    const pending = sessionStorage.getItem(SESSION_STORAGE_KEYS.PENDING_MESSAGE);
     if (pending) {
       setPendingMessage(pending);
       setShouldAutoSend(true);
-      sessionStorage.removeItem("pendingMessage");
+      sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_MESSAGE);
     }
-    const pendingModel = sessionStorage.getItem("pendingModel");
+    const pendingModel = sessionStorage.getItem(SESSION_STORAGE_KEYS.PENDING_MODEL);
     if (pendingModel) {
       dispatch({ type: "SET_SELECTED_MODEL", payload: pendingModel });
-      setStorageItemSync(LAST_MODEL_STORAGE_KEY, pendingModel);
+      setStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL, pendingModel);
       storedModelIdRef.current = pendingModel;
-      sessionStorage.removeItem("pendingModel");
+      sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_MODEL);
     }
   }, []);
 
@@ -236,9 +235,9 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   const persistSelectedModel = useCallback((next: string | null) => {
     if (next) {
-      setStorageItemSync(LAST_MODEL_STORAGE_KEY, next);
+      setStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL, next);
     } else {
-      removeStorageItemSync(LAST_MODEL_STORAGE_KEY);
+      removeStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL);
     }
     storedModelIdRef.current = next;
   }, []);
@@ -254,7 +253,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   );
 
   useEffect(() => {
-    const stored = getStorageItemSync(LAST_MODEL_STORAGE_KEY);
+    const stored = getStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL);
     storedModelIdRef.current = stored;
     if (stored && !selectedModel) {
       dispatch({ type: "SET_SELECTED_MODEL", payload: stored });
@@ -355,13 +354,10 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         }
 
         logError("Failed to load OpenRouter models", error);
-        if (!(error as any)?.__posthogTracked) {
-          const status =
-            typeof (error as any)?.status === "number"
-              ? (error as any).status
-              : 0;
+        if (isApiError(error) && !error.__posthogTracked) {
+          const status = typeof error.status === "number" ? error.status : 0;
           let providerHost = "openrouter.ai";
-          const providerUrl = (error as any)?.providerUrl;
+          const providerUrl = error.providerUrl;
           if (typeof providerUrl === "string" && providerUrl.length > 0) {
             try {
               providerHost = new URL(providerUrl).host;
@@ -736,14 +732,21 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
           attachment_count: attachments?.length || 0,
         });
       } catch (error) {
-        const status =
-          error instanceof Response
-            ? error.status
-            : typeof (error as any)?.status === "number"
-              ? (error as any).status
-              : typeof (error as any)?.cause?.status === "number"
-                ? (error as any).cause.status
-                : null;
+        let status: number | null = null;
+
+        if (error instanceof Response) {
+          status = error.status;
+        } else if (isApiError(error) && typeof error.status === "number") {
+          status = error.status;
+        } else if (
+          isApiError(error) &&
+          error.cause &&
+          typeof error.cause === "object" &&
+          "status" in error.cause &&
+          typeof error.cause.status === "number"
+        ) {
+          status = error.cause.status;
+        }
         if (status === 429) {
           let limitHeader: number | undefined;
           let windowHeader: number | undefined;
@@ -837,6 +840,11 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 focus:outline-none focus-visible:outline-none">
+      {/* Screen reader announcements for loading states */}
+      <LiveRegion
+        message={status === "submitted" ? "Sending message..." : status === "streaming" ? "Receiving response..." : ""}
+        politeness="polite"
+      />
       <OpenRouterLinkModal
         open={showKeyModal}
         saving={savingApiKey || modelsLoading}
@@ -862,22 +870,24 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
-          <ChatComposer
-            placeholder="Type your message..."
-            sendDisabled={sendDisabled}
-            disabled={composerDisabled}
-            onSend={handleSend}
-            modelOptions={modelOptions}
-            modelValue={selectedModel}
-            onModelChange={handleModelSelection}
-            modelsLoading={modelsLoading}
-            apiKey={apiKey}
-            isStreaming={status === "streaming"}
-            onStop={() => stop()}
-            onMissingRequirement={handleMissingRequirement}
-            userId={convexUserId as any}
-            chatId={chatId as any}
-          />
+          <ErrorBoundary level="section" resetKeys={[chatId]}>
+            <ChatComposer
+              placeholder="Type your message..."
+              sendDisabled={sendDisabled}
+              disabled={composerDisabled}
+              onSend={handleSend}
+              modelOptions={modelOptions}
+              modelValue={selectedModel}
+              onModelChange={handleModelSelection}
+              modelsLoading={modelsLoading}
+              apiKey={apiKey}
+              isStreaming={status === "streaming"}
+              onStop={() => stop()}
+              onMissingRequirement={handleMissingRequirement}
+              userId={convexUserId}
+              chatId={toConvexChatId(chatId)}
+            />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

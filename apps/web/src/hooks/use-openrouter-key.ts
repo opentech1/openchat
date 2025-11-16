@@ -10,8 +10,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
-import { useConvex, useQuery } from "convex/react";
-import { api } from "@server/convex/_generated/api";
+import { useConvex } from "convex/react";
 import { authClient } from "@/lib/auth-client";
 import {
   saveOpenRouterKey,
@@ -19,6 +18,7 @@ import {
   removeOpenRouterKey,
 } from "@/lib/openrouter-key-storage";
 import { logError } from "@/lib/logger";
+import { useConvexUser } from "@/contexts/convex-user-context";
 
 export function useOpenRouterKey() {
   const [apiKey, setApiKey] = useState<string | null>(null);
@@ -32,11 +32,8 @@ export function useOpenRouterKey() {
   // Check if Convex client is available before calling hooks
   const isConvexReady = convex !== null && convex !== undefined;
 
-  // Get Convex user ID from Better Auth session - only if Convex is ready
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    isConvexReady && user?.id ? { externalId: user.id } : "skip"
-  );
+  // Get Convex user from shared context
+  const { convexUser } = useConvexUser();
 
   // Load API key on mount or when user changes
   useEffect(() => {

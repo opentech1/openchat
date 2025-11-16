@@ -12,23 +12,25 @@ interface FocusRect {
   height: number;
 }
 
-const LogoIconImage = ({ className }: { className?: string }) => (
+const LogoIconImage = ({ className, priority }: { className?: string; priority?: boolean }) => (
 	<Image
 		src="/logo.png"
 		alt="osschat logo"
 		width={24}
 		height={24}
 		className={className}
-		priority
+		priority={priority}
 	/>
 )
 
 export const LogoWithEffect = ({
 	className,
 	size = 'default',
+	priority = false,
 }: {
 	className?: string;
 	size?: 'small' | 'default' | 'large';
+	priority?: boolean;
 }) => {
 	const words = ['oss', 'chat'];
 	const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -69,7 +71,7 @@ export const LogoWithEffect = ({
 
 	return (
 		<span className={cn('inline-flex items-center font-semibold tracking-tight', sizes.container, className)}>
-			<LogoIconImage className={cn(sizes.logo)} />
+			<LogoIconImage className={cn(sizes.logo)} priority={priority} />
 			<div className="relative flex gap-0 items-center" ref={containerRef}>
 				{words.map((word, index) => {
 					const isActive = index === currentIndex;

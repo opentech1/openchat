@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Github, ArrowLeft, LoaderIcon, ExternalLink } from "lucide-react";
+import { Github, ArrowLeft, LoaderIcon, ExternalLink } from "@/lib/icons";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -13,9 +13,10 @@ import { NiceLoader } from "@/components/ui/nice-loader";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { spacing, iconSize } from "@/styles/design-tokens";
+import { useConvexUser } from "@/contexts/convex-user-context";
 
 const TONE_OPTIONS = [
 	{ value: "casual", label: "Casual / Friendly", description: "Conversational and relaxed" },
@@ -30,11 +31,8 @@ export default function OnboardingPage() {
 	const { hasKey, saveKey, isLoading: isKeyLoading } = useOpenRouterKey();
 	const completeOnboarding = useMutation(api.users.completeOnboarding);
 
-	// Get Convex user ID from Better Auth session
-	const convexUser = useQuery(
-		api.users.getByExternalId,
-		session?.user?.id ? { externalId: session.user.id } : "skip"
-	);
+	// Get Convex user from shared context
+	const { convexUser, isLoading: isConvexUserLoading } = useConvexUser();
 	const userId = convexUser?._id;
 	const user = convexUser;
 
@@ -53,7 +51,7 @@ export default function OnboardingPage() {
 	const [customInstructions, setCustomInstructions] = useState("");
 
 	// Check if we're waiting for user data to load
-	const isUserLoading = session?.user?.id && !user;
+	const isUserLoading = isConvexUserLoading;
 
 	// Redirect to dashboard if onboarding is already completed
 	useEffect(() => {

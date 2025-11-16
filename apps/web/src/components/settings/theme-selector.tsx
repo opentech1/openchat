@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check } from "@/lib/icons";
 
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { cn } from "@/lib/utils";

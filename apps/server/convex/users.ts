@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 
 // User document validator with all fields including fileUploadCount
 const userDoc = v.object({
@@ -56,6 +57,10 @@ export const ensure = mutation({
 			createdAt: now,
 			updatedAt: now,
 		});
+
+		// PERFORMANCE OPTIMIZATION: Update stats counter when creating user
+		await incrementStat(ctx, STAT_KEYS.USERS_TOTAL);
+
 		return { userId };
 	},
 });

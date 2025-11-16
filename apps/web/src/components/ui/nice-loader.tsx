@@ -1,4 +1,4 @@
-import { LoaderIcon } from "lucide-react";
+import { LoaderIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type NiceLoaderProps = {

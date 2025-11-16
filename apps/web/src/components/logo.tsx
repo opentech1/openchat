@@ -2,14 +2,14 @@ import { cn } from '@/lib/utils'
 import Image from 'next/image'
 
 // Use the logo.png image
-const LogoIconImage = ({ className }: { className?: string }) => (
+const LogoIconImage = ({ className, priority }: { className?: string; priority?: boolean }) => (
 	<Image
 		src="/logo.png"
 		alt="osschat logo"
 		width={24}
 		height={24}
 		className={className}
-		priority
+		priority={priority}
 	/>
 )
 
@@ -39,9 +39,11 @@ export const LogoTextSvg = ({ className }: { className?: string }) => (
 export const Logo = ({
 	className,
 	size = 'default',
+	priority = false,
 }: {
 	className?: string;
 	size?: 'small' | 'default' | 'large';
+	priority?: boolean;
 }) => {
 	const sizeClasses = {
 		small: { container: 'gap-1.5', logo: 'size-5', text: 'text-base' },
@@ -53,7 +55,7 @@ export const Logo = ({
 
 	return (
 		<span className={cn('inline-flex items-center font-semibold tracking-tight', sizes.container, className)}>
-			<LogoIconImage className={cn(sizes.logo)} />
+			<LogoIconImage className={cn(sizes.logo)} priority={priority} />
 			<span className={cn('font-mono font-bold', sizes.text)}>
 				<span className="text-foreground">oss</span>
 				<span className="text-foreground">chat</span>
@@ -63,6 +65,6 @@ export const Logo = ({
 }
 
 // Icon-only version
-export const LogoIcon = ({ className }: { className?: string }) => (
-	<LogoIconImage className={cn('size-6', className)} />
+export const LogoIcon = ({ className, priority = false }: { className?: string; priority?: boolean }) => (
+	<LogoIconImage className={cn('size-6', className)} priority={priority} />
 )

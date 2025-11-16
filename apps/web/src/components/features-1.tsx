@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Zap, Wrench, Heart } from "lucide-react";
+import { Zap, Wrench, Heart } from "@/lib/icons";
 import type { ReactNode } from "react";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 

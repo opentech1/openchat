@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Cloud, Server, Check } from 'lucide-react';
+import { Cloud, Server, Check } from '@/lib/icons';
 import { spacing, opacity, borderRadius, iconSize, transitions } from '@/styles/design-tokens';
 
 const CLOUD_FEATURES = [

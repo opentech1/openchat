@@ -88,8 +88,10 @@ export async function GET(request: Request) {
 		return NextResponse.json(
 			{
 				error: "Internal server error",
-				message: error instanceof Error ? error.message : "Unknown error",
-				stack: error instanceof Error ? error.stack : undefined,
+				// Only include detailed error info in development for security
+				// Stack traces can reveal internal implementation details to attackers
+				message: isDev && error instanceof Error ? error.message : "An unexpected error occurred",
+				...(isDev && error instanceof Error && { stack: error.stack }),
 			},
 			{ status: 500 },
 		);
@@ -104,8 +106,10 @@ export async function POST(request: Request) {
 		return NextResponse.json(
 			{
 				error: "Internal server error",
-				message: error instanceof Error ? error.message : "Unknown error",
-				stack: error instanceof Error ? error.stack : undefined,
+				// Only include detailed error info in development for security
+				// Stack traces can reveal internal implementation details to attackers
+				message: isDev && error instanceof Error ? error.message : "An unexpected error occurred",
+				...(isDev && error instanceof Error && { stack: error.stack }),
 			},
 			{ status: 500 },
 		);
