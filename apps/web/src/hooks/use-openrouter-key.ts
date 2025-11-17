@@ -38,8 +38,8 @@ export function useOpenRouterKey() {
   // Get Convex user from shared context
   const { convexUser } = useConvexUser();
 
-  // Function to load the key
-  const loadKey = useCallback(async () => {
+  // Load API key on mount, when user changes, or when event is triggered
+  useEffect(() => {
     // Don't try to load if Convex is not ready yet
     if (!isConvexReady) {
       setIsLoading(false);
@@ -52,40 +52,51 @@ export function useOpenRouterKey() {
       return;
     }
 
+    let cancelled = false;
     setIsLoading(true);
 
-    try {
-      const key = await loadOpenRouterKey(convexUser._id, user.id, convex);
-      setApiKey(key);
-      setError(null);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logError("Failed to load OpenRouter key", error);
-      setError(error);
-      setApiKey(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isConvexReady, user?.id, convexUser?._id, convex]);
+    const loadKey = async () => {
+      try {
+        const key = await loadOpenRouterKey(convexUser._id, user.id, convex);
+        if (!cancelled) {
+          setApiKey(key);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          logError("Failed to load OpenRouter key", error);
+          setError(error);
+          setApiKey(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-  // Load API key on mount or when user changes
-  useEffect(() => {
+    // Load initially
     void loadKey();
-  }, [loadKey]);
 
-  // Listen for global key change events
-  useEffect(() => {
+    // Listen for global key change events
     const handleKeyChange = () => {
-      void loadKey();
+      if (!cancelled) {
+        void loadKey();
+      }
     };
 
     if (typeof window !== "undefined") {
       window.addEventListener(KEY_CHANGE_EVENT, handleKeyChange);
-      return () => {
-        window.removeEventListener(KEY_CHANGE_EVENT, handleKeyChange);
-      };
     }
-  }, [loadKey]);
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+      }
+    };
+  }, [isConvexReady, user?.id, convexUser?._id, convex]);
 
   const saveKey = useCallback(
     async (newKey: string) => {
