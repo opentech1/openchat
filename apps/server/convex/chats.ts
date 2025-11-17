@@ -182,8 +182,8 @@ export const create = mutation({
 			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
 			.filter((q) =>
 				q.and(
-					q.gte(q.field("createdAt"), spamWindowStart),
-					q.neq(q.field("deletedAt"), undefined)
+					q.neq(q.field("deletedAt"), undefined),
+					q.gte(q.field("deletedAt"), spamWindowStart)
 				)
 			)
 			.collect();
