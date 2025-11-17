@@ -226,6 +226,9 @@ function ChatComposer({
     () => externalReasoningConfig ?? DEFAULT_REASONING_CONFIG
   );
 
+  // Model selector open state for keyboard shortcut
+  const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
+
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
@@ -300,6 +303,20 @@ function ChatComposer({
       adjustHeight();
     }
   }, [initialValue, adjustHeight, textareaRef]);
+
+  // Keyboard shortcut: Cmd+M / Ctrl+M to open model selector
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+M (Mac) or Ctrl+M (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+        e.preventDefault();
+        setModelSelectorOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // File upload handler
   const handleFileSelect = useCallback(
@@ -572,6 +589,8 @@ function ChatComposer({
             }}
             disabled={disabled || isBusy || modelOptions.length === 0}
             loading={modelsLoading}
+            open={modelSelectorOpen}
+            onOpenChange={setModelSelectorOpen}
           />
           {userId && chatId && (
             <FileUploadButton
