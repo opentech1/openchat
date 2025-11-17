@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X, LogIn, Check, Key, LoaderIcon } from "@/lib/icons";
+import { X } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,6 @@ import {
 } from "@/lib/posthog";
 import { AccountSettingsModalLazy as AccountSettingsModal } from "@/components/lazy/account-settings-modal-lazy";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
-import { useOpenRouterOAuth } from "@/hooks/use-openrouter-oauth";
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
@@ -151,7 +150,6 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   const user = session?.user;
   const { theme: brandTheme } = useBrandTheme();
   const { hasKey: hasOpenRouterKey } = useOpenRouterKey();
-  const { initiateLogin, isLoading: isOAuthLoading, error: oauthError } = useOpenRouterOAuth();
   const [accountOpen, setAccountOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
@@ -175,14 +173,6 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     });
     registerClientProperties({ auth_state: "member", workspace_id: user.id });
   }, [user?.id]);
-
-  useEffect(() => {
-    if (oauthError) {
-      toast.error("Failed to connect to OpenRouter", {
-        description: oauthError.message,
-      });
-    }
-  }, [oauthError]);
 
   const handleCreateChat = useCallback(async () => {
     if (isCreating) return;
