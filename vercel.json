@@ -1,5 +1,5 @@
 {
-	"buildCommand": "bun run build:web",
-	"outputDirectory": "apps/web/.next",
+	"buildCommand": "bun run build",
+	"outputDirectory": ".next",
 	"installCommand": "bun install"
 }
