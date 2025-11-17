@@ -10,6 +10,9 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+
+// Global event name for key changes
+const KEY_CHANGE_EVENT = "openrouter-key-changed";
 import { useConvex } from "convex/react";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -35,7 +38,7 @@ export function useOpenRouterKey() {
   // Get Convex user from shared context
   const { convexUser } = useConvexUser();
 
-  // Load API key on mount or when user changes
+  // Load API key on mount, when user changes, or when event is triggered
   useEffect(() => {
     // Don't try to load if Convex is not ready yet
     if (!isConvexReady) {
@@ -52,7 +55,7 @@ export function useOpenRouterKey() {
     let cancelled = false;
     setIsLoading(true);
 
-    void (async () => {
+    const loadKey = async () => {
       try {
         const key = await loadOpenRouterKey(convexUser._id, user.id, convex);
         if (!cancelled) {
@@ -71,10 +74,27 @@ export function useOpenRouterKey() {
           setIsLoading(false);
         }
       }
-    })();
+    };
+
+    // Load initially
+    void loadKey();
+
+    // Listen for global key change events
+    const handleKeyChange = () => {
+      if (!cancelled) {
+        void loadKey();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+    }
 
     return () => {
       cancelled = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+      }
     };
   }, [isConvexReady, user?.id, convexUser?._id, convex]);
 
@@ -91,6 +111,10 @@ export function useOpenRouterKey() {
         await saveOpenRouterKey(newKey, convexUser._id, user.id, convex);
         setApiKey(newKey);
         setError(null);
+        // Notify all instances of this hook to reload
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
+        }
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         logError("Failed to save OpenRouter key", error);
@@ -113,6 +137,10 @@ export function useOpenRouterKey() {
       await removeOpenRouterKey(convexUser._id, convex);
       setApiKey(null);
       setError(null);
+      // Notify all instances of this hook to reload
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
+      }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logError("Failed to remove OpenRouter key", error);
