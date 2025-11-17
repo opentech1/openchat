@@ -100,6 +100,8 @@ type ModelSelectorProps = {
 	onChange?: (value: string) => void
 	disabled?: boolean
 	loading?: boolean
+	open?: boolean
+	onOpenChange?: (open: boolean) => void
 }
 
 // Extract provider from model ID (e.g. "openai/gpt-4" -> "openai")
@@ -209,7 +211,7 @@ const providerNames: Record<string, string> = {
 	"amazon": "Amazon",
 }
 
-// OpenRouter OAuth sign-in banner component
+// OpenRouter OAuth sign-in banner component (shown in dropdown when connected)
 function OpenRouterSignInBanner() {
 	const { initiateLogin, isLoading } = useOpenRouterOAuth();
 
@@ -350,12 +352,23 @@ const MemoizedModelSelectorItem = React.memo(function MemoizedModelSelectorItem(
 	);
 });
 
-function ModelSelector({ options, value, onChange, disabled, loading }: ModelSelectorProps) {
-	const [open, setOpen] = React.useState(false)
+function ModelSelector({ options, value, onChange, disabled, loading, open: controlledOpen, onOpenChange }: ModelSelectorProps) {
+	const [internalOpen, setInternalOpen] = React.useState(false)
 	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
+
+	// Support both controlled and uncontrolled mode for open state
+	const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+	const setOpen = React.useCallback((nextOpen: boolean) => {
+		if (onOpenChange) {
+			onOpenChange(nextOpen)
+		} else {
+			setInternalOpen(nextOpen)
+		}
+	}, [onOpenChange])
 
 	// Check if user has OpenRouter key
 	const { hasKey, isLoading: isKeyLoading } = useOpenRouterKey()
+	const { initiateLogin, isLoading: isOAuthLoading } = useOpenRouterOAuth()
 
 	React.useEffect(() => {
 		if (value !== undefined) {
@@ -409,8 +422,30 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 		[value, onChange]
 	);
 
-	// Show sign-in banner if user doesn't have a key and we're not still loading
-	const showSignInBanner = !isKeyLoading && !hasKey;
+	// If no key is connected, show a button that triggers OAuth
+	if (!isKeyLoading && !hasKey) {
+		return (
+			<>
+				<LiveRegion
+					message={isOAuthLoading ? "Connecting to OpenRouter..." : ""}
+					politeness="polite"
+				/>
+				<Button
+					variant="outline"
+					onClick={initiateLogin}
+					disabled={isOAuthLoading}
+					className="w-[200px] justify-start gap-2"
+				>
+					{isOAuthLoading ? (
+						<Loader2 className="size-4 animate-spin" />
+					) : (
+						<LogIn className="size-4" />
+					)}
+					<span>{isOAuthLoading ? "Connecting..." : "Connect OpenRouter"}</span>
+				</Button>
+			</>
+		)
+	}
 
 	return (
 		<AIModelSelector open={open} onOpenChange={setOpen}>
@@ -431,15 +466,11 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 						)}
 						<ModelSelectorName className="truncate">{triggerLabel}</ModelSelectorName>
 					</div>
-					{!hasKey && !isKeyLoading && <Settings className="size-4 shrink-0 opacity-50" />}
 				</Button>
 			</ModelSelectorTrigger>
 			<ModelSelectorContent>
 				<ModelSelectorInput placeholder="Search models..." />
 				<ModelSelectorList>
-					{/* Show sign-in banner if user doesn't have a key */}
-					{showSignInBanner && <OpenRouterSignInBanner />}
-
 					<ModelSelectorEmpty>
 						{loading ? "Loading models..." : "No models found."}
 					</ModelSelectorEmpty>

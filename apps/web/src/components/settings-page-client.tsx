@@ -48,9 +48,9 @@ export default function SettingsPageClient() {
 
         <section className="rounded-xl border p-4 space-y-3">
           <div>
-            <h2 className="text-sm font-medium">OpenRouter API</h2>
+            <h2 className="text-sm font-medium">OpenRouter Connection</h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Connect your OpenRouter account to access AI models. You can use OAuth (recommended) or manually enter your API key.
+              Connect your OpenRouter account via OAuth to access AI models.
             </p>
           </div>
           {!isLoading && (
