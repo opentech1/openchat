@@ -1,5 +1,5 @@
 {
-  "installCommand": "npm install",
-  "buildCommand": "npm run build:web",
+  "installCommand": "bun install",
+  "buildCommand": "cd apps/web && bun run build",
   "outputDirectory": "apps/web/.next"
 }
