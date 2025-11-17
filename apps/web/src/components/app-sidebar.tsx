@@ -304,43 +304,6 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {/* OpenRouter OAuth Section */}
-        <SidebarGroup className="px-2 pb-2">
-          {!hasOpenRouterKey ? (
-            <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                variant="default"
-                className="w-full justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium shadow-md"
-                onClick={initiateLogin}
-                disabled={isOAuthLoading}
-                aria-label="Sign in with OpenRouter"
-              >
-                {isOAuthLoading ? (
-                  <LoaderIcon className="size-4 animate-spin" />
-                ) : (
-                  <LogIn className="size-4" />
-                )}
-                {isOAuthLoading ? "Signing in..." : "Sign in with OpenRouter"}
-              </Button>
-              <p className="text-xs text-muted-foreground text-center px-1">
-                Recommended - Get access to all models
-              </p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 text-sm">
-              <div className="flex size-8 items-center justify-center rounded-full bg-green-500/10">
-                <Check className="size-4 text-green-600 dark:text-green-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">Connected to OpenRouter</p>
-                <p className="text-xs text-muted-foreground truncate">
-                  All models available
-                </p>
-              </div>
-            </div>
-          )}
-        </SidebarGroup>
         <SidebarGroup className="px-2">
           <Button
             type="button"

@@ -214,54 +214,20 @@ function OpenRouterSignInBanner() {
 	const { initiateLogin, isLoading } = useOpenRouterOAuth();
 
 	return (
-		<div className="px-2 py-3 mb-2 border-b">
-			<div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-lg p-4">
-				<div className="flex flex-col gap-3">
-					<div className="flex items-start gap-3">
-						<div className="shrink-0 mt-0.5">
-							<LogIn className="size-5 text-blue-500" />
-						</div>
-						<div className="flex-1 min-w-0">
-							<h3 className="font-medium text-sm mb-1">
-								Sign in with OpenRouter
-							</h3>
-							<p className="text-xs text-muted-foreground">
-								Connect your OpenRouter account to access AI models from leading providers
-							</p>
-						</div>
-					</div>
-					<div className="flex flex-col gap-2">
-						<Button
-							onClick={initiateLogin}
-							disabled={isLoading}
-							className="w-full"
-							size="sm"
-						>
-							{isLoading ? (
-								<>
-									<Loader2 className="mr-2 size-4 animate-spin" />
-									Connecting...
-								</>
-							) : (
-								<>
-									<LogIn className="mr-2 size-4" />
-									Sign in with OpenRouter
-								</>
-							)}
-						</Button>
-						<div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-							<span>or</span>
-							<a
-								href="/dashboard/settings"
-								className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-							>
-								<Settings className="size-3" />
-								enter API key manually
-							</a>
-						</div>
-					</div>
-				</div>
-			</div>
+		<div className="px-2 py-2 border-b">
+			<button
+				type="button"
+				onClick={initiateLogin}
+				disabled={isLoading}
+				className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+			>
+				{isLoading ? (
+					<Loader2 className="size-4 animate-spin" />
+				) : (
+					<LogIn className="size-4" />
+				)}
+				<span>{isLoading ? "Connecting..." : "Add OpenRouter Account"}</span>
+			</button>
 		</div>
 	);
 }
