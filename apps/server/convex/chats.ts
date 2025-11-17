@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, decrementStat, STAT_KEYS } from "./lib/dbStats";
+import { CHAT_LIMITS } from "./config/constants";
 
 // Input sanitization for chat titles
 const MAX_TITLE_LENGTH = 200;
@@ -136,9 +137,13 @@ export const create = mutation({
 		// Sanitize the title to prevent injection attacks and ensure valid input
 		const sanitizedTitle = sanitizeTitle(args.title);
 
-		// Rate limit: check recent NON-DELETED chat creation
-		// Important: filter out deleted chats to prevent bypass via create/delete loop
-		// Use by_user_created index to sort by createdAt, preventing bypass via chat updates
+		// SMART RATE LIMITING: Two-tier protection against spam
+		// Tier 1: Minimum time between chats (prevents rapid-fire creation)
+		// Tier 2: Sliding window limit (prevents sustained abuse)
+
+		const now = Date.now();
+
+		// Tier 1: Check minimum time between chats (quick check)
 		const recentChat = await ctx.db
 			.query("chats")
 			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
@@ -146,13 +151,47 @@ export const create = mutation({
 			.filter((q) => q.eq(q.field("deletedAt"), undefined))
 			.first();
 
-		const now = Date.now();
-		const rateLimit = 3 * 1000; // 3 seconds
-		if (recentChat) {
-			const lastChatTime = recentChat.createdAt;
-			if (now - lastChatTime < rateLimit) {
-				throw new Error("Rate limit exceeded. Please wait before creating another chat.");
-			}
+		if (recentChat && (now - recentChat.createdAt < CHAT_LIMITS.CREATE_RATE_LIMIT_MS)) {
+			throw new Error("Rate limit exceeded. Please wait before creating another chat.");
+		}
+
+		// Tier 2: Sliding window - count chats created in last window
+		// This prevents users from creating too many chats over time
+		const windowStart = now - CHAT_LIMITS.CREATE_RATE_LIMIT_WINDOW_MS;
+		const recentChats = await ctx.db
+			.query("chats")
+			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+			.filter((q) =>
+				q.and(
+					q.gte(q.field("createdAt"), windowStart),
+					q.eq(q.field("deletedAt"), undefined)
+				)
+			)
+			.collect();
+
+		if (recentChats.length >= CHAT_LIMITS.CREATE_RATE_LIMIT_MAX_PER_WINDOW) {
+			throw new Error(`Rate limit exceeded. You can create up to ${CHAT_LIMITS.CREATE_RATE_LIMIT_MAX_PER_WINDOW} chats per minute.`);
+		}
+
+		// Tier 3: Spam detection - detect create/delete abuse patterns
+		// Check for excessive deletions in a longer window (5 minutes)
+		// This catches users trying to bypass rate limits via rapid create/delete cycles
+		const spamWindowStart = now - CHAT_LIMITS.SPAM_DETECTION_WINDOW_MS;
+		const deletedChats = await ctx.db
+			.query("chats")
+			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
+			.filter((q) =>
+				q.and(
+					q.gte(q.field("createdAt"), spamWindowStart),
+					q.neq(q.field("deletedAt"), undefined)
+				)
+			)
+			.collect();
+
+		if (deletedChats.length >= CHAT_LIMITS.SPAM_DETECTION_MAX_DELETIONS) {
+			throw new Error(
+				`Suspicious activity detected. Please slow down and avoid creating/deleting chats rapidly.`
+			);
 		}
 
 		const chatId = await ctx.db.insert("chats", {

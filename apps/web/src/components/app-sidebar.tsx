@@ -415,18 +415,24 @@ function ChatList({
   if (!shouldVirtualize) {
     // Non-virtualized list for few chats
     return (
-      <ul className="px-1 space-y-1" data-ph-no-capture>
-        {chats.map((c) => (
-          <ChatListItem
-            key={c.id}
-            chat={c}
-            activePath={activePath}
-            onDelete={onDelete}
-            deletingId={deletingId}
-            onHoverChat={onHoverChat}
-          />
-        ))}
-      </ul>
+      <div
+        className="px-1 overflow-y-auto overflow-x-hidden"
+        style={{ maxHeight: "calc(100vh - 280px)" }}
+        data-ph-no-capture
+      >
+        <ul className="space-y-1">
+          {chats.map((c) => (
+            <ChatListItem
+              key={c.id}
+              chat={c}
+              activePath={activePath}
+              onDelete={onDelete}
+              deletingId={deletingId}
+              onHoverChat={onHoverChat}
+            />
+          ))}
+        </ul>
+      </div>
     );
   }
 
@@ -434,7 +440,7 @@ function ChatList({
   return (
     <div
       ref={parentRef}
-      className="px-1 overflow-auto"
+      className="px-1 overflow-y-auto overflow-x-hidden"
       style={{ maxHeight: "calc(100vh - 280px)" }}
       data-ph-no-capture
     >

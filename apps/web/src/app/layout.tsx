@@ -133,6 +133,15 @@ export default function RootLayout({
 						__html: stringifyStructuredData(structuredData),
 					}}
 				/>
+				{/* React Grab - Developer tool for element inspection */}
+				{process.env.NODE_ENV === "development" && (
+					<Script
+						src="//unpkg.com/react-grab/dist/index.global.js"
+						crossOrigin="anonymous"
+						strategy="beforeInteractive"
+						data-enabled="true"
+					/>
+				)}
 			</head>
 			<body className={cn("font-sans antialiased", GeistSans.className)}>
 				<ErrorBoundary level="app">
