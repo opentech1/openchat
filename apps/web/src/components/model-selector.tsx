@@ -431,7 +431,7 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 						)}
 						<ModelSelectorName className="truncate">{triggerLabel}</ModelSelectorName>
 					</div>
-					<Settings className="size-4 shrink-0 opacity-50" />
+					{!hasKey && !isKeyLoading && <Settings className="size-4 shrink-0 opacity-50" />}
 				</Button>
 			</ModelSelectorTrigger>
 			<ModelSelectorContent>
