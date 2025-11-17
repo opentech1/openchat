@@ -1,18 +1,16 @@
 import posthog from "posthog-js";
-import { getClientEnv } from "./env";
 
 type IdentifyOptions = {
 	workspaceId?: string | null | undefined;
 	properties?: Record<string, unknown>;
 };
 
-const env = getClientEnv();
-
-const POSTHOG_KEY = env.NEXT_PUBLIC_POSTHOG_KEY;
-const POSTHOG_HOST = env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
-const APP_VERSION = env.NEXT_PUBLIC_APP_VERSION ?? "dev";
-const DEPLOYMENT = env.NEXT_PUBLIC_DEPLOYMENT ?? "local";
-const ELECTRIC_ENABLED = Boolean(env.NEXT_PUBLIC_ELECTRIC_URL);
+// Access env vars directly to avoid build-time validation
+const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+const DEPLOYMENT = process.env.NEXT_PUBLIC_DEPLOYMENT ?? "local";
+const ELECTRIC_ENABLED = Boolean(process.env.NEXT_PUBLIC_ELECTRIC_URL);
 
 const BASE_SUPER_PROPERTIES = Object.freeze({
 	app: "openchat-web",
