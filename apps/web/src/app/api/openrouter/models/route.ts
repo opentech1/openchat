@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { logError } from "@/lib/logger-server";
 import { apiKeySchema, createValidationErrorResponse } from "@/lib/validation";
-import { getServerEnv } from "@/lib/env";
 import {
 	hasReasoningCapability,
 	hasImageCapability,
@@ -11,8 +10,8 @@ import {
 	hasMandatoryReasoning,
 } from "@/lib/model-capabilities";
 
-const env = getServerEnv();
-const OPENROUTER_BASE_URL = (env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
+// Get base URL with fallback - using env var directly to avoid build-time validation
+const OPENROUTER_BASE_URL = (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(/\/$/, "");
 
 // PERFORMANCE FIX: Cache for transformed model data
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes

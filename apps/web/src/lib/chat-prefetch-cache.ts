@@ -1,7 +1,6 @@
 "use client";
 
 import { logError } from "@/lib/logger";
-import { getClientEnv } from "./env";
 
 export type PrefetchMessage = {
 	id: string;
@@ -39,10 +38,10 @@ function isPrefetchCache(value: unknown): value is Record<string, PrefetchEntry>
 	return Object.values(value).every((entry) => isPrefetchEntry(entry));
 }
 
-const env = getClientEnv();
 const STORAGE_KEY = "openchat.chat-prefetch";
-const DEFAULT_TTL_MS = Number(env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
-const MAX_CACHE_SIZE = Number(env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
+// Access env vars directly to avoid build-time validation
+const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
+const MAX_CACHE_SIZE = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
 
 declare global {
 	// eslint-disable-next-line no-var, vars-on-top
