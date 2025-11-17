@@ -423,15 +423,15 @@ function ModelSelector({ options, value, onChange, disabled, loading }: ModelSel
 				<Button
 					variant="outline"
 					disabled={disabled || loading || options.length === 0}
-					className="w-[200px] justify-between"
+					className="w-[200px] justify-between gap-2"
 				>
-					{selectedProvider && (
-						<ModelSelectorLogo provider={selectedProvider} className="size-4" />
-					)}
-					{selectedOption && (
-						<ModelSelectorName>{triggerLabel}</ModelSelectorName>
-					)}
-					<Check className="ml-2 size-4 shrink-0 opacity-50" />
+					<div className="flex items-center gap-2 flex-1 min-w-0">
+						{selectedProvider && (
+							<ModelSelectorLogo provider={selectedProvider} className="size-4 shrink-0" />
+						)}
+						<ModelSelectorName className="truncate">{triggerLabel}</ModelSelectorName>
+					</div>
+					<Settings className="size-4 shrink-0 opacity-50" />
 				</Button>
 			</ModelSelectorTrigger>
 			<ModelSelectorContent>
