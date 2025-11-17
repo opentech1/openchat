@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useConvex } from "convex/react";
 import { authClient } from "@/lib/auth-client";
@@ -15,7 +15,7 @@ import { saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import { logError } from "@/lib/logger";
 import { Logo } from "@/components/logo";
 
-export default function OpenRouterCallbackPage() {
+function OpenRouterCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const convex = useConvex();
@@ -97,7 +97,7 @@ export default function OpenRouterCallbackPage() {
     <div className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6 text-center">
         <div className="flex justify-center">
-          <Logo size="medium" />
+          <Logo size="large" />
         </div>
 
         {status === "processing" && (
@@ -177,5 +177,22 @@ export default function OpenRouterCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function OpenRouterCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <div className="flex justify-center">
+            <Logo size="large" />
+          </div>
+          <div className="text-sm text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    }>
+      <OpenRouterCallbackContent />
+    </Suspense>
   );
 }
