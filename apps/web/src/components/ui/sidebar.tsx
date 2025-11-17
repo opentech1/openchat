@@ -51,12 +51,12 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.key === "b") {
 				e.preventDefault();
-				setCollapsed((prev) => !prev);
+				setCollapsed(!collapsed);
 			}
 		};
 		window.addEventListener("keydown", handleKeyDown);
 		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [setCollapsed]);
+	}, [collapsed, setCollapsed]);
 
 	const contextValue = React.useMemo(
 		() => ({ collapsed, setCollapsed }),

@@ -372,13 +372,14 @@ export const removeOnboardingFields = internalMutation({
 									);
 								} else {
 									// Remove onboarding fields by setting them to undefined
+									// Type assertion needed because these fields are deprecated and no longer in schema
 									await ctx.db.patch(user._id, {
 										onboardingCompletedAt: undefined,
 										displayName: undefined,
 										preferredTone: undefined,
 										customInstructions: undefined,
 										updatedAt: Date.now(),
-									});
+									} as any);
 									console.log(
 										`[Migration] Removed onboarding fields from user ${user._id}`
 									);
