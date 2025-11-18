@@ -12,11 +12,17 @@ export default defineSchema({
 		encryptedOpenRouterKey: v.optional(v.string()),
 		// File upload quota tracking
 		fileUploadCount: v.optional(v.number()),
+		// Better-auth admin plugin: ban status (for manual bans)
+		banned: v.optional(v.boolean()),
+		bannedAt: v.optional(v.number()),
+		banReason: v.optional(v.string()),
+		banExpiresAt: v.optional(v.number()),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 	})
 		.index("by_external_id", ["externalId"])
-		.index("by_email", ["email"]),
+		.index("by_email", ["email"])
+		.index("by_banned", ["banned"]),
 	chats: defineTable({
 		userId: v.id("users"),
 		// Title can be encrypted (prefixed with enc_v1:)

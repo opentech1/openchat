@@ -4,6 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, decrementStat, STAT_KEYS } from "./lib/dbStats";
 import { CHAT_LIMITS } from "./config/constants";
+import { rateLimiter } from "./lib/rateLimiter";
 
 // Input sanitization for chat titles
 const MAX_TITLE_LENGTH = 200;
@@ -134,76 +135,29 @@ export const create = mutation({
 	},
 	returns: v.object({ chatId: v.id("chats") }),
 	handler: async (ctx, args) => {
-		// Sanitize the title to prevent injection attacks and ensure valid input
 		const sanitizedTitle = sanitizeTitle(args.title);
 
-		// SMART RATE LIMITING: Two-tier protection against spam
-		// Tier 1: Minimum time between chats (prevents rapid-fire creation)
-		// Tier 2: Sliding window limit (prevents sustained abuse)
+		// Simple rate limiting with the package - returns { ok, retryAfter }
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "chatCreate", {
+			key: args.userId,
+		});
 
-		const now = Date.now();
-
-		// Tier 1: Check minimum time between chats (quick check)
-		const recentChat = await ctx.db
-			.query("chats")
-			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
-			.order("desc")
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
-			.first();
-
-		if (recentChat && (now - recentChat.createdAt < CHAT_LIMITS.CREATE_RATE_LIMIT_MS)) {
-			throw new Error("Rate limit exceeded. Please wait before creating another chat.");
-		}
-
-		// Tier 2: Sliding window - count chats created in last window
-		// This prevents users from creating too many chats over time
-		const windowStart = now - CHAT_LIMITS.CREATE_RATE_LIMIT_WINDOW_MS;
-		const recentChats = await ctx.db
-			.query("chats")
-			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
-			.filter((q) =>
-				q.and(
-					q.gte(q.field("createdAt"), windowStart),
-					q.eq(q.field("deletedAt"), undefined)
-				)
-			)
-			.collect();
-
-		if (recentChats.length >= CHAT_LIMITS.CREATE_RATE_LIMIT_MAX_PER_WINDOW) {
-			throw new Error(`Rate limit exceeded. You can create up to ${CHAT_LIMITS.CREATE_RATE_LIMIT_MAX_PER_WINDOW} chats per minute.`);
-		}
-
-		// Tier 3: Spam detection - detect create/delete abuse patterns
-		// Check for excessive deletions in a longer window (5 minutes)
-		// This catches users trying to bypass rate limits via rapid create/delete cycles
-		const spamWindowStart = now - CHAT_LIMITS.SPAM_DETECTION_WINDOW_MS;
-		const deletedChats = await ctx.db
-			.query("chats")
-			.withIndex("by_user_created", (q) => q.eq("userId", args.userId))
-			.filter((q) =>
-				q.and(
-					q.neq(q.field("deletedAt"), undefined),
-					q.gte(q.field("deletedAt"), spamWindowStart)
-				)
-			)
-			.collect();
-
-		if (deletedChats.length >= CHAT_LIMITS.SPAM_DETECTION_MAX_DELETIONS) {
+		if (!ok) {
 			throw new Error(
-				`Suspicious activity detected. Please slow down and avoid creating/deleting chats rapidly.`
+				`Too many chats created. Please try again in ${retryAfter} seconds.`
 			);
 		}
 
+		const now = Date.now();
 		const chatId = await ctx.db.insert("chats", {
 			userId: args.userId,
 			title: sanitizedTitle,
 			createdAt: now,
 			updatedAt: now,
 			lastMessageAt: now,
-			messageCount: 0, // Initialize with zero messages
+			messageCount: 0,
 		});
 
-		// PERFORMANCE OPTIMIZATION: Update stats counter when creating chat
 		await incrementStat(ctx, STAT_KEYS.CHATS_TOTAL);
 
 		return { chatId };
@@ -217,15 +171,23 @@ export const remove = mutation({
 	},
 	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
+		// Rate limit chat deletions to prevent abuse
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "chatDelete", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			throw new Error(
+				`Too many deletions. Please try again in ${retryAfter} seconds.`
+			);
+		}
+
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
 			return { ok: false } as const;
 		}
 		const now = Date.now();
 
-		// PERFORMANCE OPTIMIZATION: Cascade soft delete to all messages in the chat
-		// Use by_chat_not_deleted index to filter at database level (much faster)
-		// Use Promise.all for parallel execution to minimize total time
 		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_chat_not_deleted", (q) =>
@@ -241,14 +203,11 @@ export const remove = mutation({
 			),
 		);
 
-		// Soft delete: mark chat as deleted instead of hard delete
-		// PERFORMANCE OPTIMIZATION: Reset messageCount since all messages are soft-deleted
 		await ctx.db.patch(args.chatId, {
 			deletedAt: now,
 			messageCount: 0,
 		});
 
-		// PERFORMANCE OPTIMIZATION: Update stats counters when soft-deleting
 		await incrementStat(ctx, STAT_KEYS.CHATS_SOFT_DELETED);
 		await incrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED, messages.length);
 

@@ -136,21 +136,6 @@ export const CHAT_LIMITS = {
 
 	/** Default limit for chat list queries */
 	DEFAULT_LIST_LIMIT: 50,
-
-	/** Rate limit for chat creation in milliseconds (1 second) - minimum time between chats */
-	CREATE_RATE_LIMIT_MS: 1 * 1000,
-
-	/** Sliding window rate limit: maximum chats per window */
-	CREATE_RATE_LIMIT_MAX_PER_WINDOW: 15,
-
-	/** Sliding window rate limit: window duration in milliseconds (1 minute) */
-	CREATE_RATE_LIMIT_WINDOW_MS: 60 * 1000,
-
-	/** Spam detection: maximum deletions allowed in the detection window */
-	SPAM_DETECTION_MAX_DELETIONS: 10,
-
-	/** Spam detection: window duration in milliseconds (5 minutes) */
-	SPAM_DETECTION_WINDOW_MS: 5 * 60 * 1000,
 } as const;
 
 /**

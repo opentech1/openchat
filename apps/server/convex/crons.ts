@@ -149,40 +149,9 @@ export const cleanupSoftDeletedRecords = internalMutation({
 /**
  * Cleanup expired rate limit buckets
  *
- * If you're using a database-backed rate limiter (instead of in-memory),
- * this job cleans up expired rate limit records to prevent table bloat.
- *
- * NOTE: The current implementation uses in-memory rate limiting, so this
- * is a placeholder for future enhancement.
- *
- * SCHEDULE RECOMMENDATION:
- * - Run every hour
- * - Quick operation, minimal database load
- *
- * @example
- * ```bash
- * # Configure in Convex dashboard:
- * npx convex crons schedule --name cleanup-rate-limits \
- *   --schedule "0 * * * *" \
- *   --function crons:cleanupExpiredRateLimits
- * ```
+ * NOTE: Using @convex-dev/rate-limiter package which handles cleanup automatically.
+ * No manual cleanup needed!
  */
-export const cleanupExpiredRateLimits = internalMutation({
-	args: {},
-	handler: async (ctx) => {
-		console.log("[Cron] Cleanup expired rate limits - Started");
-
-		// TODO: Implement when rate limiting moves to database
-		// Current implementation uses in-memory buckets with automatic cleanup
-
-		console.log("[Cron] Cleanup expired rate limits - Skipped (in-memory implementation)");
-
-		return {
-			success: true,
-			message: "In-memory rate limiter handles cleanup automatically",
-		};
-	},
-});
 
 /**
  * Generate database statistics

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { createLogger } from "./lib/logger";
+import { rateLimiter } from "./lib/rateLimiter";
 
 // Constants & Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes (default)
@@ -270,6 +271,17 @@ export const saveFileMetadata = mutation({
 		url: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
+		// Rate limit file uploads
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "fileUpload", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			throw new Error(
+				`Too many file uploads. Please try again in ${retryAfter} seconds.`
+			);
+		}
+
 		// Validate file size
 		validateFileSize(args.size, args.contentType);
 

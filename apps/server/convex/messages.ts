@@ -4,6 +4,7 @@ import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
+import { rateLimiter } from "./lib/rateLimiter";
 
 // Return type for list query - excludes redundant fields to reduce bandwidth
 const messageDoc = v.object({
@@ -152,6 +153,17 @@ export const send = mutation({
 		assistantMessageId: v.optional(v.id("messages")),
 	}),
 	handler: async (ctx, args) => {
+		// Rate limit message sending
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "messageSend", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			throw new Error(
+				`Too many messages sent. Please try again in ${retryAfter} seconds.`
+			);
+		}
+
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
 		if (!chat) {
 			return { ok: false as const, userMessageId: undefined, assistantMessageId: undefined };
