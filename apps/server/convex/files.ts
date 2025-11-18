@@ -177,6 +177,18 @@ export const generateUploadUrl = mutation({
 	},
 	returns: v.string(),
 	handler: async (ctx, args) => {
+		// Rate limit upload URL generation
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "fileGenerateUploadUrl", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many upload URL requests. Please try again ${waitTime}.`
+			);
+		}
+
 		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel to reduce latency
 		// This reduces total wait time from T(user) + T(chat) to max(T(user), T(chat))
 		const [user, chat] = await Promise.all([
@@ -204,9 +216,6 @@ export const generateUploadUrl = mutation({
 				`File quota exceeded. Maximum ${MAX_USER_FILES} files allowed per user.`
 			);
 		}
-
-		// NOTE: Rate limiting is handled in saveFileMetadata using @convex-dev/rate-limiter
-		// No need to check here as well
 
 		// Generate and return upload URL
 		return await ctx.storage.generateUploadUrl();
@@ -241,8 +250,8 @@ export const saveFileMetadata = mutation({
 		url: v.union(v.string(), v.null()),
 	}),
 	handler: async (ctx, args) => {
-		// Rate limit file uploads
-		const { ok, retryAfter } = await rateLimiter.limit(ctx, "fileUpload", {
+		// Rate limit file metadata saves
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "fileSaveMetadata", {
 			key: args.userId,
 		});
 
@@ -442,6 +451,18 @@ export const deleteFile = mutation({
 	},
 	returns: v.object({ ok: v.boolean() }),
 	handler: async (ctx, args) => {
+		// Rate limit file deletions
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "fileDelete", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many file deletions. Please try again ${waitTime}.`
+			);
+		}
+
 		// Find the file by storage ID
 		const file = await ctx.db
 			.query("fileUploads")

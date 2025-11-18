@@ -243,6 +243,18 @@ export const streamUpsert = mutation({
 		messageId: v.optional(v.id("messages")),
 	}),
 	handler: async (ctx, args) => {
+		// Rate limit stream updates (high limit for AI streaming)
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "messageStreamUpsert", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many stream updates. Please try again ${waitTime}.`
+			);
+		}
+
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
 		if (!chat) {
 			return { ok: false as const, messageId: undefined };

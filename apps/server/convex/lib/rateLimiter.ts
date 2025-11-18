@@ -14,19 +14,53 @@ import { components } from "../_generated/api";
 /**
  * Global rate limiter instance
  *
- * Rate limits:
- * - Chat creation: 20 per minute with bursts of 5
- * - Chat deletion: 15 per minute (prevent delete spam)
- * - Message sending: 30 per minute with bursts of 10
- * - File uploads: 10 per minute with bursts of 3
+ * Comprehensive rate limiting for all app operations:
+ *
+ * USER OPERATIONS:
+ * - User authentication: 100/min (high limit for auth flows)
+ * - API key save: 5/min (rarely changed)
+ * - API key remove: 5/min (rarely changed)
+ *
+ * CHAT OPERATIONS:
+ * - Chat creation: 20/min with 5 burst
+ * - Chat deletion: 15/min with 3 burst
+ *
+ * MESSAGE OPERATIONS:
+ * - Message send: 30/min with 10 burst
+ * - Stream upsert: 200/min with 50 burst (AI streaming needs high throughput)
+ *
+ * FILE OPERATIONS:
+ * - Upload URL generation: 10/min with 3 burst
+ * - File metadata save: 10/min with 3 burst
+ * - File deletion: 15/min with 5 burst
  */
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
+	// User operations
+	userEnsure: {
+		kind: "token bucket",
+		rate: 100,
+		period: MINUTE,
+		capacity: 20, // Allow burst for auth flows
+	},
+	userSaveApiKey: {
+		kind: "token bucket",
+		rate: 5,
+		period: MINUTE,
+		capacity: 2,
+	},
+	userRemoveApiKey: {
+		kind: "token bucket",
+		rate: 5,
+		period: MINUTE,
+		capacity: 2,
+	},
+
 	// Chat operations
 	chatCreate: {
 		kind: "token bucket",
 		rate: 20,
 		period: MINUTE,
-		capacity: 5, // Allow 5 rapid creates if they haven't used many
+		capacity: 5,
 	},
 	chatDelete: {
 		kind: "token bucket",
@@ -40,14 +74,32 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		kind: "token bucket",
 		rate: 30,
 		period: MINUTE,
-		capacity: 10, // Allow conversation bursts
+		capacity: 10,
+	},
+	messageStreamUpsert: {
+		kind: "token bucket",
+		rate: 200,
+		period: MINUTE,
+		capacity: 50, // AI streaming needs many rapid updates
 	},
 
 	// File operations
-	fileUpload: {
+	fileGenerateUploadUrl: {
 		kind: "token bucket",
 		rate: 10,
 		period: MINUTE,
 		capacity: 3,
+	},
+	fileSaveMetadata: {
+		kind: "token bucket",
+		rate: 10,
+		period: MINUTE,
+		capacity: 3,
+	},
+	fileDelete: {
+		kind: "token bucket",
+		rate: 15,
+		period: MINUTE,
+		capacity: 5,
 	},
 });
