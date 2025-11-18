@@ -200,7 +200,7 @@ function ChatMessagesPanelComponent({
           ref={(node) => {
             viewportRef.current = node;
           }}
-          className="size-full"
+          className="size-full overflow-y-auto overflow-x-hidden"
           aria-label="Conversation messages"
         >
           <div

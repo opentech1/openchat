@@ -9,9 +9,9 @@ import { SECURE_SESSION_COOKIE_NAME, NORMAL_SESSION_COOKIE_NAME } from "@/lib/ap
  */
 const BASE_CSP_DIRECTIVES = [
 	"default-src 'self'",
-	"script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.convex.cloud https://*.convex.site https://us.i.posthog.com",
+	"script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.convex.cloud https://*.convex.site https://us.i.posthog.com https://unpkg.com",
 	"connect-src 'self' https://*.convex.cloud https://*.convex.site wss://*.convex.cloud wss://*.convex.site https://openrouter.ai https://us.i.posthog.com https://us-assets.i.posthog.com",
-	"img-src 'self' blob: data: https://*.convex.cloud https://*.convex.site https://avatar.vercel.sh https://avatars.githubusercontent.com",
+	"img-src 'self' blob: data: https://*.convex.cloud https://*.convex.site https://avatar.vercel.sh https://avatars.githubusercontent.com https://models.dev",
 	"font-src 'self' data:",
 	"style-src 'self' 'unsafe-inline'",
 	"frame-ancestors 'none'",
