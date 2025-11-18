@@ -46,8 +46,10 @@ export async function DELETE(
 			return NextResponse.json({ ok: true });
 		} catch (error) {
 			logError("Error deleting chat", error);
+			// Pass through the actual error message from Convex (e.g., rate limit messages)
+			const errorMessage = error instanceof Error ? error.message : "Failed to delete chat";
 			return NextResponse.json(
-				{ error: "Failed to delete chat" },
+				{ error: errorMessage },
 				{ status: 500 },
 			);
 		}
