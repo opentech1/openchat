@@ -201,10 +201,9 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
       await router.push(`/dashboard/chat/${payload.chat.id}`);
     } catch (error) {
       logError("Failed to create chat", error);
-      toast.error("Unable to create chat", {
-        description:
-          error instanceof Error ? error.message : "Try again in a moment",
-      });
+      // Show actual error message as toast title for better visibility
+      const errorMessage = error instanceof Error ? error.message : "Unable to create chat";
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -226,9 +225,9 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
       setChats((prev) => sortChats(prev.filter((chat) => chat.id !== chatId)));
     } catch (error) {
       logError("Failed to delete chat", error);
-      toast.error("Unable to delete chat", {
-        description: error instanceof Error ? error.message : "Please retry",
-      });
+      // Show actual error message as toast title for better visibility
+      const errorMessage = error instanceof Error ? error.message : "Unable to delete chat";
+      toast.error(errorMessage);
     } finally {
       setDeletingChatId(null);
     }
