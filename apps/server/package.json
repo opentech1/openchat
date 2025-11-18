@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.9.7",
+    "@convex-dev/rate-limiter": "^0.3.0",
     "convex": "^1.29.0"
   }
 }
