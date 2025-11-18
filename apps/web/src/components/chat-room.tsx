@@ -869,6 +869,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         className="flex-1 rounded-xl bg-background/40 shadow-inner"
         isStreaming={status === "streaming"}
         userId={convexUserId as string | null}
+        chatId={chatId}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">

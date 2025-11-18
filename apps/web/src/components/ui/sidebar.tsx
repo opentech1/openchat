@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/utils";
 import { spacing } from "@/styles/design-tokens";
@@ -23,18 +24,27 @@ export function useSidebar() {
 
 export function Sidebar({ className, children, defaultCollapsed = false, ...props }: React.ComponentProps<"aside"> & { defaultCollapsed?: boolean }) {
 	// State management with localStorage persistence
-	const [collapsed, setCollapsedState] = React.useState(() => {
-		if (typeof window === "undefined") return defaultCollapsed;
-		const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
-		// If no stored value, use defaultCollapsed (false for new users = auto-open)
-		if (stored === null) return defaultCollapsed;
-		return stored === "1";
-	});
+	// Start with defaultCollapsed to avoid hydration mismatch
+	const [collapsed, setCollapsedState] = React.useState(defaultCollapsed);
+	const [mounted, setMounted] = React.useState(false);
+
+	// Load from localStorage after mount to avoid hydration mismatch
+	React.useEffect(() => {
+		setMounted(true);
+		if (typeof window !== "undefined") {
+			const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
+			if (stored !== null) {
+				setCollapsedState(stored === "1");
+			}
+		}
+	}, []);
 
 	const setCollapsed = React.useCallback((value: boolean) => {
 		setCollapsedState(value);
 		if (typeof window !== "undefined") {
 			localStorage.setItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED, value ? "1" : "0");
+			// Dispatch event to notify other components (like DashboardControls)
+			window.dispatchEvent(new CustomEvent("sidebar-toggled"));
 		}
 	}, []);
 
@@ -142,8 +152,13 @@ export function SidebarMenuSubButton({ className, isActive, asChild, type = "but
 
 export function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
 	const { collapsed, setCollapsed } = useSidebar();
+	const [mounted, setMounted] = React.useState(false);
 
-	return (
+	React.useEffect(() => {
+		setMounted(true);
+	}, []);
+
+	const button = (
 		<button
 			type="button"
 			onClick={() => setCollapsed(!collapsed)}
@@ -184,4 +199,13 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<"butto
 			</svg>
 		</button>
 	);
+
+	// Use portal to render outside the sidebar's overflow-hidden container
+	if (!mounted) return null;
+
+	if (typeof document !== "undefined") {
+		return createPortal(button, document.body);
+	}
+
+	return button;
 }

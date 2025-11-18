@@ -53,6 +53,7 @@ type ChatMessagesPanelProps = {
   autoStick?: boolean;
   isStreaming?: boolean;
   userId?: string | null;
+  chatId?: string;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
@@ -65,6 +66,7 @@ function ChatMessagesPanelComponent({
   loading = false,
   isStreaming = false,
   userId,
+  chatId,
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,17 @@ function ChatMessagesPanelComponent({
   const initialSyncDoneRef = useRef(false);
   const shouldStickRef = useRef(true);
   const lastSignatureRef = useRef<string | null>(null);
+  const lastChatIdRef = useRef<string | undefined>(chatId);
+
+  // Reset scroll state when switching to a different chat
+  useEffect(() => {
+    if (chatId && chatId !== lastChatIdRef.current) {
+      lastChatIdRef.current = chatId;
+      initialSyncDoneRef.current = false;
+      shouldStickRef.current = true;
+      lastSignatureRef.current = null;
+    }
+  }, [chatId]);
 
   const hasMessages = messages.length > 0;
   const tailSignature = useMemo(() => {
