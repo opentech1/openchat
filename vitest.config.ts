@@ -8,6 +8,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "apps/web/src"),
+			"@server": path.resolve(__dirname, "apps/server"),
 		},
 	},
 	root: process.cwd(),
