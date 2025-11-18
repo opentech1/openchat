@@ -44,7 +44,7 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 		if (typeof window !== "undefined") {
 			localStorage.setItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED, value ? "1" : "0");
 			// Dispatch event to notify other components (like DashboardControls)
-			window.dispatchEvent(new CustomEvent('sidebar-toggled'));
+			window.dispatchEvent(new CustomEvent("sidebar-toggled"));
 		}
 	}, []);
 
@@ -203,7 +203,7 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<"butto
 	// Use portal to render outside the sidebar's overflow-hidden container
 	if (!mounted) return null;
 
-	if (typeof document !== 'undefined') {
+	if (typeof document !== "undefined") {
 		return createPortal(button, document.body);
 	}
 
