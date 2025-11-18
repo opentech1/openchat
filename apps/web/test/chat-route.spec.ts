@@ -2,6 +2,25 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createChatHandler } from "@/app/api/chat/chat-handler";
 
+vi.mock("@/lib/auth-server", () => ({
+	getUserContext: vi.fn().mockResolvedValue({
+		isAuthenticated: true,
+		userId: "user-123",
+		email: "test@example.com",
+		name: "Test User",
+		image: null,
+	}),
+}));
+
+vi.mock("@/lib/convex-server", () => ({
+	ensureConvexUser: vi.fn().mockResolvedValue("convex-user-123"),
+	streamUpsertMessage: vi.fn(),
+}));
+
+vi.mock("@/lib/posthog-server", () => ({
+	captureServerEvent: vi.fn(),
+}));
+
 describe("POST /api/chat", () => {
 	it("streams text chunks in order", async () => {
 		const encoder = new TextEncoder();
@@ -33,6 +52,7 @@ describe("POST /api/chat", () => {
 
 		const persistSpy = vi.fn(async () => ({ ok: true }));
 		const handler = createChatHandler({
+			corsOrigin: "https://example.com",
 			convertToCoreMessagesImpl: convertSpy as any,
 			streamTextImpl: streamSpy as any,
 			provider: { chat: vi.fn(() => ({ id: "mock-model" })) } as any,
@@ -77,26 +97,32 @@ describe("POST /api/chat", () => {
 		const calls = persistSpy.mock.calls.map((call) => call[0]);
 		expect(calls).toEqual([
 			{
+				userId: "convex-user-123",
 				chatId: "chat-123",
-				messageId: "m1",
+				clientMessageId: "m1",
 				role: "user",
 				content: "Hello world",
 				createdAt: "2024-01-01T00:00:00.000Z",
 				status: "completed",
+				attachments: undefined,
 			},
 			{
+				userId: "convex-user-123",
 				chatId: "chat-123",
-				messageId: expect.any(String),
+				clientMessageId: expect.any(String),
 				role: "assistant",
 				content: "",
 				createdAt: expect.any(String),
 				status: "streaming",
 			},
 			{
+				userId: "convex-user-123",
 				chatId: "chat-123",
-				messageId: expect.any(String),
+				clientMessageId: expect.any(String),
 				role: "assistant",
 				content: "Hello world",
+				reasoning: undefined,
+				thinkingTimeMs: undefined,
 				createdAt: expect.any(String),
 				status: "completed",
 			},
