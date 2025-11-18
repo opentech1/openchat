@@ -55,9 +55,6 @@ const ALLOWED_TYPES = [
 	...ALLOWED_VIDEO_TYPES,
 ] as const;
 
-const UPLOAD_RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
-const MAX_UPLOADS_PER_WINDOW = 10;
-
 // Helper Functions
 
 /**
@@ -162,33 +159,6 @@ function validateFileSize(size: number, contentType: string): void {
 	}
 }
 
-/**
- * Checks if the user has exceeded the upload rate limit.
- * @param ctx - The mutation context
- * @param userId - The user ID to check
- * @throws Error if rate limit is exceeded
- */
-async function checkUploadRateLimit(
-	ctx: MutationCtx,
-	userId: Id<"users">
-): Promise<void> {
-	const now = Date.now();
-	const windowStart = now - UPLOAD_RATE_LIMIT_WINDOW;
-
-	// Query recent uploads within the rate limit window
-	const recentUploads = await ctx.db
-		.query("fileUploads")
-		.withIndex("by_user", (q) => q.eq("userId", userId))
-		.filter((q) => q.gte(q.field("uploadedAt"), windowStart))
-		.collect();
-
-	if (recentUploads.length >= MAX_UPLOADS_PER_WINDOW) {
-		throw new Error(
-			`Upload rate limit exceeded. Maximum ${MAX_UPLOADS_PER_WINDOW} uploads per minute allowed. Please try again later.`
-		);
-	}
-}
-
 // Exported Functions
 
 /**
@@ -235,8 +205,8 @@ export const generateUploadUrl = mutation({
 			);
 		}
 
-		// Check upload rate limit
-		await checkUploadRateLimit(ctx, args.userId);
+		// NOTE: Rate limiting is handled in saveFileMetadata using @convex-dev/rate-limiter
+		// No need to check here as well
 
 		// Generate and return upload URL
 		return await ctx.storage.generateUploadUrl();
@@ -277,8 +247,9 @@ export const saveFileMetadata = mutation({
 		});
 
 		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
 			throw new Error(
-				`Too many file uploads. Please try again in ${retryAfter} seconds.`
+				`Too many file uploads. Please try again ${waitTime}.`
 			);
 		}
 

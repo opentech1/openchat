@@ -50,11 +50,4 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		period: MINUTE,
 		capacity: 3,
 	},
-
-	// Aggressive limits for detected spammers
-	spammerBlock: {
-		kind: "fixed window",
-		rate: 1,
-		period: HOUR, // Only 1 action per hour if flagged as spammer
-	},
 });

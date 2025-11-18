@@ -143,8 +143,9 @@ export const create = mutation({
 		});
 
 		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
 			throw new Error(
-				`Too many chats created. Please try again in ${retryAfter} seconds.`
+				`Too many chats created. Please try again ${waitTime}.`
 			);
 		}
 
@@ -177,8 +178,9 @@ export const remove = mutation({
 		});
 
 		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
 			throw new Error(
-				`Too many deletions. Please try again in ${retryAfter} seconds.`
+				`Too many deletions. Please try again ${waitTime}.`
 			);
 		}
 

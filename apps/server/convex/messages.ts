@@ -159,8 +159,9 @@ export const send = mutation({
 		});
 
 		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
 			throw new Error(
-				`Too many messages sent. Please try again in ${retryAfter} seconds.`
+				`Too many messages sent. Please try again ${waitTime}.`
 			);
 		}
 
