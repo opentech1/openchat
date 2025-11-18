@@ -71,6 +71,8 @@ export async function POST(req: Request) {
 		return NextResponse.json(result, { headers: corsHeaders });
 	} catch (error) {
 		logError("Failed to send chat message", error);
-		return NextResponse.json({ ok: false }, { status: 500, headers: corsHeaders });
+		// Pass through the actual error message from Convex (e.g., rate limit messages)
+		const errorMessage = error instanceof Error ? error.message : "Failed to send message";
+		return NextResponse.json({ ok: false, error: errorMessage }, { status: 500, headers: corsHeaders });
 	}
 }

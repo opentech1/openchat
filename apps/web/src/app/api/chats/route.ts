@@ -95,8 +95,10 @@ export async function POST(request: Request) {
 		return NextResponse.json({ chat: serializeChat(chat) });
 	} catch (error) {
 		logError("Error creating chat", error);
+		// Pass through the actual error message from Convex (e.g., rate limit messages)
+		const errorMessage = error instanceof Error ? error.message : "Failed to create chat";
 		return NextResponse.json(
-			{ error: "Failed to create chat" },
+			{ error: errorMessage },
 			{ status: 500 },
 		);
 	}
