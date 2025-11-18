@@ -27,8 +27,11 @@ export const ensure = mutation({
 	returns: v.object({ userId: v.id("users") }),
 	handler: async (ctx, args) => {
 		// Rate limit user authentication/creation
+		// SECURITY: Use global rate limit key to prevent bypass attacks
+		// Using a fixed key prevents attackers from bypassing the limit by
+		// generating different externalId values
 		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userEnsure", {
-			key: args.externalId,
+			key: "global",
 		});
 
 		if (!ok) {
