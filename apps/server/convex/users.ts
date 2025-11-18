@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
+import { rateLimiter } from "./lib/rateLimiter";
 
 // User document validator with all fields including fileUploadCount
 const userDoc = v.object({
@@ -25,6 +26,21 @@ export const ensure = mutation({
 	},
 	returns: v.object({ userId: v.id("users") }),
 	handler: async (ctx, args) => {
+		// Rate limit user authentication/creation
+		// SECURITY: Use global rate limit key to prevent bypass attacks
+		// Using a fixed key prevents attackers from bypassing the limit by
+		// generating different externalId values
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userEnsure", {
+			key: "global",
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many authentication attempts. Please try again ${waitTime}.`
+			);
+		}
+
 		const existing = await ctx.db
 			.query("users")
 			.withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
@@ -93,6 +109,18 @@ export const saveOpenRouterKey = mutation({
 	},
 	returns: v.object({ success: v.boolean() }),
 	handler: async (ctx, args) => {
+		// Rate limit API key saves
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userSaveApiKey", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many API key updates. Please try again ${waitTime}.`
+			);
+		}
+
 		await ctx.db.patch(args.userId, {
 			encryptedOpenRouterKey: args.encryptedKey,
 			updatedAt: Date.now(),
@@ -118,6 +146,18 @@ export const removeOpenRouterKey = mutation({
 	},
 	returns: v.object({ success: v.boolean() }),
 	handler: async (ctx, args) => {
+		// Rate limit API key removals
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userRemoveApiKey", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
+			throw new Error(
+				`Too many API key removals. Please try again ${waitTime}.`
+			);
+		}
+
 		await ctx.db.patch(args.userId, {
 			encryptedOpenRouterKey: undefined,
 			updatedAt: Date.now(),
