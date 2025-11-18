@@ -18,6 +18,7 @@ export type ChatMessagesFeedProps = {
   loading?: boolean;
   isStreaming?: boolean;
   userId?: string | null;
+  chatId?: string;
 };
 
 export function ChatMessagesFeed({
@@ -28,6 +29,7 @@ export function ChatMessagesFeed({
   loading = false,
   isStreaming = false,
   userId,
+  chatId,
 }: ChatMessagesFeedProps) {
   const optimisticNormalized = useMemo(
     () => optimisticMessages.map(normalizeUiMessage),
@@ -111,6 +113,7 @@ export function ChatMessagesFeed({
       loading={loading}
       isStreaming={isStreaming}
       userId={userId}
+      chatId={chatId}
     />
   );
 }

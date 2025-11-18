@@ -46,6 +46,8 @@ const TOKEN_OPTIONS: Array<{ value: ReasoningOption; label: string; description:
 	{ value: "16000", label: "16K", description: "Deep reasoning" },
 ];
 
+const STORAGE_KEY = "reasoning-toast-shown";
+
 export function ReasoningControls({
 	value,
 	onChange,
@@ -55,23 +57,47 @@ export function ReasoningControls({
 }: ReasoningControlsProps) {
 	const [open, setOpen] = React.useState(false);
 	const supportsEffort = supportsReasoningEffort(modelId);
-	const hasShownToastRef = React.useRef<string | null>(null);
 
 	const options = supportsEffort ? EFFORT_OPTIONS : TOKEN_OPTIONS;
 
+	// Check if we've shown the toast for this model in this session
+	const hasShownToast = React.useCallback((model: string): boolean => {
+		if (typeof window === "undefined") return false;
+		try {
+			const shown = sessionStorage.getItem(STORAGE_KEY);
+			if (!shown) return false;
+			const shownModels = JSON.parse(shown) as string[];
+			return shownModels.includes(model);
+		} catch {
+			return false;
+		}
+	}, []);
+
+	// Mark that we've shown the toast for this model
+	const markToastShown = React.useCallback((model: string) => {
+		if (typeof window === "undefined") return;
+		try {
+			const shown = sessionStorage.getItem(STORAGE_KEY);
+			const shownModels = shown ? (JSON.parse(shown) as string[]) : [];
+			if (!shownModels.includes(model)) {
+				shownModels.push(model);
+				sessionStorage.setItem(STORAGE_KEY, JSON.stringify(shownModels));
+			}
+		} catch {
+			// Ignore storage errors
+		}
+	}, []);
+
 	// AUTO-ENABLE: If model has mandatory reasoning but reasoning is off, auto-enable it
 	React.useEffect(() => {
-		// Create a unique key for this model's mandatory reasoning state
-		const toastKey = `${modelId}:${capabilities?.mandatoryReasoning}`;
-
 		// Only check if model has mandatory reasoning and reasoning is currently disabled
-		// AND we haven't already shown the toast for this model
+		// AND we haven't already shown the toast for this model in this session
 		if (
 			capabilities?.mandatoryReasoning === true &&
 			value.enabled === false &&
-			hasShownToastRef.current !== toastKey
+			!hasShownToast(modelId)
 		) {
-			hasShownToastRef.current = toastKey;
+			markToastShown(modelId);
 
 			toast.warning("This model always uses reasoning", {
 				description: "Auto-enabled reasoning. This model has built-in reasoning that cannot be disabled.",
@@ -85,7 +111,7 @@ export function ReasoningControls({
 			console.log("Auto-enabling reasoning for mandatory model:", modelId, newConfig);
 			onChange(newConfig);
 		}
-	}, [modelId, capabilities?.mandatoryReasoning, value.enabled, supportsEffort, onChange]);
+	}, [modelId, capabilities?.mandatoryReasoning, value.enabled, supportsEffort, onChange, hasShownToast, markToastShown]);
 
 	// Get current value as option string
 	const currentOption = React.useMemo(() => {

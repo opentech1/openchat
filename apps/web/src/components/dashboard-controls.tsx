@@ -8,6 +8,7 @@ import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 
 export function DashboardControls() {
 	const { open, setOpen } = useCommandPalette();
+	// Start with false to match server render and avoid hydration mismatch
 	const [collapsed, setCollapsed] = useState(false);
 
 	const updateCollapsedState = useCallback(() => {
@@ -20,6 +21,7 @@ export function DashboardControls() {
 	}, []);
 
 	useEffect(() => {
+		// Load from localStorage after mount
 		updateCollapsedState();
 
 		const handleStorage = (e: StorageEvent) => {
@@ -44,7 +46,7 @@ export function DashboardControls() {
 	return (
 		<>
 			{collapsed && (
-				<div className="pointer-events-auto absolute left-4 top-4 z-20 hidden md:block">
+				<div className="pointer-events-auto fixed left-4 top-4 z-30 hidden md:block">
 					<div className={`flex items-center rounded-xl border bg-card/${opacity.subtle} px-2 py-1.5 shadow-md backdrop-blur ${spacing.gap.xs}`}>
 						<SidebarCollapseButton />
 					</div>

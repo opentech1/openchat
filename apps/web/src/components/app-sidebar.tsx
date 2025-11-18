@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X } from "@/lib/icons";
+import { X, PanelLeft } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarHeader,
-  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -284,14 +284,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         politeness="polite"
       />
       <SidebarHeader className="px-2 py-3">
-        <div className="flex items-center justify-center">
-          <Link
-            href="/dashboard"
-            className="hover:opacity-80 transition-opacity"
-          >
-            <Logo size="default" />
-          </Link>
-        </div>
+        <SidebarHeaderContent />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup className="px-2">
@@ -360,7 +353,6 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           )}
         </button>
       </div>
-      <SidebarRail />
       <AccountSettingsModal
         open={accountOpen && Boolean(user)}
         onClose={() => setAccountOpen(false)}
@@ -372,6 +364,31 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
 AppSidebar.displayName = "AppSidebar";
 
 export default React.memo(AppSidebar);
+
+function SidebarHeaderContent() {
+  const { setCollapsed } = useSidebar();
+
+  return (
+    <div className="flex items-center justify-between">
+      <button
+        type="button"
+        onClick={() => setCollapsed(true)}
+        className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar (Cmd+B)"
+      >
+        <PanelLeft className="size-4" />
+      </button>
+      <Link
+        href="/dashboard"
+        className="hover:opacity-80 transition-opacity"
+      >
+        <Logo size="default" />
+      </Link>
+      <div className="size-9" />
+    </div>
+  );
+}
 
 function ChatList({
   chats,
