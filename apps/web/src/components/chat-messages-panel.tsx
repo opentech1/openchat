@@ -194,13 +194,13 @@ function ChatMessagesPanelComponent({
   }, [autoStick, scrollToBottom]);
 
   return (
-    <div className={cn("relative flex flex-1 min-h-0 flex-col", className)}>
+    <div className={cn("relative flex flex-1 min-h-0 flex-col overflow-hidden", className)}>
       <ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
         <ScrollAreaPrimitive.Viewport
           ref={(node) => {
             viewportRef.current = node;
           }}
-          className="size-full"
+          className="size-full overflow-y-auto overflow-x-hidden"
           aria-label="Conversation messages"
         >
           <div

@@ -14,7 +14,7 @@
     "compile": "tsc --noEmit",
     "check-types": "tsc --noEmit",
     "lint": "oxlint",
-    "postinstall": "wxt prepare"
+    "postinstall": "wxt prepare --localstorage-file .wxt/local-storage.json || true"
   },
   "dependencies": {
     "react": "^19.1.1",

@@ -842,7 +842,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-hidden px-4 focus:outline-none focus-visible:outline-none">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-x-hidden px-4 focus:outline-none focus-visible:outline-none">
       {/* Screen reader announcements for loading states */}
       <LiveRegion
         message={status === "submitted" ? "Sending message..." : status === "streaming" ? "Receiving response..." : ""}

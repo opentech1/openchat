@@ -93,7 +93,7 @@ const nextConfig = {
 		additionalConnectSet.add(posthogAssetsHost);
 		additionalConnectSet.add(sentryIngest);
 		const additionalConnect = Array.from(additionalConnectSet);
-		const scriptSrcSet = new Set(["'self'", "'unsafe-inline'", "'unsafe-eval'"]);
+		const scriptSrcSet = new Set(["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"]);
 		for (const origin of additionalConnect) {
 			if (origin) {
 				scriptSrcSet.add(origin);
