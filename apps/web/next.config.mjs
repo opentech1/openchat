@@ -98,6 +98,8 @@ const nextConfig = {
 		if (!isProd) {
 			scriptSrcSet.add("https://unpkg.com");
 		}
+		// Add Vercel Speed Insights
+		scriptSrcSet.add("https://va.vercel-scripts.com");
 		for (const origin of additionalConnect) {
 			if (origin) {
 				scriptSrcSet.add(origin);
