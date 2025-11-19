@@ -890,6 +890,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               onMissingRequirement={handleMissingRequirement}
               userId={convexUserId}
               chatId={toConvexChatId(chatId)}
+              messages={messages}
             />
           </ErrorBoundary>
         </div>
