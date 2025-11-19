@@ -97,7 +97,7 @@ export async function GET(
 				// Check if it's a rate limit error
 				if (
 					error instanceof Error &&
-					error.message.includes("Too many requests")
+					error.message.includes("Too many exports")
 				) {
 					return NextResponse.json(
 						{ error: error.message },
