@@ -575,13 +575,8 @@ function ChatComposer({
       // Insert the command with a space for arguments (Claude Code style)
       dispatchComposer({ type: "SET_VALUE", payload: `${template.command} ` });
 
-      // Increment usage count
-      if (convexUser?._id) {
-        void incrementTemplateUsage({
-          templateId: template._id as Id<"promptTemplates">,
-          userId: convexUser._id,
-        });
-      }
+      // Note: Usage count is incremented when message is sent, not on selection
+      // This prevents double-counting and ensures accurate analytics
 
       setShowCommandAutocomplete(false);
       setPartialCommand(template.command);
@@ -597,7 +592,7 @@ function ChatComposer({
         }
       }, 0);
     },
-    [convexUser, incrementTemplateUsage, adjustHeight, textareaRef]
+    [adjustHeight, textareaRef]
   );
 
   const onKeyDown = useCallback(
