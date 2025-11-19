@@ -24,6 +24,8 @@ import {
   writeCachedModels,
 } from "@/lib/openrouter-model-cache";
 import { getStorageItemSync, setStorageItemSync } from "@/lib/storage";
+import { FileTextIcon } from "lucide-react";
+import Link from "next/link";
 
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 
@@ -299,7 +301,51 @@ function ChatPreview({ className }: { className?: string }) {
               </div>
             </div>
 
-            {/* Removed suggested command chips below input */}
+            {/* Prompt Library Quick Access */}
+            <div className="flex items-center justify-center animate-in fade-in-0 duration-500 delay-300 py-2">
+              <Link href="/dashboard/templates" className="w-full max-w-md">
+                <div
+                  className={cn(
+                    "group relative flex items-center justify-between px-6 py-4",
+                    "bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10",
+                    "border border-primary/20 hover:border-primary/40",
+                    "hover:shadow-lg hover:shadow-primary/10",
+                    "transition-all duration-300 hover:scale-[1.02]",
+                    borderRadius.xl,
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "flex items-center justify-center w-10 h-10",
+                      "bg-primary/20 group-hover:bg-primary/30",
+                      "transition-colors",
+                      borderRadius.lg,
+                    )}>
+                      <FileTextIcon className="size-5 text-primary" aria-hidden="true" />
+                    </div>
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium text-foreground">Prompt Library</span>
+                      <span className="text-xs text-muted-foreground">
+                        Create & manage reusable templates
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-muted-foreground group-hover:text-foreground transition-colors">
+                    <svg
+                      className="size-5"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </Link>
+            </div>
           </div>
         </div>
 

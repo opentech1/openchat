@@ -24,6 +24,7 @@ import { components } from "../_generated/api";
  * CHAT OPERATIONS:
  * - Chat creation: 20/min with 5 burst
  * - Chat deletion: 15/min with 3 burst
+ * - Chat export: 5/min with 2 burst
  *
  * MESSAGE OPERATIONS:
  * - Message send: 30/min with 10 burst
@@ -33,6 +34,11 @@ import { components } from "../_generated/api";
  * - Upload URL generation: 10/min with 3 burst
  * - File metadata save: 10/min with 3 burst
  * - File deletion: 15/min with 5 burst
+ *
+ * PROMPT TEMPLATE OPERATIONS:
+ * - Template creation: 20/min with 5 burst
+ * - Template update: 30/min with 10 burst
+ * - Template deletion: 15/min with 3 burst
  */
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
 	// User operations
@@ -68,6 +74,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		period: MINUTE,
 		capacity: 3,
 	},
+	chatExport: {
+		kind: "token bucket",
+		rate: 5,
+		period: MINUTE,
+		capacity: 2,
+	},
 
 	// Message operations
 	messageSend: {
@@ -101,5 +113,25 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		rate: 15,
 		period: MINUTE,
 		capacity: 5,
+	},
+
+	// Prompt template operations
+	templateCreate: {
+		kind: "token bucket",
+		rate: 20,
+		period: MINUTE,
+		capacity: 5,
+	},
+	templateUpdate: {
+		kind: "token bucket",
+		rate: 30,
+		period: MINUTE,
+		capacity: 10,
+	},
+	templateDelete: {
+		kind: "token bucket",
+		rate: 15,
+		period: MINUTE,
+		capacity: 3,
 	},
 });

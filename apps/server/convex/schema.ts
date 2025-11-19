@@ -104,4 +104,31 @@ export default defineSchema({
 		})),
 	})
 		.index("by_key", ["key"]),
+	promptTemplates: defineTable({
+		userId: v.id("users"),
+		// User-friendly name for the template (e.g., "Code Review", "Bug Fix")
+		name: v.string(),
+		// Command to trigger template (e.g., "/review", "/fix")
+		command: v.string(),
+		// Template content with argument placeholders ($ARGUMENTS, $1, $2, etc.)
+		template: v.string(),
+		// Optional description of what the template does
+		description: v.optional(v.string()),
+		// Category for organization (e.g., "coding", "writing", "analysis")
+		category: v.optional(v.string()),
+		// Whether template is shared publicly (future feature)
+		isPublic: v.optional(v.boolean()),
+		// Draft status - templates can be saved as drafts before publishing
+		isDraft: v.optional(v.boolean()),
+		// Usage tracking
+		usageCount: v.optional(v.number()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		deletedAt: v.optional(v.number()),
+	})
+		.index("by_user", ["userId", "deletedAt", "updatedAt"])
+		.index("by_command", ["userId", "command"])
+		.index("by_category", ["userId", "category", "deletedAt"])
+		.index("by_public", ["isPublic", "deletedAt"])
+		.index("by_draft", ["userId", "isDraft", "deletedAt"]),
 });

@@ -32,6 +32,15 @@ import { getModelCapabilities } from "@/lib/model-capabilities";
 import { ContextUsageIndicator } from "@/components/ui/context-usage-indicator";
 import { countTokens, countMessagesTokens } from "@/lib/token-counter";
 import type { UIMessage } from "ai";
+import { CommandAutocomplete } from "./command-autocomplete";
+import { CommandBadge } from "./ui/command-badge";
+import {
+  isCommandStart,
+  extractPartialCommand,
+  parseCommand,
+  applyTemplate,
+} from "@/lib/template-parser";
+import { useConvexUser } from "@/contexts/convex-user-context";
 
 type FileAttachment = {
   storageId: Id<"_storage">;
@@ -234,6 +243,11 @@ function ChatComposer({
   // Model selector open state for keyboard shortcut
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
 
+  // Command autocomplete state
+  const [showCommandAutocomplete, setShowCommandAutocomplete] = useState(false);
+  const [partialCommand, setPartialCommand] = useState<string | null>(null);
+  const [isCommandValid, setIsCommandValid] = useState(false);
+
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
@@ -245,6 +259,16 @@ function ChatComposer({
     api.files.getUserQuota,
     userId ? { userId } : "skip"
   );
+
+  // Fetch user's prompt templates for command autocomplete
+  const { convexUser } = useConvexUser();
+  const templatesResult = useQuery(
+    api.promptTemplates.list,
+    convexUser?._id ? { userId: convexUser._id } : "skip"
+  );
+  const incrementTemplateUsage = useMutation(api.promptTemplates.incrementUsage);
+
+  const templates = templatesResult?.templates || [];
 
   useEffect(() => {
     if (modelValue) {
@@ -453,16 +477,43 @@ function ChatComposer({
       return;
     }
 
+    // Check if the message is a command and expand it to the template
+    let messageToSend = trimmed;
+    if (isCommandStart(trimmed)) {
+      const parsed = parseCommand(trimmed);
+      if (parsed && templates) {
+        // Find matching template
+        const matchingTemplate = templates.find(t => t.command === parsed.command);
+        if (matchingTemplate) {
+          // Expand the template with arguments
+          messageToSend = applyTemplate(matchingTemplate.template, parsed);
+
+          // Increment usage count for manual command typing
+          if (convexUser?._id) {
+            void incrementTemplateUsage({
+              templateId: matchingTemplate._id as Id<"promptTemplates">,
+              userId: convexUser._id,
+            });
+          }
+        }
+      }
+    }
+
     // Clear input and files INSTANTLY for responsive feel
     dispatchComposer({ type: "CLEAR_INPUT" });
     adjustHeight(true);
     const attachmentsToSend = uploadedFiles.length > 0 ? uploadedFiles : undefined;
     dispatchFileUpload({ type: "CLEAR_UPLOADED" });
 
+    // Clear command state
+    setPartialCommand(null);
+    setIsCommandValid(false);
+    setShowCommandAutocomplete(false);
+
     dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
       await onSend({
-        text: trimmed,
+        text: messageToSend,
         modelId: currentModelId,
         apiKey,
         attachments: attachmentsToSend,
@@ -495,6 +546,7 @@ function ChatComposer({
     value,
     uploadedFiles,
     activeReasoningConfig,
+    templates,
   ]);
 
   // Handler for reasoning config changes
@@ -517,18 +569,78 @@ function ChatComposer({
         dispatchComposer({ type: "SET_ERROR", payload: null });
       }
       debouncedAdjustHeight();
+
+      // Check if user is typing a command
+      if (isCommandStart(newValue)) {
+        const partial = extractPartialCommand(newValue);
+
+        // If there's a space in the input, user is typing arguments - hide autocomplete
+        const hasSpace = newValue.trim().includes(" ");
+
+        if (hasSpace) {
+          // User is typing arguments after command
+          setShowCommandAutocomplete(false);
+          if (partial) {
+            setPartialCommand(partial); // Keep the command for reference
+            // Check if the command is valid (matches a template)
+            const isValid = templates.some(t => t.command === partial);
+            setIsCommandValid(isValid);
+          }
+        } else if (partial && partial !== partialCommand) {
+          // User is typing the command itself
+          setPartialCommand(partial);
+          setShowCommandAutocomplete(true);
+          // Check if the command is valid
+          const isValid = templates.some(t => t.command === partial);
+          setIsCommandValid(isValid);
+        } else if (!partial) {
+          setShowCommandAutocomplete(false);
+          setIsCommandValid(false);
+        }
+      } else {
+        setShowCommandAutocomplete(false);
+        setPartialCommand(null);
+        setIsCommandValid(false);
+      }
     },
-    [errorMessage, debouncedAdjustHeight]
+    [errorMessage, debouncedAdjustHeight, partialCommand, templates]
+  );
+
+  // Handle template selection from autocomplete
+  const handleTemplateSelect = useCallback(
+    (template: { _id: string; command: string; template: string }) => {
+      // Insert the command with a space for arguments (Claude Code style)
+      dispatchComposer({ type: "SET_VALUE", payload: `${template.command} ` });
+
+      // Note: Usage count is incremented when message is sent, not on selection
+      // This prevents double-counting and ensures accurate analytics
+
+      setShowCommandAutocomplete(false);
+      setPartialCommand(template.command);
+      setIsCommandValid(true);
+      adjustHeight();
+
+      // Focus back on textarea at the end
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const len = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(len, len);
+        }
+      }, 0);
+    },
+    [adjustHeight, textareaRef]
   );
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      // Don't send if command autocomplete is open - let it handle Enter
+      if (e.key === "Enter" && !e.shiftKey && !showCommandAutocomplete) {
         e.preventDefault();
         void send();
       }
     },
-    [send]
+    [send, showCommandAutocomplete]
   );
 
   // Handle paste events for images
@@ -562,7 +674,39 @@ function ChatComposer({
         shadows.xl,
       )}
     >
-      <div className={spacing.padding.lg}>
+      {/* Command Autocomplete */}
+      {showCommandAutocomplete && partialCommand && (
+        <CommandAutocomplete
+          templates={templates}
+          partialCommand={partialCommand}
+          onSelect={handleTemplateSelect}
+          onClose={() => {
+            setShowCommandAutocomplete(false);
+            setPartialCommand(null);
+          }}
+        />
+      )}
+
+      <div
+        className={spacing.padding.lg}
+        onClick={(e) => {
+          // Only focus if clicking outside the textarea (to allow text selection)
+          if (e.target !== textareaRef.current) {
+            textareaRef.current?.focus();
+          }
+        }}
+      >
+        {/* Command Badge Indicator */}
+        {partialCommand && !showCommandAutocomplete && (
+          <div className="mb-2">
+            <CommandBadge
+              command={partialCommand}
+              isValid={isCommandValid}
+              show={true}
+            />
+          </div>
+        )}
+
         <ChatComposerTextarea
           value={value}
           onChange={handleTextareaChange}
