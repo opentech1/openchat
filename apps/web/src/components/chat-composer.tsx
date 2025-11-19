@@ -450,6 +450,14 @@ function ChatComposer({
         if (matchingTemplate) {
           // Expand the template with arguments
           messageToSend = applyTemplate(matchingTemplate.template, parsed);
+
+          // Increment usage count for manual command typing
+          if (convexUser?._id) {
+            void incrementTemplateUsage({
+              templateId: matchingTemplate._id as Id<"promptTemplates">,
+              userId: convexUser._id,
+            });
+          }
         }
       }
     }
