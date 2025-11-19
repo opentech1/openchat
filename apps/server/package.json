@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "convex dev --local",
+    "dev": "convex dev",
     "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build' --preview-run previewSeed --preview-create $VERCEL_GIT_COMMIT_REF; else convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build'; fi",
     "check-types": "tsc --noEmit || true",
     "test": "echo \"No Convex tests yet\""

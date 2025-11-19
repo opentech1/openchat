@@ -12,6 +12,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { extractPlaceholders, generateArgumentHint } from "@/lib/template-parser";
+import { toast } from "sonner";
 
 interface TemplateEditorFullProps {
 	templateId?: Id<"promptTemplates">;
@@ -60,6 +61,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 				setLastSaved(new Date());
 			} catch (error) {
 				console.error("Auto-save failed:", error);
+				toast.error("Failed to auto-save changes. Please save manually.");
 			}
 		}, 2000); // Auto-save after 2 seconds of inactivity
 

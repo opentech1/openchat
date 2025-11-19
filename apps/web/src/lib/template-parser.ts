@@ -136,7 +136,9 @@ export function applyTemplate(template: string, parsedCommand: ParsedCommand): s
 		const placeholder = `$${i}`;
 		if (result.includes(placeholder)) {
 			const arg = parsedCommand.args[i - 1] || "";
-			result = result.replace(new RegExp(`\\$${i}\\b`, "g"), arg);
+			// Use negative lookahead to avoid matching $1 in $10, $11, etc.
+			// This works with punctuation unlike \b word boundary
+			result = result.replace(new RegExp(`\\$${i}(?!\\d)`, "g"), arg);
 		}
 	}
 
@@ -163,7 +165,8 @@ export function extractPlaceholders(template: string): string[] {
 	}
 
 	// Find all positional placeholders ($1, $2, etc.)
-	const positionalRegex = /\$(\d+)\b/g;
+	// Use negative lookahead instead of \b to work with punctuation
+	const positionalRegex = /\$(\d+)(?!\d)/g;
 	let match;
 	while ((match = positionalRegex.exec(template)) !== null) {
 		placeholders.add(match[0]);

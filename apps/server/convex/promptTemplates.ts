@@ -100,16 +100,17 @@ export const list = query({
 			)
 			.order("desc");
 
+		// Filter by category BEFORE pagination to ensure correct page size
+		if (args.category) {
+			query = query.filter(q => q.eq(q.field("category"), args.category));
+		}
+
 		const results = await query.paginate({
 			cursor: args.cursor ?? null,
 			numItems: limit,
 		});
 
-		// Filter by category if specified
-		let templates = results.page;
-		if (args.category) {
-			templates = templates.filter(t => t.category === args.category);
-		}
+		const templates = results.page;
 
 		// Return optimized response
 		return {
