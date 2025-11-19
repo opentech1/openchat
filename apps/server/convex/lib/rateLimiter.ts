@@ -34,6 +34,11 @@ import { components } from "../_generated/api";
  * - Upload URL generation: 10/min with 3 burst
  * - File metadata save: 10/min with 3 burst
  * - File deletion: 15/min with 5 burst
+ *
+ * PROMPT TEMPLATE OPERATIONS:
+ * - Template creation: 20/min with 5 burst
+ * - Template update: 30/min with 10 burst
+ * - Template deletion: 15/min with 3 burst
  */
 export const rateLimiter = new RateLimiter(components.rateLimiter, {
 	// User operations
@@ -108,5 +113,25 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		rate: 15,
 		period: MINUTE,
 		capacity: 5,
+	},
+
+	// Prompt template operations
+	templateCreate: {
+		kind: "token bucket",
+		rate: 20,
+		period: MINUTE,
+		capacity: 5,
+	},
+	templateUpdate: {
+		kind: "token bucket",
+		rate: 30,
+		period: MINUTE,
+		capacity: 10,
+	},
+	templateDelete: {
+		kind: "token bucket",
+		rate: 15,
+		period: MINUTE,
+		capacity: 3,
 	},
 });

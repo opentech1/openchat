@@ -22,6 +22,7 @@ import type * as lib_rateLimiter from "../lib/rateLimiter.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as previewSeed from "../previewSeed.js";
+import type * as promptTemplates from "../promptTemplates.js";
 import type * as users from "../users.js";
 
 import type {
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   migrations: typeof migrations;
   previewSeed: typeof previewSeed;
+  promptTemplates: typeof promptTemplates;
   users: typeof users;
 }>;
 
