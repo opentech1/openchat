@@ -62,7 +62,7 @@ export function CommandAutocomplete({
 					break;
 				case "Tab":
 				case "Enter":
-					if (e.key === "Enter") e.preventDefault();
+					e.preventDefault();
 					if (filteredTemplates[selectedIndex]) {
 						onSelect(filteredTemplates[selectedIndex]!);
 					}
