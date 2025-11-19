@@ -1,4 +1,9 @@
 #!/bin/bash
+# Ensure this script runs in bash even if called from fish or other shells
+if [ -z "$BASH_VERSION" ]; then
+    exec bash "$0" "$@"
+fi
+
 set -e
 
 echo "======================================"
@@ -19,7 +24,13 @@ echo "✅ Bun found: $(bun --version)"
 # Install dependencies
 echo ""
 echo "Installing dependencies..."
-bun install
+# Set environment to skip optional native builds that may fail
+export npm_config_build_from_source=false
+export npm_config_optional=false
+bun install || {
+    echo "⚠️  Initial install had some errors, trying with --ignore-scripts..."
+    bun install --ignore-scripts
+}
 
 # Set up environment variables
 echo ""
