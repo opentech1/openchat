@@ -24,6 +24,7 @@ import { components } from "../_generated/api";
  * CHAT OPERATIONS:
  * - Chat creation: 20/min with 5 burst
  * - Chat deletion: 15/min with 3 burst
+ * - Chat export: 5/min with 2 burst
  *
  * MESSAGE OPERATIONS:
  * - Message send: 30/min with 10 burst
@@ -72,6 +73,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		rate: 15,
 		period: MINUTE,
 		capacity: 3,
+	},
+	chatExport: {
+		kind: "token bucket",
+		rate: 5,
+		period: MINUTE,
+		capacity: 2,
 	},
 
 	// Message operations

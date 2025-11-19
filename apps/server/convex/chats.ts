@@ -229,3 +229,26 @@ export async function assertOwnsChat(
 	return chat;
 }
 
+export const checkExportRateLimit = mutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.object({ ok: v.boolean() }),
+	handler: async (ctx, args) => {
+		// Rate limit chat exports to prevent abuse
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "chatExport", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			const waitTime =
+				retryAfter !== undefined
+					? `in ${Math.ceil(retryAfter / 1000)} seconds`
+					: "later";
+			throw new Error(`Too many exports. Please try again ${waitTime}.`);
+		}
+
+		return { ok: true } as const;
+	},
+});
+
