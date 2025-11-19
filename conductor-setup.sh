@@ -62,14 +62,23 @@ if [ -f "$CONDUCTOR_ROOT_PATH/.env.local" ]; then
     echo "✅ Copied root .env.local"
 fi
 
-# Set up Convex
+# Set up Convex for local deployment
 echo ""
-if [ -f "apps/server/.env.local" ] && grep -q "CONVEX_DEPLOYMENT" apps/server/.env.local; then
-    echo "✅ Convex configuration found in apps/server/.env.local"
-    echo "   Your worktree will use the same Convex deployment as the main project"
+echo "Configuring Convex to use local deployment..."
+
+# Modify server package.json to use local Convex deployment
+if [ -f "apps/server/package.json" ]; then
+    # Use Node.js to safely modify the JSON file
+    node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('apps/server/package.json', 'utf8'));
+        pkg.scripts.dev = 'convex dev --local';
+        fs.writeFileSync('apps/server/package.json', JSON.stringify(pkg, null, 2) + '\n');
+    "
+    echo "✅ Configured Convex to use local deployment (isolated from main project)"
+    echo "   Your worktree has its own Convex backend - schema changes won't conflict!"
 else
-    echo "⚠️  No Convex configuration found"
-    echo "   Convex will prompt you to select a project when you run 'convex dev'"
+    echo "⚠️  Could not find apps/server/package.json"
 fi
 
 echo ""

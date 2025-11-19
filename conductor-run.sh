@@ -2,9 +2,9 @@
 
 echo "Starting OpenChat for Conductor..."
 echo ""
-echo "⚠️  Note: Skipping Convex codegen for Conductor"
-echo "   The app will run without backend database functionality"
-echo "   To use Convex, run 'bun run convex:dev' separately"
+echo "✅ Using LOCAL Convex deployment for this worktree"
+echo "   Your changes won't affect the main project's database"
+echo "   Each worktree has its own isolated Convex backend"
 echo ""
 
 echo "Starting dev servers..."
