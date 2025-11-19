@@ -314,7 +314,10 @@ function ChatComposer({
       ? countTokens(value, activeModelId)
       : 0;
 
-    // 3. Count uploaded files (approximate - file descriptions add tokens)
+    // 3. Count uploaded files (not yet sent - pendingattachment tokens)
+    // Note: uploadedFiles contains files attached but NOT yet sent in a message.
+    // Once sent, these files become part of messages and are counted in historyTokens.
+    // uploadedFiles is cleared after sending (see CLEAR_UPLOADED action), so no double-counting.
     const fileTokens = uploadedFiles.reduce((total, file) => {
       // File references in messages consume tokens
       const description = `File: ${file.filename} (${file.contentType})`;
