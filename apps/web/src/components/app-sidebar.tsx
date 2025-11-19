@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X, PanelLeft } from "@/lib/icons";
+import { X, PanelLeft, Settings } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,7 @@ import { fetchWithCsrf } from "@/lib/csrf-client";
 import { Logo } from "@/components/logo";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LiveRegion } from "@/components/ui/live-region";
+import ThemeToggle from "@/components/theme-toggle";
 
 export type ChatListItem = {
   id: string;
@@ -318,7 +319,23 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           </ErrorBoundary>
         </SidebarGroup>
       </SidebarContent>
-      <div className="mt-auto w-full px-2 pb-3 pt-2">
+      <div className="mt-auto w-full px-2 pb-3 pt-2 space-y-2">
+        {/* Settings and Theme Controls */}
+        <div className="flex items-stretch gap-2">
+          <Link
+            href="/dashboard/settings"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Settings"
+          >
+            <Settings className="size-4" />
+            <span>Settings</span>
+          </Link>
+          <div className="flex items-center justify-center rounded-lg border bg-card px-3 py-2">
+            <ThemeToggle />
+          </div>
+        </div>
+
+        {/* Account Button */}
         <button
           type="button"
           onClick={() => setAccountOpen(true)}
