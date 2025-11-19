@@ -25,38 +25,52 @@ bun install
 echo ""
 echo "Setting up environment variables..."
 
-# Check if .env.local exists in root
-if [ -f "$CONDUCTOR_ROOT_PATH/.env.local" ]; then
-    echo "Found .env.local in root, creating symlink..."
-    ln -sf "$CONDUCTOR_ROOT_PATH/.env.local" .env.local
-    echo "✅ Linked .env.local from root"
-elif [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
-    echo "Found .env in root, creating symlink..."
-    ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env.local
-    echo "✅ Linked .env from root as .env.local"
+# Copy server .env.local (contains CONVEX_DEPLOYMENT config)
+if [ -f "$CONDUCTOR_ROOT_PATH/apps/server/.env.local" ]; then
+    echo "Copying apps/server/.env.local from main project..."
+    mkdir -p apps/server
+    cp "$CONDUCTOR_ROOT_PATH/apps/server/.env.local" apps/server/.env.local
+    echo "✅ Copied apps/server/.env.local (includes Convex configuration)"
 else
-    echo "⚠️  No .env file found in root"
-    echo "   Creating .env.local from .env.example..."
-
-    if [ -f ".env.example" ]; then
-        cp .env.example .env.local
-        echo "✅ Created .env.local from .env.example"
-        echo ""
-        echo "⚠️  IMPORTANT: You need to configure your .env.local file!"
-        echo "   Key variables to set:"
-        echo "   - BETTER_AUTH_SECRET (generate with: openssl rand -base64 32)"
-        echo "   - CONVEX_URL and NEXT_PUBLIC_CONVEX_URL"
-        echo "   - OAuth credentials (optional)"
-    else
-        echo "❌ Error: No .env.example found"
-        exit 1
+    echo "⚠️  No apps/server/.env.local found in main project"
+    if [ -f "apps/server/.env.example" ]; then
+        mkdir -p apps/server
+        cp apps/server/.env.example apps/server/.env.local
+        echo "⚠️  Created apps/server/.env.local from example - you'll need to configure Convex"
     fi
+fi
+
+# Copy web .env.local (contains all frontend env vars)
+if [ -f "$CONDUCTOR_ROOT_PATH/apps/web/.env.local" ]; then
+    echo "Copying apps/web/.env.local from main project..."
+    mkdir -p apps/web
+    cp "$CONDUCTOR_ROOT_PATH/apps/web/.env.local" apps/web/.env.local
+    echo "✅ Copied apps/web/.env.local"
+else
+    echo "⚠️  No apps/web/.env.local found in main project"
+    if [ -f "apps/web/.env.example" ]; then
+        mkdir -p apps/web
+        cp apps/web/.env.example apps/web/.env.local
+        echo "⚠️  Created apps/web/.env.local from example - you may need to configure it"
+    fi
+fi
+
+# Also handle root .env.local if it exists
+if [ -f "$CONDUCTOR_ROOT_PATH/.env.local" ]; then
+    echo "Copying root .env.local from main project..."
+    cp "$CONDUCTOR_ROOT_PATH/.env.local" .env.local
+    echo "✅ Copied root .env.local"
 fi
 
 # Set up Convex
 echo ""
-echo "⚠️  Convex will be initialized when you run the dev servers"
-echo "   The run script will handle codegen automatically"
+if [ -f "apps/server/.env.local" ] && grep -q "CONVEX_DEPLOYMENT" apps/server/.env.local; then
+    echo "✅ Convex configuration found in apps/server/.env.local"
+    echo "   Your worktree will use the same Convex deployment as the main project"
+else
+    echo "⚠️  No Convex configuration found"
+    echo "   Convex will prompt you to select a project when you run 'convex dev'"
+fi
 
 echo ""
 echo "======================================"
@@ -64,6 +78,6 @@ echo "✅ Setup complete!"
 echo "======================================"
 echo ""
 echo "Next steps:"
-echo "  1. Review your .env.local file and add any missing secrets"
-echo "  2. Click the 'Run' button to start the dev servers"
+echo "  1. Click the 'Run' button to start the dev servers"
+echo "  2. Your worktree is configured to use the same Convex deployment"
 echo ""
