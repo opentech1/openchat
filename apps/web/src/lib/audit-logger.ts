@@ -38,6 +38,7 @@ function hashValue(value: string): string {
 export type AuditEventType =
 	| "chat.delete"
 	| "chat.create"
+	| "chat.export"
 	| "user.create"
 	| "user.delete"
 	| "user.update"
@@ -336,6 +337,24 @@ export async function auditChatCreate(params: {
 		event: "chat.create",
 		userId: params.userId,
 		resourceId: params.chatId,
+		ipAddress: params.ipAddress,
+		userAgent: params.userAgent,
+		status: "success",
+	});
+}
+
+export async function auditChatExport(params: {
+	userId: string;
+	chatId: string;
+	format: string;
+	ipAddress?: string;
+	userAgent?: string;
+}): Promise<void> {
+	await auditLog({
+		event: "chat.export",
+		userId: params.userId,
+		resourceId: params.chatId,
+		metadata: { format: params.format },
 		ipAddress: params.ipAddress,
 		userAgent: params.userAgent,
 		status: "success",

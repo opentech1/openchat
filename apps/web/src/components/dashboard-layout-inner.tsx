@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Settings } from "@/lib/icons";
 import AppSidebar from "@/components/app-sidebar";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
@@ -9,6 +10,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import { spacing, opacity, iconSize } from "@/styles/design-tokens";
 import { DashboardControls } from "@/components/dashboard-controls";
 import { HelpButton } from "@/components/help-button";
+import { ChatExportButton } from "@/components/chat-export-button";
 
 type DashboardLayoutClientProps = {
   children: ReactNode;
@@ -24,6 +26,13 @@ export default function DashboardLayoutClient({
   children,
   chats,
 }: DashboardLayoutClientProps) {
+  const pathname = usePathname();
+
+  // Check if we're on a chat page and extract chatId
+  const chatPageMatch = pathname?.match(/^\/dashboard\/chat\/([^/]+)$/);
+  const chatId = chatPageMatch?.[1];
+  const isOnChatPage = Boolean(chatId);
+
   return (
     <div className="relative flex h-svh overflow-hidden">
       <a
@@ -47,6 +56,7 @@ export default function DashboardLayoutClient({
           className={`pointer-events-auto absolute right-4 top-4 z-20 flex items-center rounded-xl border bg-card/${opacity.subtle} px-3 py-1.5 shadow-md backdrop-blur ${spacing.gap.sm}`}
         >
           <MobileDashboardNav initialChats={chats} />
+          {isOnChatPage && chatId && <ChatExportButton chatId={chatId} />}
           <Link
             href="/dashboard/settings"
             className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
