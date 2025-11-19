@@ -29,6 +29,9 @@ import {
   getDefaultReasoningForModel,
 } from "@/lib/reasoning-config";
 import { getModelCapabilities } from "@/lib/model-capabilities";
+import { ContextUsageIndicator } from "@/components/ui/context-usage-indicator";
+import { countTokens, countMessagesTokens } from "@/lib/token-counter";
+import type { UIMessage } from "ai";
 
 type FileAttachment = {
   storageId: Id<"_storage">;
@@ -184,6 +187,7 @@ export type ChatComposerProps = {
   chatId?: Id<"chats"> | null;
   reasoningConfig?: ReasoningConfig;
   onReasoningConfigChange?: (config: ReasoningConfig) => void;
+  messages?: UIMessage[];
 };
 
 function ChatComposer({
@@ -204,6 +208,7 @@ function ChatComposer({
   chatId,
   reasoningConfig: externalReasoningConfig,
   onReasoningConfigChange,
+  messages = [],
 }: ChatComposerProps) {
   // Consolidated composer state with useReducer
   const [composerState, dispatchComposer] = useReducer(composerReducer, {
@@ -296,6 +301,35 @@ function ChatComposer({
 
   // Memoize the active reasoning config
   const activeReasoningConfig = externalReasoningConfig ?? internalReasoningConfig;
+
+  // Calculate total context usage including conversation history
+  const currentTokenCount = useMemo(() => {
+    // 1. Count all previous messages in conversation history
+    const historyTokens = messages.length > 0
+      ? countMessagesTokens(messages, activeModelId)
+      : 0;
+
+    // 2. Count current input being typed
+    const inputTokens = value.trim()
+      ? countTokens(value, activeModelId)
+      : 0;
+
+    // 3. Count uploaded files (approximate - file descriptions add tokens)
+    const fileTokens = uploadedFiles.reduce((total, file) => {
+      // File references in messages consume tokens
+      const description = `File: ${file.filename} (${file.contentType})`;
+      return total + countTokens(description, activeModelId);
+    }, 0);
+
+    // 4. Total context usage
+    return historyTokens + inputTokens + fileTokens;
+  }, [messages, value, activeModelId, uploadedFiles]);
+
+  // Get max context length from selected model
+  const maxContextTokens = useMemo(() => {
+    const selectedModel = modelOptions.find(m => m.value === activeModelId);
+    return selectedModel?.context ?? null;
+  }, [modelOptions, activeModelId]);
 
   // Adjust height when initialValue is provided
   useEffect(() => {
@@ -620,6 +654,10 @@ function ChatComposer({
               disabled={disabled || isBusy}
             />
           )}
+          <ContextUsageIndicator
+            currentTokens={currentTokenCount}
+            maxTokens={maxContextTokens}
+          />
         </div>
 
         <div className={cn("flex flex-col items-end", spacing.gap.xs)}>
