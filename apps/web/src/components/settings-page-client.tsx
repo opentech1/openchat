@@ -6,6 +6,7 @@ import { ArrowLeft } from "@/lib/icons";
 import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
 import { ApiKeySectionWithOAuth } from "@/components/settings/api-key-section-with-oauth";
+import { JonModeSection } from "@/components/settings/jon-mode-section";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { Button } from "@/components/ui/button";
 import { spacing } from "@/styles/design-tokens";
@@ -65,6 +66,14 @@ export default function SettingsPageClient() {
           <h2 className="text-sm font-medium">Appearance</h2>
           <p className="text-muted-foreground mt-1 text-sm">Choose the accent color used across the dashboard.</p>
           <ThemeSelector className="mt-4" />
+        </section>
+
+        <section className="rounded-xl border p-4">
+          <h2 className="text-sm font-medium">Output Preferences</h2>
+          <p className="text-muted-foreground mt-1 text-sm">Customize how AI responses are formatted.</p>
+          <div className="mt-4">
+            <JonModeSection />
+          </div>
         </section>
       </div>
 
