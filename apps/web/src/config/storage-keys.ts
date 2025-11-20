@@ -20,6 +20,8 @@ export const LOCAL_STORAGE_KEYS = {
 	USER: {
 		/** Last selected AI model ID */
 		LAST_MODEL: "openchat:last-model",
+		/** Jon Mode: Prevents AI from using em-dashes */
+		JON_MODE: "openchat:jon-mode",
 	},
 
 	/** Session and authentication */

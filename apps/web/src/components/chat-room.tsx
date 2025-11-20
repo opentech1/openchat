@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
+import { useJonMode } from "@/hooks/use-jon-mode";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -162,6 +163,9 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     saveKey,
     removeKey,
   } = useOpenRouterKey();
+
+  // Jon Mode: Get em-dash prevention setting
+  const { jonMode } = useJonMode();
 
   // Use reducer for OpenRouter state management (excluding apiKey which comes from hook)
   const [openRouterState, dispatch] = useReducer(
@@ -687,12 +691,14 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       apiKey: requestApiKey,
       attachments,
       reasoningConfig,
+      jonMode: jonModeParam,
     }: {
       text: string;
       modelId: string;
       apiKey: string;
       attachments?: any[];
       reasoningConfig?: any;
+      jonMode?: boolean;
     }) => {
       const content = text.trim();
       if (!content) return;
@@ -723,6 +729,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               apiKey: requestApiKey,
               attachments,
               reasoningConfig,
+              jonMode: jonModeParam,
             },
           },
         );
@@ -818,8 +825,9 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
       text: pendingMessage,
       modelId: selectedModel,
       apiKey: apiKey,
+      jonMode: jonMode,
     });
-  }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, status, handleSend]);
+  }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, jonMode, status, handleSend]);
 
   const _busy = status === "submitted" || status === "streaming";
   const isLinked = Boolean(apiKey);
@@ -891,6 +899,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               userId={convexUserId}
               chatId={toConvexChatId(chatId)}
               messages={messages}
+              jonMode={jonMode}
             />
           </ErrorBoundary>
         </div>
