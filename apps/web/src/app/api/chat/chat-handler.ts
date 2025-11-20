@@ -13,7 +13,7 @@ import type { IRateLimiter } from "@/lib/rate-limit";
 import { hasReasoningCapability } from "@/lib/model-capabilities";
 import { isTextPart, isFilePart } from "@/lib/error-handling";
 import { removeEmDashes } from "@/lib/text-transforms";
-import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/__tests__/lib/jon-mode-prompts.test";
+import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
 
 type AnyUIMessage = UIMessage<Record<string, unknown>>;
 

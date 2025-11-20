@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { streamText } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from '@/__tests__/lib/jon-mode-prompts.test';
+import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from '@/lib/jon-mode-prompts';
 import { containsEmDashes, removeEmDashes } from '@/lib/text-transforms';
 
 /**
