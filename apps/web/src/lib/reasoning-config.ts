@@ -42,14 +42,6 @@ export const DEFAULT_REASONING_CONFIG: ReasoningConfig = {
 };
 
 /**
- * Get the model provider from model ID
- */
-function getModelProvider(modelId: string): string | null {
-	const parts = modelId.split("/");
-	return parts.length > 1 ? parts[0]! : null;
-}
-
-/**
  * Check if a model supports effort-based reasoning (OpenAI, Grok)
  */
 export function supportsReasoningEffort(modelId: string): boolean {
