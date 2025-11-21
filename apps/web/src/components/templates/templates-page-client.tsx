@@ -13,8 +13,10 @@ import type { PromptTemplate } from "./template-card";
 import { NiceLoader } from "@/components/ui/nice-loader";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { useRouter } from "next/navigation";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 export default function TemplatesPageClient() {
+	const prefersReducedMotion = useReducedMotion();
 	const router = useRouter();
 	const { convexUser } = useConvexUser();
 	const [searchQuery, setSearchQuery] = useState("");
@@ -93,9 +95,9 @@ export default function TemplatesPageClient() {
 			<div className="container max-w-7xl mx-auto px-4 py-8 space-y-6">
 				{/* Header */}
 				<motion.div
-					initial={{ opacity: 0, y: -10 }}
+					initial={{ opacity: 0, y: prefersReducedMotion ? 0 : -10 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
 					className="space-y-2"
 				>
 					<h1 className="text-3xl font-bold tracking-tight">Prompt Templates</h1>
@@ -106,9 +108,9 @@ export default function TemplatesPageClient() {
 
 				{/* Toolbar */}
 				<motion.div
-					initial={{ opacity: 0, y: -10 }}
+					initial={{ opacity: 0, y: prefersReducedMotion ? 0 : -10 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.1 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.3, delay: prefersReducedMotion ? 0 : 0.1 }}
 					className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
 				>
 					<div className="flex flex-col sm:flex-row gap-3 flex-1 w-full sm:w-auto">
@@ -157,9 +159,9 @@ export default function TemplatesPageClient() {
 
 				{/* Stats */}
 				<motion.div
-					initial={{ opacity: 0, y: -10 }}
+					initial={{ opacity: 0, y: prefersReducedMotion ? 0 : -10 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.2 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.3, delay: prefersReducedMotion ? 0 : 0.2 }}
 					className="flex gap-6 text-sm text-muted-foreground"
 				>
 					<span>
@@ -177,7 +179,7 @@ export default function TemplatesPageClient() {
 				<motion.div
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
-					transition={{ duration: 0.3, delay: 0.3 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.3, delay: prefersReducedMotion ? 0 : 0.3 }}
 				>
 					{templatesResult === undefined ? (
 						<div className="flex items-center justify-center py-12">

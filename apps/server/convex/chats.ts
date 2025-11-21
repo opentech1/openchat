@@ -102,6 +102,10 @@ export const list = query({
 		// - _creationTime: Duplicates createdAt field
 		// - deletedAt: Always undefined (filtered at index level)
 		// - messageCount: Not used in frontend chat list
+
+		// Convert Convex's special "_end_cursor" to null for API consistency
+		const nextCursor = results.continueCursor === "_end_cursor" ? null : results.continueCursor;
+
 		return {
 			chats: results.page.map(chat => ({
 				_id: chat._id,
@@ -110,7 +114,7 @@ export const list = query({
 				updatedAt: chat.updatedAt,
 				lastMessageAt: chat.lastMessageAt,
 			})),
-			nextCursor: results.continueCursor ?? null,
+			nextCursor,
 		};
 	},
 });

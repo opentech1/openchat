@@ -68,8 +68,12 @@ export function validateConvexEnv(): ConvexEnv {
 		} else {
 			warnings.push("BETTER_AUTH_SECRET not set, using default: dev-secret");
 		}
-	} else if (authSecret === "dev-secret" && isProd) {
-		errors.push("BETTER_AUTH_SECRET must not be 'dev-secret' in production");
+	} else if (authSecret === "dev-secret") {
+		if (isProd) {
+			errors.push("BETTER_AUTH_SECRET must not be 'dev-secret' in production");
+		} else {
+			console.warn("WARNING: Using dev-secret for BETTER_AUTH_SECRET. This is insecure and should only be used in development.");
+		}
 	}
 
 	// Check OAuth providers - at least one should be configured

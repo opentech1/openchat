@@ -6,11 +6,20 @@
     "dev": "convex dev --local",
     "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build' --preview-run previewSeed --preview-create $VERCEL_GIT_COMMIT_REF; else convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build'; fi",
     "check-types": "tsc --noEmit || true",
-    "test": "echo \"No Convex tests yet\""
+    "codegen": "convex codegen",
+    "test": "vitest --config vitest.config.ts",
+    "test:once": "vitest run --config vitest.config.ts",
+    "test:coverage": "vitest run --coverage --config vitest.config.ts"
   },
   "dependencies": {
     "@convex-dev/better-auth": "^0.9.7",
     "@convex-dev/rate-limiter": "^0.3.0",
     "convex": "^1.29.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "convex-test": "^0.0.39",
+    "vitest": "^2.1.8"
   }
 }

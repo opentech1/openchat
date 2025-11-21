@@ -11,9 +11,14 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 const isTest = process.env.NODE_ENV === 'test';
 
 /**
+ * Log context type for structured logging metadata
+ */
+export type LogContext = Record<string, string | number | boolean | null | undefined>;
+
+/**
  * Log information messages (development only)
  */
-export function logInfo(message: string, ...args: any[]) {
+export function logInfo(message: string, ...args: unknown[]) {
 	if (isDevelopment) {
 		console.log(message, ...args);
 	}
@@ -23,7 +28,7 @@ export function logInfo(message: string, ...args: any[]) {
  * Log warning messages
  * Warnings are logged in all environments as they may indicate issues
  */
-export function logWarn(message: string, ...args: any[]) {
+export function logWarn(message: string, ...args: unknown[]) {
 	if (isDevelopment || !isTest) {
 		console.warn(message, ...args);
 	}
@@ -34,7 +39,7 @@ export function logWarn(message: string, ...args: any[]) {
  * - In development: logs to console
  * - In production: Sentry automatically captures errors, so we suppress console output
  */
-export function logError(message: string, error?: unknown, context?: Record<string, any>) {
+export function logError(message: string, error?: unknown, context?: LogContext) {
 	if (isDevelopment) {
 		console.error(message, error, context);
 	}
@@ -45,7 +50,7 @@ export function logError(message: string, error?: unknown, context?: Record<stri
 /**
  * Log debug messages (development only)
  */
-export function logDebug(message: string, ...args: any[]) {
+export function logDebug(message: string, ...args: unknown[]) {
 	if (isDevelopment) {
 		console.debug(message, ...args);
 	}
@@ -56,10 +61,10 @@ export function logDebug(message: string, ...args: any[]) {
  */
 export function createLogger(context: string) {
 	return {
-		info: (message: string, ...args: any[]) => logInfo(`[${context}] ${message}`, ...args),
-		warn: (message: string, ...args: any[]) => logWarn(`[${context}] ${message}`, ...args),
-		error: (message: string, error?: unknown, extraContext?: Record<string, any>) =>
+		info: (message: string, ...args: unknown[]) => logInfo(`[${context}] ${message}`, ...args),
+		warn: (message: string, ...args: unknown[]) => logWarn(`[${context}] ${message}`, ...args),
+		error: (message: string, error?: unknown, extraContext?: LogContext) =>
 			logError(`[${context}] ${message}`, error, extraContext),
-		debug: (message: string, ...args: any[]) => logDebug(`[${context}] ${message}`, ...args),
+		debug: (message: string, ...args: unknown[]) => logDebug(`[${context}] ${message}`, ...args),
 	};
 }

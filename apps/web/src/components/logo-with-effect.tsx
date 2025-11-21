@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 interface FocusRect {
   x: number;
@@ -32,6 +33,7 @@ export const LogoWithEffect = ({
 	size?: 'small' | 'default' | 'large';
 	priority?: boolean;
 }) => {
+	const prefersReducedMotion = useReducedMotion();
 	const words = ['oss', 'chat'];
 	const [currentIndex, setCurrentIndex] = useState<number>(0);
 	const containerRef = useRef<HTMLDivElement | null>(null);
@@ -46,13 +48,34 @@ export const LogoWithEffect = ({
 
 	const sizes = sizeClasses[size]
 
+	// PERFORMANCE FIX: Memoize inline styles
+	const motionDivStyle = useMemo(
+		() => ({
+			'--border-color': 'white',
+			'--glow-color': 'rgba(255, 255, 255, 0.6)'
+		} as React.CSSProperties),
+		[]
+	);
+
+	const cornerStyle = useMemo(
+		() => ({
+			borderColor: 'var(--border-color)',
+			filter: 'drop-shadow(0 0 2px var(--border-color))'
+		}),
+		[]
+	);
+
 	useEffect(() => {
+		if (prefersReducedMotion) {
+			return;
+		}
+
 		const interval = setInterval(() => {
 			setCurrentIndex(prev => (prev + 1) % words.length);
 		}, 3000); // 2s animation + 1s pause
 
 		return () => clearInterval(interval);
-	}, [words.length]);
+	}, [prefersReducedMotion, words.length]);
 
 	useEffect(() => {
 		if (currentIndex === null || currentIndex === -1) return;
@@ -102,40 +125,25 @@ export const LogoWithEffect = ({
 						opacity: currentIndex >= 0 ? 1 : 0
 					}}
 					transition={{
-						duration: 0.5
+						duration: prefersReducedMotion ? 0 : 0.5
 					}}
-					style={{
-						'--border-color': 'white',
-						'--glow-color': 'rgba(255, 255, 255, 0.6)'
-					} as React.CSSProperties}
+					style={motionDivStyle}
 				>
 					<span
 						className="absolute w-2 h-2 border-[2px] rounded-[2px] top-[-6px] left-[-6px] border-r-0 border-b-0"
-						style={{
-							borderColor: 'var(--border-color)',
-							filter: 'drop-shadow(0 0 2px var(--border-color))'
-						}}
+						style={cornerStyle}
 					></span>
 					<span
 						className="absolute w-2 h-2 border-[2px] rounded-[2px] top-[-6px] right-[-6px] border-l-0 border-b-0"
-						style={{
-							borderColor: 'var(--border-color)',
-							filter: 'drop-shadow(0 0 2px var(--border-color))'
-						}}
+						style={cornerStyle}
 					></span>
 					<span
 						className="absolute w-2 h-2 border-[2px] rounded-[2px] bottom-[-6px] left-[-6px] border-r-0 border-t-0"
-						style={{
-							borderColor: 'var(--border-color)',
-							filter: 'drop-shadow(0 0 2px var(--border-color))'
-						}}
+						style={cornerStyle}
 					></span>
 					<span
 						className="absolute w-2 h-2 border-[2px] rounded-[2px] bottom-[-6px] right-[-6px] border-l-0 border-t-0"
-						style={{
-							borderColor: 'var(--border-color)',
-							filter: 'drop-shadow(0 0 2px var(--border-color))'
-						}}
+						style={cornerStyle}
 					></span>
 				</motion.div>
 			</div>

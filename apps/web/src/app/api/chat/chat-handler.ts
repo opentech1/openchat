@@ -1,7 +1,6 @@
-import { convertToCoreMessages, smoothStream, streamText, type UIMessage } from "ai";
+import { convertToCoreMessages, smoothStream, streamText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createHash } from "crypto";
-import type { Id } from "@server/convex/_generated/dataModel";
 
 import { captureServerEvent } from "@/lib/posthog-server";
 import { getUserContext } from "@/lib/auth-server";
@@ -9,102 +8,54 @@ import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 import { createLogger } from "@/lib/logger";
 import { toConvexUserId, toConvexChatId, toConvexStorageId } from "@/lib/type-converters";
-import type { IRateLimiter } from "@/lib/rate-limit";
 import { hasReasoningCapability } from "@/lib/model-capabilities";
-import { isTextPart, isFilePart } from "@/lib/error-handling";
-
-type AnyUIMessage = UIMessage<Record<string, unknown>>;
+import {
+	RATE_LIMITS,
+	DEFAULT_RATE_LIMIT,
+	MAX_TRACKED_RATE_BUCKETS,
+	MAX_USER_PART_CHARS,
+	MAX_MESSAGES_PER_REQUEST,
+	MAX_REQUEST_BODY_SIZE,
+	MAX_ATTACHMENT_SIZE,
+	MAX_MESSAGE_CONTENT_LENGTH,
+	STREAM_FLUSH_INTERVAL_MS,
+	STREAM_MIN_CHARS_PER_FLUSH,
+	STREAM_SMOOTH_DELAY_MS,
+	MAX_TOKENS,
+	OPENROUTER_TIMEOUT_MS,
+} from "@/config/constants";
+import type {
+	AnyUIMessage,
+	ChatRequestPayload,
+	StreamPersistRequest,
+	OpenRouterError,
+} from "./chat-handler-types";
+import {
+	getMessageId,
+	getMessageCreatedAt,
+	isOpenRouterError,
+	isReasoningStreamChunk,
+} from "./chat-handler-types";
+import {
+	validateRequestBodySize,
+	validateActualBodySize,
+	validateMessagesLength,
+	validateMessageContent,
+	validateChatId,
+	validateMessages,
+	findLastUserMessage,
+	clampUserText,
+	extractMessageText,
+} from "./chat-handler-validation";
+import { StreamManager } from "./chat-handler-streaming";
+import { PersistenceHandler, coerceIsoDate } from "./chat-handler-persistence";
 
 type RateBucket = {
 	count: number;
 	resetAt: number;
 };
 
-// Rate limiting configuration
-/** Default maximum requests per minute if not configured via env */
-const DEFAULT_RATE_LIMIT_PER_MINUTE = 30;
-/** Rate limit window duration in milliseconds (1 minute) */
-const RATE_LIMIT_WINDOW_MS = 60_000;
-/** Default maximum number of rate limit buckets to track in memory */
-const DEFAULT_MAX_TRACKED_BUCKETS = 1_000;
 
-// Message content configuration
-/** Maximum characters allowed in user message parts before truncation */
-const DEFAULT_MAX_USER_CHARS = 8_000;
-
-// Stream buffering configuration
-/** Default interval for flushing buffered stream chunks to database (milliseconds) */
-const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 80;
-/** Default minimum characters required before flushing a stream chunk */
-const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 24;
-/** Default delay between smooth stream word chunks (milliseconds) */
-const DEFAULT_STREAM_SMOOTH_DELAY_MS = 12;
-
-const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? DEFAULT_RATE_LIMIT_PER_MINUTE);
-const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? DEFAULT_MAX_TRACKED_BUCKETS);
-const MAX_TRACKED_RATE_BUCKETS = Number.isFinite(RAW_MAX_TRACKED_RATE_BUCKETS) && RAW_MAX_TRACKED_RATE_BUCKETS > 0
-	? RAW_MAX_TRACKED_RATE_BUCKETS
-	: null;
-const MAX_USER_PART_CHARS = Number(process.env.OPENROUTER_MAX_USER_CHARS ?? DEFAULT_MAX_USER_CHARS);
-
-// Request size limits for security
-const MAX_MESSAGES_PER_REQUEST = (() => {
-	const val = Number(process.env.MAX_MESSAGES_PER_REQUEST ?? 100);
-	return Number.isFinite(val) && val > 0 ? val : 100;
-})();
-const MAX_REQUEST_BODY_SIZE = (() => {
-	const val = Number(process.env.MAX_REQUEST_BODY_SIZE ?? 10_000_000);
-	return Number.isFinite(val) && val > 0 ? val : 10_000_000;
-})();
-const MAX_ATTACHMENT_SIZE = (() => {
-	const val = Number(process.env.MAX_ATTACHMENT_SIZE ?? 5_000_000);
-	return Number.isFinite(val) && val > 0 ? val : 5_000_000;
-})();
-const MAX_MESSAGE_CONTENT_LENGTH = (() => {
-	const val = Number(process.env.MAX_MESSAGE_CONTENT_LENGTH ?? 50_000);
-	return Number.isFinite(val) && val > 0 ? val : 50_000;
-})();
-
-const STREAM_FLUSH_INTERVAL_RAW = Number(process.env.OPENROUTER_STREAM_FLUSH_INTERVAL_MS ?? DEFAULT_STREAM_FLUSH_INTERVAL_MS);
-const STREAM_FLUSH_INTERVAL_MS =
-	Number.isFinite(STREAM_FLUSH_INTERVAL_RAW) && STREAM_FLUSH_INTERVAL_RAW > 0
-		? STREAM_FLUSH_INTERVAL_RAW
-		: DEFAULT_STREAM_FLUSH_INTERVAL_MS;
-const STREAM_MIN_CHARS_PER_FLUSH_RAW = Number(
-	process.env.OPENROUTER_STREAM_MIN_CHARS_PER_FLUSH ?? DEFAULT_STREAM_MIN_CHARS_PER_FLUSH,
-);
-const STREAM_MIN_CHARS_PER_FLUSH =
-	Number.isFinite(STREAM_MIN_CHARS_PER_FLUSH_RAW) && STREAM_MIN_CHARS_PER_FLUSH_RAW > 0
-		? STREAM_MIN_CHARS_PER_FLUSH_RAW
-		: DEFAULT_STREAM_MIN_CHARS_PER_FLUSH;
-const STREAM_SMOOTH_DELAY_MS = (() => {
-	const raw = process.env.OPENROUTER_STREAM_DELAY_MS;
-	if (raw === undefined || raw === null || raw.trim() === "") return DEFAULT_STREAM_SMOOTH_DELAY_MS;
-	if (raw.trim().toLowerCase() === "null") return null;
-	const parsed = Number(raw);
-	if (!Number.isFinite(parsed)) return DEFAULT_STREAM_SMOOTH_DELAY_MS;
-	return parsed < 0 ? 0 : parsed;
-})();
-const MAX_TOKENS = (() => {
-	const raw = process.env.OPENROUTER_MAX_TOKENS;
-	if (!raw || raw.trim() === "") return 8192;
-	const parsed = Number(raw);
-	if (!Number.isFinite(parsed) || parsed <= 0) return 8192;
-	return Math.min(parsed, 32768); // Cap at 32k to prevent excessive token usage
-})();
-
-
-/**
- * Convert reasoning config from client to OpenRouter API format
- *
- * OpenRouter unified reasoning API supports:
- * - reasoning.enabled: boolean - Enable reasoning with defaults
- * - reasoning.effort: "low" | "medium" | "high" - For OpenAI/Grok models
- * - reasoning.max_tokens: number - For Anthropic/Gemini models
- * - reasoning.exclude: boolean - Use reasoning but don't include in response
- *
- * Based on: https://openrouter.ai/docs/use-cases/reasoning-tokens
- */
 /**
  * Convert reasoning config from client to OpenRouter API format
  *
@@ -143,102 +94,6 @@ function buildReasoningParam(
 	}
 
 	return reasoning;
-}
-
-// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
-const OPENROUTER_TIMEOUT_MS = (() => {
-	const raw = process.env.OPENROUTER_TIMEOUT_MS;
-	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
-	const parsed = Number(raw);
-	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
-	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
-})();
-
-type StreamPersistRequest = {
-	userId: string;
-	chatId: string;
-	clientMessageId?: string | null;
-	role: "user" | "assistant";
-	content: string;
-	reasoning?: string;
-	thinkingTimeMs?: number;
-	createdAt: string;
-	status: "streaming" | "completed";
-	attachments?: Array<{
-		storageId: Id<"_storage">;
-		filename: string;
-		contentType: string;
-		size: number;
-		uploadedAt: number;
-		url?: string;
-	}>;
-};
-
-type ChatRequestPayload = {
-	modelId?: string;
-	apiKey?: string;
-	chatId?: string;
-	messages?: AnyUIMessage[];
-	assistantMessageId?: string;
-	attachments?: Array<{
-		storageId: Id<"_storage">;
-		filename: string;
-		contentType: string;
-		size: number;
-		url?: string;
-	}>;
-	reasoningConfig?: {
-		enabled: boolean;
-		effort?: "medium" | "high";
-		max_tokens?: number;
-		exclude?: boolean;
-	};
-};
-
-function clampUserText(message: AnyUIMessage): AnyUIMessage {
-	if (message.role !== "user") return message;
-	let remaining = MAX_USER_PART_CHARS;
-	const parts = message.parts.map((part) => {
-		if (part?.type !== "text") return part;
-		if (remaining <= 0) return { ...part, text: "" };
-		if (part.text.length <= remaining) {
-			remaining -= part.text.length;
-			return part;
-		}
-		const slice = part.text.slice(0, remaining);
-		remaining = 0;
-		return { ...part, text: slice };
-	});
-	return { ...message, parts };
-}
-
-function extractMessageText(message: AnyUIMessage): string {
-	const segments: string[] = [];
-	for (const part of message.parts ?? []) {
-		if (!part) continue;
-		if (isTextPart(part)) {
-			segments.push(part.text);
-			continue;
-		}
-		if (isFilePart(part)) {
-			const name = part.filename && part.filename.length > 0 ? part.filename : "attachment";
-			const media = part.mediaType && part.mediaType.length > 0 ? ` (${part.mediaType})` : "";
-			segments.push(`[Attachment: ${name}${media}]`);
-			continue;
-		}
-	}
-	return segments.join("");
-}
-
-function coerceIsoDate(value: unknown): string {
-	if (typeof value === "string" && value.length > 0) {
-		const date = new Date(value);
-		if (!Number.isNaN(date.valueOf())) return date.toISOString();
-	}
-	if (value instanceof Date && !Number.isNaN(value.valueOf())) {
-		return value.toISOString();
-	}
-	return new Date().toISOString();
 }
 
 function pickClientIp(request: Request): string {
@@ -300,8 +155,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 	const logger = createLogger("ChatHandler");
 	const streamTextImpl = options.streamTextImpl ?? streamText;
 	const convertToCoreMessagesImpl = options.convertToCoreMessagesImpl ?? convertToCoreMessages;
-	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMIT_WINDOW_MS };
-	const bucketWindowMs = rateLimit.windowMs > 0 ? rateLimit.windowMs : RATE_LIMIT_WINDOW_MS;
+	const rateLimit = options.rateLimit ?? { limit: DEFAULT_RATE_LIMIT, windowMs: RATE_LIMITS.WINDOW_MS };
+	const bucketWindowMs = rateLimit.windowMs > 0 ? rateLimit.windowMs : RATE_LIMITS.WINDOW_MS;
 	const now = options.now ?? (() => Date.now());
 	const corsOrigin = options.corsOrigin ?? process.env.NEXT_PUBLIC_APP_URL ?? process.env.CORS_ORIGIN;
 	const allowedOrigins = resolveAllowedOrigins(corsOrigin);
@@ -400,16 +255,10 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		// Validate request body size BEFORE loading into memory
-		const contentLength = request.headers.get("content-length");
-		if (contentLength) {
-			const declaredSize = Number.parseInt(contentLength, 10);
-			if (!Number.isNaN(declaredSize) && declaredSize > MAX_REQUEST_BODY_SIZE) {
-				const headers = buildCorsHeaders(request, allowOrigin);
-				return new Response(
-					`Request body too large: ${declaredSize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
-					{ status: 413, headers }
-				);
-			}
+		const bodySizeCheck = validateRequestBodySize(request);
+		if (!bodySizeCheck.valid) {
+			const headers = buildCorsHeaders(request, allowOrigin);
+			return new Response(bodySizeCheck.error, { status: 413, headers });
 		}
 
 		let payload: ChatRequestPayload;
@@ -417,14 +266,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		try {
 			rawBody = await request.text();
 
-			// Double-check actual body size after loading (in case Content-Length was missing or incorrect)
-			const bodySize = new TextEncoder().encode(rawBody).length;
-			if (bodySize > MAX_REQUEST_BODY_SIZE) {
+			// Double-check actual body size after loading
+			const actualSizeCheck = validateActualBodySize(rawBody);
+			if (!actualSizeCheck.valid) {
 				const headers = buildCorsHeaders(request, allowOrigin);
-				return new Response(
-					`Request body too large: ${bodySize} bytes (max: ${MAX_REQUEST_BODY_SIZE} bytes)`,
-					{ status: 413, headers }
-				);
+				return new Response(actualSizeCheck.error, { status: 413, headers });
 			}
 
 			payload = JSON.parse(rawBody);
@@ -486,72 +332,34 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response(responseMessage, { status, headers });
 		}
 
-		const chatId = typeof payload?.chatId === "string" && payload.chatId.trim().length > 0 ? payload.chatId.trim() : null;
-		if (!chatId) {
+		// Validate chat ID
+		const chatIdValidation = validateChatId(payload);
+		if (!chatIdValidation.valid) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Missing chatId", { status: 400, headers });
+			return new Response(chatIdValidation.error, { status: 400, headers });
 		}
+		const chatId = chatIdValidation.chatId!;
 
-		const rawMessages: AnyUIMessage[] = Array.isArray(payload?.messages) ? (payload.messages as AnyUIMessage[]) : [];
-		if (rawMessages.length === 0) {
+		// Validate messages exist
+		const messagesValidation = validateMessages(payload);
+		if (!messagesValidation.valid) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Missing chat messages", { status: 400, headers });
+			return new Response(messagesValidation.error, { status: 400, headers });
 		}
+		const rawMessages = messagesValidation.messages!;
 
 		// Validate messages array length
-		if (rawMessages.length > MAX_MESSAGES_PER_REQUEST) {
+		const lengthValidation = validateMessagesLength(rawMessages);
+		if (!lengthValidation.valid) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response(
-				`Too many messages: ${rawMessages.length} (max: ${MAX_MESSAGES_PER_REQUEST})`,
-				{ status: 413, headers }
-			);
+			return new Response(lengthValidation.error, { status: 413, headers });
 		}
 
 		// Validate message content length and attachment sizes
-		for (let i = 0; i < rawMessages.length; i++) {
-			const message = rawMessages[i];
-			if (!message) continue;
-
-			// Check each part of the message
-			for (const part of message.parts ?? []) {
-				if (!part) continue;
-
-				// Validate text content length
-				if (isTextPart(part)) {
-					const textLength = part.text.length;
-					if (textLength > MAX_MESSAGE_CONTENT_LENGTH) {
-						const headers = buildCorsHeaders(request, allowOrigin);
-						return new Response(
-							`Message content too long: ${textLength} characters (max: ${MAX_MESSAGE_CONTENT_LENGTH})`,
-							{ status: 413, headers }
-						);
-					}
-				}
-
-				// Validate attachment size - check combined size to prevent bypass
-				if (isFilePart(part)) {
-					let totalAttachmentSize = 0;
-
-					// Add data URL size if present
-					if (typeof part.data === "string") {
-						totalAttachmentSize += new TextEncoder().encode(part.data).length;
-					}
-
-					// Add url content size if it's a data URL
-					if (typeof part.url === "string" && part.url.startsWith("data:")) {
-						totalAttachmentSize += new TextEncoder().encode(part.url).length;
-					}
-
-					// Check combined size to prevent bypass by splitting content
-					if (totalAttachmentSize > MAX_ATTACHMENT_SIZE) {
-						const headers = buildCorsHeaders(request, allowOrigin);
-						return new Response(
-							`Attachment too large: ${totalAttachmentSize} bytes (max: ${MAX_ATTACHMENT_SIZE} bytes)`,
-							{ status: 413, headers }
-						);
-					}
-				}
-			}
+		const contentValidation = validateMessageContent(rawMessages);
+		if (!contentValidation.valid) {
+			const headers = buildCorsHeaders(request, allowOrigin);
+			return new Response(contentValidation.error, { status: 413, headers });
 		}
 
 		// Convert Convex attachments to AI SDK file parts
@@ -588,21 +396,19 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		}
 
 		const safeMessages = rawMessages.map(clampUserText);
-		const userMessageIndex = [...rawMessages].reverse().findIndex((msg) => msg.role === "user");
-		if (userMessageIndex === -1) {
+		const userMessageResult = findLastUserMessage(rawMessages);
+		if (!userMessageResult.found) {
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Missing user message", { status: 400, headers });
+			return new Response(userMessageResult.error, { status: 400, headers });
 		}
-		const normalizedIndex = rawMessages.length - 1 - userMessageIndex;
-		const rawUserMessage = rawMessages[normalizedIndex]!;
-		const safeUserMessage = safeMessages[normalizedIndex]!;
-		const userMessageId = typeof rawUserMessage.id === "string" && rawUserMessage.id.length > 0
-			? rawUserMessage.id
-			: (crypto.randomUUID?.() ?? `user-${Date.now()}`);
-		const userCreatedAtIso = coerceIsoDate((rawUserMessage as any)?.metadata?.createdAt);
+		const rawUserMessage = userMessageResult.message!;
+		const safeUserMessage = safeMessages[userMessageResult.index!]!;
+		const userMessageId = getMessageId(rawUserMessage);
+		const userCreatedAtIso = getMessageCreatedAt(rawUserMessage);
 		const userContent = extractMessageText(safeUserMessage);
-		if ((safeUserMessage as any).id !== userMessageId) {
-			(safeUserMessage as any).id = userMessageId;
+		// Ensure message has the correct ID
+		if (safeUserMessage.id !== userMessageId) {
+			safeUserMessage.id = userMessageId;
 		}
 
 		const assistantMessageId = typeof payload?.assistantMessageId === "string" && payload.assistantMessageId.length > 0
@@ -839,9 +645,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 							logger.debug("Reasoning started", { startTime: reasoningStartTime });
 						}
 
-						const text = (chunk as any).text;
-						if (typeof text === "string" && text.length > 0) {
-							assistantReasoning += text;
+						// Type-safe check for reasoning chunk
+						if (isReasoningStreamChunk(chunk) && chunk.text.length > 0) {
+							assistantReasoning += chunk.text;
 							// Update end time on EVERY chunk (captures last one)
 							reasoningEndTime = Date.now();
 							scheduleStreamFlush();
@@ -950,8 +756,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				rate_limit_bucket: rateLimitBucketLabel,
 			});
 			const headers = buildCorsHeaders(request, allowOrigin);
-			const upstreamStatus =
-				typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : undefined;
+
+			// Type-safe error status code extraction
+			const upstreamStatus = isOpenRouterError(error) ? error.statusCode : undefined;
 			const isProduction = process.env.NODE_ENV === "production";
 
 			// Handle specific error cases with generic messages in production

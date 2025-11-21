@@ -46,10 +46,8 @@ export function useOpenRouterOAuth(): UseOpenRouterOAuthReturn {
       setError(null);
 
       // Get callback URL from environment or construct from current origin
-      const callbackUrl =
-        process.env.NEXT_PUBLIC_APP_URL
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/openrouter/callback`
-          : `${window.location.origin}/openrouter/callback`;
+      const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
+      const callbackUrl = `${baseUrl}/openrouter/callback`;
 
       // Initiate OAuth flow (will redirect user)
       initiateOAuthFlow(callbackUrl);

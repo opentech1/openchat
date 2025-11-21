@@ -13,6 +13,12 @@ import { fetchWithCsrf } from "@/lib/csrf-client";
 
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 
+interface OpenRouterError extends Error {
+  __posthogTracked?: boolean;
+  status?: number;
+  providerUrl?: string;
+}
+
 type ModelManagerState = {
   apiKey: string | null;
   modelOptions: ModelSelectorOption[];
@@ -181,13 +187,14 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
         }
 
         logError("Failed to load OpenRouter models", error);
-        if (!(error as any)?.__posthogTracked) {
+        const openRouterError = error as OpenRouterError;
+        if (!openRouterError.__posthogTracked) {
           const status =
-            typeof (error as any)?.status === "number"
-              ? (error as any).status
+            typeof openRouterError.status === "number"
+              ? openRouterError.status
               : 0;
           let providerHost = "openrouter.ai";
-          const providerUrl = (error as any)?.providerUrl;
+          const providerUrl = openRouterError.providerUrl;
           if (typeof providerUrl === "string" && providerUrl.length > 0) {
             try {
               providerHost = new URL(providerUrl).host;

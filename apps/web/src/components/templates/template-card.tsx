@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { EditIcon, TrashIcon, CommandIcon, TrendingUpIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractPlaceholders, generateArgumentHint } from "@/lib/template-parser";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { logError } from "@/lib/logger";
 
 export interface PromptTemplate {
 	_id: string;
@@ -29,6 +31,7 @@ interface TemplateCardProps {
 }
 
 export function TemplateCard({ template, onEdit, onDelete, onClick }: TemplateCardProps) {
+	const prefersReducedMotion = useReducedMotion();
 	const [isDeleting, setIsDeleting] = useState(false);
 
 	const placeholders = extractPlaceholders(template.template);
@@ -41,7 +44,7 @@ export function TemplateCard({ template, onEdit, onDelete, onClick }: TemplateCa
 		try {
 			await onDelete(template._id);
 		} catch (error) {
-			console.error("Failed to delete template:", error);
+			logError("Failed to delete template", { error, templateId: template._id });
 			setIsDeleting(false);
 		}
 	};
@@ -57,14 +60,21 @@ export function TemplateCard({ template, onEdit, onDelete, onClick }: TemplateCa
 		}
 	};
 
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if ((e.key === 'Enter' || e.key === ' ') && onClick) {
+			e.preventDefault();
+			onClick(template);
+		}
+	};
+
 	return (
 		<motion.div
 			layout
-			initial={{ opacity: 0, scale: 0.95 }}
+			initial={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.95 }}
 			animate={{ opacity: 1, scale: 1 }}
-			exit={{ opacity: 0, scale: 0.95 }}
-			whileHover={{ scale: 1.02 }}
-			transition={{ duration: 0.2 }}
+			exit={{ opacity: 0, scale: prefersReducedMotion ? 1 : 0.95 }}
+			whileHover={{ scale: prefersReducedMotion ? 1 : 1.02 }}
+			transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
 		>
 			<Card
 				className={cn(
@@ -72,6 +82,10 @@ export function TemplateCard({ template, onEdit, onDelete, onClick }: TemplateCa
 					onClick && "hover:border-primary/50"
 				)}
 				onClick={handleClick}
+				onKeyDown={handleKeyDown}
+				tabIndex={onClick ? 0 : undefined}
+				role={onClick ? "button" : undefined}
+				aria-label={onClick ? `Select template: ${template.name}` : undefined}
 			>
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">

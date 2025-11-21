@@ -14,9 +14,13 @@ export default defineConfig({
 	root: process.cwd(),
 	test: {
 		globals: true,
-		environment: "node",
+		environment: "happy-dom",
 		testTimeout: 20000,
-		include: ["apps/**/test/**/*.spec.ts"],
+		include: [
+			"apps/**/test/**/*.spec.ts",
+			"apps/**/*.test.{ts,tsx}",
+			"apps/**/*.component.test.{ts,tsx}",
+		],
 		exclude: ["apps/**/tests/**"],
 		coverage: {
 			provider: "v8",
@@ -24,5 +28,6 @@ export default defineConfig({
 		},
 		pool: "threads",
 		poolOptions: { threads: { singleThread: true } },
+		setupFiles: ["apps/web/src/test/setup.ts"],
 	},
 });

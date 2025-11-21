@@ -8,6 +8,8 @@
  * - Type-safe error handling utilities
  */
 
+import type { LogContext } from "./logger-server";
+
 export type ErrorCategory =
   | "network"
   | "authentication"
@@ -224,14 +226,14 @@ export interface ErrorLogData {
   statusCode?: number;
   stack?: string;
   digest?: string;
-  context?: Record<string, any>;
+  context?: LogContext;
   timestamp: string;
   [key: string]: unknown; // Index signature for compatibility with LogContext
 }
 
 export function formatErrorForLogging(
   error: unknown,
-  context?: Record<string, any>
+  context?: LogContext
 ): ErrorLogData {
   const categorized = categorizeError(error);
   const timestamp = new Date().toISOString();

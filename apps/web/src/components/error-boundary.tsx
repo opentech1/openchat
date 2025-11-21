@@ -109,9 +109,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       // We can also manually capture with additional context:
       try {
         // Check if Sentry is available
-        if (typeof window !== "undefined" && (window as any).Sentry) {
-          const Sentry = (window as any).Sentry;
-          Sentry.captureException(error, {
+        if (typeof window !== "undefined" && window.Sentry) {
+          window.Sentry.captureException(error, {
             contexts: {
               react: {
                 componentStack: errorInfo.componentStack,
@@ -221,9 +220,9 @@ function DefaultErrorFallback({
           </p>
 
           {/* Show error digest in production if available */}
-          {!isDev && error && typeof (error as any).digest === "string" && (
+          {!isDev && error && "digest" in error && typeof error.digest === "string" && (
             <p className="text-xs text-muted-foreground">
-              Error ID: {(error as any).digest}
+              Error ID: {error.digest}
             </p>
           )}
 

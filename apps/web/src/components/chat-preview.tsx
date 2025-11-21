@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -38,6 +38,9 @@ function ChatPreview({ className }: { className?: string }) {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
   const typingTimeoutRef = useRef<number | null>(null);
+
+  // PERFORMANCE FIX: Memoize inline style
+  const textareaStyle = useMemo(() => ({ overflow: "hidden" as const }), []);
 
   const { apiKey, isLoading: keyLoading } = useOpenRouterKey();
   useEffect(
@@ -223,9 +226,7 @@ function ChatPreview({ className }: { className?: string }) {
                     "placeholder:text-muted-foreground",
                     "min-h-[60px]",
                   )}
-                  style={{
-                    overflow: "hidden",
-                  }}
+                  style={textareaStyle}
                   data-ph-no-capture
                   aria-label="Message input"
                 />
@@ -371,7 +372,7 @@ if (typeof document !== "undefined") {
   if (!document.getElementById(STYLE_ID)) {
     const style = document.createElement("style");
     style.id = STYLE_ID;
-    style.innerHTML = rippleKeyframes;
+    style.textContent = rippleKeyframes;
     document.head.appendChild(style);
   }
 }

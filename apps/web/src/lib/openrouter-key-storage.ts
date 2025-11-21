@@ -8,13 +8,11 @@
 
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
+import type { ConvexReactClient } from "convex/react";
 import { encryptApiKey, decryptApiKey } from "./encryption";
 import { logError } from "./logger";
 
-type ConvexClient = {
-	mutation: (api: any, args?: any) => Promise<any>;
-	query: (api: any, args?: any) => Promise<any>;
-};
+type ConvexClient = Pick<ConvexReactClient, "mutation" | "query">;
 
 /**
  * Saves an OpenRouter API key to the server (encrypted)

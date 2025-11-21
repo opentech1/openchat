@@ -41,9 +41,8 @@ export default function RootError({
 		// Report to error tracking if appropriate
 		if (shouldReportError(error)) {
 			// Sentry auto-captures errors, but we can add extra context
-			if (typeof window !== "undefined" && (window as any).Sentry) {
-				const Sentry = (window as any).Sentry;
-				Sentry.captureException(error, {
+			if (typeof window !== "undefined" && window.Sentry) {
+				window.Sentry.captureException(error, {
 					level: "error",
 					contexts: {
 						error: errorLog,

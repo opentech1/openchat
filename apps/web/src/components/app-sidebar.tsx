@@ -442,6 +442,12 @@ function ChatList({
     [virtualizer]
   );
 
+  // PERFORMANCE FIX: Memoize maxHeight style
+  const listMaxHeightStyle = useMemo(
+    () => ({ maxHeight: "calc(100vh - 280px)" }),
+    []
+  );
+
   if (chats.length === 0)
     return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
 
@@ -450,7 +456,7 @@ function ChatList({
     return (
       <div
         className="px-1 overflow-y-auto overflow-x-hidden"
-        style={{ maxHeight: "calc(100vh - 280px)" }}
+        style={listMaxHeightStyle}
         data-ph-no-capture
       >
         <ul className="space-y-1">
@@ -474,7 +480,7 @@ function ChatList({
     <div
       ref={parentRef}
       className="px-1 overflow-y-auto overflow-x-hidden"
-      style={{ maxHeight: "calc(100vh - 280px)" }}
+      style={listMaxHeightStyle}
       data-ph-no-capture
     >
       <div style={virtualListContainerStyle}>

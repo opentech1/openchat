@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { CommandIcon, XCircleIcon, CheckCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 interface CommandBadgeProps {
 	command: string;
@@ -11,14 +12,16 @@ interface CommandBadgeProps {
 }
 
 export function CommandBadge({ command, isValid, show }: CommandBadgeProps) {
+	const prefersReducedMotion = useReducedMotion();
+
 	return (
 		<AnimatePresence>
 			{show && (
 				<motion.div
-					initial={{ opacity: 0, y: 5 }}
+					initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 5 }}
 					animate={{ opacity: 1, y: 0 }}
-					exit={{ opacity: 0, y: 5 }}
-					transition={{ duration: 0.15 }}
+					exit={{ opacity: 0, y: prefersReducedMotion ? 0 : 5 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
 					className={cn(
 						"inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors",
 						isValid

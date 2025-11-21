@@ -1,0 +1,301 @@
+name: E2E Tests
+
+# E2E tests run separately from regular tests because:
+# 1. They are slower and more resource-intensive
+# 2. They require a running application server
+# 3. They test in real browsers
+# 4. They should not block regular CI/CD pipelines
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser to run tests on'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - chromium
+          - firefox
+          - webkit
+      headed:
+        description: 'Run in headed mode (show browser)'
+        required: false
+        default: false
+        type: boolean
+
+  # Weekly scheduled run
+  schedule:
+    # Run every Sunday at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+  # Optional: Uncomment to run on specific branches
+  # push:
+  #   branches:
+  #     - main
+  # pull_request:
+  #   branches:
+  #     - main
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - chromium
+          - firefox
+          - webkit
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.3.0"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: bunx playwright install-deps ${{ matrix.browser }}
+
+      - name: Setup environment
+        run: |
+          # Create .env.local for E2E tests
+          cat > apps/web/.env.local << EOF
+          # E2E Test Environment
+          NEXT_PUBLIC_APP_URL=http://localhost:3000
+          NODE_ENV=test
+          EOF
+
+          echo "✅ Environment configured for E2E tests"
+
+      - name: Build application
+        run: bun run build:web
+        env:
+          NODE_ENV: production
+
+      - name: Start development server
+        run: |
+          bun run dev:web &
+          echo $! > .dev-server.pid
+          echo "Started dev server with PID: $(cat .dev-server.pid)"
+
+      - name: Wait for server to be ready
+        run: |
+          echo "Waiting for dev server to be ready..."
+          timeout 120 bash -c 'until curl -f http://localhost:3000 > /dev/null 2>&1; do sleep 2; done'
+          echo "✅ Server is ready"
+
+      - name: Run E2E tests
+        run: |
+          if [ "${{ github.event.inputs.browser }}" != "" ] && [ "${{ github.event.inputs.browser }}" != "all" ]; then
+            # Manual trigger with specific browser
+            bunx playwright test --project=${{ github.event.inputs.browser }}
+          else
+            # Run all browsers or matrix browser
+            bunx playwright test --project=${{ matrix.browser }}
+          fi
+        env:
+          CI: true
+          BASE_URL: http://localhost:3000
+
+      - name: Stop development server
+        if: always()
+        run: |
+          if [ -f .dev-server.pid ]; then
+            kill $(cat .dev-server.pid) || true
+            rm .dev-server.pid
+          fi
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.browser }}
+          path: test-results/
+          retention-days: 30
+
+      - name: Upload traces
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-${{ matrix.browser }}
+          path: test-results/**/trace.zip
+          retention-days: 30
+
+  e2e-summary:
+    name: E2E Test Summary
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: always()
+
+    steps:
+      - name: Check E2E test results
+        run: |
+          if [ "${{ needs.e2e-tests.result }}" != "success" ]; then
+            echo "## ❌ E2E Tests Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more E2E tests failed. Please check the test reports in the artifacts." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### How to Debug:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Download the Playwright report from the artifacts" >> $GITHUB_STEP_SUMMARY
+            echo "2. Download traces from failed tests" >> $GITHUB_STEP_SUMMARY
+            echo "3. Run tests locally: \`bun test:e2e --debug\`" >> $GITHUB_STEP_SUMMARY
+            echo "4. Check [docs/TESTING.md](docs/TESTING.md#running-e2e-tests) for more info" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "## ✅ E2E Tests Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All E2E tests passed successfully across all browsers!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Tested Browsers:" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Chromium" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Firefox" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ WebKit" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Notify on scheduled run failure
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: failure() && github.event_name == 'schedule'
+
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Scheduled E2E Tests Failed';
+            const body = `
+            ## Scheduled E2E Test Failure
+
+            The weekly E2E test run has failed.
+
+            **Run Details:**
+            - Workflow: ${{ github.workflow }}
+            - Run ID: ${{ github.run_id }}
+            - Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Triggered: Scheduled (weekly)
+
+            **Next Steps:**
+            1. Review the test results in the workflow artifacts
+            2. Check the Playwright reports for detailed failure information
+            3. Run tests locally to reproduce: \`bun test:e2e\`
+            4. Fix failing tests or update if behavior has intentionally changed
+
+            **Resources:**
+            - [Testing Guide](docs/TESTING.md)
+            - [E2E Test Patterns](docs/WRITING_TESTS.md#e2e-test-patterns)
+
+            This issue was automatically created by the E2E test workflow.
+            `;
+
+            // Check if there's already an open issue for E2E test failures
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'e2e-failure,automated'
+            });
+
+            if (issues.data.length === 0) {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['e2e-failure', 'automated', 'testing']
+              });
+            } else {
+              // Comment on existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: `Another E2E test failure occurred.\n\n${body}`
+              });
+            }
+
+  # Optional: Run a subset of smoke tests on every PR
+  # Uncomment this job if you want basic E2E tests on every PR
+  # smoke-tests:
+  #   name: Smoke Tests
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'pull_request'
+  #   timeout-minutes: 10
+  #
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Setup Bun
+  #       uses: oven-sh/setup-bun@v1
+  #       with:
+  #         bun-version: "1.3.0"
+  #
+  #     - name: Install dependencies
+  #       run: bun install --frozen-lockfile
+  #
+  #     - name: Install Playwright
+  #       run: bunx playwright install chromium --with-deps
+  #
+  #     - name: Start server
+  #       run: |
+  #         bun run dev:web &
+  #         echo $! > .dev-server.pid
+  #
+  #     - name: Wait for server
+  #       run: timeout 60 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+  #
+  #     - name: Run smoke tests
+  #       run: bunx playwright test --grep @smoke --project=chromium
+  #       env:
+  #         CI: true
+  #
+  #     - name: Stop server
+  #       if: always()
+  #       run: kill $(cat .dev-server.pid) || true

@@ -42,7 +42,9 @@ export interface ValidationResult {
  * @returns true if the content type is an allowed image type
  */
 export function isImageFile(contentType: string): boolean {
-  return ALLOWED_IMAGE_TYPES.includes(contentType as AllowedImageType);
+  // Normalize the content type by removing parameters (e.g., "image/png;charset=utf-8" -> "image/png")
+  const normalizedType = contentType.split(';')[0].trim();
+  return ALLOWED_IMAGE_TYPES.includes(normalizedType as AllowedImageType);
 }
 
 /**
@@ -51,7 +53,9 @@ export function isImageFile(contentType: string): boolean {
  * @returns true if the content type is an allowed document type
  */
 export function isDocumentFile(contentType: string): boolean {
-  return ALLOWED_DOCUMENT_TYPES.includes(contentType as AllowedDocumentType);
+  // Normalize the content type by removing parameters (e.g., "text/plain;charset=utf-8" -> "text/plain")
+  const normalizedType = contentType.split(';')[0].trim();
+  return ALLOWED_DOCUMENT_TYPES.includes(normalizedType as AllowedDocumentType);
 }
 
 /**
@@ -86,7 +90,10 @@ export function validateFileType(
   file: File,
   allowedTypes: string[] = [...ALLOWED_FILE_TYPES]
 ): ValidationResult {
-  if (!allowedTypes.includes(file.type)) {
+  // Normalize the file type by removing parameters (e.g., "text/plain;charset=utf-8" -> "text/plain")
+  const normalizedFileType = file.type.split(';')[0].trim();
+
+  if (!allowedTypes.includes(normalizedFileType)) {
     const typeCategories: string[] = [];
 
     if (allowedTypes.some(type => ALLOWED_IMAGE_TYPES.includes(type as AllowedImageType))) {

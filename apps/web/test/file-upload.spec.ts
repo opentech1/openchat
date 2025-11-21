@@ -142,7 +142,9 @@ describe("File Upload - Type Validation", () => {
 			});
 
 			// Act
-			const isValidType = DOCUMENT_TYPES.includes(file.type);
+			// Normalize MIME type by removing parameters (e.g., charset)
+			const normalizedType = file.type.split(';')[0].trim();
+			const isValidType = DOCUMENT_TYPES.includes(normalizedType);
 
 			// Assert
 			expect(isValidType).toBe(true);

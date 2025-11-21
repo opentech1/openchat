@@ -90,9 +90,8 @@ export class ChatErrorBoundary extends Component<
   reportToErrorTracking = (error: Error, errorInfo: React.ErrorInfo) => {
     if (process.env.NODE_ENV === "production") {
       try {
-        if (typeof window !== "undefined" && (window as any).Sentry) {
-          const Sentry = (window as any).Sentry;
-          Sentry.captureException(error, {
+        if (typeof window !== "undefined" && window.Sentry) {
+          window.Sentry.captureException(error, {
             contexts: {
               react: {
                 componentStack: errorInfo.componentStack,
@@ -203,9 +202,9 @@ function ChatErrorFallback({ error, resetError, chatId }: ChatErrorFallbackProps
               )}
 
               {/* Show error digest in production */}
-              {!isDev && error && typeof (error as any).digest === "string" && (
+              {!isDev && error && "digest" in error && typeof error.digest === "string" && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Error ID: {(error as any).digest}
+                  Error ID: {error.digest}
                 </p>
               )}
 

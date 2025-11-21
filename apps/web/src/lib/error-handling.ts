@@ -20,7 +20,7 @@
  * - Server errors (unexpected failures)
  */
 
-import { logError, logWarn } from "./logger-server";
+import { logError, logWarn, type LogContext } from "./logger-server";
 import { ZodError } from "zod";
 
 /**
@@ -517,7 +517,7 @@ export function isRecoverableError(error: unknown): boolean {
  */
 export function reportError(
 	error: unknown,
-	context?: Record<string, unknown>,
+	context?: LogContext,
 ): void {
 	// Always log with our structured logger
 	// This handles environment differences automatically

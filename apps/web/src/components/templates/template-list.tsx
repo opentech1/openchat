@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { TemplateCard, type PromptTemplate } from "./template-card";
 import { FileTextIcon } from "lucide-react";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 interface TemplateListProps {
 	templates: PromptTemplate[];
@@ -13,13 +14,15 @@ interface TemplateListProps {
 }
 
 export function TemplateList({ templates, onEdit, onDelete, onClick, emptyMessage }: TemplateListProps) {
+	const prefersReducedMotion = useReducedMotion();
+
 	if (templates.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center py-12 text-center">
 				<motion.div
-					initial={{ opacity: 0, y: 10 }}
+					initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 10 }}
 					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3 }}
+					transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
 				>
 					<FileTextIcon className="h-12 w-12 text-muted-foreground/50 mb-4" />
 					<p className="text-muted-foreground text-sm">

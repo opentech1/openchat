@@ -2,6 +2,7 @@
 import { cn } from "@/lib/utils";
 import type { HTMLMotionProps } from "motion/react";
 import { motion } from "motion/react";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
 export const GRADIENT_ANGLES = {
   top: 0,
@@ -24,8 +25,10 @@ export function ProgressiveBlur({
   blurIntensity = 0.25,
   ...props
 }: ProgressiveBlurProps) {
+  const prefersReducedMotion = useReducedMotion();
   const layers = Math.max(blurLayers, 2);
   const segmentSize = 1 / (blurLayers + 1);
+  const effectiveBlurIntensity = prefersReducedMotion ? 0 : blurIntensity;
 
   return (
     <div className={cn('relative', className)}>
@@ -54,8 +57,8 @@ export function ProgressiveBlur({
             style={{
               maskImage: gradient,
               WebkitMaskImage: gradient,
-              backdropFilter: `blur(${index * blurIntensity}px)`,
-              WebkitBackdropFilter: `blur(${index * blurIntensity}px)`,
+              backdropFilter: `blur(${index * effectiveBlurIntensity}px)`,
+              WebkitBackdropFilter: `blur(${index * effectiveBlurIntensity}px)`,
             }}
             {...props}
           />

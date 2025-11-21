@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowDownIcon } from "@/lib/icons";
-import {
+import React, {
   memo,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ArrowDownIcon } from "@/lib/icons";
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -111,6 +111,12 @@ function ChatMessagesPanelComponent({
       position: "relative" as const,
     }),
     [virtualizer]
+  );
+
+  // PERFORMANCE FIX: Memoize paddingBottom style
+  const contentStyle = useMemo(
+    () => ({ paddingBottom }),
+    [paddingBottom]
   );
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
@@ -223,7 +229,7 @@ function ChatMessagesPanelComponent({
             aria-live="polite"
             aria-relevant="additions"
             data-ph-no-capture
-            style={{ paddingBottom }}
+            style={contentStyle}
           >
             {hasMessages ? (
               <div className="w-full max-w-3xl mx-auto">

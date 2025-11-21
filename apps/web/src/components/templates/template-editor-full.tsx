@@ -13,6 +13,8 @@ import { motion, AnimatePresence } from "motion/react";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { extractPlaceholders, generateArgumentHint } from "@/lib/template-parser";
 import { toast } from "sonner";
+import { useReducedMotion } from "@/hooks/use-reduced-motion";
+import { logError } from "@/lib/logger";
 
 interface TemplateEditorFullProps {
 	templateId?: Id<"promptTemplates">;
@@ -27,6 +29,7 @@ interface TemplateEditorFullProps {
 }
 
 export function TemplateEditorFull({ templateId, userId, initialData }: TemplateEditorFullProps) {
+	const prefersReducedMotion = useReducedMotion();
 	const router = useRouter();
 	const [name, setName] = useState(initialData?.name || "");
 	const [command, setCommand] = useState(initialData?.command?.replace(/^\//, "") || "");
@@ -60,7 +63,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 				});
 				setLastSaved(new Date());
 			} catch (error) {
-				console.error("Auto-save failed:", error);
+				logError("Auto-save failed", { error, templateId });
 				toast.error("Failed to auto-save changes. Please save manually.");
 			}
 		}, 2000); // Auto-save after 2 seconds of inactivity
@@ -108,7 +111,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 			setLastSaved(new Date());
 			router.push("/dashboard/templates");
 		} catch (error) {
-			console.error("Failed to save:", error);
+			logError("Failed to save template", { error, templateId, name });
 			alert(error instanceof Error ? error.message : "Failed to save template");
 		} finally {
 			setIsSaving(false);
@@ -245,10 +248,10 @@ Translate $1 to $2 in a $3 tone"
 				<AnimatePresence mode="wait">
 					{showPreview && (
 						<motion.div
-							initial={{ opacity: 0, x: 20 }}
+							initial={{ opacity: 0, x: prefersReducedMotion ? 0 : 20 }}
 							animate={{ opacity: 1, x: 0 }}
-							exit={{ opacity: 0, x: 20 }}
-							transition={{ duration: 0.2 }}
+							exit={{ opacity: 0, x: prefersReducedMotion ? 0 : 20 }}
+							transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
 							className="flex-1 flex flex-col"
 						>
 							<div className="px-6 py-3 border-b border-border bg-muted/30">

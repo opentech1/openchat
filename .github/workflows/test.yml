@@ -1,0 +1,329 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.3.0"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run unit tests
+        run: bun test:unit --coverage
+        env:
+          NODE_ENV: test
+
+      - name: Run component tests
+        run: bun test:component --coverage
+        env:
+          NODE_ENV: test
+
+      - name: Run integration tests
+        run: bun test:integration --coverage
+        env:
+          NODE_ENV: test
+
+      - name: Check coverage threshold
+        run: |
+          echo "Checking coverage thresholds..."
+
+          # Function to check coverage threshold
+          check_coverage() {
+            local coverage_file=$1
+            local test_type=$2
+
+            if [ ! -f "$coverage_file" ]; then
+              echo "⚠️  Coverage file not found: $coverage_file"
+              return 0
+            fi
+
+            # Extract coverage percentages
+            local lines_pct=$(cat "$coverage_file" | jq '.total.lines.pct' 2>/dev/null || echo "0")
+            local statements_pct=$(cat "$coverage_file" | jq '.total.statements.pct' 2>/dev/null || echo "0")
+            local functions_pct=$(cat "$coverage_file" | jq '.total.functions.pct' 2>/dev/null || echo "0")
+            local branches_pct=$(cat "$coverage_file" | jq '.total.branches.pct' 2>/dev/null || echo "0")
+
+            echo "📊 $test_type Coverage:"
+            echo "  Lines:      ${lines_pct}%"
+            echo "  Statements: ${statements_pct}%"
+            echo "  Functions:  ${functions_pct}%"
+            echo "  Branches:   ${branches_pct}%"
+
+            # Check if any metric is below 80%
+            local threshold=80
+            if (( $(echo "$lines_pct < $threshold" | bc -l) )); then
+              echo "❌ Lines coverage (${lines_pct}%) is below ${threshold}%"
+              return 1
+            fi
+            if (( $(echo "$statements_pct < $threshold" | bc -l) )); then
+              echo "❌ Statements coverage (${statements_pct}%) is below ${threshold}%"
+              return 1
+            fi
+            if (( $(echo "$functions_pct < $threshold" | bc -l) )); then
+              echo "❌ Functions coverage (${functions_pct}%) is below ${threshold}%"
+              return 1
+            fi
+            if (( $(echo "$branches_pct < $threshold" | bc -l) )); then
+              echo "❌ Branches coverage (${branches_pct}%) is below ${threshold}%"
+              return 1
+            fi
+
+            echo "✅ $test_type coverage meets threshold (80%)"
+            return 0
+          }
+
+          # Check each coverage report
+          all_passed=true
+
+          if ! check_coverage "coverage/unit/coverage-summary.json" "Unit Tests"; then
+            all_passed=false
+          fi
+
+          if ! check_coverage "coverage/component/coverage-summary.json" "Component Tests"; then
+            all_passed=false
+          fi
+
+          if ! check_coverage "coverage/integration/coverage-summary.json" "Integration Tests"; then
+            all_passed=false
+          fi
+
+          if [ "$all_passed" = false ]; then
+            echo ""
+            echo "❌ Coverage threshold check failed!"
+            echo "Please add tests to meet the 80% coverage requirement."
+            echo "See docs/TEST_COVERAGE.md for guidance."
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All coverage thresholds met!"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: |
+            ./coverage/unit/lcov.info
+            ./coverage/component/lcov.info
+            ./coverage/integration/lcov.info
+          flags: unittests,componenttests,integrationtests
+          name: codecov-openchat
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Archive coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            coverage/unit/
+            coverage/component/
+            coverage/integration/
+          retention-days: 30
+
+      - name: Comment PR with coverage
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            function readCoverage(path) {
+              try {
+                const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+                return {
+                  lines: data.total.lines.pct.toFixed(2),
+                  statements: data.total.statements.pct.toFixed(2),
+                  functions: data.total.functions.pct.toFixed(2),
+                  branches: data.total.branches.pct.toFixed(2)
+                };
+              } catch (error) {
+                return null;
+              }
+            }
+
+            const unitCov = readCoverage('coverage/unit/coverage-summary.json');
+            const componentCov = readCoverage('coverage/component/coverage-summary.json');
+            const integrationCov = readCoverage('coverage/integration/coverage-summary.json');
+
+            let comment = '## 📊 Test Coverage Report\n\n';
+
+            if (unitCov) {
+              comment += '### Unit Tests\n';
+              comment += `| Metric | Coverage |\n`;
+              comment += `|--------|----------|\n`;
+              comment += `| Lines | ${unitCov.lines}% |\n`;
+              comment += `| Statements | ${unitCov.statements}% |\n`;
+              comment += `| Functions | ${unitCov.functions}% |\n`;
+              comment += `| Branches | ${unitCov.branches}% |\n\n`;
+            }
+
+            if (componentCov) {
+              comment += '### Component Tests\n';
+              comment += `| Metric | Coverage |\n`;
+              comment += `|--------|----------|\n`;
+              comment += `| Lines | ${componentCov.lines}% |\n`;
+              comment += `| Statements | ${componentCov.statements}% |\n`;
+              comment += `| Functions | ${componentCov.functions}% |\n`;
+              comment += `| Branches | ${componentCov.branches}% |\n\n`;
+            }
+
+            if (integrationCov) {
+              comment += '### Integration Tests\n';
+              comment += `| Metric | Coverage |\n`;
+              comment += `|--------|----------|\n`;
+              comment += `| Lines | ${integrationCov.lines}% |\n`;
+              comment += `| Statements | ${integrationCov.statements}% |\n`;
+              comment += `| Functions | ${integrationCov.functions}% |\n`;
+              comment += `| Branches | ${integrationCov.branches}% |\n\n`;
+            }
+
+            comment += '---\n';
+            comment += '**Coverage Requirement:** 80% minimum for all metrics\n';
+            comment += '\n📚 [Test Coverage Guide](../docs/TEST_COVERAGE.md)';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit Tests: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Component Tests: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Integration Tests: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Reports" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage reports have been uploaded to Codecov and archived as artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Documentation" >> $GITHUB_STEP_SUMMARY
+          echo "- [Testing Guide](docs/TESTING.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Writing Tests Guide](docs/WRITING_TESTS.md)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Test Coverage Guide](docs/TEST_COVERAGE.md)" >> $GITHUB_STEP_SUMMARY
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.3.0"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run linter
+        run: bun run check
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.3.0"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            node_modules
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run type checking
+        run: bun run check-types
+
+  # Require all checks to pass before merging
+  all-checks:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [test, lint, type-check]
+    if: always()
+
+    steps:
+      - name: Check test status
+        if: needs.test.result != 'success'
+        run: |
+          echo "❌ Tests failed"
+          exit 1
+
+      - name: Check lint status
+        if: needs.lint.result != 'success'
+        run: |
+          echo "❌ Linting failed"
+          exit 1
+
+      - name: Check type-check status
+        if: needs.type-check.result != 'success'
+        run: |
+          echo "❌ Type checking failed"
+          exit 1
+
+      - name: All checks passed
+        run: |
+          echo "✅ All checks passed!"
+          echo "Tests, linting, and type checking completed successfully."

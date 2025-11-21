@@ -67,12 +67,15 @@ async function withAuthRateLimit(
 
 	// Create a new response with rate limit headers
 	// (Response headers are immutable in Next.js App Router)
+	// Clone the response to read it and create a new one with additional headers
+	const cloned = response.clone();
+	const bodyBuffer = cloned.body ? await cloned.arrayBuffer() : null;
 	const newHeaders = new Headers(response.headers);
 	Object.entries(rateLimitHeaders).forEach(([key, value]) => {
 		newHeaders.set(key, value);
 	});
 
-	return new Response(response.body, {
+	return new Response(bodyBuffer, {
 		status: response.status,
 		statusText: response.statusText,
 		headers: newHeaders,

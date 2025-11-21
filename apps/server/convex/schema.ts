@@ -46,10 +46,20 @@ export default defineSchema({
 		role: v.string(),
 		// Content can be encrypted (prefixed with enc_v1:). Max length: 100KB (102400 bytes)
 		content: v.string(),
+		// Model used for this message (e.g., "anthropic/claude-3.5-sonnet")
+		modelId: v.optional(v.string()),
 		// Reasoning content from models with reasoning capabilities (e.g., Claude 4, GPT-5, DeepSeek R1)
 		reasoning: v.optional(v.string()),
 		// Time spent thinking in milliseconds (for reasoning models)
 		thinkingTimeMs: v.optional(v.number()),
+		// Token usage tracking
+		tokenUsage: v.optional(v.object({
+			promptTokens: v.number(),
+			completionTokens: v.number(),
+			totalTokens: v.number(),
+		})),
+		// Stream ID for tracking streaming responses (legacy field, may be removed in future)
+		streamId: v.optional(v.id("messages")),
 		// File attachments
 		attachments: v.optional(
 			v.array(

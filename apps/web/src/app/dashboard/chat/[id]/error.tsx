@@ -33,9 +33,8 @@ export default function ChatError({
 
 		// Report to error tracking if appropriate
 		if (shouldReportError(error)) {
-			if (typeof window !== "undefined" && (window as any).Sentry) {
-				const Sentry = (window as any).Sentry;
-				Sentry.captureException(error, {
+			if (typeof window !== "undefined" && window.Sentry) {
+				window.Sentry.captureException(error, {
 					contexts: {
 						error: errorLog,
 					},

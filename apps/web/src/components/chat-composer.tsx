@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { SendIcon, LoaderIcon, SquareIcon } from "@/lib/icons";
 import {
   ModelSelector,
@@ -18,8 +18,6 @@ import {
 import * as React from "react";
 import { FileUploadButton } from "./file-upload-button";
 import { FilePreview } from "./file-preview";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@server/convex/_generated/api";
 import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { ReasoningControls } from "./reasoning-controls";
@@ -34,21 +32,11 @@ import { countTokens, countMessagesTokens } from "@/lib/token-counter";
 import type { UIMessage } from "ai";
 import { CommandAutocomplete } from "./command-autocomplete";
 import { CommandBadge } from "./ui/command-badge";
-import {
-  isCommandStart,
-  extractPartialCommand,
-  parseCommand,
-  applyTemplate,
-} from "@/lib/template-parser";
-import { useConvexUser } from "@/contexts/convex-user-context";
+import type { ConvexFileAttachment } from "@/lib/convex-types";
+import { useFileUpload } from "@/components/chat-composer/use-file-upload";
+import { useCommandParser } from "@/components/chat-composer/use-command-parser";
 
-type FileAttachment = {
-  storageId: Id<"_storage">;
-  filename: string;
-  contentType: string;
-  size: number;
-  url?: string;
-};
+type FileAttachment = ConvexFileAttachment;
 
 // Extracted textarea component for performance optimization
 interface ChatComposerTextareaProps {
@@ -73,6 +61,9 @@ const ChatComposerTextarea = React.memo(
     errorMessage,
     textareaRef,
   }: ChatComposerTextareaProps) => {
+    // PERFORMANCE FIX: Memoize inline style
+    const textareaStyle = useMemo(() => ({ overflow: "hidden" as const }), []);
+
     return (
       <textarea
         ref={textareaRef}
@@ -91,7 +82,7 @@ const ChatComposerTextarea = React.memo(
           "placeholder:text-muted-foreground",
           "min-h-[60px]",
         )}
-        style={{ overflow: "hidden" }}
+        style={textareaStyle}
         disabled={disabled}
         aria-label="Message input"
         aria-invalid={!!errorMessage}
@@ -134,39 +125,6 @@ function composerReducer(state: ComposerState, action: ComposerAction): Composer
       return { ...state, value: "", errorMessage: null };
     case "RESTORE_MESSAGE":
       return { ...state, value: action.payload };
-    default:
-      return state;
-  }
-}
-
-// Consolidated file upload state
-type FileUploadState = {
-  uploadingFiles: File[];
-  uploadedFiles: FileAttachment[];
-};
-
-type FileUploadAction =
-  | { type: "ADD_UPLOADING"; payload: File }
-  | { type: "REMOVE_UPLOADING"; payload: File }
-  | { type: "ADD_UPLOADED"; payload: FileAttachment }
-  | { type: "REMOVE_UPLOADED"; payload: number }
-  | { type: "CLEAR_UPLOADED" }
-  | { type: "RESTORE_UPLOADED"; payload: FileAttachment[] };
-
-function fileUploadReducer(state: FileUploadState, action: FileUploadAction): FileUploadState {
-  switch (action.type) {
-    case "ADD_UPLOADING":
-      return { ...state, uploadingFiles: [...state.uploadingFiles, action.payload] };
-    case "REMOVE_UPLOADING":
-      return { ...state, uploadingFiles: state.uploadingFiles.filter(f => f !== action.payload) };
-    case "ADD_UPLOADED":
-      return { ...state, uploadedFiles: [...state.uploadedFiles, action.payload] };
-    case "REMOVE_UPLOADED":
-      return { ...state, uploadedFiles: state.uploadedFiles.filter((_, i) => i !== action.payload) };
-    case "CLEAR_UPLOADED":
-      return { ...state, uploadedFiles: [] };
-    case "RESTORE_UPLOADED":
-      return { ...state, uploadedFiles: action.payload };
     default:
       return state;
   }
@@ -228,12 +186,33 @@ function ChatComposer({
   });
   const { value, isSending, errorMessage, fallbackModelId } = composerState;
 
-  // Consolidated file upload state with useReducer
-  const [fileUploadState, dispatchFileUpload] = useReducer(fileUploadReducer, {
-    uploadingFiles: [],
-    uploadedFiles: [],
+  // Use file upload hook
+  const {
+    uploadingFiles,
+    uploadedFiles,
+    quota,
+    handleFileSelect,
+    handleRemoveFile,
+    clearUploadedFiles,
+    restoreUploadedFiles,
+  } = useFileUpload({ userId, chatId });
+
+  // Use command parser hook
+  const {
+    showCommandAutocomplete,
+    partialCommand,
+    isCommandValid,
+    templates,
+    handleTemplateSelect: handleTemplateSelectFromHook,
+    closeAutocomplete,
+    expandCommandIfNeeded,
+    clearCommandState,
+  } = useCommandParser({
+    value,
+    onValueChange: (newValue: string) => {
+      dispatchComposer({ type: "SET_VALUE", payload: newValue });
+    },
   });
-  const { uploadingFiles, uploadedFiles } = fileUploadState;
 
   // Reasoning configuration state
   const [internalReasoningConfig, setInternalReasoningConfig] = useState<ReasoningConfig>(
@@ -243,32 +222,9 @@ function ChatComposer({
   // Model selector open state for keyboard shortcut
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
 
-  // Command autocomplete state
-  const [showCommandAutocomplete, setShowCommandAutocomplete] = useState(false);
-  const [partialCommand, setPartialCommand] = useState<string | null>(null);
-  const [isCommandValid, setIsCommandValid] = useState(false);
-
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
   const activeModelIdRef = useRef<string>("");
-
-  // Convex mutations and queries
-  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const saveFileMetadata = useMutation(api.files.saveFileMetadata);
-  const quota = useQuery(
-    api.files.getUserQuota,
-    userId ? { userId } : "skip"
-  );
-
-  // Fetch user's prompt templates for command autocomplete
-  const { convexUser } = useConvexUser();
-  const templatesResult = useQuery(
-    api.promptTemplates.list,
-    convexUser?._id ? { userId: convexUser._id } : "skip"
-  );
-  const incrementTemplateUsage = useMutation(api.promptTemplates.incrementUsage);
-
-  const templates = templatesResult?.templates || [];
 
   useEffect(() => {
     if (modelValue) {
@@ -379,90 +335,6 @@ function ChatComposer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // File upload handler
-  const handleFileSelect = useCallback(
-    async (file: File) => {
-      // Check if we have userId and chatId
-      if (!userId || !chatId) {
-        toast.error("Unable to upload file. Please try again.");
-        return;
-      }
-
-      // Check quota first
-      if (quota && quota.used >= quota.limit) {
-        toast.error("You've reached your file upload limit", { duration: 5000 });
-        return;
-      }
-
-      // Add to uploading state
-      dispatchFileUpload({ type: "ADD_UPLOADING", payload: file });
-
-      try {
-        // Step 1: Generate upload URL
-        const uploadUrl = await generateUploadUrl({ userId, chatId });
-
-        // Step 2: Upload file to Convex storage
-        const uploadResponse = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload file");
-        }
-
-        const { storageId } = (await uploadResponse.json()) as {
-          storageId: Id<"_storage">;
-        };
-
-        // Step 3: Save file metadata and get URL
-        const { filename: sanitizedFilename, url } = await saveFileMetadata({
-          userId,
-          chatId,
-          storageId,
-          filename: file.name,
-          contentType: file.type,
-          size: file.size,
-        });
-
-        // Add to uploaded files with URL
-        dispatchFileUpload({
-          type: "ADD_UPLOADED",
-          payload: {
-            storageId,
-            filename: sanitizedFilename,
-            contentType: file.type,
-            size: file.size,
-            url: url || undefined,
-          },
-        });
-
-        toast.success(`${sanitizedFilename} uploaded successfully`);
-      } catch (error) {
-        logError("Failed to upload file", error);
-
-        // Check if it's a quota error
-        if (error instanceof Error && error.message.includes("quota exceeded")) {
-          toast.error("You've reached your file upload limit", { duration: 5000 });
-        } else {
-          toast.error(
-            error instanceof Error ? error.message : "Failed to upload file"
-          );
-        }
-      } finally {
-        // Remove from uploading state
-        dispatchFileUpload({ type: "REMOVE_UPLOADING", payload: file });
-      }
-    },
-    [userId, chatId, quota, generateUploadUrl, saveFileMetadata]
-  );
-
-  // Remove uploaded file
-  const handleRemoveFile = useCallback((index: number) => {
-    dispatchFileUpload({ type: "REMOVE_UPLOADED", payload: index });
-  }, []);
-
   const send = useCallback(async () => {
     const trimmed = value.trim();
     if (!trimmed || sendDisabled || isSending) return;
@@ -478,37 +350,16 @@ function ChatComposer({
     }
 
     // Check if the message is a command and expand it to the template
-    let messageToSend = trimmed;
-    if (isCommandStart(trimmed)) {
-      const parsed = parseCommand(trimmed);
-      if (parsed && templates) {
-        // Find matching template
-        const matchingTemplate = templates.find(t => t.command === parsed.command);
-        if (matchingTemplate) {
-          // Expand the template with arguments
-          messageToSend = applyTemplate(matchingTemplate.template, parsed);
-
-          // Increment usage count for manual command typing
-          if (convexUser?._id) {
-            void incrementTemplateUsage({
-              templateId: matchingTemplate._id as Id<"promptTemplates">,
-              userId: convexUser._id,
-            });
-          }
-        }
-      }
-    }
+    const messageToSend = expandCommandIfNeeded(trimmed);
 
     // Clear input and files INSTANTLY for responsive feel
     dispatchComposer({ type: "CLEAR_INPUT" });
     adjustHeight(true);
     const attachmentsToSend = uploadedFiles.length > 0 ? uploadedFiles : undefined;
-    dispatchFileUpload({ type: "CLEAR_UPLOADED" });
+    clearUploadedFiles();
 
     // Clear command state
-    setPartialCommand(null);
-    setIsCommandValid(false);
-    setShowCommandAutocomplete(false);
+    clearCommandState();
 
     dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
@@ -524,7 +375,7 @@ function ChatComposer({
       // Restore message and files if failed
       dispatchComposer({ type: "RESTORE_MESSAGE", payload: trimmed });
       if (attachmentsToSend) {
-        dispatchFileUpload({ type: "RESTORE_UPLOADED", payload: attachmentsToSend });
+        restoreUploadedFiles(attachmentsToSend);
       }
       adjustHeight();
       dispatchComposer({
@@ -546,7 +397,10 @@ function ChatComposer({
     value,
     uploadedFiles,
     activeReasoningConfig,
-    templates,
+    expandCommandIfNeeded,
+    clearUploadedFiles,
+    clearCommandState,
+    restoreUploadedFiles,
   ]);
 
   // Handler for reasoning config changes
@@ -569,55 +423,14 @@ function ChatComposer({
         dispatchComposer({ type: "SET_ERROR", payload: null });
       }
       debouncedAdjustHeight();
-
-      // Check if user is typing a command
-      if (isCommandStart(newValue)) {
-        const partial = extractPartialCommand(newValue);
-
-        // If there's a space in the input, user is typing arguments - hide autocomplete
-        const hasSpace = newValue.trim().includes(" ");
-
-        if (hasSpace) {
-          // User is typing arguments after command
-          setShowCommandAutocomplete(false);
-          if (partial) {
-            setPartialCommand(partial); // Keep the command for reference
-            // Check if the command is valid (matches a template)
-            const isValid = templates.some(t => t.command === partial);
-            setIsCommandValid(isValid);
-          }
-        } else if (partial && partial !== partialCommand) {
-          // User is typing the command itself
-          setPartialCommand(partial);
-          setShowCommandAutocomplete(true);
-          // Check if the command is valid
-          const isValid = templates.some(t => t.command === partial);
-          setIsCommandValid(isValid);
-        } else if (!partial) {
-          setShowCommandAutocomplete(false);
-          setIsCommandValid(false);
-        }
-      } else {
-        setShowCommandAutocomplete(false);
-        setPartialCommand(null);
-        setIsCommandValid(false);
-      }
     },
-    [errorMessage, debouncedAdjustHeight, partialCommand, templates]
+    [errorMessage, debouncedAdjustHeight]
   );
 
   // Handle template selection from autocomplete
   const handleTemplateSelect = useCallback(
-    (template: { _id: string; command: string; template: string }) => {
-      // Insert the command with a space for arguments (Claude Code style)
-      dispatchComposer({ type: "SET_VALUE", payload: `${template.command} ` });
-
-      // Note: Usage count is incremented when message is sent, not on selection
-      // This prevents double-counting and ensures accurate analytics
-
-      setShowCommandAutocomplete(false);
-      setPartialCommand(template.command);
-      setIsCommandValid(true);
+    (template: { _id: string; name: string; command: string; template: string }) => {
+      handleTemplateSelectFromHook(template);
       adjustHeight();
 
       // Focus back on textarea at the end
@@ -629,7 +442,7 @@ function ChatComposer({
         }
       }, 0);
     },
-    [adjustHeight, textareaRef]
+    [adjustHeight, textareaRef, handleTemplateSelectFromHook]
   );
 
   const onKeyDown = useCallback(
@@ -680,10 +493,7 @@ function ChatComposer({
           templates={templates}
           partialCommand={partialCommand}
           onSelect={handleTemplateSelect}
-          onClose={() => {
-            setShowCommandAutocomplete(false);
-            setPartialCommand(null);
-          }}
+          onClose={closeAutocomplete}
         />
       )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import React, { useRef } from "react";
 import { Paperclip } from "@/lib/icons";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -112,7 +112,13 @@ export function FileUploadButton({
 					{onUnsupportedModel && (
 						<button
 							onClick={onUnsupportedModel}
-							className="text-sm text-blue-500 hover:text-blue-600 underline text-left"
+							onKeyDown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									onUnsupportedModel();
+								}
+							}}
+							className="text-sm text-blue-500 hover:text-blue-600 underline text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
 						>
 							Switch to a model with file support
 						</button>
@@ -150,7 +156,13 @@ export function FileUploadButton({
 						{onUnsupportedModel && (
 							<button
 								onClick={onUnsupportedModel}
-								className="text-sm text-blue-500 hover:text-blue-600 underline text-left"
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										onUnsupportedModel();
+									}
+								}}
+								className="text-sm text-blue-500 hover:text-blue-600 underline text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
 							>
 								Switch to a vision model
 							</button>
@@ -165,7 +177,13 @@ export function FileUploadButton({
 						{onUnsupportedModel && (
 							<button
 								onClick={onUnsupportedModel}
-								className="text-sm text-blue-500 hover:text-blue-600 underline text-left"
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										onUnsupportedModel();
+									}
+								}}
+								className="text-sm text-blue-500 hover:text-blue-600 underline text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
 							>
 								Switch to an audio-capable model
 							</button>
@@ -180,7 +198,13 @@ export function FileUploadButton({
 						{onUnsupportedModel && (
 							<button
 								onClick={onUnsupportedModel}
-								className="text-sm text-blue-500 hover:text-blue-600 underline text-left"
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										onUnsupportedModel();
+									}
+								}}
+								className="text-sm text-blue-500 hover:text-blue-600 underline text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded"
 							>
 								Switch to a video-capable model
 							</button>

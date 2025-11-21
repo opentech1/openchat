@@ -1,0 +1,14 @@
+# Test Fixtures
+
+Add test files here for E2E tests:
+
+- test-image.png (small PNG image for upload tests)
+- test-image.jpg (small JPEG image for upload tests)
+- test-image.webp (small WebP image for upload tests)
+
+You can create simple test images using any image editor or download placeholder images.
+
+Example sizes:
+- Keep files small (< 100KB) for faster test execution
+- Use simple colored squares or patterns
+- Recommended dimensions: 100x100 to 500x500 pixels

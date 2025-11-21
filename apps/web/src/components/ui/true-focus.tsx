@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 interface TrueFocusProps {
   sentence?: string;
@@ -27,6 +28,7 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
   animationDuration = 0.5,
   pauseBetweenAnimations = 1
 }) => {
+  const prefersReducedMotion = useReducedMotion();
   const words = sentence.split(' ');
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [lastActiveIndex, setLastActiveIndex] = useState<number | null>(null);
@@ -35,7 +37,7 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
   const [focusRect, setFocusRect] = useState<FocusRect>({ x: 0, y: 0, width: 0, height: 0 });
 
   useEffect(() => {
-    if (!manualMode) {
+    if (!manualMode && !prefersReducedMotion) {
       const interval = setInterval(
         () => {
           setCurrentIndex(prev => (prev + 1) % words.length);
@@ -45,7 +47,7 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
 
       return () => clearInterval(interval);
     }
-  }, [manualMode, animationDuration, pauseBetweenAnimations, words.length]);
+  }, [manualMode, prefersReducedMotion, animationDuration, pauseBetweenAnimations, words.length]);
 
   useEffect(() => {
     if (currentIndex === null || currentIndex === -1) return;
@@ -75,6 +77,29 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
     }
   };
 
+  const handleFocus = (index: number) => {
+    if (manualMode) {
+      setLastActiveIndex(index);
+      setCurrentIndex(index);
+    }
+  };
+
+  const handleBlur = () => {
+    if (manualMode) {
+      setCurrentIndex(lastActiveIndex!);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (manualMode) {
+        setLastActiveIndex(index);
+        setCurrentIndex(index);
+      }
+    }
+  };
+
   return (
     <div className="relative flex gap-4 justify-center items-center flex-wrap" ref={containerRef}>
       {words.map((word, index) => {
@@ -85,7 +110,7 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
             ref={el => {
               wordRefs.current[index] = el;
             }}
-            className="relative text-[3rem] font-black cursor-pointer"
+            className="relative text-[3rem] font-black cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary rounded"
             style={
               {
                 filter: manualMode
@@ -100,6 +125,12 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
             }
             onMouseEnter={() => handleMouseEnter(index)}
             onMouseLeave={handleMouseLeave}
+            onFocus={() => handleFocus(index)}
+            onBlur={handleBlur}
+            onKeyDown={(e) => handleKeyDown(e, index)}
+            tabIndex={manualMode ? 0 : -1}
+            role="button"
+            aria-label={`Focus word: ${word}`}
           >
             {word}
           </span>
@@ -116,7 +147,7 @@ const TrueFocus: React.FC<TrueFocusProps> = ({
           opacity: currentIndex >= 0 ? 1 : 0
         }}
         transition={{
-          duration: animationDuration
+          duration: prefersReducedMotion ? 0 : animationDuration
         }}
         style={
           {

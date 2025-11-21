@@ -284,3 +284,44 @@ export function getMessageThrottle(): number {
 	const parsed = Number(envValue);
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : MESSAGE_LIMITS.THROTTLE_MS;
 }
+
+/**
+ * Get configured values for chat handler
+ * These functions are used by the chat handler to get environment-configured values
+ */
+
+/** Get the configured rate limit per minute */
+export const DEFAULT_RATE_LIMIT = getRateLimit();
+
+/** Get the configured max tracked rate buckets (or null for unlimited) */
+export const MAX_TRACKED_RATE_BUCKETS = getMaxTrackedBuckets();
+
+/** Get the configured max user message characters */
+export const MAX_USER_PART_CHARS = getMaxUserChars();
+
+/** Get the configured max messages per request */
+export const MAX_MESSAGES_PER_REQUEST = getMaxMessagesPerRequest();
+
+/** Get the configured max request body size */
+export const MAX_REQUEST_BODY_SIZE = getMaxRequestBodySize();
+
+/** Get the configured max attachment size */
+export const MAX_ATTACHMENT_SIZE = getMaxAttachmentSize();
+
+/** Get the configured max message content length */
+export const MAX_MESSAGE_CONTENT_LENGTH = getMaxMessageContentLength();
+
+/** Get the configured stream flush interval */
+export const STREAM_FLUSH_INTERVAL_MS = getStreamFlushInterval();
+
+/** Get the configured stream min chars per flush */
+export const STREAM_MIN_CHARS_PER_FLUSH = getStreamMinCharsPerFlush();
+
+/** Get the configured stream smooth delay (null to disable) */
+export const STREAM_SMOOTH_DELAY_MS = getStreamSmoothDelay();
+
+/** Get the configured max tokens */
+export const MAX_TOKENS = getMaxTokens();
+
+/** Get the configured OpenRouter timeout */
+export const OPENROUTER_TIMEOUT_MS = getOpenRouterTimeout();
