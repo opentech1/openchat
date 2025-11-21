@@ -9,6 +9,9 @@ import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-orig
 import { createLogger } from "@/lib/logger";
 import { toConvexUserId, toConvexChatId, toConvexStorageId } from "@/lib/type-converters";
 import { hasReasoningCapability } from "@/lib/model-capabilities";
+import { isTextPart, isFilePart } from "@/lib/error-handling";
+import { removeEmDashes } from "@/lib/text-transforms";
+import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
 import {
 	RATE_LIMITS,
 	DEFAULT_RATE_LIMIT,
@@ -96,6 +99,203 @@ function buildReasoningParam(
 	return reasoning;
 }
 
+<<<<<<< HEAD
+||||||| 130fcf0
+// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
+const OPENROUTER_TIMEOUT_MS = (() => {
+	const raw = process.env.OPENROUTER_TIMEOUT_MS;
+	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
+	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
+})();
+
+type StreamPersistRequest = {
+	userId: string;
+	chatId: string;
+	clientMessageId?: string | null;
+	role: "user" | "assistant";
+	content: string;
+	reasoning?: string;
+	thinkingTimeMs?: number;
+	createdAt: string;
+	status: "streaming" | "completed";
+	attachments?: Array<{
+		storageId: Id<"_storage">;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+		url?: string;
+	}>;
+};
+
+type ChatRequestPayload = {
+	modelId?: string;
+	apiKey?: string;
+	chatId?: string;
+	messages?: AnyUIMessage[];
+	assistantMessageId?: string;
+	attachments?: Array<{
+		storageId: Id<"_storage">;
+		filename: string;
+		contentType: string;
+		size: number;
+		url?: string;
+	}>;
+	reasoningConfig?: {
+		enabled: boolean;
+		effort?: "medium" | "high";
+		max_tokens?: number;
+		exclude?: boolean;
+	};
+};
+
+function clampUserText(message: AnyUIMessage): AnyUIMessage {
+	if (message.role !== "user") return message;
+	let remaining = MAX_USER_PART_CHARS;
+	const parts = message.parts.map((part) => {
+		if (part?.type !== "text") return part;
+		if (remaining <= 0) return { ...part, text: "" };
+		if (part.text.length <= remaining) {
+			remaining -= part.text.length;
+			return part;
+		}
+		const slice = part.text.slice(0, remaining);
+		remaining = 0;
+		return { ...part, text: slice };
+	});
+	return { ...message, parts };
+}
+
+function extractMessageText(message: AnyUIMessage): string {
+	const segments: string[] = [];
+	for (const part of message.parts ?? []) {
+		if (!part) continue;
+		if (isTextPart(part)) {
+			segments.push(part.text);
+			continue;
+		}
+		if (isFilePart(part)) {
+			const name = part.filename && part.filename.length > 0 ? part.filename : "attachment";
+			const media = part.mediaType && part.mediaType.length > 0 ? ` (${part.mediaType})` : "";
+			segments.push(`[Attachment: ${name}${media}]`);
+			continue;
+		}
+	}
+	return segments.join("");
+}
+
+function coerceIsoDate(value: unknown): string {
+	if (typeof value === "string" && value.length > 0) {
+		const date = new Date(value);
+		if (!Number.isNaN(date.valueOf())) return date.toISOString();
+	}
+	if (value instanceof Date && !Number.isNaN(value.valueOf())) {
+		return value.toISOString();
+	}
+	return new Date().toISOString();
+}
+
+=======
+// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
+const OPENROUTER_TIMEOUT_MS = (() => {
+	const raw = process.env.OPENROUTER_TIMEOUT_MS;
+	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
+	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
+})();
+
+type StreamPersistRequest = {
+	userId: string;
+	chatId: string;
+	clientMessageId?: string | null;
+	role: "user" | "assistant";
+	content: string;
+	reasoning?: string;
+	thinkingTimeMs?: number;
+	createdAt: string;
+	status: "streaming" | "completed";
+	attachments?: Array<{
+		storageId: Id<"_storage">;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+		url?: string;
+	}>;
+};
+
+type ChatRequestPayload = {
+	modelId?: string;
+	apiKey?: string;
+	chatId?: string;
+	messages?: AnyUIMessage[];
+	assistantMessageId?: string;
+	attachments?: Array<{
+		storageId: Id<"_storage">;
+		filename: string;
+		contentType: string;
+		size: number;
+		url?: string;
+	}>;
+	reasoningConfig?: {
+		enabled: boolean;
+		effort?: "medium" | "high";
+		max_tokens?: number;
+		exclude?: boolean;
+	};
+	jonMode?: boolean;
+};
+
+function clampUserText(message: AnyUIMessage): AnyUIMessage {
+	if (message.role !== "user") return message;
+	let remaining = MAX_USER_PART_CHARS;
+	const parts = message.parts.map((part) => {
+		if (part?.type !== "text") return part;
+		if (remaining <= 0) return { ...part, text: "" };
+		if (part.text.length <= remaining) {
+			remaining -= part.text.length;
+			return part;
+		}
+		const slice = part.text.slice(0, remaining);
+		remaining = 0;
+		return { ...part, text: slice };
+	});
+	return { ...message, parts };
+}
+
+function extractMessageText(message: AnyUIMessage): string {
+	const segments: string[] = [];
+	for (const part of message.parts ?? []) {
+		if (!part) continue;
+		if (isTextPart(part)) {
+			segments.push(part.text);
+			continue;
+		}
+		if (isFilePart(part)) {
+			const name = part.filename && part.filename.length > 0 ? part.filename : "attachment";
+			const media = part.mediaType && part.mediaType.length > 0 ? ` (${part.mediaType})` : "";
+			segments.push(`[Attachment: ${name}${media}]`);
+			continue;
+		}
+	}
+	return segments.join("");
+}
+
+function coerceIsoDate(value: unknown): string {
+	if (typeof value === "string" && value.length > 0) {
+		const date = new Date(value);
+		if (!Number.isNaN(date.valueOf())) return date.toISOString();
+	}
+	if (value instanceof Date && !Number.isNaN(value.valueOf())) {
+		return value.toISOString();
+	}
+	return new Date().toISOString();
+}
+
+>>>>>>> origin/main
 function pickClientIp(request: Request): string {
 	const forwarded = request.headers.get("x-forwarded-for");
 	if (forwarded) return forwarded.split(",")[0]!.trim();
@@ -605,6 +805,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			// Build reasoning parameter from client configuration using OpenRouter unified API
 			const reasoning = buildReasoningParam(payload.reasoningConfig, config.modelId);
 
+			// Jon Mode: Extract em-dash prevention setting
+			const jonMode = payload.jonMode ?? false;
+
 			// DEBUG: Log reasoning config to understand what's being sent
 			logger.debug("Reasoning configuration", {
 				modelId: config.modelId,
@@ -624,9 +827,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				})
 			});
 
+			// Jon Mode: Prepend system prompt if enabled
+			const messagesForModel = jonMode
+				? [
+					{
+						role: "system" as const,
+						parts: [{ type: "text" as const, text: EM_DASH_PREVENTION_SYSTEM_PROMPT }]
+					},
+					...safeMessages
+				]
+				: safeMessages;
+
 			const result = await streamTextImpl({
 				model,
-				messages: convertToCoreMessagesImpl(safeMessages),
+				messages: convertToCoreMessagesImpl(messagesForModel),
 				maxOutputTokens: MAX_TOKENS,
 				abortSignal: abortController.signal,
 				// CRITICAL FIX: Don't apply smoothStream to reasoning models - it blocks reasoning chunks!
@@ -636,7 +850,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				}),
 				onChunk: async ({ chunk }) => {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
-						assistantText += chunk.text;
+						// Jon Mode: Post-processing failsafe - remove em-dashes from chunks
+						const textToAdd = jonMode ? removeEmDashes(chunk.text) : chunk.text;
+						assistantText += textToAdd;
 						scheduleStreamFlush();
 					} else if (chunk.type === "reasoning-delta") {
 						// Start timer on FIRST reasoning chunk if not started

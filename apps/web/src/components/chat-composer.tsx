@@ -136,6 +136,7 @@ export type ChatComposerProps = {
     apiKey: string;
     attachments?: FileAttachment[];
     reasoningConfig?: ReasoningConfig;
+    jonMode?: boolean;
   }) => void | Promise<void>;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -154,6 +155,7 @@ export type ChatComposerProps = {
   reasoningConfig?: ReasoningConfig;
   onReasoningConfigChange?: (config: ReasoningConfig) => void;
   messages?: UIMessage[];
+  jonMode?: boolean;
 };
 
 function ChatComposer({
@@ -175,6 +177,7 @@ function ChatComposer({
   reasoningConfig: externalReasoningConfig,
   onReasoningConfigChange,
   messages = [],
+  jonMode,
 }: ChatComposerProps) {
   // Consolidated composer state with useReducer
   const [composerState, dispatchComposer] = useReducer(composerReducer, {
@@ -368,6 +371,7 @@ function ChatComposer({
         apiKey,
         attachments: attachmentsToSend,
         reasoningConfig: activeReasoningConfig,
+        jonMode: jonMode,
       });
     } catch (error) {
       logError("Failed to send message", error);

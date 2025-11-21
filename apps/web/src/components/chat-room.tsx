@@ -13,6 +13,8 @@ import { toast } from "sonner";
 
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
+import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
+import { useJonMode } from "@/hooks/use-jon-mode";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -61,6 +63,10 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
 
   // Use custom hooks for state management
   const chatState = useChatState();
+
+  // Jon Mode: Get em-dash prevention setting
+  const { jonMode } = useJonMode();
+
   const {
     apiKey,
     keyLoading,
