@@ -46,14 +46,14 @@ const rateLimiterComponentSchema = defineSchema({
     }).index("name", ["name", "key", "shard"]),
 });
 
-// Rate limiter component modules (using absolute paths from the workspace root)
-// These paths go up 3 levels from convex/ to reach the workspace root
+// Rate limiter component modules (using proper package imports)
+// Import directly from the package without hardcoded paths
 const rateLimiterComponentModules = {
-  './internal.ts': () => import('../../../node_modules/.bun/@convex-dev+rate-limiter@0.3.0+ea7eeb9bdd3f4abe/node_modules/@convex-dev/rate-limiter/dist/component/internal.js'),
-  './lib.ts': () => import('../../../node_modules/.bun/@convex-dev+rate-limiter@0.3.0+ea7eeb9bdd3f4abe/node_modules/@convex-dev/rate-limiter/dist/component/lib.js'),
-  './schema.ts': () => import('../../../node_modules/.bun/@convex-dev+rate-limiter@0.3.0+ea7eeb9bdd3f4abe/node_modules/@convex-dev/rate-limiter/dist/component/schema.js'),
-  './_generated/api.ts': () => import('../../../node_modules/.bun/@convex-dev+rate-limiter@0.3.0+ea7eeb9bdd3f4abe/node_modules/@convex-dev/rate-limiter/dist/component/_generated/api.js'),
-  './_generated/server.ts': () => import('../../../node_modules/.bun/@convex-dev+rate-limiter@0.3.0+ea7eeb9bdd3f4abe/node_modules/@convex-dev/rate-limiter/dist/component/_generated/server.js'),
+  './internal.ts': () => import('@convex-dev/rate-limiter/dist/component/internal.js'),
+  './lib.ts': () => import('@convex-dev/rate-limiter/dist/component/lib.js'),
+  './schema.ts': () => import('@convex-dev/rate-limiter/dist/component/schema.js'),
+  './_generated/api.ts': () => import('@convex-dev/rate-limiter/dist/component/_generated/api.js'),
+  './_generated/server.ts': () => import('@convex-dev/rate-limiter/dist/component/_generated/server.js'),
 };
 
 /**
