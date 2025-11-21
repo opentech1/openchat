@@ -29,8 +29,6 @@ import {
 } from "@/config/constants";
 import type {
 	AnyUIMessage,
-	ChatRequestPayload,
-	StreamPersistRequest,
 	OpenRouterError,
 } from "./chat-handler-types";
 import {
@@ -98,114 +96,6 @@ function buildReasoningParam(
 
 	return reasoning;
 }
-
-<<<<<<< HEAD
-||||||| 130fcf0
-// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
-const OPENROUTER_TIMEOUT_MS = (() => {
-	const raw = process.env.OPENROUTER_TIMEOUT_MS;
-	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
-	const parsed = Number(raw);
-	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
-	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
-})();
-
-type StreamPersistRequest = {
-	userId: string;
-	chatId: string;
-	clientMessageId?: string | null;
-	role: "user" | "assistant";
-	content: string;
-	reasoning?: string;
-	thinkingTimeMs?: number;
-	createdAt: string;
-	status: "streaming" | "completed";
-	attachments?: Array<{
-		storageId: Id<"_storage">;
-		filename: string;
-		contentType: string;
-		size: number;
-		uploadedAt: number;
-		url?: string;
-	}>;
-};
-
-type ChatRequestPayload = {
-	modelId?: string;
-	apiKey?: string;
-	chatId?: string;
-	messages?: AnyUIMessage[];
-	assistantMessageId?: string;
-	attachments?: Array<{
-		storageId: Id<"_storage">;
-		filename: string;
-		contentType: string;
-		size: number;
-		url?: string;
-	}>;
-	reasoningConfig?: {
-		enabled: boolean;
-		effort?: "medium" | "high";
-		max_tokens?: number;
-		exclude?: boolean;
-	};
-};
-
-function clampUserText(message: AnyUIMessage): AnyUIMessage {
-	if (message.role !== "user") return message;
-	let remaining = MAX_USER_PART_CHARS;
-	const parts = message.parts.map((part) => {
-		if (part?.type !== "text") return part;
-		if (remaining <= 0) return { ...part, text: "" };
-		if (part.text.length <= remaining) {
-			remaining -= part.text.length;
-			return part;
-		}
-		const slice = part.text.slice(0, remaining);
-		remaining = 0;
-		return { ...part, text: slice };
-	});
-	return { ...message, parts };
-}
-
-function extractMessageText(message: AnyUIMessage): string {
-	const segments: string[] = [];
-	for (const part of message.parts ?? []) {
-		if (!part) continue;
-		if (isTextPart(part)) {
-			segments.push(part.text);
-			continue;
-		}
-		if (isFilePart(part)) {
-			const name = part.filename && part.filename.length > 0 ? part.filename : "attachment";
-			const media = part.mediaType && part.mediaType.length > 0 ? ` (${part.mediaType})` : "";
-			segments.push(`[Attachment: ${name}${media}]`);
-			continue;
-		}
-	}
-	return segments.join("");
-}
-
-function coerceIsoDate(value: unknown): string {
-	if (typeof value === "string" && value.length > 0) {
-		const date = new Date(value);
-		if (!Number.isNaN(date.valueOf())) return date.toISOString();
-	}
-	if (value instanceof Date && !Number.isNaN(value.valueOf())) {
-		return value.toISOString();
-	}
-	return new Date().toISOString();
-}
-
-=======
-// PERFORMANCE FIX: Timeout for OpenRouter stream to prevent hanging requests
-const OPENROUTER_TIMEOUT_MS = (() => {
-	const raw = process.env.OPENROUTER_TIMEOUT_MS;
-	if (!raw || raw.trim() === "") return 120000; // Default 2 minutes
-	const parsed = Number(raw);
-	if (!Number.isFinite(parsed) || parsed <= 0) return 120000;
-	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
-})();
 
 type StreamPersistRequest = {
 	userId: string;
@@ -295,7 +185,6 @@ function coerceIsoDate(value: unknown): string {
 	return new Date().toISOString();
 }
 
->>>>>>> origin/main
 function pickClientIp(request: Request): string {
 	const forwarded = request.headers.get("x-forwarded-for");
 	if (forwarded) return forwarded.split(",")[0]!.trim();
