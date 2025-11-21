@@ -21,7 +21,7 @@ import { convexTest } from 'convex-test';
 import schema from './schema';
 import { api } from './_generated/api';
 import type { Id } from './_generated/dataModel';
-import { modules, rateLimiter } from './test-setup';
+import { modules, rateLimiter } from './test-setup.test';
 
 // Helper to create convex test instance
 function createConvexTest() {
