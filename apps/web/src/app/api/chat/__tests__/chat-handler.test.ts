@@ -1,10 +1,37 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { convertToCoreMessages } from "ai";
 
 import { createChatHandler } from "../chat-handler";
 
 const encoder = new TextEncoder();
+
+// Mock CORS origin validation
+vi.mock("@/lib/request-origin", () => ({
+	resolveAllowedOrigins: vi.fn(() => new Set(["http://localhost"])),
+	validateRequestOrigin: vi.fn(() => ({ ok: true, origin: "http://localhost" })),
+}));
+
+// Mock auth to return a valid user
+vi.mock("@/lib/auth-server", () => ({
+	getUserContext: vi.fn().mockResolvedValue({
+		userId: "user_test123",
+		email: "test@example.com",
+		name: "Test User",
+		image: null,
+	}),
+}));
+
+// Mock Convex user creation
+vi.mock("@/lib/convex-server", () => ({
+	ensureConvexUser: vi.fn().mockResolvedValue("convex_user_123"),
+	streamUpsertMessage: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+// Mock PostHog server events
+vi.mock("@/lib/posthog-server", () => ({
+	captureServerEvent: vi.fn(),
+}));
 
 describe("createChatHandler", () => {
 	it("streams assistant responses with resolved model", async () => {
@@ -57,7 +84,10 @@ describe("createChatHandler", () => {
 
 		const request = new Request("http://localhost/api/chat", {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:3000",
+			},
 			body: JSON.stringify(payload),
 		});
 
@@ -85,7 +115,10 @@ describe("createChatHandler", () => {
 
 		const request = new Request("http://localhost/api/chat", {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:3000",
+			},
 			body: JSON.stringify({
 				chatId: "chat-1",
 				messages: [
@@ -114,7 +147,10 @@ describe("createChatHandler", () => {
 
 		const request = new Request("http://localhost/api/chat", {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:3000",
+			},
 			body: JSON.stringify({
 				chatId: "chat-1",
 				modelId: "test-model",

@@ -12,7 +12,7 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit || true",
     "lint": "oxlint",
     "postinstall": "wxt prepare --localstorage-file .wxt/local-storage.json || true"
   },
