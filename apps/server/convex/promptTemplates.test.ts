@@ -18,7 +18,7 @@ import { api } from "./_generated/api";
 import schema from "./schema";
 import type { Id } from "./_generated/dataModel";
 import path from "path";
-import { modules, rateLimiter } from './test-setup';
+import { modules, rateLimiter } from './test-setup.test';
 
 // Helper to create convex test instance with components registered
 function createConvexTest() {

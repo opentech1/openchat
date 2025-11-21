@@ -15,7 +15,7 @@ import { convexTest } from "convex-test";
 import { expect, test, describe, vi, beforeEach, afterEach } from "vitest";
 import { api } from "../_generated/api";
 import schema from "../schema";
-import { modules, rateLimiter } from '../test-setup';
+import { modules, rateLimiter } from '../test-setup.test';
 
 // Helper to create convex test instance with components registered
 function createConvexTest() {
