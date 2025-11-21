@@ -1,0 +1,800 @@
+/**
+ * Comprehensive Tests for Convex Chat Functions
+ *
+ * Tests cover:
+ * - Chat creation with validation and sanitization
+ * - Chat listing with pagination and filtering
+ * - Chat retrieval with ownership checks
+ * - Chat deletion (soft delete) with cascading
+ * - Rate limiting
+ * - Security and authorization
+ * - Edge cases and error handling
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import { convexTest } from 'convex-test';
+import schema from './schema';
+import { api, components } from './_generated/api';
+import type { Id } from './_generated/dataModel';
+import { modules, rateLimiter } from './test-setup';
+
+// Helper to create convex test instance with components registered
+function createConvexTest() {
+  const t = convexTest(schema, modules);
+  rateLimiter.register(t);
+  return t;
+}
+
+describe('chats.create', () => {
+  let t: ReturnType<typeof convexTest>;
+  let userId: Id<'users'>;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+
+    // Create a test user
+    userId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+  });
+
+  it('should create a chat with valid title', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'My New Chat',
+    });
+
+    expect(result.chatId).toBeDefined();
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat).toBeDefined();
+    expect(chat?.title).toBe('My New Chat');
+    expect(chat?.userId).toBe(userId);
+    expect(chat?.messageCount).toBe(0);
+  });
+
+  it('should sanitize chat title by trimming whitespace', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: '  Padded Title  ',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('Padded Title');
+  });
+
+  it('should sanitize chat title by removing control characters', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Title\x00with\x01control\x1Fchars',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('Titlewithcontrolchars');
+  });
+
+  it('should sanitize chat title by converting newlines to spaces', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Multi\nLine\rTitle',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('Multi Line Title');
+  });
+
+  it('should sanitize chat title by collapsing multiple spaces', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Too    Many     Spaces',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('Too Many Spaces');
+  });
+
+  it('should truncate title to maximum length (200 chars)', async () => {
+    const longTitle = 'a'.repeat(250);
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: longTitle,
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('a'.repeat(200));
+    expect(chat?.title.length).toBe(200);
+  });
+
+  it('should use default title for empty string after sanitization', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: '   ',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('New Chat');
+  });
+
+  it('should use default title for only control characters', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: '\x00\x01\x02',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('New Chat');
+  });
+
+  it('should set createdAt and updatedAt timestamps', async () => {
+    const before = Date.now();
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Test Chat',
+    });
+    const after = Date.now();
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.createdAt).toBeGreaterThanOrEqual(before);
+    expect(chat?.createdAt).toBeLessThanOrEqual(after);
+    expect(chat?.createdAt).toBe(chat?.updatedAt);
+  });
+
+  it('should initialize messageCount to 0', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Test Chat',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.messageCount).toBe(0);
+  });
+
+  it('should set lastMessageAt timestamp', async () => {
+    const before = Date.now();
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Test Chat',
+    });
+    const after = Date.now();
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.lastMessageAt).toBeGreaterThanOrEqual(before);
+    expect(chat?.lastMessageAt).toBeLessThanOrEqual(after);
+  });
+
+  it('should handle Unicode characters in title', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: '🎉 My Chat 你好',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('🎉 My Chat 你好');
+  });
+
+  it('should handle empty emoji title', async () => {
+    const result = await t.mutation(api.chats.create, {
+      userId,
+      title: '🎉',
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(result.chatId));
+    expect(chat?.title).toBe('🎉');
+  });
+
+  it('should create multiple chats for same user', async () => {
+    const result1 = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Chat 1',
+    });
+
+    const result2 = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Chat 2',
+    });
+
+    expect(result1.chatId).not.toBe(result2.chatId);
+
+    const chats = await t.run(async (ctx) => {
+      return await ctx.db
+        .query('chats')
+        .filter((q) => q.eq(q.field('userId'), userId))
+        .collect();
+    });
+
+    expect(chats.length).toBe(2);
+  });
+
+  it('should create chats with same title for same user', async () => {
+    const result1 = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Duplicate Title',
+    });
+
+    const result2 = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Duplicate Title',
+    });
+
+    expect(result1.chatId).not.toBe(result2.chatId);
+
+    const chat1 = await t.run(async (ctx) => await ctx.db.get(result1.chatId));
+    const chat2 = await t.run(async (ctx) => await ctx.db.get(result2.chatId));
+
+    expect(chat1?.title).toBe('Duplicate Title');
+    expect(chat2?.title).toBe('Duplicate Title');
+  });
+});
+
+describe('chats.list', () => {
+  let t: ReturnType<typeof convexTest>;
+  let userId: Id<'users'>;
+  let otherUserId: Id<'users'>;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+
+    userId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    otherUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'other-user',
+        email: 'other@example.com',
+        name: 'Other User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+  });
+
+  it('should list chats for a user', async () => {
+    await t.mutation(api.chats.create, { userId, title: 'Chat 1' });
+    await t.mutation(api.chats.create, { userId, title: 'Chat 2' });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    expect(result.chats).toBeDefined();
+    expect(result.chats.length).toBe(2);
+  });
+
+  it('should return empty array when user has no chats', async () => {
+    const result = await t.query(api.chats.list, { userId });
+
+    expect(result.chats).toEqual([]);
+    expect(result.nextCursor).toBe(null);
+  });
+
+  it('should only return chats owned by user', async () => {
+    await t.mutation(api.chats.create, { userId, title: 'My Chat' });
+    await t.mutation(api.chats.create, { userId: otherUserId, title: 'Other Chat' });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    expect(result.chats.length).toBe(1);
+    expect(result.chats[0].title).toBe('My Chat');
+  });
+
+  it('should filter out soft-deleted chats', async () => {
+    const chat1 = await t.mutation(api.chats.create, { userId, title: 'Active Chat' });
+    const chat2 = await t.mutation(api.chats.create, { userId, title: 'Deleted Chat' });
+
+    // Soft delete chat2
+    await t.run(async (ctx) => {
+      await ctx.db.patch(chat2.chatId, { deletedAt: Date.now() });
+    });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    expect(result.chats.length).toBe(1);
+    expect(result.chats[0].title).toBe('Active Chat');
+  });
+
+  it('should respect custom limit', async () => {
+    // Insert directly to avoid rate limiting
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let i = 0; i < 10; i++) {
+        await ctx.db.insert('chats', {
+          userId,
+          title: `Chat ${i}`,
+          messageCount: 0,
+          createdAt: now + i,
+          updatedAt: now + i,
+        });
+      }
+    });
+
+    const result = await t.query(api.chats.list, { userId, limit: 5 });
+
+    expect(result.chats.length).toBe(5);
+  });
+
+  it('should use default limit of 50', async () => {
+    // Insert directly to avoid rate limiting
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let i = 0; i < 60; i++) {
+        await ctx.db.insert('chats', {
+          userId,
+          title: `Chat ${i}`,
+          messageCount: 0,
+          createdAt: now + i,
+          updatedAt: now + i,
+        });
+      }
+    });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    expect(result.chats.length).toBe(50);
+  });
+
+  it('should enforce maximum limit of 200', async () => {
+    const result = await t.query(api.chats.list, { userId, limit: 500 });
+
+    // Should not throw, limit should be clamped to 200
+    expect(result).toBeDefined();
+  });
+
+  it('should handle invalid limit (negative)', async () => {
+    const result = await t.query(api.chats.list, { userId, limit: -10 });
+
+    // Should use default limit
+    expect(result).toBeDefined();
+  });
+
+  it('should handle invalid limit (zero)', async () => {
+    const result = await t.query(api.chats.list, { userId, limit: 0 });
+
+    // Should use default limit
+    expect(result).toBeDefined();
+  });
+
+  it('should exclude redundant fields from response', async () => {
+    await t.mutation(api.chats.create, { userId, title: 'Test Chat' });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    const chat = result.chats[0];
+    expect(chat).toHaveProperty('_id');
+    expect(chat).toHaveProperty('title');
+    expect(chat).toHaveProperty('createdAt');
+    expect(chat).toHaveProperty('updatedAt');
+    expect(chat).toHaveProperty('lastMessageAt');
+
+    // These fields should be excluded
+    expect(chat).not.toHaveProperty('_creationTime');
+    expect(chat).not.toHaveProperty('userId');
+    expect(chat).not.toHaveProperty('messageCount');
+    expect(chat).not.toHaveProperty('deletedAt');
+  });
+
+  it('should return chats in descending order by update time', async () => {
+    const chat1 = await t.mutation(api.chats.create, { userId, title: 'First' });
+    await new Promise(resolve => setTimeout(resolve, 10)); // Small delay
+    const chat2 = await t.mutation(api.chats.create, { userId, title: 'Second' });
+
+    const result = await t.query(api.chats.list, { userId });
+
+    // Most recently updated first
+    expect(result.chats[0]._id).toBe(chat2.chatId);
+    expect(result.chats[1]._id).toBe(chat1.chatId);
+  });
+
+  it('should support pagination', async () => {
+    // Insert directly to avoid rate limiting
+    await t.run(async (ctx) => {
+      const now = Date.now();
+      for (let i = 0; i < 10; i++) {
+        await ctx.db.insert('chats', {
+          userId,
+          title: `Chat ${i}`,
+          messageCount: 0,
+          createdAt: now + i,
+          updatedAt: now + i,
+        });
+      }
+    });
+
+    const firstPage = await t.query(api.chats.list, { userId, limit: 5 });
+    expect(firstPage.chats.length).toBe(5);
+    expect(firstPage.nextCursor).toBeTruthy();
+
+    const secondPage = await t.query(api.chats.list, {
+      userId,
+      limit: 5,
+      cursor: firstPage.nextCursor ?? undefined,
+    });
+    expect(secondPage.chats.length).toBe(5);
+  });
+
+  it('should return null nextCursor when no more results', async () => {
+    await t.mutation(api.chats.create, { userId, title: 'Only Chat' });
+
+    const result = await t.query(api.chats.list, { userId, limit: 10 });
+
+    expect(result.chats.length).toBe(1);
+    expect(result.nextCursor).toBe(null);
+  });
+});
+
+describe('chats.get', () => {
+  let t: ReturnType<typeof convexTest>;
+  let userId: Id<'users'>;
+  let otherUserId: Id<'users'>;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+
+    userId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    otherUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'other-user',
+        email: 'other@example.com',
+        name: 'Other User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+  });
+
+  it('should return chat when user owns it', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'My Chat',
+    });
+
+    const result = await t.query(api.chats.get, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result).toBeDefined();
+    expect(result?._id).toBe(created.chatId);
+    expect(result?.title).toBe('My Chat');
+  });
+
+  it('should return null when chat does not exist', async () => {
+    // Create a valid ID that doesn't exist
+    const fakeChatId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert('chats', {
+        userId,
+        title: 'Fake Chat',
+        messageCount: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      await ctx.db.delete(id);
+      return id;
+    });
+
+    const result = await t.query(api.chats.get, {
+      chatId: fakeChatId,
+      userId,
+    });
+
+    expect(result).toBe(null);
+  });
+
+  it('should return null when user does not own chat', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId: otherUserId,
+      title: 'Other Chat',
+    });
+
+    const result = await t.query(api.chats.get, {
+      chatId: created.chatId,
+      userId, // Different user
+    });
+
+    expect(result).toBe(null);
+  });
+
+  it('should return null when chat is soft-deleted', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Deleted Chat',
+    });
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(created.chatId, { deletedAt: Date.now() });
+    });
+
+    const result = await t.query(api.chats.get, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result).toBe(null);
+  });
+
+  it('should return all chat fields', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Full Chat',
+    });
+
+    const result = await t.query(api.chats.get, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result).toHaveProperty('_id');
+    expect(result).toHaveProperty('_creationTime');
+    expect(result).toHaveProperty('userId');
+    expect(result).toHaveProperty('title');
+    expect(result).toHaveProperty('createdAt');
+    expect(result).toHaveProperty('updatedAt');
+    expect(result).toHaveProperty('messageCount');
+  });
+});
+
+describe('chats.remove (soft delete)', () => {
+  let t: ReturnType<typeof convexTest>;
+  let userId: Id<'users'>;
+  let otherUserId: Id<'users'>;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+
+    userId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+
+    otherUserId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'other-user',
+        email: 'other@example.com',
+        name: 'Other User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+  });
+
+  it('should soft delete chat when user owns it', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'My Chat',
+    });
+
+    const result = await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result.ok).toBe(true);
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(created.chatId));
+    expect(chat?.deletedAt).toBeDefined();
+    expect(chat?.messageCount).toBe(0);
+  });
+
+  it('should soft delete all messages in chat', async () => {
+    const chat = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Chat with messages',
+    });
+
+    // Create some messages
+    const msg1 = await t.run(async (ctx) => {
+      return await ctx.db.insert('messages', {
+        chatId: chat.chatId,
+        role: 'user',
+        content: 'Message 1',
+        createdAt: Date.now(),
+        status: 'completed',
+      });
+    });
+
+    const msg2 = await t.run(async (ctx) => {
+      return await ctx.db.insert('messages', {
+        chatId: chat.chatId,
+        role: 'assistant',
+        content: 'Message 2',
+        createdAt: Date.now(),
+        status: 'completed',
+      });
+    });
+
+    await t.mutation(api.chats.remove, {
+      chatId: chat.chatId,
+      userId,
+    });
+
+    const message1 = await t.run(async (ctx) => await ctx.db.get(msg1));
+    const message2 = await t.run(async (ctx) => await ctx.db.get(msg2));
+
+    expect(message1?.deletedAt).toBeDefined();
+    expect(message2?.deletedAt).toBeDefined();
+  });
+
+  it('should return false when chat does not exist', async () => {
+    // Create a valid ID that doesn't exist
+    const fakeChatId = await t.run(async (ctx) => {
+      const id = await ctx.db.insert('chats', {
+        userId,
+        title: 'Fake Chat',
+        messageCount: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      await ctx.db.delete(id);
+      return id;
+    });
+
+    const result = await t.mutation(api.chats.remove, {
+      chatId: fakeChatId,
+      userId,
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('should return false when user does not own chat', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId: otherUserId,
+      title: 'Other Chat',
+    });
+
+    const result = await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId, // Different user
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('should return false when chat already deleted', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'My Chat',
+    });
+
+    await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    // Try to delete again
+    const result = await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('should reset messageCount to 0', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'My Chat',
+    });
+
+    // Update message count
+    await t.run(async (ctx) => {
+      await ctx.db.patch(created.chatId, { messageCount: 10 });
+    });
+
+    await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    const chat = await t.run(async (ctx) => await ctx.db.get(created.chatId));
+    expect(chat?.messageCount).toBe(0);
+  });
+
+  it('should handle deletion with no messages', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'Empty Chat',
+    });
+
+    const result = await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('should not appear in list after deletion', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'To Delete',
+    });
+
+    await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    const list = await t.query(api.chats.list, { userId });
+
+    expect(list.chats.length).toBe(0);
+  });
+
+  it('should not be retrievable after deletion', async () => {
+    const created = await t.mutation(api.chats.create, {
+      userId,
+      title: 'To Delete',
+    });
+
+    await t.mutation(api.chats.remove, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    const chat = await t.query(api.chats.get, {
+      chatId: created.chatId,
+      userId,
+    });
+
+    expect(chat).toBe(null);
+  });
+});
+
+describe('chats.checkExportRateLimit', () => {
+  let t: ReturnType<typeof convexTest>;
+  let userId: Id<'users'>;
+
+  beforeEach(async () => {
+    t = createConvexTest();
+
+    userId = await t.run(async (ctx) => {
+      return await ctx.db.insert('users', {
+        externalId: 'test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    });
+  });
+
+  it('should return ok: true when not rate limited', async () => {
+    const result = await t.mutation(api.chats.checkExportRateLimit, {
+      userId,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('should allow multiple export checks within limit', async () => {
+    const result1 = await t.mutation(api.chats.checkExportRateLimit, { userId });
+    const result2 = await t.mutation(api.chats.checkExportRateLimit, { userId });
+
+    expect(result1.ok).toBe(true);
+    expect(result2.ok).toBe(true);
+  });
+});

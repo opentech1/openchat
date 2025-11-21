@@ -19,3 +19,4 @@ better-auth_migrations/
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
 /.playwright-mcp/
+*.bak

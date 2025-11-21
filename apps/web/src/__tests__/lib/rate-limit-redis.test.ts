@@ -42,6 +42,19 @@ try {
 async function isRedisRunning(): Promise<boolean> {
 	if (!redisAvailable) return false;
 
+	// Check if Redis credentials are available (for Upstash)
+	const hasUpstashCreds = Boolean(
+		process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+	);
+
+	// Check if Redis URL is set (for local Redis)
+	const hasRedisUrl = Boolean(process.env.REDIS_URL);
+
+	if (!hasUpstashCreds && !hasRedisUrl) {
+		console.warn("Skipping Redis tests - No Redis credentials or URL configured");
+		return false;
+	}
+
 	try {
 		const limiter = new RedisRateLimiter(
 			{ limit: 1, windowMs: 1000 },
@@ -56,18 +69,17 @@ async function isRedisRunning(): Promise<boolean> {
 	}
 }
 
-describe.skipIf(!redisAvailable)("RedisRateLimiter", () => {
+// Skip entire suite if Redis is not available
+const hasRedisCredentials = Boolean(
+	(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) ||
+	process.env.REDIS_URL
+);
+
+describe.skipIf(!redisAvailable || !hasRedisCredentials)("RedisRateLimiter", () => {
 	let limiter: any;
 	const testIdentifier = `test-${Date.now()}-${Math.random()}`;
 
 	beforeEach(async () => {
-		// Skip all tests if Redis is not running
-		const running = await isRedisRunning();
-		if (!running) {
-			console.warn("Skipping Redis tests - Redis server not available");
-			return;
-		}
-
 		// Create fresh limiter for each test
 		limiter = new RedisRateLimiter(
 			{
@@ -336,15 +348,9 @@ describe("createRateLimiter factory", () => {
 		}
 	});
 
-	it.skipIf(!redisAvailable)(
+	it.skipIf(!redisAvailable || !hasRedisCredentials)(
 		"should create Redis limiter when REDIS_URL is set",
 		async () => {
-			const running = await isRedisRunning();
-			if (!running) {
-				console.warn("Skipping test - Redis not available");
-				return;
-			}
-
 			// Set REDIS_URL
 			const originalRedisUrl = process.env.REDIS_URL;
 			process.env.REDIS_URL = "redis://localhost:6379";
@@ -369,15 +375,9 @@ describe("createRateLimiter factory", () => {
 		},
 	);
 
-	it.skipIf(!redisAvailable)(
+	it.skipIf(!redisAvailable || !hasRedisCredentials)(
 		"should accept custom Redis URL parameter",
 		async () => {
-			const running = await isRedisRunning();
-			if (!running) {
-				console.warn("Skipping test - Redis not available");
-				return;
-			}
-
 			const { createRateLimiter } = await import("../../lib/rate-limit");
 			const limiter = await createRateLimiter(
 				{ limit: 10, windowMs: 60000 },
@@ -415,14 +415,8 @@ describe("createRateLimiter factory", () => {
 });
 
 // Performance comparison tests (informational)
-describe.skipIf(!redisAvailable)("Performance comparison", () => {
+describe.skipIf(!redisAvailable || !hasRedisCredentials)("Performance comparison", () => {
 	it("should compare in-memory vs Redis performance", async () => {
-		const running = await isRedisRunning();
-		if (!running) {
-			console.warn("Skipping performance test - Redis not available");
-			return;
-		}
-
 		const { RateLimiter } = await import("../../lib/rate-limit");
 		const { RedisRateLimiter } = await import("../../lib/rate-limit-redis");
 
