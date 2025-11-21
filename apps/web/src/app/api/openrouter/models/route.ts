@@ -21,11 +21,6 @@ type CacheEntry = {
 };
 const modelCache = new Map<string, CacheEntry>();
 
-// Export for testing
-export const __testing = {
-	clearCache: () => modelCache.clear(),
-};
-
 // Validation schema for the request body
 const modelsRequestSchema = z.object({
 	apiKey: apiKeySchema,

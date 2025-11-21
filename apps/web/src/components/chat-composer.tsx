@@ -15,7 +15,6 @@ import {
   spacing,
   opacity,
 } from "@/styles/design-tokens";
-import * as React from "react";
 import { FileUploadButton } from "./file-upload-button";
 import { FilePreview } from "./file-preview";
 import { toast } from "sonner";
