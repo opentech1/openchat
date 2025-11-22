@@ -67,10 +67,23 @@ async function withAuthRateLimit(
 
 	// Create a new response with rate limit headers
 	// (Response headers are immutable in Next.js App Router)
+	// IMPORTANT: Use getSetCookie() to properly preserve Set-Cookie headers
+	// The Headers constructor does NOT properly clone multiple Set-Cookie values
 	const newHeaders = new Headers(response.headers);
+
+	// Preserve Set-Cookie headers which are critical for auth
+	// getSetCookie() returns an array of all Set-Cookie header values
+	const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
+
+	// Add rate limit headers
 	Object.entries(rateLimitHeaders).forEach(([key, value]) => {
 		newHeaders.set(key, value);
 	});
+
+	// Re-add Set-Cookie headers that may have been lost during cloning
+	for (const cookie of setCookieHeaders) {
+		newHeaders.append("Set-Cookie", cookie);
+	}
 
 	return new Response(response.body, {
 		status: response.status,
