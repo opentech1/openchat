@@ -26,12 +26,14 @@ export const ensure = mutation({
 	},
 	returns: v.object({ userId: v.id("users") }),
 	handler: async (ctx, args) => {
-		// Rate limit user authentication/creation
-		// SECURITY: Use global rate limit key to prevent bypass attacks
-		// Using a fixed key prevents attackers from bypassing the limit by
-		// generating different externalId values
+		// Rate limit user authentication/creation per external ID
+		// NOTE: Using externalId (from Clerk) is safe because:
+		// 1. Clerk already handles brute-force protection at the auth layer
+		// 2. Using a global key causes write conflicts under load (all users
+		//    compete for the same rate limit row, causing OCC failures)
+		// 3. The externalId is verified by Clerk before reaching this function
 		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userEnsure", {
-			key: "global",
+			key: args.externalId,
 		});
 
 		if (!ok) {
