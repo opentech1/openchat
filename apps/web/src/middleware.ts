@@ -72,6 +72,17 @@ export async function middleware(request: NextRequest) {
 	);
 
 	if (isProtectedRoute) {
+		// Allow requests with one-time token (ott) to pass through
+		// The ott is used by crossDomain plugin to establish session via ConvexBetterAuthProvider
+		const hasOtt = request.nextUrl.searchParams.has("ott");
+		if (hasOtt) {
+			// Let the request through so ConvexBetterAuthProvider can verify the OTT
+			// and establish the session cookie on the client side
+			const response = NextResponse.next();
+			response.headers.set("X-Request-ID", correlationId);
+			return response;
+		}
+
 		// Check for session cookie
 		// Note: We can't use async getSessionToken() here because middleware runs in edge runtime
 		// So we inline the cookie check using the same cookie names from session-helpers
