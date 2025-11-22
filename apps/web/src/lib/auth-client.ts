@@ -11,12 +11,9 @@ export const authClient = createAuthClient({
 		convexClient(),
 		// Enable cross-domain authentication
 		// Required because Convex runs on .convex.site but app runs on osschat.dev
-		// This plugin handles session storage and one-time token verification
+		// This plugin verifies OTT and sets session cookies
 		crossDomainClient({
-			// Use localStorage for session persistence across page reloads
-			storage: typeof window !== "undefined" ? window.localStorage : undefined,
 			storagePrefix: "openchat",
-			disableCache: false,
 		}),
 	],
 });
