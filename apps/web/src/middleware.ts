@@ -72,20 +72,6 @@ export async function middleware(request: NextRequest) {
 	);
 
 	if (isProtectedRoute) {
-		// Redirect requests with one-time token (ott) to /auth/callback
-		// The ott is used by crossDomain plugin to establish session via ConvexBetterAuthProvider
-		// We must redirect to a client-only page because server components can't handle OTT
-		const ott = request.nextUrl.searchParams.get("ott");
-		if (ott) {
-			// Redirect to /auth/callback which is a client-only page
-			// This allows the crossDomainClient plugin to verify the OTT and establish session
-			const callbackUrl = new URL("/auth/callback", request.url);
-			callbackUrl.searchParams.set("ott", ott);
-			// Preserve the original destination for redirect after session is established
-			callbackUrl.searchParams.set("from", pathname);
-			return NextResponse.redirect(callbackUrl);
-		}
-
 		// Check for session cookie
 		// Note: We can't use async getSessionToken() here because middleware runs in edge runtime
 		// So we inline the cookie check using the same cookie names from session-helpers
