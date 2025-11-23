@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { logError } from "./logger-server";
 
 export type UserContext = {
@@ -38,25 +38,35 @@ export function clearSessionCache(): void {
 // Using React cache() to avoid duplicate fetches within the same request across server components
 // Also implements Map-based caching with 30-second TTL to eliminate repeated HTTP calls
 const resolveUserContext = cache(async (): Promise<UserContext> => {
+	// Try both cookies() and headers() to diagnose the issue
 	const cookieStore = await cookies();
+	const headerStore = await headers();
 
 	// Forward ALL cookies to the auth API instead of manually checking specific names
 	// This ensures compatibility regardless of how better-auth/convex sets cookies
 	const allCookies = cookieStore.getAll();
 
+	// Also try getting Cookie header directly via headers()
+	const rawCookieHeader = headerStore.get("cookie");
+
 	// Debug logging to understand what cookies the server receives
-	console.log("[Auth Server] Cookies received:", allCookies.length, "cookies");
+	console.log("[Auth Server] cookies() returned:", allCookies.length, "cookies");
+	console.log("[Auth Server] headers().get('cookie'):", rawCookieHeader ? "has value" : "empty/null");
 	if (allCookies.length > 0) {
-		console.log("[Auth Server] Cookie names:", allCookies.map(c => c.name).join(", "));
+		console.log("[Auth Server] Cookie names from cookies():", allCookies.map(c => c.name).join(", "));
+	}
+	if (rawCookieHeader) {
+		console.log("[Auth Server] Raw cookie header length:", rawCookieHeader.length);
 	}
 
-	const cookieHeader = allCookies
+	// Prefer raw cookie header if available, fall back to cookies()
+	const cookieHeader = rawCookieHeader || allCookies
 		.map((c) => `${c.name}=${c.value}`)
 		.join("; ");
 
 	// If no cookies at all, redirect immediately
 	if (!cookieHeader) {
-		console.log("[Auth Server] No cookies found, redirecting to sign-in");
+		console.log("[Auth Server] No cookies found from either source, redirecting to sign-in");
 		redirect("/auth/sign-in");
 	}
 
