@@ -177,11 +177,19 @@ export async function getUserContextFromRequest(request: Request): Promise<UserC
 	}
 
 	// Call better-auth API to get session
+	// Use the request's origin for the base URL to ensure internal routing works
 	try {
-		const baseUrl =
-			process.env.NEXT_PUBLIC_APP_URL ||
-			process.env.SITE_URL ||
-			"http://localhost:3000";
+		// Try to get the host from the request for internal calls
+		const host = request.headers.get("host");
+		const protocol = request.headers.get("x-forwarded-proto") || "https";
+		const baseUrl = host
+			? `${protocol}://${host}`
+			: process.env.NEXT_PUBLIC_APP_URL ||
+			  process.env.SITE_URL ||
+			  "http://localhost:3000";
+
+		console.log("[Auth Server API] Fetching session from:", `${baseUrl}/api/auth/get-session`);
+
 		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
 			headers: {
 				Cookie: cookieHeader,
