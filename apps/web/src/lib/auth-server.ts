@@ -145,3 +145,77 @@ export async function getUserId(): Promise<string> {
 	const { userId } = await resolveUserContext();
 	return userId;
 }
+
+/**
+ * Get user context from a Request object (for API routes)
+ *
+ * This reads cookies directly from the request headers instead of using
+ * next/headers cookies() which doesn't work in some environments.
+ *
+ * Returns null if not authenticated (does NOT redirect).
+ * API routes should return 401 when this returns null.
+ */
+export async function getUserContextFromRequest(request: Request): Promise<UserContext | null> {
+	const cookieHeader = request.headers.get("cookie");
+
+	if (!cookieHeader) {
+		console.log("[Auth Server API] No cookie header in request");
+		return null;
+	}
+
+	// Find a session-like cookie for cache key generation
+	const sessionMatch = cookieHeader.match(/(?:session|token)[^=]*=([^;]+)/i);
+	const cacheKey = sessionMatch?.[1];
+
+	// Check cache first (only if we have a valid session cookie as cache key)
+	const now = Date.now();
+	if (cacheKey) {
+		const cached = sessionCache.get(cacheKey);
+		if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
+			return cached.user;
+		}
+	}
+
+	// Call better-auth API to get session
+	try {
+		const baseUrl =
+			process.env.NEXT_PUBLIC_APP_URL ||
+			process.env.SITE_URL ||
+			"http://localhost:3000";
+		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
+			headers: {
+				Cookie: cookieHeader,
+			},
+			cache: "no-store",
+		});
+
+		if (!response.ok) {
+			console.log("[Auth Server API] Auth response not ok:", response.status);
+			return null;
+		}
+
+		const data = await response.json();
+
+		if (!data || !data.user) {
+			console.log("[Auth Server API] No user in session data");
+			return null;
+		}
+
+		const user: UserContext = {
+			userId: data.user.id,
+			email: data.user.email,
+			name: data.user.name,
+			image: data.user.image,
+		};
+
+		// Store in cache only if we have a unique session identifier
+		if (cacheKey) {
+			sessionCache.set(cacheKey, { user, timestamp: now });
+		}
+
+		return user;
+	} catch (error) {
+		logError("Failed to get session from request", error);
+		return null;
+	}
+}
