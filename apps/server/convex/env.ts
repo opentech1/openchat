@@ -40,7 +40,7 @@ export function validateConvexEnv(): ConvexEnv {
 
 	// Apply development defaults only in non-production environments
 	// Handle empty strings explicitly - they should trigger defaults too
-	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (!isProd ? "http://localhost:3001" : undefined));
+	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (!isProd ? "http://localhost:3000" : undefined));
 	const authSecret = (process.env.BETTER_AUTH_SECRET?.trim() || (!isProd ? "dev-secret" : undefined));
 
 	// Check required variables
@@ -48,7 +48,7 @@ export function validateConvexEnv(): ConvexEnv {
 		if (isProd) {
 			errors.push("NEXT_PUBLIC_APP_URL is required");
 		} else {
-			warnings.push("NEXT_PUBLIC_APP_URL not set, using default: http://localhost:3001");
+			warnings.push("NEXT_PUBLIC_APP_URL not set, using default: http://localhost:3000");
 		}
 	} else {
 		try {
@@ -102,7 +102,7 @@ export function validateConvexEnv(): ConvexEnv {
 	}
 
 	return {
-		NEXT_PUBLIC_APP_URL: appUrl || "http://localhost:3001",
+		NEXT_PUBLIC_APP_URL: appUrl || "http://localhost:3000",
 		BETTER_AUTH_SECRET: authSecret || "dev-secret",
 		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
 		GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,

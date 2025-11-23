@@ -130,10 +130,11 @@ export const config = {
 		 * - api routes (handled by API routes)
 		 * - _next/static (static files)
 		 * - _next/image (image optimization files)
+		 * - __webpack_hmr (webpack hot module replacement - dev only)
 		 * - favicon.ico, sitemap.xml, robots.txt (public files)
 		 * - images and other assets (png, jpg, svg, etc.)
 		 */
-		"/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)).*)",
+		"/((?!api|_next/static|_next/image|__webpack_hmr|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)).*)",
 	],
 };
 

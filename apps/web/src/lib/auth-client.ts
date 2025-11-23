@@ -7,6 +7,11 @@ import { convexClient, crossDomainClient } from "@convex-dev/better-auth/client/
 // Access env var directly to avoid build-time validation
 export const authClient = createAuthClient({
 	baseURL: process.env.NEXT_PUBLIC_APP_URL || "",
+	// IMPORTANT: credentials: "include" is required for cookies to be sent/received
+	// Without this, fetch requests won't include cookies and Set-Cookie headers won't be stored
+	fetchOptions: {
+		credentials: "include",
+	},
 	plugins: [
 		convexClient(),
 		// Enable cross-domain authentication
