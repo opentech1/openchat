@@ -166,6 +166,42 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
     setChats(dedupedInitialChats);
   }, [dedupedInitialChats]);
 
+  // CLIENT-SIDE CHAT FETCHING: Load chats from API when initialChats is empty
+  // This handles the case where server-side fetching isn't available (e.g., AuthGuard)
+  const [isLoadingChats, setIsLoadingChats] = useState(false);
+  const hasFetchedChatsRef = useRef(false);
+
+  useEffect(() => {
+    // Only fetch if user is authenticated and we haven't fetched yet
+    if (!user?.id) return;
+    if (hasFetchedChatsRef.current) return;
+    // Skip if we already have chats from initialChats
+    if (initialChats.length > 0) return;
+
+    const fetchChats = async () => {
+      setIsLoadingChats(true);
+      try {
+        const response = await fetch("/api/chats", {
+          method: "GET",
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.chats && Array.isArray(data.chats)) {
+            setChats(dedupeChats(data.chats));
+            hasFetchedChatsRef.current = true;
+          }
+        }
+      } catch (error) {
+        logError("Failed to fetch chats", error);
+      } finally {
+        setIsLoadingChats(false);
+      }
+    };
+
+    void fetchChats();
+  }, [user?.id, initialChats.length]);
+
   useEffect(() => {
     if (!user?.id) return;
     identifyClient(user.id, {
@@ -315,6 +351,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
               onDelete={handleDelete}
               deletingId={deletingChatId}
               onHoverChat={handleHoverChat}
+              isLoading={isLoadingChats}
             />
           </ErrorBoundary>
         </SidebarGroup>
@@ -412,12 +449,14 @@ function ChatList({
   onDelete,
   deletingId,
   onHoverChat,
+  isLoading,
 }: {
   chats: ChatListItem[];
   activePath?: string | null;
   onDelete: (chatId: string) => void | Promise<void>;
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
+  isLoading?: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -441,6 +480,9 @@ function ChatList({
     }),
     [virtualizer]
   );
+
+  if (isLoading)
+    return <p className="px-2 text-xs text-muted-foreground animate-pulse">Loading chats...</p>;
 
   if (chats.length === 0)
     return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
