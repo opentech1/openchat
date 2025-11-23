@@ -43,12 +43,20 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 	// Forward ALL cookies to the auth API instead of manually checking specific names
 	// This ensures compatibility regardless of how better-auth/convex sets cookies
 	const allCookies = cookieStore.getAll();
+
+	// Debug logging to understand what cookies the server receives
+	console.log("[Auth Server] Cookies received:", allCookies.length, "cookies");
+	if (allCookies.length > 0) {
+		console.log("[Auth Server] Cookie names:", allCookies.map(c => c.name).join(", "));
+	}
+
 	const cookieHeader = allCookies
 		.map((c) => `${c.name}=${c.value}`)
 		.join("; ");
 
 	// If no cookies at all, redirect immediately
 	if (!cookieHeader) {
+		console.log("[Auth Server] No cookies found, redirecting to sign-in");
 		redirect("/auth/sign-in");
 	}
 
