@@ -17,7 +17,9 @@ export default function LoginPage() {
 		try {
 			await authClient.signIn.social({
 				provider: "github",
-				callbackURL: "/dashboard",
+				// Redirect to /auth/callback to let client-side verify OTT
+				// before accessing protected routes with server-side session checks
+				callbackURL: "/auth/callback",
 			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to sign in with GitHub");
