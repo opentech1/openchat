@@ -40,32 +40,43 @@ export function clearSessionCache(): void {
 const resolveUserContext = cache(async (): Promise<UserContext> => {
 	const cookieStore = await cookies();
 
-	// better-auth stores session token with the cookiePrefix from convex/auth.ts
-	// In production (HTTPS), cookies get __Secure- prefix: "__Secure-openchat.session_token"
-	// In development (HTTP), cookies don't have prefix: "openchat.session_token"
-	const secureCookie = cookieStore.get("__Secure-openchat.session_token");
-	const normalCookie = cookieStore.get("openchat.session_token");
-	const sessionCookie = secureCookie || normalCookie;
+	// Forward ALL cookies to the auth API instead of manually checking specific names
+	// This ensures compatibility regardless of how better-auth/convex sets cookies
+	const allCookies = cookieStore.getAll();
+	const cookieHeader = allCookies
+		.map((c) => `${c.name}=${c.value}`)
+		.join("; ");
 
-	if (!sessionCookie?.value) {
+	// If no cookies at all, redirect immediately
+	if (!cookieHeader) {
 		redirect("/auth/sign-in");
 	}
 
-	// Check cache first
+	// Find a session-like cookie for cache key generation
+	// IMPORTANT: Only cache if we have a unique session identifier to prevent cross-user cache collisions
+	const sessionCookie = allCookies.find(
+		(c) => c.name.includes("session") || c.name.includes("token")
+	);
+	const cacheKey = sessionCookie?.value;
+
+	// Check cache first (only if we have a valid session cookie as cache key)
 	const now = Date.now();
-	const cached = sessionCache.get(sessionCookie.value);
-	if (cached && (now - cached.timestamp) < SESSION_CACHE_TTL_MS) {
-		return cached.user;
+	if (cacheKey) {
+		const cached = sessionCache.get(cacheKey);
+		if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
+			return cached.user;
+		}
 	}
 
 	// Call better-auth API to get session
 	try {
-		const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3000";
-		// Use the correct cookie name based on which one exists
-		const cookieName = secureCookie ? "__Secure-openchat.session_token" : "openchat.session_token";
+		const baseUrl =
+			process.env.NEXT_PUBLIC_APP_URL ||
+			process.env.SITE_URL ||
+			"http://localhost:3000";
 		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
 			headers: {
-				Cookie: `${cookieName}=${sessionCookie.value}`,
+				Cookie: cookieHeader,
 			},
 			cache: "no-store",
 		});
@@ -87,8 +98,10 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 			image: data.user.image,
 		};
 
-		// Store in cache
-		sessionCache.set(sessionCookie.value, { user, timestamp: now });
+		// Store in cache only if we have a unique session identifier
+		if (cacheKey) {
+			sessionCache.set(cacheKey, { user, timestamp: now });
+		}
 
 		// Cleanup old entries to prevent memory leaks
 		if (sessionCache.size > 1000) {
