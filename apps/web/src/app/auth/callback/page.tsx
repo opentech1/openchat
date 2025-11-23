@@ -8,12 +8,8 @@ import { NiceLoader } from "@/components/ui/nice-loader";
 /**
  * Auth Callback Content Component
  *
- * Handles the OAuth callback for cross-domain authentication.
- *
- * NOTE: The middleware intercepts requests to /auth/callback with an OTT parameter
- * and redirects to /api/auth/callback-ott for server-side verification.
- * By the time this page loads, OTT verification is complete and cookies are set.
- * This page only needs to poll for the session and redirect to the dashboard.
+ * Handles the OAuth callback. After successful OAuth login, better-auth
+ * redirects here. We poll for the session and redirect to the dashboard.
  */
 function AuthCallbackContent() {
 	const searchParams = useSearchParams();
@@ -22,23 +18,15 @@ function AuthCallbackContent() {
 
 	// Extract params once to avoid dependency issues
 	const from = searchParams.get("from");
-	const errorParam = searchParams.get("error");
 
 	useEffect(() => {
 		let cancelled = false;
-
-		// Handle error from server-side verification
-		if (errorParam === "verification_failed") {
-			setError("Authentication failed. Please try signing in again.");
-			setChecking(false);
-			return;
-		}
 
 		const checkSession = async () => {
 			if (cancelled) return;
 
 			let attempts = 0;
-			const maxAttempts = 15; // Increased for more patience
+			const maxAttempts = 15;
 
 			const poll = async () => {
 				if (cancelled) return;
@@ -73,13 +61,12 @@ function AuthCallbackContent() {
 			await poll();
 		};
 
-		// Start checking session - by this point OTT should be verified and cookies set
 		checkSession();
 
 		return () => {
 			cancelled = true;
 		};
-	}, [from, errorParam]);
+	}, [from]);
 
 	if (error) {
 		return (
