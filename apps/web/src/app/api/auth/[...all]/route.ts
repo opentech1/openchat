@@ -4,11 +4,14 @@ import { RateLimiter, getClientIp, createRateLimitHeaders } from "@/lib/rate-lim
 import { logWarn } from "@/lib/logger-server";
 import { splitCookiesString } from "set-cookie-parser";
 
-// Export the Convex Better Auth handler for Next.js
-// This uses Convex as the database backend instead of SQLite
-// Sessions and user data are stored in Convex
-// IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
-// Auto-detect from NEXT_PUBLIC_CONVEX_SITE_URL with fallback to production
+/**
+ * Convex Better Auth handler for Next.js
+ *
+ * This route handler proxies auth requests to Convex.
+ * Since it runs on the same domain as the app, regular cookies work fine.
+ *
+ * IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
+ */
 const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
 const { GET: originalGET, POST: originalPOST } = nextJsHandler(
 	convexSiteUrl ? { convexSiteUrl } : undefined
@@ -60,14 +63,13 @@ async function withAuthRateLimit(
 	// Call the original handler
 	const response = await handler(request);
 
-	// Add rate limit headers to successful responses too
+	// Add rate limit headers to successful responses
 	const rateLimitHeaders = createRateLimitHeaders(result, {
 		limit: authRateLimiter.getStats().config.limit,
 		windowMs: authRateLimiter.getStats().config.windowMs,
 	});
 
 	// Create a new response with rate limit headers
-	// (Response headers are immutable in Next.js App Router)
 	// IMPORTANT: Manually copy headers to preserve Set-Cookie properly
 	// Edge runtime's Headers constructor may not preserve multiple Set-Cookie values
 	const newHeaders = new Headers();
@@ -109,70 +111,5 @@ async function withAuthRateLimit(
 	});
 }
 
-/**
- * Handle cross-domain cookie conversion for better-auth
- *
- * The crossDomain plugin on Convex server converts Set-Cookie to Set-Better-Auth-Cookie
- * to avoid browser domain mismatch issues when calling Convex directly.
- * Since we are proxying via Next.js (same origin), we convert it back to Set-Cookie
- * so the browser will accept it for navigation requests.
- *
- * IMPORTANT: We keep BOTH headers because:
- * - Set-Cookie: Used by browser for navigation/page loads
- * - Set-Better-Auth-Cookie: Read by crossDomainClient plugin for localStorage storage
- */
-function convertCrossdomainCookies(response: Response): Headers {
-	const newHeaders = new Headers();
-
-	// Copy all headers manually to ensure nothing is lost
-	response.headers.forEach((value, key) => {
-		newHeaders.append(key, value);
-	});
-
-	const betterAuthCookieHeader = response.headers.get("Set-Better-Auth-Cookie");
-
-	if (betterAuthCookieHeader) {
-		// Set-Better-Auth-Cookie might contain multiple cookies joined by comma
-		// We need to split them properly to handle each one
-		const cookies = splitCookiesString(betterAuthCookieHeader);
-
-		for (const cookie of cookies) {
-			// Strip Domain attribute - if it's .convex.site, it's invalid for our domain
-			let sanitizedCookie = cookie.replace(/;\s*[Dd]omain=[^;]+/, "");
-
-			// In development, strip Secure attribute so cookies work on HTTP localhost
-			if (process.env.NODE_ENV !== "production") {
-				sanitizedCookie = sanitizedCookie.replace(/;\s*[Ss]ecure/g, "");
-				// Also strip __Secure- prefix from cookie name if present
-				sanitizedCookie = sanitizedCookie.replace(/^__Secure-/i, "");
-			}
-
-			newHeaders.append("Set-Cookie", sanitizedCookie);
-		}
-		// DO NOT delete Set-Better-Auth-Cookie - crossDomainClient needs it!
-	}
-
-	return newHeaders;
-}
-
-export const GET = (req: Request) =>
-	withAuthRateLimit(req, async (request) => {
-		const response = await originalGET(request);
-		const headers = convertCrossdomainCookies(response);
-		return new Response(response.body, {
-			status: response.status,
-			statusText: response.statusText,
-			headers,
-		});
-	});
-
-export const POST = (req: Request) =>
-	withAuthRateLimit(req, async (request) => {
-		const response = await originalPOST(request);
-		const headers = convertCrossdomainCookies(response);
-		return new Response(response.body, {
-			status: response.status,
-			statusText: response.statusText,
-			headers,
-		});
-	});
+export const GET = (req: Request) => withAuthRateLimit(req, originalGET);
+export const POST = (req: Request) => withAuthRateLimit(req, originalPOST);

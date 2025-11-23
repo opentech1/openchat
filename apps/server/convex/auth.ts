@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
+import { convex } from "@convex-dev/better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
@@ -64,13 +64,10 @@ export const createAuth = (
 		secret: authSecret,
 		socialProviders,
 		plugins: [
+			// The Convex plugin is required for Convex compatibility
+			// NOTE: We do NOT use crossDomain because our Next.js API route handler
+			// proxies auth requests on the same domain - regular cookies work fine
 			convex(),
-			// Enable cross-domain authentication
-			// Required because Convex runs on .convex.site but app runs on osschat.dev
-			// This plugin adds OTT (one-time token) to OAuth callback for cross-domain session
-			crossDomain({
-				siteUrl: siteUrl,
-			}),
 		],
 		trustedOrigins: [
 			"http://localhost:3000",

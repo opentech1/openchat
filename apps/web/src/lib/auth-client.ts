@@ -1,24 +1,18 @@
 import { createAuthClient } from "better-auth/react";
-import { convexClient, crossDomainClient } from "@convex-dev/better-auth/client/plugins";
+import { convexClient } from "@convex-dev/better-auth/client/plugins";
 
-// Create auth client with Convex Better Auth
-// The convexClient plugin handles routing to /api/auth/[...all] which uses nextJsHandler()
-// baseURL is provided for the Next.js route handler that proxies to Convex
-// Access env var directly to avoid build-time validation
+/**
+ * Better Auth client for Convex
+ *
+ * Uses the simple setup from the official Convex Better Auth docs.
+ * The convexClient plugin handles routing to /api/auth/[...all] which proxies to Convex.
+ *
+ * NOTE: We do NOT use crossDomainClient because:
+ * - crossDomainClient is for mobile/Expo apps that can't set browser cookies
+ * - For Next.js, the API route handler (/api/auth) runs on the same domain
+ * - Regular browser cookies work fine when proxied through our Next.js API
+ */
 export const authClient = createAuthClient({
 	baseURL: process.env.NEXT_PUBLIC_APP_URL || "",
-	// IMPORTANT: credentials: "include" is required for cookies to be sent/received
-	// Without this, fetch requests won't include cookies and Set-Cookie headers won't be stored
-	fetchOptions: {
-		credentials: "include",
-	},
-	plugins: [
-		convexClient(),
-		// Enable cross-domain authentication
-		// Required because Convex runs on .convex.site but app runs on osschat.dev
-		// This plugin handles OTT (one-time token) verification to establish session cookies
-		crossDomainClient({
-			storagePrefix: "openchat",
-		}),
-	],
+	plugins: [convexClient()],
 });
