@@ -163,7 +163,11 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   const [chats, setChats] = useState<ChatListItem[]>(() => dedupedInitialChats);
 
   useEffect(() => {
-    setChats(dedupedInitialChats);
+    // Only sync from props if initialChats has actual data
+    // When empty, we rely on client-side fetching and don't want to overwrite
+    if (dedupedInitialChats.length > 0) {
+      setChats(dedupedInitialChats);
+    }
   }, [dedupedInitialChats]);
 
   // CLIENT-SIDE CHAT FETCHING: Load chats from API when initialChats is empty
