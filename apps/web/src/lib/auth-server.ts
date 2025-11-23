@@ -176,23 +176,26 @@ export async function getUserContextFromRequest(request: Request): Promise<UserC
 		}
 	}
 
-	// Call Convex auth endpoint directly to get session
-	// This avoids internal routing issues in serverless environments
+	// Call auth handler directly to avoid HTTP routing issues
+	// This imports the auth handler and calls it with a synthetic request
 	try {
-		// Prefer calling Convex directly to avoid internal HTTP routing issues
+		const { nextJsHandler } = await import("@convex-dev/better-auth/nextjs");
 		const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-		const sessionUrl = convexSiteUrl
-			? `${convexSiteUrl}/auth/get-session`
-			: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/get-session`;
+		const { GET: authHandler } = nextJsHandler(
+			convexSiteUrl ? { convexSiteUrl } : undefined
+		);
 
-		console.log("[Auth Server API] Fetching session from:", sessionUrl);
-
-		const response = await fetch(sessionUrl, {
+		// Create a synthetic request for get-session
+		const syntheticRequest = new Request("http://localhost/api/auth/get-session", {
+			method: "GET",
 			headers: {
 				Cookie: cookieHeader,
 			},
-			cache: "no-store",
 		});
+
+		console.log("[Auth Server API] Calling auth handler directly");
+
+		const response = await authHandler(syntheticRequest);
 
 		if (!response.ok) {
 			console.log("[Auth Server API] Auth response not ok:", response.status);
