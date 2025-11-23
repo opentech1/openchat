@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { SECURE_SESSION_COOKIE_NAME, NORMAL_SESSION_COOKIE_NAME } from "@/lib/api/session-helpers";
 
 /**
  * Pre-compute CSP headers at module load to eliminate per-request overhead
@@ -44,12 +43,16 @@ function generateCorrelationId(): string {
 }
 
 /**
- * Middleware for route-level protection
+ * Middleware for security headers and request tracing
  *
  * Provides:
  * - Request correlation IDs for distributed tracing
- * - Authentication checks for protected routes
- * - Security headers for all responses
+ * - Security headers for all responses (CSP, XSS protection, etc.)
+ *
+ * NOTE: Authentication is NOT handled here. The convexClient() plugin from
+ * @convex-dev/better-auth stores sessions in localStorage (not cookies) for
+ * cross-domain compatibility with Convex. Middleware cannot access localStorage,
+ * so auth checks happen in server components via getUserContext().
  *
  * REQUEST CORRELATION IDS:
  * - Each request gets a unique X-Request-ID header
@@ -59,38 +62,14 @@ function generateCorrelationId(): string {
  * - Makes it easy to trace a request through multiple services/logs
  */
 export async function middleware(request: NextRequest) {
-	const { pathname, searchParams } = request.nextUrl;
-
 	// Extract or generate correlation ID
 	const existingCorrelationId = request.headers.get("x-request-id");
 	const correlationId = existingCorrelationId || generateCorrelationId();
 
-	// Protected routes that require authentication
-	const protectedRoutes = ["/dashboard", "/chat", "/settings"];
-	const isProtectedRoute = protectedRoutes.some((route) =>
-		pathname.startsWith(route),
-	);
-
-	if (isProtectedRoute) {
-		// Check for session cookie
-		// Note: We can't use async getSessionToken() here because middleware runs in edge runtime
-		// So we inline the cookie check using the same cookie names from session-helpers
-		const secureCookie = request.cookies.get(SECURE_SESSION_COOKIE_NAME);
-		const normalCookie = request.cookies.get(NORMAL_SESSION_COOKIE_NAME);
-		const hasSession = secureCookie || normalCookie;
-
-		if (!hasSession) {
-			// Redirect to sign-in if no session found
-			const signInUrl = new URL("/auth/sign-in", request.url);
-			signInUrl.searchParams.set("from", pathname);
-			return NextResponse.redirect(signInUrl);
-		}
-
-		// Note: We only check for session cookie existence here
-		// Full session validation happens in getUserContext() server-side
-		// This is by design - middleware is edge-compatible and shouldn't make
-		// external API calls. The actual auth verification happens in server components.
-	}
+	// NOTE: Authentication is handled by server components via getUserContext()
+	// We don't check for cookies here because convexClient() from @convex-dev/better-auth
+	// stores session in localStorage (not browser cookies) for cross-domain compatibility.
+	// The middleware cannot access localStorage, so auth checks happen server-side.
 
 	// Add security headers to all responses
 	const response = NextResponse.next();
