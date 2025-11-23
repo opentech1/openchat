@@ -100,8 +100,23 @@ async function withAuthRateLimit(
 	});
 
 	// Add Set-Cookie headers individually (not comma-joined)
+	// IMPORTANT: Sanitize cookies to ensure they work with our domain
+	// Convex runs on .convex.site but our app runs on osschat.dev
+	// We need to strip the Domain attribute to let the browser set it for our domain
 	for (const cookie of setCookieHeaders) {
-		newHeaders.append("Set-Cookie", cookie);
+		let sanitizedCookie = cookie;
+
+		// Strip Domain attribute - if it's set to .convex.site, it won't work for our domain
+		sanitizedCookie = sanitizedCookie.replace(/;\s*[Dd]omain=[^;]+/g, "");
+
+		// In development, strip Secure attribute so cookies work on HTTP localhost
+		if (process.env.NODE_ENV !== "production") {
+			sanitizedCookie = sanitizedCookie.replace(/;\s*[Ss]ecure/g, "");
+			// Also strip __Secure- prefix from cookie name if present
+			sanitizedCookie = sanitizedCookie.replace(/^__Secure-/i, "");
+		}
+
+		newHeaders.append("Set-Cookie", sanitizedCookie);
 	}
 
 	return new Response(response.body, {
