@@ -13,5 +13,6 @@ import { convexClient } from "@convex-dev/better-auth/client/plugins";
  * - Regular browser cookies work fine when proxied through our Next.js API
  */
 export const authClient = createAuthClient({
+	baseURL: process.env.NEXT_PUBLIC_APP_URL || "",
 	plugins: [convexClient()],
 });
