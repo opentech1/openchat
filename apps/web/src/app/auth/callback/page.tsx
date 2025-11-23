@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { NiceLoader } from "@/components/ui/nice-loader";
@@ -16,6 +16,7 @@ import { NiceLoader } from "@/components/ui/nice-loader";
 function AuthCallbackContent() {
 	const searchParams = useSearchParams();
 	const [error, setError] = useState<string | null>(null);
+	const processingRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		const verifyAndRedirect = async () => {
@@ -28,6 +29,13 @@ function AuthCallbackContent() {
 					setError("Authentication failed - no token provided. Please try signing in again.");
 					return;
 				}
+
+				// Prevent double-processing (React Strict Mode or duplicate effects)
+				if (processingRef.current === ott) {
+					console.log("[Auth Callback] Already processing this OTT, skipping...");
+					return;
+				}
+				processingRef.current = ott;
 
 				console.log("[Auth Callback] Verifying OTT...");
 
@@ -46,11 +54,14 @@ function AuthCallbackContent() {
 				if (!verifyResponse.ok) {
 					const errorData = await verifyResponse.json().catch(() => ({}));
 					console.error("[Auth Callback] OTT verification failed:", verifyResponse.status, errorData);
-					setError("Authentication failed. Please try signing in again.");
-					return;
+					
+					// If verification failed (e.g. 400 Invalid Token), it implies the token might be already used.
+					// This can happen if the effect fired twice or in race conditions.
+					// We should check if we actually have a session now before showing an error.
+					console.log("[Auth Callback] Checking if session exists despite verification failure...");
+				} else {
+					console.log("[Auth Callback] OTT verified, checking session...");
 				}
-
-				console.log("[Auth Callback] OTT verified, checking session...");
 
 				// Give the cookie a moment to be set
 				await new Promise((resolve) => setTimeout(resolve, 100));
@@ -73,7 +84,12 @@ function AuthCallbackContent() {
 						window.location.href = from;
 					} else {
 						console.error("[Auth Callback] Session not established after OTT verification");
-						setError("Authentication failed. Please try signing in again.");
+						// Only show error if we really don't have a session
+						if (!verifyResponse.ok) {
+							setError("Authentication failed. Please try signing in again.");
+						} else {
+							setError("Session establishment failed. Please try refreshing the page.");
+						}
 					}
 				}
 			} catch (err) {
