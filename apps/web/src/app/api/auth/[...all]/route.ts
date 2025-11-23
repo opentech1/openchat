@@ -105,9 +105,6 @@ const handleAuthRequest = async (request: Request, handler: (request: Request) =
     newHeaders.append(key, value);
   });
 
-  // Debug header to verify proxy is active
-  newHeaders.set("X-Proxy-Debug", "active");
-
   // The crossDomain plugin on Convex server converts Set-Cookie to Set-Better-Auth-Cookie
   // to avoid browser domain mismatch issues when calling directly.
   // Since we are proxying via Next.js (same origin), we need to convert it back to Set-Cookie
@@ -115,7 +112,6 @@ const handleAuthRequest = async (request: Request, handler: (request: Request) =
   const betterAuthCookie = response.headers.get("Set-Better-Auth-Cookie");
   
   if (betterAuthCookie) {
-    newHeaders.set("X-Proxy-Cookie-Found", "true");
     // Add it as a standard Set-Cookie header
     // IMPORTANT: We must strip any Domain attribute because:
     // 1. If it's .convex.site, it's invalid for osschat.dev
@@ -125,8 +121,6 @@ const handleAuthRequest = async (request: Request, handler: (request: Request) =
     newHeaders.append("Set-Cookie", sanitizedCookie);
     // Remove the custom header to clean up
     newHeaders.delete("Set-Better-Auth-Cookie");
-  } else {
-    newHeaders.set("X-Proxy-Cookie-Found", "false");
   }
 
   // Also preserve any existing Set-Cookie headers properly
