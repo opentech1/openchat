@@ -93,58 +93,71 @@ async function withAuthRateLimit(
 	});
 }
 
-// TEMPORARILY BYPASS RATE LIMITING TO DEBUG COOKIE ISSUE
-// But we MUST wrap the handler to fix the cross-domain cookie issue
-const handleAuthRequest = async (request: Request, handler: (request: Request) => Promise<Response>) => {
-  const response = await handler(request);
+/**
+ * Handle cross-domain cookie conversion for better-auth
+ *
+ * The crossDomain plugin on Convex server converts Set-Cookie to Set-Better-Auth-Cookie
+ * to avoid browser domain mismatch issues when calling Convex directly.
+ * Since we are proxying via Next.js (same origin), we convert it back to Set-Cookie
+ * so the browser will accept it for navigation requests.
+ *
+ * IMPORTANT: We keep BOTH headers because:
+ * - Set-Cookie: Used by browser for navigation/page loads
+ * - Set-Better-Auth-Cookie: Read by crossDomainClient plugin which uses credentials: "omit"
+ *   and stores cookies in localStorage instead of relying on browser cookie jar
+ */
+function convertCrossdomainCookies(response: Response): Headers {
+	const newHeaders = new Headers();
 
-  // Create new headers to modify them
-  const newHeaders = new Headers();
-  
-  // Copy all headers manually to ensure nothing is lost
-  response.headers.forEach((value, key) => {
-    newHeaders.append(key, value);
-  });
+	// Copy all headers manually to ensure nothing is lost
+	response.headers.forEach((value, key) => {
+		newHeaders.append(key, value);
+	});
 
-  // The crossDomain plugin on Convex server converts Set-Cookie to Set-Better-Auth-Cookie
-  // to avoid browser domain mismatch issues when calling directly.
-  // Since we are proxying via Next.js (same origin), we need to convert it back to Set-Cookie
-  // so the browser will accept it.
-  const betterAuthCookieHeader = response.headers.get("Set-Better-Auth-Cookie");
-  
-  if (betterAuthCookieHeader) {
-    // Set-Better-Auth-Cookie might contain multiple cookies joined by comma
-    // We need to split them properly to handle each one
-    const cookies = splitCookiesString(betterAuthCookieHeader);
-    
-    for (const cookie of cookies) {
-        // Add it as a standard Set-Cookie header
-        // IMPORTANT: We must strip any Domain attribute because:
-        // 1. If it's .convex.site, it's invalid for osschat.dev
-        // 2. If it's osschat.dev, it was invalid when sent from convex.site (but we are proxying so it's fine now)
-        // 3. Safest is to strip it and let it be host-only for osschat.dev
-        const sanitizedCookie = cookie.replace(/;\s*[Dd]omain=[^;]+/, "");
-        newHeaders.append("Set-Cookie", sanitizedCookie);
-    }
-    
-    // Remove the custom header to clean up
-    newHeaders.delete("Set-Better-Auth-Cookie");
-  }
+	const betterAuthCookieHeader = response.headers.get("Set-Better-Auth-Cookie");
 
-  // Also preserve any existing Set-Cookie headers properly
-  const existingCookies = response.headers.getSetCookie?.() ?? [];
-  // We don't need to re-append if we simply cloned the headers, BUT
-  // the Headers constructor implementation can sometimes merge or lose Set-Cookie values
-  // so it's safer to be explicit if we were reconstructing from scratch.
-  // Since we used new Headers(response.headers), it *should* copy them,
-  // but Set-Better-Auth-Cookie logic above is the critical fix.
+	if (betterAuthCookieHeader) {
+		// Set-Better-Auth-Cookie might contain multiple cookies joined by comma
+		// We need to split them properly to handle each one
+		const cookies = splitCookiesString(betterAuthCookieHeader);
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders,
-  });
-};
+		for (const cookie of cookies) {
+			// Strip Domain attribute - if it's .convex.site, it's invalid for our domain
+			let sanitizedCookie = cookie.replace(/;\s*[Dd]omain=[^;]+/, "");
 
-export const GET = (req: Request) => handleAuthRequest(req, originalGET);
-export const POST = (req: Request) => handleAuthRequest(req, originalPOST);
+			// In development, strip Secure attribute so cookies work on HTTP localhost
+			if (process.env.NODE_ENV !== "production") {
+				sanitizedCookie = sanitizedCookie.replace(/;\s*[Ss]ecure/g, "");
+				// Also strip __Secure- prefix from cookie name if present
+				sanitizedCookie = sanitizedCookie.replace(/^__Secure-/i, "");
+			}
+
+			newHeaders.append("Set-Cookie", sanitizedCookie);
+		}
+		// DO NOT delete Set-Better-Auth-Cookie - crossDomainClient needs it!
+	}
+
+	return newHeaders;
+}
+
+export const GET = (req: Request) =>
+	withAuthRateLimit(req, async (request) => {
+		const response = await originalGET(request);
+		const headers = convertCrossdomainCookies(response);
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers,
+		});
+	});
+
+export const POST = (req: Request) =>
+	withAuthRateLimit(req, async (request) => {
+		const response = await originalPOST(request);
+		const headers = convertCrossdomainCookies(response);
+		return new Response(response.body, {
+			status: response.status,
+			statusText: response.statusText,
+			headers,
+		});
+	});
