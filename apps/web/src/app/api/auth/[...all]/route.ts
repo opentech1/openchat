@@ -115,10 +115,14 @@ function convertCrossdomainCookies(response: Response): Headers {
 
 	const betterAuthCookieHeader = response.headers.get("Set-Better-Auth-Cookie");
 
+	// DEBUG: Log what we're receiving
+	console.log("[Auth Route] Set-Better-Auth-Cookie header:", betterAuthCookieHeader?.substring(0, 200));
+
 	if (betterAuthCookieHeader) {
 		// Set-Better-Auth-Cookie might contain multiple cookies joined by comma
 		// We need to split them properly to handle each one
 		const cookies = splitCookiesString(betterAuthCookieHeader);
+		console.log("[Auth Route] Split into", cookies.length, "cookies");
 
 		for (const cookie of cookies) {
 			// Strip Domain attribute - if it's .convex.site, it's invalid for our domain
@@ -131,6 +135,7 @@ function convertCrossdomainCookies(response: Response): Headers {
 				sanitizedCookie = sanitizedCookie.replace(/^__Secure-/i, "");
 			}
 
+			console.log("[Auth Route] Adding Set-Cookie:", sanitizedCookie.substring(0, 100));
 			newHeaders.append("Set-Cookie", sanitizedCookie);
 		}
 		// DO NOT delete Set-Better-Auth-Cookie - crossDomainClient needs it!
