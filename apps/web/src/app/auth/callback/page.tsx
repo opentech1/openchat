@@ -20,7 +20,7 @@ function AuthCallbackContent() {
 	useEffect(() => {
 		let cancelled = false;
 		let attempts = 0;
-		const maxAttempts = 10; // Try for up to 5 seconds (500ms * 10)
+		const maxAttempts = 10; // up to 5 seconds (500ms * 10)
 
 		const checkSession = async () => {
 			try {

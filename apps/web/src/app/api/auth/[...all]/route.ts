@@ -103,8 +103,7 @@ async function withAuthRateLimit(
  *
  * IMPORTANT: We keep BOTH headers because:
  * - Set-Cookie: Used by browser for navigation/page loads
- * - Set-Better-Auth-Cookie: Read by crossDomainClient plugin which uses credentials: "omit"
- *   and stores cookies in localStorage instead of relying on browser cookie jar
+ * - Set-Better-Auth-Cookie: Read by crossDomainClient plugin for localStorage storage
  */
 function convertCrossdomainCookies(response: Response): Headers {
 	const newHeaders = new Headers();
