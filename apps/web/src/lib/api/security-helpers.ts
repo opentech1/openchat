@@ -10,7 +10,6 @@
  * Any divergence in security validation logic could create vulnerabilities.
  */
 
-import { cookies } from "next/headers";
 import { validateCsrfToken, requiresCsrfProtection, CSRF_COOKIE_NAME } from "@/lib/csrf";
 import { resolveAllowedOrigins, validateRequestOrigin, type OriginValidationResult } from "@/lib/request-origin";
 
@@ -41,9 +40,12 @@ export type CsrfValidationResult = {
 /**
  * Validate CSRF token for the given request.
  *
+ * This reads cookies directly from the request headers instead of using
+ * next/headers cookies() which doesn't work in some environments (Vercel Edge, Cloudflare).
+ *
  * This is a standardized helper that:
  * 1. Checks if CSRF protection is required (skips GET/HEAD/OPTIONS)
- * 2. Retrieves CSRF token from cookies
+ * 2. Retrieves CSRF token from request cookie header
  * 3. Validates token against request header
  *
  * WHEN TO USE:
@@ -92,12 +94,19 @@ export async function validateCsrfForRequest(
 		return { valid: true };
 	}
 
-	// Get CSRF token from cookies
-	const cookieStore = await cookies();
-	const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
+	// Get CSRF token from request cookie header (not next/headers cookies())
+	// This works in all environments including Vercel Edge and Cloudflare
+	const cookieHeader = request.headers.get("cookie");
+	let csrfCookieValue: string | undefined;
+
+	if (cookieHeader) {
+		// Parse the CSRF cookie from the cookie header
+		const csrfMatch = cookieHeader.match(new RegExp(`${CSRF_COOKIE_NAME}=([^;]+)`));
+		csrfCookieValue = csrfMatch?.[1];
+	}
 
 	// Validate token
-	const validation = validateCsrfToken(request, csrfCookie?.value);
+	const validation = validateCsrfToken(request, csrfCookieValue);
 
 	if (!validation.valid) {
 		return {
