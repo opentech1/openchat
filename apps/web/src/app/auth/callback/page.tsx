@@ -21,6 +21,10 @@ function AuthCallbackContent() {
 	const [checking, setChecking] = useState(true);
 	const verifyingRef = useRef(false);
 
+	// Extract params once to avoid dependency issues
+	const ott = searchParams.get("ott");
+	const from = searchParams.get("from");
+
 	useEffect(() => {
 		let cancelled = false;
 
@@ -30,7 +34,6 @@ function AuthCallbackContent() {
 			verifyingRef.current = true;
 
 			try {
-				const ott = searchParams.get("ott");
 
 				if (ott) {
 					console.log("[Auth Callback] Found OTT, verifying with credentials: include...");
@@ -40,6 +43,9 @@ function AuthCallbackContent() {
 					// By doing this FIRST, we ensure Set-Cookie headers from our route handler
 					// are stored by the browser as actual cookies (not just localStorage).
 					const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+					if (!process.env.NEXT_PUBLIC_APP_URL) {
+						console.warn("[Auth Callback] NEXT_PUBLIC_APP_URL not set, falling back to window.location.origin");
+					}
 					const verifyResponse = await fetch(`${baseUrl}/api/auth/cross-domain/one-time-token/verify`, {
 						method: "POST",
 						headers: {
@@ -75,8 +81,7 @@ function AuthCallbackContent() {
 
 						if (session?.data?.user) {
 							console.log("[Auth Callback] Session established, redirecting...");
-							const from = searchParams.get("from") || "/dashboard";
-							window.location.href = from;
+							window.location.href = from || "/dashboard";
 							return;
 						}
 
@@ -115,7 +120,7 @@ function AuthCallbackContent() {
 		return () => {
 			cancelled = true;
 		};
-	}, [searchParams]);
+	}, [ott, from]);
 
 	if (error) {
 		return (
