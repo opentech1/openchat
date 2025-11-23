@@ -2,6 +2,7 @@ import { nextJsHandler } from "@convex-dev/better-auth/nextjs";
 import { NextResponse } from "next/server";
 import { RateLimiter, getClientIp, createRateLimitHeaders } from "@/lib/rate-limit";
 import { logWarn } from "@/lib/logger-server";
+import { splitCookiesString } from "set-cookie-parser";
 
 // Export the Convex Better Auth handler for Next.js
 // This uses Convex as the database backend instead of SQLite
@@ -109,16 +110,23 @@ const handleAuthRequest = async (request: Request, handler: (request: Request) =
   // to avoid browser domain mismatch issues when calling directly.
   // Since we are proxying via Next.js (same origin), we need to convert it back to Set-Cookie
   // so the browser will accept it.
-  const betterAuthCookie = response.headers.get("Set-Better-Auth-Cookie");
+  const betterAuthCookieHeader = response.headers.get("Set-Better-Auth-Cookie");
   
-  if (betterAuthCookie) {
-    // Add it as a standard Set-Cookie header
-    // IMPORTANT: We must strip any Domain attribute because:
-    // 1. If it's .convex.site, it's invalid for osschat.dev
-    // 2. If it's osschat.dev, it was invalid when sent from convex.site (but we are proxying so it's fine now)
-    // 3. Safest is to strip it and let it be host-only for osschat.dev
-    const sanitizedCookie = betterAuthCookie.replace(/;\s*[Dd]omain=[^;]+/, "");
-    newHeaders.append("Set-Cookie", sanitizedCookie);
+  if (betterAuthCookieHeader) {
+    // Set-Better-Auth-Cookie might contain multiple cookies joined by comma
+    // We need to split them properly to handle each one
+    const cookies = splitCookiesString(betterAuthCookieHeader);
+    
+    for (const cookie of cookies) {
+        // Add it as a standard Set-Cookie header
+        // IMPORTANT: We must strip any Domain attribute because:
+        // 1. If it's .convex.site, it's invalid for osschat.dev
+        // 2. If it's osschat.dev, it was invalid when sent from convex.site (but we are proxying so it's fine now)
+        // 3. Safest is to strip it and let it be host-only for osschat.dev
+        const sanitizedCookie = cookie.replace(/;\s*[Dd]omain=[^;]+/, "");
+        newHeaders.append("Set-Cookie", sanitizedCookie);
+    }
+    
     // Remove the custom header to clean up
     newHeaders.delete("Set-Better-Auth-Cookie");
   }
