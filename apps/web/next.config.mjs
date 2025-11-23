@@ -40,6 +40,8 @@ const nextConfig = {
 	// REMOVED: output: "standalone"
 	// Vercel has its own runtime and doesn't need standalone mode
 	// Keeping this enabled adds 150MB+ to builds and increases build time
+	// RE-ENABLED: output: "standalone" is REQUIRED for Docker/Railway builds
+	output: "standalone",
 	images: {
 		remotePatterns: [
 			{ protocol: "https", hostname: "ik.imagekit.io" },
