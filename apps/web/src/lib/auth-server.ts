@@ -176,21 +176,18 @@ export async function getUserContextFromRequest(request: Request): Promise<UserC
 		}
 	}
 
-	// Call better-auth API to get session
-	// Use the request's origin for the base URL to ensure internal routing works
+	// Call Convex auth endpoint directly to get session
+	// This avoids internal routing issues in serverless environments
 	try {
-		// Try to get the host from the request for internal calls
-		const host = request.headers.get("host");
-		const protocol = request.headers.get("x-forwarded-proto") || "https";
-		const baseUrl = host
-			? `${protocol}://${host}`
-			: process.env.NEXT_PUBLIC_APP_URL ||
-			  process.env.SITE_URL ||
-			  "http://localhost:3000";
+		// Prefer calling Convex directly to avoid internal HTTP routing issues
+		const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+		const sessionUrl = convexSiteUrl
+			? `${convexSiteUrl}/auth/get-session`
+			: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/auth/get-session`;
 
-		console.log("[Auth Server API] Fetching session from:", `${baseUrl}/api/auth/get-session`);
+		console.log("[Auth Server API] Fetching session from:", sessionUrl);
 
-		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
+		const response = await fetch(sessionUrl, {
 			headers: {
 				Cookie: cookieHeader,
 			},
