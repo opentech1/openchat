@@ -93,6 +93,44 @@ async function withAuthRateLimit(
 }
 
 // TEMPORARILY BYPASS RATE LIMITING TO DEBUG COOKIE ISSUE
-// Export original handlers directly to test if cookies work
-export const GET = originalGET;
-export const POST = originalPOST;
+// But we MUST wrap the handler to fix the cross-domain cookie issue
+const handleAuthRequest = async (request: Request, handler: (request: Request) => Promise<Response>) => {
+  const response = await handler(request);
+
+  // Create new headers to modify them
+  const newHeaders = new Headers(response.headers);
+
+  // The crossDomain plugin on Convex server converts Set-Cookie to Set-Better-Auth-Cookie
+  // to avoid browser domain mismatch issues when calling directly.
+  // Since we are proxying via Next.js (same origin), we need to convert it back to Set-Cookie
+  // so the browser will accept it.
+  const betterAuthCookie = response.headers.get("Set-Better-Auth-Cookie");
+  if (betterAuthCookie) {
+    // Add it as a standard Set-Cookie header
+    // IMPORTANT: We must strip any Domain attribute because:
+    // 1. If it's .convex.site, it's invalid for osschat.dev
+    // 2. If it's osschat.dev, it was invalid when sent from convex.site (but we are proxying so it's fine now)
+    // 3. Safest is to strip it and let it be host-only for osschat.dev
+    const sanitizedCookie = betterAuthCookie.replace(/;\s*[Dd]omain=[^;]+/, "");
+    newHeaders.append("Set-Cookie", sanitizedCookie);
+    // Remove the custom header to clean up
+    newHeaders.delete("Set-Better-Auth-Cookie");
+  }
+
+  // Also preserve any existing Set-Cookie headers properly
+  const existingCookies = response.headers.getSetCookie?.() ?? [];
+  // We don't need to re-append if we simply cloned the headers, BUT
+  // the Headers constructor implementation can sometimes merge or lose Set-Cookie values
+  // so it's safer to be explicit if we were reconstructing from scratch.
+  // Since we used new Headers(response.headers), it *should* copy them,
+  // but Set-Better-Auth-Cookie logic above is the critical fix.
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
+};
+
+export const GET = (req: Request) => handleAuthRequest(req, originalGET);
+export const POST = (req: Request) => handleAuthRequest(req, originalPOST);
