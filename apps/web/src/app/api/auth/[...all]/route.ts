@@ -68,20 +68,36 @@ async function withAuthRateLimit(
 
 	// Create a new response with rate limit headers
 	// (Response headers are immutable in Next.js App Router)
-	// IMPORTANT: Use getSetCookie() to properly preserve Set-Cookie headers
-	// The Headers constructor does NOT properly clone multiple Set-Cookie values
-	const newHeaders = new Headers(response.headers);
+	// IMPORTANT: Manually copy headers to preserve Set-Cookie properly
+	// Edge runtime's Headers constructor may not preserve multiple Set-Cookie values
+	const newHeaders = new Headers();
 
-	// Preserve Set-Cookie headers which are critical for auth
-	// getSetCookie() returns an array of all Set-Cookie header values
-	const setCookieHeaders = response.headers.getSetCookie?.() ?? [];
+	// Copy all non-Set-Cookie headers first
+	response.headers.forEach((value, key) => {
+		if (key.toLowerCase() !== "set-cookie") {
+			newHeaders.append(key, value);
+		}
+	});
+
+	// Preserve Set-Cookie headers using getSetCookie() if available,
+	// or fall back to parsing the comma-separated value from get()
+	let setCookieHeaders: string[] = [];
+	if (typeof response.headers.getSetCookie === "function") {
+		setCookieHeaders = response.headers.getSetCookie();
+	} else {
+		// Fallback: get the comma-separated value and split properly
+		const setCookieValue = response.headers.get("Set-Cookie");
+		if (setCookieValue) {
+			setCookieHeaders = splitCookiesString(setCookieValue);
+		}
+	}
 
 	// Add rate limit headers
 	Object.entries(rateLimitHeaders).forEach(([key, value]) => {
 		newHeaders.set(key, value);
 	});
 
-	// Re-add Set-Cookie headers that may have been lost during cloning
+	// Add Set-Cookie headers individually (not comma-joined)
 	for (const cookie of setCookieHeaders) {
 		newHeaders.append("Set-Cookie", cookie);
 	}
