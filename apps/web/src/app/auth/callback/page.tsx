@@ -10,8 +10,8 @@ import { NiceLoader } from "@/components/ui/nice-loader";
  *
  * Handles the one-time token (OTT) verification for cross-domain authentication.
  * When OAuth completes, the user is redirected here with an OTT parameter.
- * The crossDomainClient plugin automatically verifies the OTT and establishes the session cookie.
- * Once authenticated, the user is redirected to their intended destination.
+ * We must MANUALLY call the verify endpoint - crossDomainClient does NOT do this automatically.
+ * Once verified, the session cookie is established and user is redirected.
  */
 function AuthCallbackContent() {
 	const searchParams = useSearchParams();
@@ -20,30 +20,59 @@ function AuthCallbackContent() {
 	useEffect(() => {
 		const verifyAndRedirect = async () => {
 			try {
-				// The crossDomainClient plugin automatically processes OTT from URL
-				// and calls /api/auth/cross-domain/one-time-token/verify
-				// This sets the session cookie on osschat.dev domain
+				// Get the OTT from URL - the crossDomain server plugin adds this after OAuth
+				const ott = searchParams.get("ott");
 
-				// Wait a moment for the OTT verification to complete
-				await new Promise((resolve) => setTimeout(resolve, 500));
+				if (!ott) {
+					console.error("[Auth Callback] No OTT parameter in URL");
+					setError("Authentication failed - no token provided. Please try signing in again.");
+					return;
+				}
+
+				console.log("[Auth Callback] Verifying OTT...");
+
+				// IMPORTANT: crossDomainClient does NOT automatically verify OTT
+				// We must manually call the verify endpoint
+				const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+				const verifyResponse = await fetch(`${baseUrl}/api/auth/cross-domain/one-time-token/verify`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({ token: ott }),
+					credentials: "include", // Important: include cookies in the response
+				});
+
+				if (!verifyResponse.ok) {
+					const errorData = await verifyResponse.json().catch(() => ({}));
+					console.error("[Auth Callback] OTT verification failed:", verifyResponse.status, errorData);
+					setError("Authentication failed. Please try signing in again.");
+					return;
+				}
+
+				console.log("[Auth Callback] OTT verified, checking session...");
+
+				// Give the cookie a moment to be set
+				await new Promise((resolve) => setTimeout(resolve, 100));
 
 				// Check if session is now established
 				const session = await authClient.getSession();
 
 				if (session?.data?.user) {
+					console.log("[Auth Callback] Session established, redirecting...");
 					// Session established, redirect to intended destination
 					const from = searchParams.get("from") || "/dashboard";
 					window.location.href = from;
 				} else {
-					// Wait a bit more and retry - OTT verification might still be in progress
-					await new Promise((resolve) => setTimeout(resolve, 1500));
-
+					// Session not immediately available, try once more
+					await new Promise((resolve) => setTimeout(resolve, 500));
 					const retrySession = await authClient.getSession();
+
 					if (retrySession?.data?.user) {
 						const from = searchParams.get("from") || "/dashboard";
 						window.location.href = from;
 					} else {
-						// Still no session, something went wrong
+						console.error("[Auth Callback] Session not established after OTT verification");
 						setError("Authentication failed. Please try signing in again.");
 					}
 				}
