@@ -52,17 +52,20 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 		redirect("/auth/sign-in");
 	}
 
-	// Generate a cache key from cookies that look like session tokens
+	// Find a session-like cookie for cache key generation
+	// IMPORTANT: Only cache if we have a unique session identifier to prevent cross-user cache collisions
 	const sessionCookie = allCookies.find(
 		(c) => c.name.includes("session") || c.name.includes("token")
 	);
-	const cacheKey = sessionCookie?.value || cookieHeader.slice(0, 64);
+	const cacheKey = sessionCookie?.value;
 
-	// Check cache first
+	// Check cache first (only if we have a valid session cookie as cache key)
 	const now = Date.now();
-	const cached = sessionCache.get(cacheKey);
-	if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
-		return cached.user;
+	if (cacheKey) {
+		const cached = sessionCache.get(cacheKey);
+		if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
+			return cached.user;
+		}
 	}
 
 	// Call better-auth API to get session
@@ -95,8 +98,10 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 			image: data.user.image,
 		};
 
-		// Store in cache
-		sessionCache.set(cacheKey, { user, timestamp: now });
+		// Store in cache only if we have a unique session identifier
+		if (cacheKey) {
+			sessionCache.set(cacheKey, { user, timestamp: now });
+		}
 
 		// Cleanup old entries to prevent memory leaks
 		if (sessionCache.size > 1000) {
