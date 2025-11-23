@@ -92,39 +92,7 @@ async function withAuthRateLimit(
 	});
 }
 
-// Export wrapped handlers with rate limiting
-export async function GET(request: Request) {
-	try {
-		return await withAuthRateLimit(request, originalGET);
-	} catch (error) {
-		console.error("[Auth Route Error]", error);
-		return NextResponse.json(
-			{
-				error: "Internal server error",
-				// Only include detailed error info in development for security
-				// Stack traces can reveal internal implementation details to attackers
-				message: isDev && error instanceof Error ? error.message : "An unexpected error occurred",
-				...(isDev && error instanceof Error && { stack: error.stack }),
-			},
-			{ status: 500 },
-		);
-	}
-}
-
-export async function POST(request: Request) {
-	try {
-		return await withAuthRateLimit(request, originalPOST);
-	} catch (error) {
-		console.error("[Auth Route Error]", error);
-		return NextResponse.json(
-			{
-				error: "Internal server error",
-				// Only include detailed error info in development for security
-				// Stack traces can reveal internal implementation details to attackers
-				message: isDev && error instanceof Error ? error.message : "An unexpected error occurred",
-				...(isDev && error instanceof Error && { stack: error.stack }),
-			},
-			{ status: 500 },
-		);
-	}
-}
+// TEMPORARILY BYPASS RATE LIMITING TO DEBUG COOKIE ISSUE
+// Export original handlers directly to test if cookies work
+export const GET = originalGET;
+export const POST = originalPOST;
