@@ -59,11 +59,33 @@ function generateCorrelationId(): string {
  * - Makes it easy to trace a request through multiple services/logs
  */
 export async function middleware(request: NextRequest) {
-	const { pathname } = request.nextUrl;
+	const { pathname, searchParams } = request.nextUrl;
 
 	// Extract or generate correlation ID
 	const existingCorrelationId = request.headers.get("x-request-id");
 	const correlationId = existingCorrelationId || generateCorrelationId();
+
+	// CRITICAL: Intercept /auth/callback with OTT and redirect to server-side handler
+	// This MUST happen in middleware (before any client-side JS runs) because:
+	// 1. crossDomainClient plugin consumes OTT with credentials: "omit" (no cookies set)
+	// 2. We need to verify OTT server-side to set browser cookies
+	// 3. Middleware runs before page load, so OTT hasn't been consumed yet
+	if (pathname === "/auth/callback") {
+		const ott = searchParams.get("ott");
+		if (ott) {
+			// Redirect to server-side OTT verification handler
+			const ottHandlerUrl = new URL("/api/auth/callback-ott", request.url);
+			ottHandlerUrl.searchParams.set("ott", ott);
+
+			// Preserve the 'from' parameter for post-auth redirect
+			const from = searchParams.get("from");
+			if (from) {
+				ottHandlerUrl.searchParams.set("from", from);
+			}
+
+			return NextResponse.redirect(ottHandlerUrl);
+		}
+	}
 
 	// Protected routes that require authentication
 	const protectedRoutes = ["/dashboard", "/chat", "/settings"];
