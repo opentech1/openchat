@@ -4,7 +4,7 @@ import { createHash } from "crypto";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 import { captureServerEvent } from "@/lib/posthog-server";
-import { getUserContext } from "@/lib/auth-server";
+import { getUserContextFromRequest } from "@/lib/auth-server";
 import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 import { createLogger } from "@/lib/logger";
@@ -374,7 +374,14 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			return new Response("Invalid request origin", { status: 403 });
 		}
 		const allowOrigin = originResult.origin ?? corsOrigin ?? null;
-		const session = await getUserContext();
+
+		// Use request-based auth to read cookies directly from request headers
+		const session = await getUserContextFromRequest(request);
+		if (!session) {
+			const headers = buildCorsHeaders(request, allowOrigin);
+			return new Response("Unauthorized", { status: 401, headers });
+		}
+
 		const convexUserId = await ensureConvexUser({
 			id: session.userId,
 			email: session.email,

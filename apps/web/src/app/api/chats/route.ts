@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getConvexUserFromSession, createChatForUser, listChats } from "@/lib/convex-server";
+import { getConvexUserFromRequest, createChatForUser, listChats } from "@/lib/convex-server";
 import { serializeChat } from "@/lib/chat-serializers";
 import { createChatSchema, createValidationErrorResponse } from "@/lib/validation";
 import { logError } from "@/lib/logger-server";
@@ -27,9 +27,13 @@ async function getRateLimiter() {
 	return rateLimiterPromise;
 }
 
-export async function GET() {
-	// PERFORMANCE FIX: Use combined helper to eliminate redundant getUserContext call
-	const [, userId] = await getConvexUserFromSession();
+export async function GET(request: Request) {
+	// Use request-based auth to read cookies directly from request headers
+	const authResult = await getConvexUserFromRequest(request);
+	if (!authResult) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
+	const [, userId] = authResult;
 	const result = await listChats(userId);
 	return NextResponse.json({ chats: result.chats.map(serializeChat), nextCursor: result.nextCursor });
 }
@@ -88,9 +92,14 @@ export async function POST(request: Request) {
 		);
 	}
 
-	// PERFORMANCE FIX: Use combined helper to eliminate redundant getUserContext call
+	// Use request-based auth to read cookies directly from request headers
+	const authResult = await getConvexUserFromRequest(request);
+	if (!authResult) {
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	}
+
 	try {
-		const [, userId] = await getConvexUserFromSession();
+		const [, userId] = authResult;
 		const chat = await createChatForUser(userId, validatedTitle);
 		return NextResponse.json({ chat: serializeChat(chat) });
 	} catch (error) {

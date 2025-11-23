@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import type { Id } from "@server/convex/_generated/dataModel";
-import { deleteChatForUser, getConvexUserFromSession } from "@/lib/convex-server";
+import { deleteChatForUser, getConvexUserFromRequest } from "@/lib/convex-server";
 import { withCsrfProtection, CSRF_COOKIE_NAME } from "@/lib/csrf";
 import { chatIdSchema, createValidationErrorResponse } from "@/lib/validation";
 import { logError } from "@/lib/logger-server";
@@ -21,14 +20,20 @@ export async function DELETE(
 
 	const validatedId = validation.data;
 
-	// Get CSRF token from cookies
-	const cookieStore = await cookies();
-	const csrfCookie = cookieStore.get(CSRF_COOKIE_NAME);
+	// Get CSRF token from request cookies
+	const cookieHeader = request.headers.get("cookie") || "";
+	const csrfMatch = cookieHeader.match(new RegExp(`${CSRF_COOKIE_NAME}=([^;]+)`));
+	const csrfCookieValue = csrfMatch?.[1];
 
-	return withCsrfProtection(request, csrfCookie?.value, async () => {
+	return withCsrfProtection(request, csrfCookieValue, async () => {
+		// Use request-based auth to read cookies directly from request headers
+		const authResult = await getConvexUserFromRequest(request);
+		if (!authResult) {
+			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+		}
+
 		try {
-			// PERFORMANCE FIX: Use combined helper to eliminate redundant getUserContext call
-			const [session, convexUserId] = await getConvexUserFromSession();
+			const [session, convexUserId] = authResult;
 
 			// Delete chat
 			const chatId = validatedId as Id<"chats">;

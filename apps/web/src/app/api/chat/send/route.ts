@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Id } from "@server/convex/_generated/dataModel";
-import { getConvexUserFromSession, sendMessagePair } from "@/lib/convex-server";
+import { getConvexUserFromRequest, sendMessagePair } from "@/lib/convex-server";
 import { z } from "zod";
 import { logError } from "@/lib/logger-server";
 import { createValidationErrorResponse } from "@/lib/validation";
@@ -48,9 +48,14 @@ export async function POST(req: Request) {
 	}
 	const corsHeaders = securityResult.corsHeaders;
 
+	// Use request-based auth to read cookies directly from request headers
+	const authResult = await getConvexUserFromRequest(req);
+	if (!authResult) {
+		return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: corsHeaders });
+	}
+
 	try {
-		// PERFORMANCE FIX: Use combined helper to eliminate redundant getUserContext call
-		const [, convexUserId] = await getConvexUserFromSession();
+		const [, convexUserId] = authResult;
 		// SECURITY: Use server-generated timestamps only, ignore client timestamps
 		const result = await sendMessagePair({
 			userId: convexUserId,

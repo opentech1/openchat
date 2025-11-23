@@ -184,6 +184,32 @@ export async function getConvexUserFromSession(): Promise<[SessionUser, Id<"user
 }
 
 /**
+ * Get Convex user from Request object (for API routes)
+ *
+ * This reads cookies directly from the request headers instead of using
+ * next/headers cookies() which doesn't work in some environments.
+ *
+ * Returns null if not authenticated. API routes should return 401.
+ */
+export async function getConvexUserFromRequest(request: Request): Promise<[SessionUser, Id<"users">] | null> {
+	const { getUserContextFromRequest } = await import("./auth-server");
+	const session = await getUserContextFromRequest(request);
+
+	if (!session) {
+		return null;
+	}
+
+	const sessionUser: SessionUser = {
+		id: session.userId,
+		email: session.email,
+		name: session.name,
+		image: session.image,
+	};
+	const convexUserId = await ensureConvexUser(sessionUser);
+	return [sessionUser, convexUserId];
+}
+
+/**
  * Get file URL from Convex storage
  */
 export async function getFileUrl(storageId: Id<"_storage">, userId: Id<"users">) {

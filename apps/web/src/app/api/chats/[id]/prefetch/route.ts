@@ -3,18 +3,21 @@
 import type { Id } from "@server/convex/_generated/dataModel";
 import { NextResponse } from "next/server";
 
-import { getUserContext } from "@/lib/auth-server";
+import { getUserContextFromRequest } from "@/lib/auth-server";
 import { ensureConvexUser, listMessagesForChat } from "@/lib/convex-server";
 import { logError } from "@/lib/logger-server";
 import { chatIdSchema } from "@/lib/validation";
 import { serializeMessage } from "@/lib/message-serializers";
 
 export async function GET(
-	_request: Request,
+	request: Request,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
 	try {
-		const session = await getUserContext();
+		const session = await getUserContextFromRequest(request);
+		if (!session) {
+			return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+		}
 		const convexUserId = await ensureConvexUser({
 			id: session.userId,
 			email: session.email,
