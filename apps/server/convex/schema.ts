@@ -77,7 +77,7 @@ export default defineSchema({
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),
 		deletedAt: v.optional(v.number()),
-		// Legacy field from streaming implementation - can be removed once cleaned up from DB
+		// Stream ID for persistent text streaming - links to @convex-dev/persistent-text-streaming
 		streamId: v.optional(v.string()),
 	})
 		.index("by_chat", ["chatId", "createdAt"])

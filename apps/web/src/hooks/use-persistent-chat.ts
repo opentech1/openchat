@@ -33,9 +33,15 @@ export type UsePersistentChatOptions = {
 	onError?: (error: Error) => void;
 };
 
+export type ChatMessage = {
+	role: "user" | "assistant" | "system";
+	content: string;
+};
+
 export type SendMessageOptions = {
 	apiKey: string;
 	modelId: string;
+	conversationHistory?: ChatMessage[];
 	reasoningConfig?: {
 		enabled: boolean;
 		effort?: "medium" | "high";
@@ -93,9 +99,11 @@ export function usePersistentChat({
 				const convexSiteUrl = getConvexSiteUrl();
 				const streamUrl = `${convexSiteUrl}/stream-llm`;
 
-				// Build messages array for the LLM (would need to fetch history from Convex)
-				// For now, just send the current message
-				const messages = [{ role: "user", content }];
+				// Build messages array for the LLM including conversation history
+				const messages: ChatMessage[] = [
+					...(options.conversationHistory || []),
+					{ role: "user", content },
+				];
 
 				// Fire and forget - the stream continues on Convex even if we disconnect
 				fetch(streamUrl, {
@@ -154,15 +162,21 @@ export function useMessageStream(
 	isDriven: boolean
 ) {
 	const convexSiteUrl = getConvexSiteUrl();
-	const streamUrl = streamId
+
+	// Create stream URL only when we have a valid streamId
+	// When streamId is null, we provide a placeholder URL that won't be used
+	// because isDriven will be false (the hook uses database fallback when not driven)
+	const streamUrl = streamId && convexSiteUrl
 		? new URL(`${convexSiteUrl}/stream-llm`)
-		: null;
+		: new URL("http://placeholder.invalid/stream");
 
 	// useStream handles both HTTP streaming (when isDriven) and database fallback
+	// When isDriven is false or streamId is null, it falls back to database queries
+	const shouldDrive = isDriven && streamId !== null;
 	const { text, status } = useStream(
 		api.streaming.getStreamBody,
-		streamUrl!,
-		isDriven && streamId !== null,
+		streamUrl,
+		shouldDrive,
 		(streamId || "") as StreamId
 	);
 

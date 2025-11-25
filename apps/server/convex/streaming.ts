@@ -406,8 +406,12 @@ export const streamLLM = httpAction(async (ctx, request) => {
 							fullReasoning += delta.reasoning_content;
 							reasoningEndTime = Date.now();
 						}
-					} catch {
-						// Skip invalid JSON
+					} catch (parseError) {
+						// Log JSON parse errors for debugging OpenRouter protocol issues
+						console.warn("Failed to parse streaming chunk:", {
+							data: data.slice(0, 200), // Truncate for logging
+							error: parseError instanceof Error ? parseError.message : String(parseError),
+						});
 					}
 				}
 			}
