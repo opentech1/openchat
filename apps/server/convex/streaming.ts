@@ -319,8 +319,9 @@ export const streamLLM = httpAction(async (ctx, request) => {
 
 		// Generator function for the stream
 		// This function runs to completion even if client disconnects
+		// Using 'any' for actionCtx to avoid type conflicts between httpAction ctx and stream() expected type
 		const generateResponse = async (
-			actionCtx: typeof ctx,
+			actionCtx: any,
 			_request: Request,
 			_streamId: StreamId,
 			chunkAppender: (chunk: string) => Promise<void>
