@@ -432,8 +432,10 @@ export const streamLLM = httpAction(async (ctx, request) => {
 		};
 
 		// Use the persistent streaming component
+		// Type assertion needed because httpAction ctx is GenericActionCtx<any>
+		// but stream() expects GenericActionCtx<GenericDataModel>
 		const streamResponse = await persistentTextStreaming.stream(
-			ctx,
+			ctx as Parameters<typeof persistentTextStreaming.stream>[0],
 			request,
 			streamId as StreamId,
 			generateResponse
