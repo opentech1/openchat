@@ -1,68 +1,33 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { NiceLoader } from "@/components/ui/nice-loader";
 
 /**
  * Client-side authentication guard
  *
- * This component checks authentication client-side and redirects to sign-in
- * if not authenticated. This is a workaround for issues where server-side
- * cookies() doesn't receive cookies even though they exist in the browser.
- *
- * The auth check uses fetch() with credentials: 'include' which properly
- * sends HttpOnly cookies.
+ * Uses the better-auth useSession hook for optimized session checking with caching.
+ * Shows content immediately while auth check happens in background.
+ * Only redirects to sign-in if definitively not authenticated.
  */
 export function AuthGuard({ children }: { children: ReactNode }) {
 	const router = useRouter();
-	const [isLoading, setIsLoading] = useState(true);
-	const [isAuthenticated, setIsAuthenticated] = useState(false);
+	const { data: session, isPending } = authClient.useSession();
 
 	useEffect(() => {
-		let cancelled = false;
+		// Only redirect when we're certain there's no session
+		// isPending = true means we're still checking
+		// session = null AND isPending = false means definitely not authenticated
+		if (!isPending && !session?.user) {
+			router.replace("/auth/sign-in");
+		}
+	}, [isPending, session, router]);
 
-		const checkAuth = async () => {
-			try {
-				const session = await authClient.getSession();
-
-				if (cancelled) return;
-
-				if (session?.data?.user) {
-					setIsAuthenticated(true);
-				} else {
-					// No session, redirect to sign-in
-					router.replace("/auth/sign-in");
-				}
-			} catch (error) {
-				console.error("[AuthGuard] Failed to check session:", error);
-				if (!cancelled) {
-					router.replace("/auth/sign-in");
-				}
-			} finally {
-				if (!cancelled) {
-					setIsLoading(false);
-				}
-			}
-		};
-
-		checkAuth();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [router]);
-
-	if (isLoading) {
-		return (
-			<div className="min-h-screen flex items-center justify-center">
-				<NiceLoader message="Checking authentication..." size="lg" />
-			</div>
-		);
-	}
-
-	if (!isAuthenticated) {
+	// Show content immediately while checking
+	// This provides a much faster perceived load time
+	// The redirect will happen in background if not authenticated
+	if (!isPending && !session?.user) {
 		return null; // Will redirect
 	}
 

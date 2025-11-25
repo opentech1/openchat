@@ -111,6 +111,7 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 
 export function normalizeUiMessage(message: UIMessage<{
 	createdAt?: string;
+	thinkingTimeMs?: number;
 	attachments?: Array<{
 		storageId: string;
 		filename: string;
@@ -138,23 +139,31 @@ export function normalizeUiMessage(message: UIMessage<{
 			text: part.text,
 		}));
 
+	// Extract thinkingTimeMs from metadata if available
+	const thinkingTimeMs = message.metadata?.thinkingTimeMs;
+
 	return {
 		...normalizeMessage({
 			id: message.id,
 			role: message.role,
 			content,
+			thinkingTimeMs,
 			created_at: message.metadata?.createdAt,
 		}),
 		parts: parts.length > 0 ? parts : undefined,
+		thinkingTimeMs, // Ensure it's preserved even after normalizeMessage
 	};
 }
 
-export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: string }> {
+export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: string; thinkingTimeMs?: number }> {
 	return {
 		id: message.id,
 		role: message.role,
 		parts: message.parts ?? [{ type: "text", text: message.content }],
-		metadata: { createdAt: message.createdAt.toISOString() },
+		metadata: {
+			createdAt: message.createdAt.toISOString(),
+			thinkingTimeMs: message.thinkingTimeMs,
+		},
 	};
 }
 

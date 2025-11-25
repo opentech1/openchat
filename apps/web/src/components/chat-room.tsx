@@ -14,11 +14,16 @@ import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { toast } from "sonner";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@server/convex/_generated/api";
+import type { Id } from "@server/convex/_generated/dataModel";
 
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { useJonMode } from "@/hooks/use-jon-mode";
+import { useProgressiveWaitDetection } from "@/hooks/use-progressive-wait-detection";
+// useMessageStream hook no longer needed - using direct Convex useQuery for reactivity
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -64,6 +69,8 @@ type ChatRoomProps = {
       uploadedAt: number;
     }>;
   }>;
+  // STREAM RECONNECTION: Initial stream ID to reconnect to on reload
+  initialStreamId?: string | null;
 };
 
 const MESSAGE_THROTTLE_MS = getMessageThrottle();
@@ -141,7 +148,7 @@ const initialOpenRouterState: OpenRouterState = {
   keyPromptDismissed: true, // Start dismissed - only show when user clicks "Add key" in toast
 };
 
-function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
+function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   const { data: session } = authClient.useSession();
   const user = session?.user;
   const workspaceId = user?.id ?? null;
@@ -188,6 +195,45 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const [pendingMessage, setPendingMessage] = useState<string>("");
   const [shouldAutoSend, setShouldAutoSend] = useState(false);
   const autoSendAttemptedRef = useRef(false);
+
+  // Streaming state - use local state for immediate updates, query for reconnection detection
+  const [activeStreamId, setActiveStreamId] = useState<string | null>(initialStreamId ?? null);
+  const [isConvexStreaming, setIsConvexStreaming] = useState(Boolean(initialStreamId));
+  const prepareChat = useMutation(api.streaming.prepareChat);
+
+  // STREAM RECONNECTION: Query to detect active streams on reload
+  const activeStreamFromDb = useQuery(
+    api.messages.getActiveStream,
+    convexUserId && chatId
+      ? { chatId: toConvexChatId(chatId), userId: convexUserId }
+      : "skip"
+  );
+
+  // Auto-reconnect to active stream from database (for page reload scenario)
+  const hasAttemptedReconnect = useRef(false);
+  useEffect(() => {
+    // Only attempt reconnection once, when query first resolves
+    if (hasAttemptedReconnect.current) return;
+    if (activeStreamFromDb === undefined) return; // Query still loading
+    if (!activeStreamFromDb) return; // No active stream in DB
+    if (activeStreamId) return; // Already have an active stream locally
+
+    // Found an active stream from database - reconnect!
+    hasAttemptedReconnect.current = true;
+    setActiveStreamId(activeStreamFromDb);
+    setIsConvexStreaming(true);
+  }, [activeStreamFromDb, activeStreamId]);
+
+  // Track which stream IDs were created by THIS browser session
+  const drivenStreamIdsRef = useRef<Set<string>>(new Set());
+
+  // Real-time stream content from Convex
+  const streamBody = useQuery(
+    api.streaming.getStreamBody,
+    activeStreamId ? { streamId: activeStreamId as any } : "skip"
+  );
+  const streamText = streamBody?.text || "";
+  const streamHookStatus = streamBody?.status as "pending" | "streaming" | "done" | "error" | "timeout" | undefined;
 
   // Check for pending message and model from dashboard on mount
   useEffect(() => {
@@ -710,99 +756,233 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         handleMissingRequirement("apiKey");
         return;
       }
-      const id = crypto.randomUUID?.() ?? `${Date.now()}`;
-      const createdAt = new Date().toISOString();
-      try {
-        await sendMessage(
-          {
-            id,
-            role: "user",
-            parts: [{ type: "text", text: content }],
-            metadata: {
-              createdAt,
-            },
-          },
-          {
-            body: {
-              chatId,
-              modelId,
-              apiKey: requestApiKey,
-              attachments,
-              reasoningConfig,
-              jonMode: jonModeParam,
-            },
-          },
-        );
-        captureClientEvent("chat_message_submitted", {
-          chat_id: chatId,
-          model_id: modelId,
-          characters: content.length,
-          has_api_key: Boolean(requestApiKey),
-          has_attachments: Boolean(attachments && attachments.length > 0),
-          attachment_count: attachments?.length || 0,
-        });
-      } catch (error) {
-        let status: number | null = null;
 
-        if (error instanceof Response) {
-          status = error.status;
-        } else if (isApiError(error) && typeof error.status === "number") {
-          status = error.status;
-        } else if (
-          isApiError(error) &&
-          error.cause &&
-          typeof error.cause === "object" &&
-          "status" in error.cause &&
-          typeof error.cause.status === "number"
-        ) {
-          status = error.cause.status;
-        }
-        if (status === 429) {
-          let limitHeader: number | undefined;
-          let windowHeader: number | undefined;
-          if (error instanceof Response) {
-            const limit =
-              error.headers.get("x-ratelimit-limit") ||
-              error.headers.get("X-RateLimit-Limit");
-            const windowMs =
-              error.headers.get("x-ratelimit-window") ||
-              error.headers.get("X-RateLimit-Window");
-            const parsedLimit = limit ? Number(limit) : Number.NaN;
-            const parsedWindow = windowMs ? Number(windowMs) : Number.NaN;
-            limitHeader = Number.isFinite(parsedLimit)
-              ? parsedLimit
-              : undefined;
-            windowHeader = Number.isFinite(parsedWindow)
-              ? parsedWindow
-              : undefined;
+      // Use Convex persistent streaming for true stream persistence
+      // This ensures the stream continues even if the user closes the tab
+      if (convexUserId) {
+        try {
+          const userMessageId = crypto.randomUUID?.() ?? `user-${Date.now()}`;
+          const assistantMessageId = crypto.randomUUID?.() ?? `assistant-${Date.now()}`;
+          const createdAt = new Date().toISOString();
+
+          // 1. Create user message, stream, and assistant placeholder in Convex
+          const result = await prepareChat({
+            chatId: toConvexChatId(chatId),
+            userId: convexUserId,
+            userContent: content,
+            userMessageId,
+            assistantMessageId,
+          });
+
+          // 2. Add messages to local UI immediately for instant feedback
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: userMessageId,
+              role: "user" as const,
+              parts: [{ type: "text" as const, text: content }],
+              metadata: { createdAt },
+            },
+            {
+              id: assistantMessageId,
+              role: "assistant" as const,
+              parts: [{ type: "text" as const, text: "" }],
+              metadata: { createdAt: new Date().toISOString() },
+            },
+          ]);
+
+          // 3. Set active stream state and track as driven (created in THIS session)
+          // This triggers the stream body query to start fetching content
+          setActiveStreamId(result.streamId as string);
+          setIsConvexStreaming(true);
+          drivenStreamIdsRef.current.add(result.streamId as string);
+
+          // 4. Build conversation history for the LLM
+          const conversationMessages = messages.map((m) => {
+            const textContent = m.parts
+              .filter((p): p is { type: "text"; text: string } => p.type === "text")
+              .map((p) => p.text)
+              .join("");
+            return { role: m.role, content: textContent };
+          });
+          conversationMessages.push({ role: "user", content });
+
+          // 5. Start the stream on Convex (fire and forget - continues even if we disconnect)
+          const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+          if (convexSiteUrl) {
+            fetch(`${convexSiteUrl}/stream-llm`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                streamId: result.streamId,
+                messageId: result.assistantMessageId,
+                apiKey: requestApiKey,
+                modelId,
+                messages: conversationMessages,
+                reasoningConfig,
+              }),
+            }).catch((err) => {
+              logError("Failed to start stream", err);
+              // Clear streaming state and driven stream tracking on error
+              setActiveStreamId(null);
+              setIsConvexStreaming(false);
+              drivenStreamIdsRef.current.delete(result.streamId as string);
+              // Remove the placeholder assistant message
+              setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+              toast.error("Failed to connect to AI service", {
+                description: "Check your connection and try again.",
+                duration: 5000,
+              });
+            });
+          } else {
+            // No Convex site URL configured - this is a configuration error
+            logError("NEXT_PUBLIC_CONVEX_SITE_URL not configured", new Error("Missing env var"));
+            setActiveStreamId(null);
+            setIsConvexStreaming(false);
+            drivenStreamIdsRef.current.delete(result.streamId as string);
+            setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+            toast.error("AI service not configured", {
+              description: "Please check your environment configuration.",
+              duration: 5000,
+            });
           }
-          captureClientEvent("chat.rate_limited", {
+
+          captureClientEvent("chat_message_submitted", {
             chat_id: chatId,
-            limit: limitHeader,
-            window_ms: windowHeader,
+            model_id: modelId,
+            characters: content.length,
+            has_api_key: Boolean(requestApiKey),
+            has_attachments: Boolean(attachments && attachments.length > 0),
+            attachment_count: attachments?.length || 0,
+            persistent_streaming: true,
           });
-        } else if (status === 401) {
-          await removeKey();
-          dispatch({ type: "CLEAR_MODELS" });
-          dispatch({
-            type: "SET_MODELS_ERROR",
-            payload:
-              "OpenRouter rejected your API key. Re-enter it to continue.",
-          });
-          toast.error("OpenRouter API key invalid", {
-            description:
-              "We cleared the saved key. Add a valid key to keep chatting.",
-          });
-          // Don't call handleMissingRequirement here - toast above is sufficient
-          return;
+        } catch (error) {
+          logError("Failed to prepare chat", error);
+          // Clear streaming state on error
+          setActiveStreamId(null);
+          setIsConvexStreaming(false);
+          toast.error("Failed to send message");
+          throw error;
         }
-        logError("Failed to send message", error);
-        // Re-throw error so chat-composer can restore the message
-        throw error;
+      } else {
+        // Fallback to original flow if Convex user not available
+        const id = crypto.randomUUID?.() ?? `${Date.now()}`;
+        const createdAt = new Date().toISOString();
+        try {
+          await sendMessage(
+            {
+              id,
+              role: "user",
+              parts: [{ type: "text", text: content }],
+              metadata: {
+                createdAt,
+              },
+            },
+            {
+              body: {
+                chatId,
+                modelId,
+                apiKey: requestApiKey,
+                attachments,
+                reasoningConfig,
+                jonMode: jonModeParam,
+              },
+            },
+          );
+          captureClientEvent("chat_message_submitted", {
+            chat_id: chatId,
+            model_id: modelId,
+            characters: content.length,
+            has_api_key: Boolean(requestApiKey),
+            has_attachments: Boolean(attachments && attachments.length > 0),
+            attachment_count: attachments?.length || 0,
+          });
+        } catch (error) {
+          let status: number | null = null;
+
+          if (error instanceof Response) {
+            status = error.status;
+          } else if (isApiError(error) && typeof error.status === "number") {
+            status = error.status;
+          } else if (
+            isApiError(error) &&
+            error.cause &&
+            typeof error.cause === "object" &&
+            "status" in error.cause &&
+            typeof error.cause.status === "number"
+          ) {
+            status = error.cause.status;
+          }
+          if (status === 429) {
+            captureClientEvent("chat.rate_limited", {
+              chat_id: chatId,
+            });
+          } else if (status === 401) {
+            await removeKey();
+            dispatch({ type: "CLEAR_MODELS" });
+            dispatch({
+              type: "SET_MODELS_ERROR",
+              payload:
+                "OpenRouter rejected your API key. Re-enter it to continue.",
+            });
+            toast.error("OpenRouter API key invalid", {
+              description:
+                "We cleared the saved key. Add a valid key to keep chatting.",
+            });
+            return;
+          }
+          logError("Failed to send message", error);
+          throw error;
+        }
       }
     },
-    [chatId, sendMessage, handleMissingRequirement, removeKey],
+    [chatId, convexUserId, prepareChat, messages, setMessages, sendMessage, handleMissingRequirement, removeKey],
   );
+
+  // STREAM RECONNECTION: Update assistant message content using Convex stream body
+  // This provides real-time updates from the persistent stream
+  useEffect(() => {
+    if (!activeStreamId) return;
+
+    // Find and update the last assistant message with stream content
+    if (streamText) {
+      setMessages((prev) => {
+        // Use findLastIndex to get the last assistant message (not findIndex with broken logic)
+        const lastAssistantIdx = prev.findLastIndex((m) => m.role === "assistant");
+        if (lastAssistantIdx === -1) return prev;
+
+        const msg = prev[lastAssistantIdx];
+        // Only update if content actually changed to avoid unnecessary re-renders
+        const currentText = msg?.parts.find((p): p is { type: "text"; text: string } => p.type === "text")?.text || "";
+        if (currentText === streamText) return prev;
+
+        const updated = [...prev];
+        if (msg) {
+          updated[lastAssistantIdx] = {
+            ...msg,
+            parts: [{ type: "text" as const, text: streamText }],
+          };
+        }
+        return updated;
+      });
+    }
+
+    // Clear stream state when completed, error, or timeout
+    // This is CRITICAL - without it, isConvexStreaming stays true forever
+    if (streamHookStatus === "done" || streamHookStatus === "error" || streamHookStatus === "timeout") {
+      drivenStreamIdsRef.current.delete(activeStreamId);
+      // Reset streaming state so UI no longer shows loading indicators
+      setActiveStreamId(null);
+      setIsConvexStreaming(false);
+
+      if (streamHookStatus === "error" || streamHookStatus === "timeout") {
+        toast.error(streamHookStatus === "timeout" ? "Response timed out" : "Failed to get response", {
+          description: "Please try sending your message again.",
+          duration: 5000,
+        });
+      }
+    }
+  }, [activeStreamId, streamText, streamHookStatus, setMessages]);
 
   const handleModelSelection = useCallback(
     (next: string) => {
@@ -829,7 +1009,13 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     });
   }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, jonMode, status, handleSend]);
 
-  const _busy = status === "submitted" || status === "streaming";
+  // Combine AI SDK status with Convex streaming status
+  const isStreaming = status === "streaming" || isConvexStreaming;
+  const isSubmitting = status === "submitted";
+  const _busy = isSubmitting || isStreaming;
+
+  // Progressive wait detection for better loading states
+  const { waitState, elapsedSeconds } = useProgressiveWaitDetection(isSubmitting || isStreaming);
   const isLinked = Boolean(apiKey);
   // Only show modal when user explicitly wants to add key (via toast action or settings)
   const showKeyModal = !keyPromptDismissed && checkedApiKey && !isLinked;
@@ -837,7 +1023,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
   const composerDisabled = false;
   // Don't disable send button when streaming - user needs to be able to click stop
   // Also don't block sending without API key - let handleSend show the toast instead
-  const sendDisabled = (status === "submitted") || modelsLoading || !selectedModel;
+  const sendDisabled = isSubmitting || modelsLoading || !selectedModel;
 
   const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
 
@@ -853,7 +1039,7 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3 overflow-x-hidden px-4 focus:outline-none focus-visible:outline-none">
       {/* Screen reader announcements for loading states */}
       <LiveRegion
-        message={status === "submitted" ? "Sending message..." : status === "streaming" ? "Receiving response..." : ""}
+        message={isSubmitting ? "Sending message..." : isStreaming ? "Receiving response..." : ""}
         politeness="polite"
       />
       <OpenRouterLinkModal
@@ -875,12 +1061,16 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
         optimisticMessages={messages}
         paddingBottom={conversationPaddingBottom}
         className="flex-1 rounded-xl bg-background/40 shadow-inner"
-        isStreaming={status === "streaming"}
+        isStreaming={isStreaming}
+        isSubmitted={isSubmitting}
         userId={convexUserId as string | null}
         chatId={chatId}
+        waitState={waitState}
+        elapsedSeconds={elapsedSeconds}
+        selectedModelName={modelOptions.find((m) => m.value === selectedModel)?.label}
       />
 
-      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-300 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
+      <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-200 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
         <div ref={composerRef} className="pointer-events-auto w-full max-w-3xl">
           <ErrorBoundary level="section" resetKeys={[chatId]}>
             <ChatComposer
@@ -893,8 +1083,12 @@ function ChatRoom({ chatId, initialMessages }: ChatRoomProps) {
               onModelChange={handleModelSelection}
               modelsLoading={modelsLoading}
               apiKey={apiKey}
-              isStreaming={status === "streaming"}
-              onStop={() => stop()}
+              isStreaming={isStreaming}
+              onStop={() => {
+                // Stop AI SDK stream (Convex stream continues and completes on server)
+                // The activeStreamId will automatically update when stream completes
+                stop();
+              }}
               onMissingRequirement={handleMissingRequirement}
               userId={convexUserId}
               chatId={toConvexChatId(chatId)}

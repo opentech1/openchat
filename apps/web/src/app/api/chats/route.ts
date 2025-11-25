@@ -34,7 +34,14 @@ export async function GET(request: Request) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 	const [, userId] = authResult;
-	const result = await listChats(userId);
+
+	// Parse optional params
+	const url = new URL(request.url);
+	const cursor = url.searchParams.get("cursor") || undefined;
+	const limitParam = url.searchParams.get("limit");
+	const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+	const result = await listChats(userId, cursor, limit);
 	return NextResponse.json({ chats: result.chats.map(serializeChat), nextCursor: result.nextCursor });
 }
 

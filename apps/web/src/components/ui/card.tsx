@@ -8,9 +8,14 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        `bg-card text-card-foreground flex flex-col border py-6 ${borderRadius.lg} ${shadows.sm} ${spacing.gap.xl}`,
+        `bg-card text-card-foreground flex flex-col py-6 ${borderRadius.lg} ${spacing.gap.xl}`,
+        "transition-[background-color] duration-100 ease-out",
+        "hover:bg-card/80 cursor-default",
         className
       )}
+      style={{
+        boxShadow: "inset 0 0 0 1px oklch(from var(--border) l c h / 0.5)",
+      }}
       {...props}
     />
   )

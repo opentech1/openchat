@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "../index.css";
 import Providers from "@/components/providers";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
+import { Oxanium, Fira_Code } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { RouteFocusManager } from "@/components/route-focus-manager";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -10,6 +9,20 @@ import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { generateCombinedStructuredData, stringifyStructuredData } from "@/lib/structured-data";
+
+const oxanium = Oxanium({
+	subsets: ['latin'],
+	variable: '--font-oxanium',
+	display: 'swap',
+	weight: ['300', '400', '500', '600', '700'],
+});
+
+const firaCode = Fira_Code({
+	subsets: ['latin'],
+	variable: '--font-fira-code',
+	display: 'swap',
+	weight: ['400', '500'],
+});
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -112,7 +125,7 @@ export default function RootLayout({
 			lang="en"
 			suppressHydrationWarning
 			data-brand-theme="blue"
-			className={`${GeistSans.variable} ${GeistMono.variable}`}>
+			className={`${oxanium.variable} ${firaCode.variable}`}>
 			<head>
 				{/* Resource hints for faster DNS resolution and connections */}
 				{convexDomain && (
@@ -143,7 +156,7 @@ export default function RootLayout({
 					/>
 				)}
 			</head>
-			<body className={cn("font-sans antialiased", GeistSans.className)}>
+			<body className={cn("font-sans antialiased", oxanium.className)}>
 				<ErrorBoundary level="app">
 					<Providers>
 						<RouteFocusManager />

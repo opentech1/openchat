@@ -246,10 +246,10 @@ export const zIndex = {
 export const transitions = {
   /** 75ms - very fast micro-interactions */
   fast: "duration-75",
-  /** 150ms - default for most interactions */
-  normal: "duration-150",
-  /** 300ms - slower, more noticeable transitions */
-  slow: "duration-300",
+  /** 100ms - default for most interactions */
+  normal: "duration-100",
+  /** 200ms - slower, more noticeable transitions */
+  slow: "duration-200",
   /** 500ms - for emphasis */
   slower: "duration-500",
 } as const;

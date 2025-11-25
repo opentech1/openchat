@@ -18,7 +18,7 @@ export function Stepper({ steps, currentStep, className }: StepperProps) {
 					<div
 						key={index}
 						className={cn(
-							"h-2 w-2 rounded-full transition-all duration-300",
+							"h-2 w-2 rounded-full transition-all duration-200",
 							{
 								"bg-primary": isCurrent,
 								"bg-primary/50": isCompleted,

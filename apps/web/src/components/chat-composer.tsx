@@ -60,6 +60,7 @@ interface ChatComposerTextareaProps {
   disabled?: boolean;
   errorMessage: string | null;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  isSending?: boolean;
 }
 
 const ChatComposerTextarea = React.memo(
@@ -72,6 +73,7 @@ const ChatComposerTextarea = React.memo(
     disabled,
     errorMessage,
     textareaRef,
+    isSending,
   }: ChatComposerTextareaProps) => {
     return (
       <textarea
@@ -90,6 +92,8 @@ const ChatComposerTextarea = React.memo(
           "focus:outline-none",
           "placeholder:text-muted-foreground",
           "min-h-[60px]",
+          "transition-all duration-100 ease-out",
+          isSending && "animate-[pulse-flash_100ms_ease-out]",
         )}
         style={{ overflow: "hidden" }}
         disabled={disabled}
@@ -673,7 +677,7 @@ function ChatComposer({
   return (
     <div
       className={cn(
-        `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-300`,
+        `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-200`,
         borderRadius.xl,
         shadows.xl,
       )}
@@ -720,6 +724,7 @@ function ChatComposer({
           disabled={disabled}
           errorMessage={errorMessage}
           textareaRef={textareaRef}
+          isSending={isSending}
         />
 
         {/* File Previews */}
@@ -824,48 +829,47 @@ function ChatComposer({
           <button
             type="button"
             onClick={() => {
-              if (isStreaming) {
+              // INSTANT: Show Stop immediately when sending OR streaming
+              if (isSending || isStreaming) {
                 onStop?.();
               } else {
                 void send();
               }
             }}
             disabled={
-              isStreaming
-                ? sendDisabled
+              // Only disable when models loading or no model selected
+              // Don't disable during sending/streaming - user needs Stop button
+              (isSending || isStreaming)
+                ? false
                 : sendDisabled ||
-                  isSending ||
                   !value.trim() ||
                   !activeModelId
             }
             aria-label={
-              isStreaming ? "Stop generating response" : "Send message"
+              (isSending || isStreaming) ? "Stop generating response" : "Send message"
             }
             aria-busy={isSending}
             className={cn(
-              "flex h-9 items-center text-sm font-medium transition-all hover:scale-[1.01] active:scale-[0.98]",
+              "flex h-9 items-center text-sm font-medium transition-all duration-100 ease-out hover:scale-[1.01] active:scale-[0.95]",
               borderRadius.lg,
               spacing.gap.sm,
               shadows.sm,
               "px-4",
-              isStreaming
+              // INSTANT: Show Stop style immediately when sending OR streaming
+              (isSending || isStreaming)
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 : value.trim()
                   ? "bg-primary text-primary-foreground shadow-primary/10 hover:bg-primary/90"
                   : "bg-muted/50 text-muted-foreground",
             )}
           >
-            {isStreaming ? (
+            {/* INSTANT: Show Stop icon immediately when sending OR streaming */}
+            {(isSending || isStreaming) ? (
               <SquareIcon className="size-4" aria-hidden="true" />
-            ) : isSending ? (
-              <LoaderIcon
-                className="size-4 animate-[spin_2s_linear_infinite]"
-                aria-hidden="true"
-              />
             ) : (
-              <SendIcon className="size-4" aria-hidden="true" />
+              <SendIcon className="size-4 transition-transform duration-100 ease-out" aria-hidden="true" />
             )}
-            <span>{isStreaming ? "Stop" : "Send"}</span>
+            <span>{(isSending || isStreaming) ? "Stop" : "Send"}</span>
           </button>
         </div>
       </div>

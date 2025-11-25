@@ -27,9 +27,9 @@ export default function MobileDashboardNav(props: AppSidebarProps) {
 				<Menu className={iconSize.sm} />
 			</button>
 			{open ? (
-				<div className="fixed inset-0 z-40 md:hidden animate-in fade-in duration-200">
-					<div className="absolute inset-0 bg-background/60 backdrop-blur animate-in fade-in duration-200" onClick={() => setOpen(false)} aria-hidden />
-					<div className="absolute inset-y-0 right-0 flex h-full w-full max-w-xs flex-col animate-in slide-in-from-right duration-300">
+				<div className="fixed inset-0 z-40 md:hidden animate-in fade-in duration-150">
+					<div className="absolute inset-0 bg-background/60 backdrop-blur animate-in fade-in duration-150" onClick={() => setOpen(false)} aria-hidden />
+					<div className="absolute inset-y-0 right-0 flex h-full w-full max-w-xs flex-col animate-in slide-in-from-right duration-200">
 						<div className="flex items-center justify-end px-4 py-3">
 							<button
 								type="button"

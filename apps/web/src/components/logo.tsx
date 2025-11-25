@@ -5,7 +5,7 @@ import Image from 'next/image'
 const LogoIconImage = ({ className, priority }: { className?: string; priority?: boolean }) => (
 	<Image
 		src="/logo.png"
-		alt="osschat logo"
+		alt="OpenChat logo"
 		width={24}
 		height={24}
 		className={className}
@@ -13,14 +13,14 @@ const LogoIconImage = ({ className, priority }: { className?: string; priority?:
 	/>
 )
 
-// Plain SVG version of "osschat" without effects
+// Plain SVG version of "OpenChat" without effects
 export const LogoTextSvg = ({ className }: { className?: string }) => (
 	<svg
-		viewBox="0 0 120 24"
+		viewBox="0 0 130 24"
 		fill="none"
 		xmlns="http://www.w3.org/2000/svg"
 		className={className}
-		aria-label="osschat"
+		aria-label="OpenChat"
 	>
 		<text
 			x="0"
@@ -30,7 +30,7 @@ export const LogoTextSvg = ({ className }: { className?: string }) => (
 			fontWeight="700"
 			fill="currentColor"
 		>
-			osschat
+			OpenChat
 		</text>
 	</svg>
 )
@@ -56,9 +56,9 @@ export const Logo = ({
 	return (
 		<span className={cn('inline-flex items-center font-semibold tracking-tight', sizes.container, className)}>
 			<LogoIconImage className={cn(sizes.logo)} priority={priority} />
-			<span className={cn('font-mono font-bold', sizes.text)}>
-				<span className="text-foreground">oss</span>
-				<span className="text-foreground">chat</span>
+			<span className={cn('font-sans font-bold', sizes.text)}>
+				<span className="text-foreground">Open</span>
+				<span className="text-primary">Chat</span>
 			</span>
 		</span>
 	)

@@ -47,16 +47,21 @@ export const MESSAGE_LIMITS = {
 /**
  * Stream Buffering Configuration
  * Controls how streaming responses are buffered and flushed to database
+ *
+ * PERFORMANCE: Increased intervals to reduce DB write frequency during streaming.
+ * Previously: 80ms flush with 24 chars min = ~12 DB writes/second
+ * Now: 300ms flush with 80 chars min = ~3 DB writes/second
+ * This significantly reduces latency while maintaining smooth UX.
  */
 export const STREAM_CONFIG = {
 	/** Default interval for flushing buffered stream chunks to database (milliseconds) */
-	DEFAULT_FLUSH_INTERVAL_MS: 80,
+	DEFAULT_FLUSH_INTERVAL_MS: 300,
 
 	/** Default minimum characters required before flushing a stream chunk */
-	DEFAULT_MIN_CHARS_PER_FLUSH: 24,
+	DEFAULT_MIN_CHARS_PER_FLUSH: 80,
 
 	/** Default delay between smooth stream word chunks (milliseconds) */
-	DEFAULT_SMOOTH_DELAY_MS: 12,
+	DEFAULT_SMOOTH_DELAY_MS: 10,
 } as const;
 
 /**

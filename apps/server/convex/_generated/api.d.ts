@@ -23,6 +23,7 @@ import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as previewSeed from "../previewSeed.js";
 import type * as promptTemplates from "../promptTemplates.js";
+import type * as streaming from "../streaming.js";
 import type * as users from "../users.js";
 
 import type {
@@ -47,6 +48,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   previewSeed: typeof previewSeed;
   promptTemplates: typeof promptTemplates;
+  streaming: typeof streaming;
   users: typeof users;
 }>;
 
@@ -2308,6 +2310,41 @@ export declare const components: {
     };
     time: {
       getServerTime: FunctionReference<"mutation", "internal", {}, number>;
+    };
+  };
+  persistentTextStreaming: {
+    lib: {
+      addChunk: FunctionReference<
+        "mutation",
+        "internal",
+        { final: boolean; streamId: string; text: string },
+        any
+      >;
+      createStream: FunctionReference<"mutation", "internal", {}, any>;
+      getStreamStatus: FunctionReference<
+        "query",
+        "internal",
+        { streamId: string },
+        "pending" | "streaming" | "done" | "error" | "timeout"
+      >;
+      getStreamText: FunctionReference<
+        "query",
+        "internal",
+        { streamId: string },
+        {
+          status: "pending" | "streaming" | "done" | "error" | "timeout";
+          text: string;
+        }
+      >;
+      setStreamStatus: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          status: "pending" | "streaming" | "done" | "error" | "timeout";
+          streamId: string;
+        },
+        any
+      >;
     };
   };
 };

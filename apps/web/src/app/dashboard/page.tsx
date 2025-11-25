@@ -18,7 +18,7 @@ const ChatPreview = dynamicImport(() => import("@/components/chat-preview"), {
 export default function DashboardPage() {
 	return (
 		<div className="h-[100svh] grid place-items-center p-4">
-			<div className="w-full max-w-2xl space-y-2">
+			<div className="w-full max-w-2xl animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
 				<ChatPreview className="w-full" />
 			</div>
 		</div>

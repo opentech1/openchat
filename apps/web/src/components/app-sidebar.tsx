@@ -10,11 +10,12 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X, PanelLeft, Settings } from "@/lib/icons";
+import { X, PanelLeft, Settings, MessageSquare } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
+import { useTheme } from "next-themes";
 import {
   Sidebar,
   SidebarContent,
@@ -172,20 +173,33 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
 
   // CLIENT-SIDE CHAT FETCHING: Load chats from API when initialChats is empty
   // This handles the case where server-side fetching isn't available (e.g., AuthGuard)
-  const [isLoadingChats, setIsLoadingChats] = useState(false);
-  const hasFetchedChatsRef = useRef(false);
+  const [isLoadingChats, setIsLoadingChats] = useState(true); // Start as loading
+  const [hasFetchedChats, setHasFetchedChats] = useState(false);
 
   useEffect(() => {
-    // Only fetch if user is authenticated and we haven't fetched yet
-    if (!user?.id) return;
-    if (hasFetchedChatsRef.current) return;
     // Skip if we already have chats from initialChats
-    if (initialChats.length > 0) return;
+    if (initialChats.length > 0) {
+      setHasFetchedChats(true);
+      setIsLoadingChats(false);
+      return;
+    }
+
+    // Wait for user session to be available
+    if (!user?.id) {
+      // Keep loading state while waiting for session
+      return;
+    }
+
+    // Already fetched, don't fetch again
+    if (hasFetchedChats) {
+      return;
+    }
 
     const fetchChats = async () => {
       setIsLoadingChats(true);
       try {
-        const response = await fetch("/api/chats", {
+        // Load all chats at once (limit=200 is the max)
+        const response = await fetch("/api/chats?limit=200", {
           method: "GET",
           credentials: "include",
         });
@@ -193,18 +207,24 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           const data = await response.json();
           if (data.chats && Array.isArray(data.chats)) {
             setChats(dedupeChats(data.chats));
-            hasFetchedChatsRef.current = true;
+          } else {
+            setChats([]);
           }
+        } else {
+          logError("Failed to fetch chats: HTTP " + response.status);
+          setChats([]);
         }
       } catch (error) {
         logError("Failed to fetch chats", error);
+        setChats([]);
       } finally {
         setIsLoadingChats(false);
+        setHasFetchedChats(true);
       }
     };
 
     void fetchChats();
-  }, [user?.id, initialChats.length]);
+  }, [user?.id, initialChats.length, hasFetchedChats]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -317,7 +337,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
   }, [brandTheme, chats.length, user?.id, hasOpenRouterKey]);
 
   return (
-    <Sidebar {...sidebarProps}>
+    <Sidebar {...sidebarProps} className="bg-sidebar">
       {/* Screen reader announcements for loading states */}
       <LiveRegion
         message={isCreating ? "Creating new chat..." : deletingChatId ? "Deleting chat..." : ""}
@@ -330,8 +350,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         <SidebarGroup className="px-2">
           <Button
             type="button"
-            variant="outline"
-            className="w-full justify-start px-3"
+            className="w-full justify-start px-3 bg-primary text-primary-foreground font-medium transition-colors duration-100 ease-out hover:bg-primary/90"
             onClick={() => {
               void handleCreateChat();
             }}
@@ -343,8 +362,8 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
           </Button>
         </SidebarGroup>
         <SidebarGroup className="px-2">
-          <div className="flex items-center justify-between py-1.5">
-            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="flex items-center justify-between py-1.5 border-b border-border/[0.08]">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Chats
             </h3>
           </div>
@@ -365,22 +384,20 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         <div className="flex items-stretch gap-2">
           <Link
             href="/dashboard/settings"
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors duration-100 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Settings"
           >
             <Settings className="size-4" />
             <span>Settings</span>
           </Link>
-          <div className="flex items-center justify-center rounded-lg border bg-card px-3 py-2">
-            <ThemeToggle />
-          </div>
+          <ThemeToggleButton />
         </div>
 
         {/* Account Button */}
         <button
           type="button"
           onClick={() => setAccountOpen(true)}
-          className="flex w-full items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left transition-all hover:bg-accent hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors duration-100 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Open account settings"
         >
           {user ? (
@@ -430,7 +447,7 @@ function SidebarHeaderContent() {
       <button
         type="button"
         onClick={() => setCollapsed(true)}
-        className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors"
+        className="hover:bg-accent text-muted-foreground hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md transition-colors duration-100 ease-out"
         aria-label="Collapse sidebar"
         title="Collapse sidebar (Cmd+B)"
       >
@@ -438,12 +455,34 @@ function SidebarHeaderContent() {
       </button>
       <Link
         href="/dashboard"
-        className="hover:opacity-80 transition-opacity"
+        className="hover:opacity-80 transition-opacity duration-100 ease-out flex items-center gap-2 px-3 py-1.5 rounded-lg"
       >
         <Logo size="default" />
       </Link>
       <div className="size-9" />
     </div>
+  );
+}
+
+function ThemeToggleButton() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+
+  return (
+    <button
+      type="button"
+      aria-label="Toggle theme"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="flex items-center justify-center rounded-lg border border-border bg-card px-3 py-2 transition-colors duration-100 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ThemeToggle asIcon />
+    </button>
   );
 }
 
@@ -464,8 +503,8 @@ function ChatList({
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Only virtualize when we have many chats (>30)
-  const shouldVirtualize = chats.length > 30;
+  // Only virtualize when we have many chats (>100)
+  const shouldVirtualize = chats.length > 100;
 
   const virtualizer = useVirtualizer({
     count: chats.length,
@@ -489,38 +528,39 @@ function ChatList({
     return <p className="px-2 text-xs text-muted-foreground animate-pulse">Loading chats...</p>;
 
   if (chats.length === 0)
-    return <p className="px-2 text-xs text-muted-foreground">No chats</p>;
+    return (
+      <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+        <div className="rounded-full bg-primary/10 p-3 mb-3">
+          <MessageSquare className="h-6 w-6 text-primary" />
+        </div>
+        <p className="text-sm font-medium text-foreground mb-1">No conversations yet</p>
+        <p className="text-xs text-muted-foreground mb-4">Start a new chat to begin</p>
+      </div>
+    );
 
   if (!shouldVirtualize) {
     // Non-virtualized list for few chats
     return (
-      <div
-        className="px-1 overflow-y-auto overflow-x-hidden"
-        style={{ maxHeight: "calc(100vh - 280px)" }}
-        data-ph-no-capture
-      >
-        <ul className="space-y-1">
-          {chats.map((c) => (
-            <ChatListItem
-              key={c.id}
-              chat={c}
-              activePath={activePath}
-              onDelete={onDelete}
-              deletingId={deletingId}
-              onHoverChat={onHoverChat}
-            />
-          ))}
-        </ul>
+      <div className="px-1 py-1" data-ph-no-capture>
+        {chats.map((c) => (
+          <ChatListItem
+            key={c.id}
+            chat={c}
+            activePath={activePath}
+            onDelete={onDelete}
+            deletingId={deletingId}
+            onHoverChat={onHoverChat}
+          />
+        ))}
       </div>
     );
   }
 
-  // Virtualized list for many chats
+  // Virtualized list for many chats - needs its own scroll container
   return (
     <div
       ref={parentRef}
-      className="px-1 overflow-y-auto overflow-x-hidden"
-      style={{ maxHeight: "calc(100vh - 280px)" }}
+      className="px-1 flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
       data-ph-no-capture
     >
       <div style={virtualListContainerStyle}>
@@ -580,10 +620,11 @@ function ChatListItem({
         href={`/dashboard/chat/${chat.id}`}
         prefetch
         className={cn(
-          "block truncate rounded-md px-3 py-1.5 text-sm transition-colors",
+          // Linear-style: clean active state with left border accent, subtle hover
+          "block truncate rounded-md px-3 py-1.5 text-sm transition-colors duration-100 ease-out relative",
           isActive
-            ? "bg-accent text-accent-foreground"
-            : "hover:bg-accent hover:text-accent-foreground",
+            ? "bg-accent/50 text-accent-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r"
+            : "hover:bg-accent/50 hover:text-accent-foreground",
         )}
         aria-current={isActive ? "page" : undefined}
         onMouseEnter={() => onHoverChat?.(chat.id)}
@@ -599,11 +640,12 @@ function ChatListItem({
           void onDelete(chat.id);
         }}
         className={cn(
+          // Linear-style: no scale effects, just subtle color transition
           "absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded-md",
-          "text-muted-foreground/70 transition-all duration-200",
-          "hover:bg-destructive/90 hover:text-destructive-foreground hover:scale-105",
+          "text-muted-foreground/70 transition-colors duration-100 ease-out",
+          "hover:bg-destructive/90 hover:text-destructive-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-          "disabled:cursor-wait disabled:opacity-50 disabled:hover:scale-100 disabled:hover:bg-transparent",
+          "disabled:cursor-wait disabled:opacity-50 disabled:hover:bg-transparent",
           deletingId === chat.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         )}
         aria-label="Delete chat"
