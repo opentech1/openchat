@@ -14,6 +14,9 @@ const messageDoc = v.object({
 	content: v.string(),
 	reasoning: v.optional(v.string()),
 	thinkingTimeMs: v.optional(v.number()),
+	// STREAM RECONNECTION: Include status and streamId to support reconnecting to active streams
+	status: v.optional(v.string()),
+	streamId: v.optional(v.string()),
 	attachments: v.optional(
 		v.array(
 			v.object({
@@ -103,8 +106,7 @@ export const list = query({
 		// - _creationTime: duplicates createdAt
 		// - chatId: client already knows it from request context
 		// - userId: not used by UI
-		// - status: not used by UI (only used in mutations)
-		// This reduces payload size by ~12% (58 bytes per message)
+		// This reduces payload size by ~10% per message
 		return messagesWithUrls.map((msg) => ({
 			_id: msg._id,
 			clientMessageId: msg.clientMessageId,
@@ -112,10 +114,41 @@ export const list = query({
 			content: msg.content,
 			reasoning: msg.reasoning,
 			thinkingTimeMs: msg.thinkingTimeMs,
+			// STREAM RECONNECTION: Include status and streamId for reconnecting to active streams on reload
+			status: msg.status,
+			streamId: msg.streamId,
 			attachments: msg.attachments,
 			createdAt: msg.createdAt,
 			deletedAt: msg.deletedAt,
 		}));
+	},
+});
+
+/**
+ * Get active streaming message for a chat (for reconnection after page reload)
+ * Returns the streamId if there's a message currently streaming
+ */
+export const getActiveStream = query({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
+		if (!chat) return null;
+
+		// Find the most recent message with status="streaming"
+		const streamingMessage = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
+			.order("desc")
+			.filter((q) => q.eq(q.field("status"), "streaming"))
+			.first();
+
+		return streamingMessage?.streamId ?? null;
 	},
 });
 

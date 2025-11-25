@@ -117,7 +117,7 @@ export function ContextUsageIndicator({
               strokeLinecap="round"
               className={cn(
                 colorClasses[color],
-                "transition-all duration-300 ease-in-out"
+                "transition-all duration-200 ease-in-out"
               )}
             />
           </svg>

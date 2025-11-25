@@ -63,7 +63,7 @@ export function SettingsLoader() {
 
 export function ChatLoader() {
 	return (
-		<div className="flex h-full w-full items-center justify-center">
+		<div className="flex h-full min-h-[50vh] w-full flex-1 items-center justify-center">
 			<NiceLoader message="Loading chat..." size="md" />
 		</div>
 	);

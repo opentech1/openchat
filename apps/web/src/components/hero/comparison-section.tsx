@@ -42,9 +42,9 @@ const COMPARISON_DATA = [
 	},
 ] as const;
 
-const CheckmarkIcon = ({ isPositive }: { isPositive: boolean }) => {
+const CheckmarkIcon = ({ isPositive, isPrimary = false }: { isPositive: boolean; isPrimary?: boolean }) => {
 	if (isPositive) {
-		return <Check className="size-4 shrink-0 text-green-500" aria-label="Yes" />;
+		return <Check className={`size-4 shrink-0 ${isPrimary ? 'text-primary' : 'text-green-500'}`} aria-label="Yes" />;
 	}
 	return <X className="size-4 shrink-0 text-muted-foreground/50" aria-label="No" />;
 };
@@ -58,8 +58,11 @@ export function ComparisonSection() {
 			/>
 			<div className="@container mx-auto max-w-5xl px-6">
 				<div className="text-center">
-					<h2 className="text-balance text-4xl font-semibold lg:text-5xl">Why choose OpenChat?</h2>
-					<p className="mt-4 text-muted-foreground">
+					<p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">
+						Comparison
+					</p>
+					<h2 className="text-balance text-4xl font-bold lg:text-5xl">Why choose OpenChat?</h2>
+					<p className="mt-4 text-foreground/70">
 						The open source alternative to proprietary AI chat platforms
 					</p>
 				</div>
@@ -73,11 +76,11 @@ export function ComparisonSection() {
 						      <th className="px-6 py-4 text-left text-sm font-semibold text-muted-foreground">Feature</th>
 						      <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">ChatGPT</th>
 						      <th className="px-6 py-4 text-center text-sm font-semibold text-foreground">Claude</th>
-						      <th className="bg-primary/5 px-6 py-4 text-center text-sm font-semibold text-primary">OpenChat</th>
+						      <th className="relative bg-primary/10 border-l-2 border-primary px-6 py-4 text-center text-sm font-semibold text-primary" style={{ boxShadow: '0 0 20px oklch(from var(--primary) l c h / 0.15)' }}>OpenChat</th>
 						    </tr>
 						  </thead>
 						  <tbody>
-						    {COMPARISON_DATA.map((row, _index) => (
+						    {COMPARISON_DATA.map((row, index) => (
 						      <tr
 						        key={row.feature}
 						        className={`border-b border-border/60 transition-colors ${transitions.normal} last:border-b-0 hover:bg-accent/30`}
@@ -95,9 +98,9 @@ export function ComparisonSection() {
 						            <span>{row.claude.value}</span>
 						          </div>
 						        </td>
-						        <td className="bg-primary/5 px-6 py-4 text-center text-sm font-medium text-foreground">
+						        <td className={`bg-primary/5 border-l-2 border-primary px-6 py-4 text-center text-sm font-medium text-foreground ${index === COMPARISON_DATA.length - 1 ? 'rounded-bl-lg' : ''}`}>
 						          <div className="flex items-center justify-center gap-2">
-						            <CheckmarkIcon isPositive={row.openchat.isPositive} />
+						            <CheckmarkIcon isPositive={row.openchat.isPositive} isPrimary />
 						            <span>{row.openchat.value}</span>
 						          </div>
 						        </td>
@@ -134,7 +137,7 @@ export function ComparisonSection() {
 						    <div className="bg-primary/10 -mx-4 -mb-4 mt-2 flex items-center justify-between px-4 py-3">
 						      <span className="text-sm font-medium text-primary">OpenChat:</span>
 						      <div className="flex items-center gap-2">
-						        <CheckmarkIcon isPositive={row.openchat.isPositive} />
+						        <CheckmarkIcon isPositive={row.openchat.isPositive} isPrimary />
 						        <span className="text-sm font-medium text-foreground">{row.openchat.value}</span>
 						      </div>
 						    </div>

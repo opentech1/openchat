@@ -56,10 +56,12 @@ export const HeroHeader = () => {
             <nav
                 data-state={menuState ? 'active' : 'inactive'}
                 className={cn(
-                    'fixed z-20 w-full border-b border-border/50 transition-all duration-300',
-                    isScrolled ? `bg-background/80 backdrop-blur-2xl ${shadows.md}` : 'bg-background/30 backdrop-blur-sm',
+                    'fixed z-20 w-full transition-all duration-150 ease-out',
+                    isScrolled
+                        ? 'backdrop-blur-header bg-background/80 border-b border-foreground/5 shadow-premium-sm'
+                        : 'bg-transparent border-b border-transparent',
                 )}>
-                <div className="mx-auto max-w-6xl px-6 transition-all duration-300">
+                <div className="mx-auto max-w-6xl px-6 transition-all duration-200">
                     <div className={`relative flex flex-wrap items-center justify-between ${spacing.gap.md} py-3 lg:gap-0 lg:py-4`}>
                         <div className="flex w-full items-center justify-between gap-12 lg:w-auto">
                             <Link
@@ -76,11 +78,11 @@ export const HeroHeader = () => {
                                 className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden">
                                 <Menu
                                     data-state={menuState ? 'active' : 'inactive'}
-                                    className={`in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto ${iconSize.lg} duration-200`}
+                                    className={`in-data-[state=active]:rotate-180 in-data-[state=active]:scale-0 in-data-[state=active]:opacity-0 m-auto ${iconSize.lg} duration-150`}
                                 />
                                 <X
                                     data-state={menuState ? 'active' : 'inactive'}
-                                    className={`in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto ${iconSize.lg} -rotate-180 scale-0 opacity-0 duration-200`}
+                                    className={`in-data-[state=active]:rotate-0 in-data-[state=active]:scale-100 in-data-[state=active]:opacity-100 absolute inset-0 m-auto ${iconSize.lg} -rotate-180 scale-0 opacity-0 duration-150`}
                                 />
                             </button>
 
@@ -100,7 +102,7 @@ export const HeroHeader = () => {
 														window.history.replaceState(null, "", item.href);
 													}
 												}}
-												className="text-muted-foreground hover:text-foreground block transition-colors duration-150"
+												className="text-muted-foreground hover:text-foreground block transition-smooth hover:scale-105"
 											>
 												<span>{item.name}</span>
 											</a>
@@ -112,7 +114,7 @@ export const HeroHeader = () => {
 
                         <div
                             data-state={menuState ? 'active' : 'inactive'}
-                            className={`bg-background in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 ${borderRadius["2xl"]} border ${spacing.padding.xl} ${shadows["2xl"]} shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent`}>
+                            className={`in-data-[state=active]:block lg:in-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 ${borderRadius["2xl"]} ${spacing.padding.xl} backdrop-blur-header bg-background/80 border border-foreground/5 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:bg-transparent lg:p-0 lg:border-transparent lg:backdrop-blur-none transition-smooth`}>
                             <div className="lg:hidden">
                                 <ul className="space-y-6 text-base">
 									{menuItems.map((item) => (
@@ -129,7 +131,7 @@ export const HeroHeader = () => {
 														window.history.replaceState(null, "", item.href);
 													}
 												}}
-												className="text-muted-foreground hover:text-foreground block transition-colors duration-150"
+												className="text-muted-foreground hover:text-foreground block transition-colors duration-100"
 											>
 												<span>{item.name}</span>
 											</a>

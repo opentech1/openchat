@@ -243,16 +243,16 @@ export function AccountSettingsModal({
 
   const modal = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
         aria-hidden="true"
       />
       <div
         ref={dialogRef}
-        className="relative bg-background w-full max-w-md rounded-2xl shadow-2xl border animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-300 focus:outline-none focus-visible:outline-none"
+        className="relative bg-background w-full max-w-md rounded-2xl shadow-2xl border animate-in zoom-in-95 fade-in slide-in-from-bottom-4 duration-200 focus:outline-none focus-visible:outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="account-settings-title"

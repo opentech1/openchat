@@ -7,6 +7,19 @@ export type SerializedMessage = {
 	createdAt: string;
 	status?: string | null;
 	clientMessageId?: string | null;
+	// CRITICAL: Include reasoning and thinking time for reload support
+	reasoning?: string | null;
+	thinkingTimeMs?: number | null;
+	// STREAM RECONNECTION: Include streamId to reconnect to active streams on reload
+	streamId?: string | null;
+	attachments?: Array<{
+		storageId: string;
+		filename: string;
+		contentType: string;
+		size: number;
+		uploadedAt: number;
+		url?: string;
+	}> | null;
 };
 
 // Message type returned by messages.list query (optimized, without redundant fields)
@@ -18,6 +31,9 @@ export type ListMessage = {
 	clientMessageId?: string;
 	reasoning?: string;
 	thinkingTimeMs?: number;
+	// STREAM RECONNECTION: Include status and streamId
+	status?: string;
+	streamId?: string;
 	deletedAt?: number;
 	attachments?: Array<{
 		storageId: Id<"_storage">;
@@ -35,7 +51,20 @@ export function serializeMessage(message: ListMessage): SerializedMessage {
 		role: message.role,
 		content: message.content,
 		createdAt: new Date(message.createdAt).toISOString(),
-		status: null, // Not included in optimized list response
+		// STREAM RECONNECTION: Include status and streamId from the message
+		status: message.status ?? null,
+		streamId: message.streamId ?? null,
 		clientMessageId: message.clientMessageId ?? null,
+		// CRITICAL: Include reasoning and thinking time so they persist after reload
+		reasoning: message.reasoning ?? null,
+		thinkingTimeMs: message.thinkingTimeMs ?? null,
+		attachments: message.attachments?.map(a => ({
+			storageId: a.storageId as string,
+			filename: a.filename,
+			contentType: a.contentType,
+			size: a.size,
+			uploadedAt: a.uploadedAt,
+			url: a.url,
+		})) ?? null,
 	};
 }

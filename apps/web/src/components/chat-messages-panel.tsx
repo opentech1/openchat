@@ -25,6 +25,8 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { FilePreview } from "@/components/file-preview";
+import { ProgressiveThinkingIndicator } from "@/components/progressive-thinking-indicator";
+import type { WaitState } from "@/hooks/use-progressive-wait-detection";
 
 type MessagePart =
   | { type: "text"; text: string }
@@ -52,11 +54,28 @@ type ChatMessagesPanelProps = {
   loading?: boolean;
   autoStick?: boolean;
   isStreaming?: boolean;
+  isSubmitted?: boolean;
   userId?: string | null;
   chatId?: string;
+  waitState?: WaitState;
+  elapsedSeconds?: number;
+  selectedModelName?: string;
 };
 
 const SCROLL_LOCK_THRESHOLD_PX = 48;
+
+// Thinking indicator shown when model is processing but no content yet
+const ThinkingIndicator = memo(() => (
+  <div className="flex items-center gap-2 py-2 animate-in fade-in duration-200">
+    <div className="flex gap-1">
+      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0ms]" />
+      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:150ms]" />
+      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:300ms]" />
+    </div>
+    <span className="text-muted-foreground text-xs">Generating response...</span>
+  </div>
+));
+ThinkingIndicator.displayName = "ThinkingIndicator";
 
 function ChatMessagesPanelComponent({
   messages,
@@ -65,8 +84,12 @@ function ChatMessagesPanelComponent({
   autoStick = true,
   loading = false,
   isStreaming = false,
+  isSubmitted = false,
   userId,
   chatId,
+  waitState = "normal",
+  elapsedSeconds = 0,
+  selectedModelName,
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -274,6 +297,36 @@ function ChatMessagesPanelComponent({
                     ))}
                   </div>
                 )}
+                {/* Thinking indicator: Show when waiting for response OR streaming but no content yet */}
+                {(() => {
+                  if (messages.length === 0) return null;
+                  const lastMsg = messages[messages.length - 1];
+                  // Show if submitted and waiting for assistant response
+                  if (isSubmitted && lastMsg?.role === "user") {
+                    return (
+                      <div className="mt-4">
+                        <ProgressiveThinkingIndicator
+                          waitState={waitState}
+                          elapsedSeconds={elapsedSeconds}
+                          modelName={selectedModelName}
+                        />
+                      </div>
+                    );
+                  }
+                  // Show if streaming started but assistant message has no content yet
+                  if (isStreaming && lastMsg?.role === "assistant" && !lastMsg.content?.trim()) {
+                    return (
+                      <div className="mt-4">
+                        <ProgressiveThinkingIndicator
+                          waitState={waitState}
+                          elapsedSeconds={elapsedSeconds}
+                          modelName={selectedModelName}
+                        />
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             ) : loading ? (
               <div className="flex flex-col gap-4" data-ph-no-capture>

@@ -24,14 +24,17 @@ export function AIModelsSection() {
 			/>
 			<div className="@container mx-auto max-w-5xl px-6">
 				<div className="text-center">
-					<h2 className="text-balance text-4xl font-semibold lg:text-5xl">
+					<p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">
+						AI Models
+					</p>
+					<h2 className="text-balance text-4xl font-bold lg:text-5xl">
 						Chat with 100+ AI models
 					</h2>
-					<p className="mt-4 text-muted-foreground">
+					<p className="mt-4 text-foreground/70">
 						Access the best AI models from every major provider. Switch between models instantly—no separate subscriptions needed.
 					</p>
 				</div>
-				<div className={`@min-4xl:grid-cols-4 @min-2xl:grid-cols-3 mx-auto mt-12 grid max-w-4xl grid-cols-2 md:mt-16 ${spacing.gap.lg}`}>
+				<div className={`@min-4xl:grid-cols-4 @min-2xl:grid-cols-3 mx-auto mt-12 grid max-w-4xl grid-cols-2 md:mt-16 ${spacing.gap.lg} stagger-scale`}>
 					{AI_PROVIDERS.map((item) => (
 						<Card
 						  key={item.provider}

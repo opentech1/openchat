@@ -182,20 +182,20 @@ function ChatPreview({ className }: { className?: string }) {
         <div className="relative mx-auto w-full max-w-2xl">
           <div className="relative z-10 space-y-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
             <div className="space-y-3 text-center">
-              <div className="inline-block animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150">
+              <div className="inline-block animate-in fade-in-0 slide-in-from-bottom-2 duration-200 delay-150">
                 <h1 className="pb-1 text-3xl font-medium tracking-tight">
-                  How can osschat help today?
+                  How can I help you today?
                 </h1>
                 <div className="via-primary/50 h-px bg-gradient-to-r from-transparent to-transparent animate-in fade-in-0 duration-400 delay-250" />
               </div>
-              <p className="text-muted-foreground text-sm animate-in fade-in-0 duration-300 delay-200">
+              <p className="text-muted-foreground text-sm animate-in fade-in-0 duration-200 delay-200">
                 Ask a question or type a command
               </p>
             </div>
 
             <div
               className={cn(
-                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-300 delay-50`,
+                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-200 delay-50`,
                 borderRadius.xl,
                 shadows.xl,
               )}
@@ -310,7 +310,7 @@ function ChatPreview({ className }: { className?: string }) {
                     "bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10",
                     "border border-primary/20 hover:border-primary/40",
                     "hover:shadow-lg hover:shadow-primary/10",
-                    "transition-all duration-300 hover:scale-[1.02]",
+                    "transition-all duration-200 hover:scale-[1.02]",
                     borderRadius.xl,
                   )}
                 >

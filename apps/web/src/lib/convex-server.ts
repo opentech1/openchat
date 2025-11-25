@@ -82,9 +82,9 @@ export async function getUserById(userId: Id<"users">) {
 	return user;
 }
 
-export async function listChats(userId: Id<"users">) {
+export async function listChats(userId: Id<"users">, cursor?: string, limit?: number) {
 	const client = await getClient();
-	return client.query(api.chats.list, { userId });
+	return client.query(api.chats.list, { userId, cursor, limit });
 }
 
 export async function createChatForUser(userId: Id<"users">, title: string) {

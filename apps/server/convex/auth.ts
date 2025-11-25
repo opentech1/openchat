@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
@@ -67,7 +67,8 @@ export const createAuth = (
 			// The Convex plugin is required for Convex compatibility
 			// NOTE: We do NOT use crossDomain because our Next.js API route handler
 			// proxies auth requests on the same domain - regular cookies work fine
-			convex(),
+			// Type assertion needed due to version mismatch between @convex-dev/better-auth and better-auth types
+			convex() as unknown as BetterAuthPlugin,
 		],
 		trustedOrigins: [
 			"http://localhost:3000",

@@ -31,8 +31,11 @@ export function VersionsSection() {
 			/>
 			<div className="@container mx-auto max-w-5xl px-6">
 				<div className="text-center">
-					<h2 className="text-balance text-4xl font-semibold lg:text-5xl">Choose your version</h2>
-					<p className="mt-4 text-muted-foreground">
+					<p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">
+						Pricing
+					</p>
+					<h2 className="text-balance text-4xl font-bold lg:text-5xl">Choose your version</h2>
+					<p className="mt-4 text-foreground/70">
 						Start on OpenChat Cloud today or self-host later. Both options are completely free.
 					</p>
 				</div>

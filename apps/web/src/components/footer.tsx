@@ -36,8 +36,9 @@ export function Footer() {
 	const currentYear = new Date().getFullYear();
 
 	return (
-		<footer className="bg-muted/50 border-t border-border/60 py-12">
-			<div className="mx-auto max-w-5xl px-6">
+		<footer className="relative bg-muted/80 backdrop-blur-sm py-16 md:py-20">
+			<div className="absolute top-0 left-0 right-0 h-px w-full bg-gradient-to-r from-transparent via-border to-transparent" />
+			<div className="mx-auto max-w-6xl px-6">
 				<nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
 					{FOOTER_LINKS.map((link) => {
 						if (link.external) {
@@ -71,7 +72,7 @@ export function Footer() {
 						  href="https://github.com/opentech1/openchat/blob/main/LICENSE"
 						  target="_blank"
 						  rel="noopener noreferrer"
-						  className="underline-offset-4 hover:underline"
+						  className="underline-offset-4 transition-colors hover:text-foreground hover:underline"
 						>
 						  AGPL v3
 						</a>

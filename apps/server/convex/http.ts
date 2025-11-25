@@ -2,6 +2,7 @@ import "./polyfills";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { authComponent, createAuth } from "./auth";
+import { streamLLM } from "./streaming";
 
 const http = httpRouter();
 
@@ -23,6 +24,20 @@ http.route({
       },
     );
   }),
+});
+
+// LLM streaming endpoint - runs on Convex infrastructure for persistence
+http.route({
+  path: "/stream-llm",
+  method: "POST",
+  handler: streamLLM,
+});
+
+// Handle CORS preflight for streaming endpoint
+http.route({
+  path: "/stream-llm",
+  method: "OPTIONS",
+  handler: streamLLM,
 });
 
 export default http;

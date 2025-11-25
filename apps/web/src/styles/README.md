@@ -122,8 +122,8 @@ zIndex.top       // z-[100]
 
 ```tsx
 transitions.fast    // 75ms - micro-interactions
-transitions.normal  // 150ms - default
-transitions.slow    // 300ms - noticeable
+transitions.normal  // 100ms - default
+transitions.slow    // 200ms - noticeable
 transitions.slower  // 500ms - emphasis
 ```
 

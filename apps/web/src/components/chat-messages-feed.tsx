@@ -9,16 +9,21 @@ import {
   mergeNormalizedMessages,
   normalizeUiMessage,
 } from "@/lib/chat-message-utils";
+import type { WaitState } from "@/hooks/use-progressive-wait-detection";
 
 export type ChatMessagesFeedProps = {
   initialMessages: NormalizedMessage[];
-  optimisticMessages: UIMessage<{ createdAt?: string }>[];
+  optimisticMessages: UIMessage<{ createdAt?: string; thinkingTimeMs?: number }>[];
   paddingBottom: number;
   className?: string;
   loading?: boolean;
   isStreaming?: boolean;
+  isSubmitted?: boolean;
   userId?: string | null;
   chatId?: string;
+  waitState?: WaitState;
+  elapsedSeconds?: number;
+  selectedModelName?: string;
 };
 
 export function ChatMessagesFeed({
@@ -28,8 +33,12 @@ export function ChatMessagesFeed({
   className,
   loading = false,
   isStreaming = false,
+  isSubmitted = false,
   userId,
   chatId,
+  waitState,
+  elapsedSeconds,
+  selectedModelName,
 }: ChatMessagesFeedProps) {
   const optimisticNormalized = useMemo(
     () => optimisticMessages.map(normalizeUiMessage),
@@ -112,8 +121,12 @@ export function ChatMessagesFeed({
       className={className}
       loading={loading}
       isStreaming={isStreaming}
+      isSubmitted={isSubmitted}
       userId={userId}
       chatId={chatId}
+      waitState={waitState}
+      elapsedSeconds={elapsedSeconds}
+      selectedModelName={selectedModelName}
     />
   );
 }

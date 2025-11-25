@@ -209,37 +209,31 @@ function ChatErrorFallback({ error, resetError, chatId }: ChatErrorFallbackProps
                 </p>
               )}
 
-              {/* Development details */}
+              {/* Development details - compact and contained */}
               {isDev && (
-                <details className="mt-3">
+                <details className="mt-3 max-w-full">
                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                     Technical Details (Development Only)
                   </summary>
-                  <div className="mt-2 rounded-md bg-background/50 p-3 text-xs">
-                    <div className="space-y-1 font-mono">
-                      <div>
-                        <strong>Category:</strong> {categorized.category}
-                      </div>
-                      <div>
-                        <strong>Message:</strong> {error.message}
-                      </div>
+                  <div className="mt-2 max-h-48 overflow-y-auto rounded-md bg-background/50 p-2 text-xs">
+                    <div className="space-y-1 font-mono text-[10px]">
+                      <p><strong>Category:</strong> {categorized.category}</p>
+                      <p className="break-all"><strong>Message:</strong> {error.message.slice(0, 200)}{error.message.length > 200 ? "..." : ""}</p>
                       {categorized.statusCode && (
-                        <div>
-                          <strong>Status:</strong> {categorized.statusCode}
-                        </div>
+                        <p><strong>Status:</strong> {categorized.statusCode}</p>
                       )}
                       {chatId && (
-                        <div>
-                          <strong>Chat ID:</strong> {chatId}
-                        </div>
+                        <p className="break-all"><strong>Chat ID:</strong> {chatId}</p>
                       )}
                       {error.stack && (
-                        <div className="mt-2">
-                          <strong>Stack:</strong>
-                          <pre className="mt-1 overflow-auto whitespace-pre-wrap text-[10px]">
-                            {error.stack}
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                            Stack trace
+                          </summary>
+                          <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-tight">
+                            {error.stack.slice(0, 1500)}{error.stack.length > 1500 ? "\n..." : ""}
                           </pre>
-                        </div>
+                        </details>
                       )}
                     </div>
                   </div>

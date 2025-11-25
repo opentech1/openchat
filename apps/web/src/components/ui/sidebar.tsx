@@ -77,11 +77,12 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
     <SidebarContext.Provider value={contextValue}>
       <aside
 		className={cn(
-			// Light mode now uses dedicated sidebar tokens so the chrome stays legible without feeling stark.
-			"bg-sidebar/95 text-sidebar-foreground backdrop-blur supports-backdrop-blur:border-sidebar-border/50 group/sidebar sticky top-0 h-svh border-r border-sidebar-border/80 overflow-hidden translate-z-0 transition-all duration-300 ease-in-out",
-			collapsed ? "w-0 border-r-0" : "w-64",
+			// Linear-style: subtle backdrop blur with clean borders
+			"bg-sidebar/95 text-sidebar-foreground backdrop-blur-lg supports-backdrop-blur:border-sidebar-border/50 group/sidebar sticky top-0 h-svh border-r overflow-hidden translate-z-0 will-change-[width] transition-[width,margin,opacity] duration-200 ease-out",
+			collapsed ? "w-0 border-r-0 border-sidebar-border/0" : "w-64 border-sidebar-border/[0.08]",
           className,
         )}
+		style={{ width: collapsed ? '0rem' : '16rem' }}
         {...props}
       >
         <div className="flex h-full flex-col">{children}</div>
@@ -110,14 +111,17 @@ export function SidebarMenuItem({ className, ...props }: React.ComponentProps<"l
   return <li className={cn("list-none", className)} {...props} />;
 }
 
-export function SidebarMenuButton({ className, asChild, size = "md", type = "button", ...props }: React.ComponentProps<"button"> & { asChild?: boolean; size?: "md" | "lg" }) {
+export function SidebarMenuButton({ className, asChild, size = "md", type = "button", isActive, ...props }: React.ComponentProps<"button"> & { asChild?: boolean; size?: "md" | "lg"; isActive?: boolean }) {
 	const Comp: React.ElementType = asChild ? Slot : "button";
 	return (
 		<Comp
 			className={cn(
-				"text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center rounded-md px-2 py-2 text-sm transition-colors",
+				// Linear-style: subtle hover, active indicator via left border, grounded feel
+				"text-foreground/90 hover:bg-accent hover:text-accent-foreground inline-flex w-full items-center rounded-md px-2 py-2 text-sm transition-colors duration-100 ease-out relative",
 				spacing.gap.sm,
 				size === "lg" && "px-2 py-2.5 text-base",
+				// Active state: left border accent
+				isActive && "bg-accent/50 text-accent-foreground before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r",
 				className,
 			)}
 			{...(asChild ? {} : { type })}
@@ -139,9 +143,11 @@ export function SidebarMenuSubButton({ className, isActive, asChild, type = "but
 	return (
 		<Comp
 			className={cn(
-				"hover:bg-accent/70 inline-flex w-full items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors",
+				// Linear-style: subtle hover, no lift effects
+				"hover:bg-accent/70 inline-flex w-full items-center rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors duration-100 ease-out relative",
 				spacing.gap.sm,
-				isActive && "bg-accent text-accent-foreground",
+				// Active state: left border accent for sub-items too
+				isActive && "bg-accent text-accent-foreground before:absolute before:left-0 before:top-0.5 before:bottom-0.5 before:w-0.5 before:bg-primary/70 before:rounded-r",
 				className,
 			)}
 			{...(asChild ? {} : { type })}
@@ -163,7 +169,8 @@ export function SidebarRail({ className, ...props }: React.ComponentProps<"butto
 			type="button"
 			onClick={() => setCollapsed(!collapsed)}
 			className={cn(
-				"fixed z-30 flex h-9 w-9 items-center justify-center rounded-md border bg-background text-foreground shadow-md transition-all hover:bg-accent hover:text-accent-foreground",
+				// Linear-style: clean button with subtle transitions, no bouncy easing
+				"fixed z-30 flex h-9 w-9 items-center justify-center rounded-md border bg-background text-foreground shadow-md transition-all duration-200 ease-out hover:bg-accent hover:text-accent-foreground",
 				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 				collapsed ? "left-4 top-4" : "left-60 top-4",
 				className

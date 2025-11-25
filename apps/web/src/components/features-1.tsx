@@ -14,12 +14,15 @@ export default function Features() {
             />
             <div className="@container mx-auto max-w-5xl px-6">
                 <div className="text-center">
-                    <h2 className="text-balance text-4xl font-semibold lg:text-5xl">Why teams choose OpenChat</h2>
-                    <p className="mt-4 text-muted-foreground">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">
+                        Features
+                    </p>
+                    <h2 className="text-balance text-4xl font-bold lg:text-5xl">Why teams choose OpenChat</h2>
+                    <p className="mt-4 text-foreground/70">
                         We obsess over speed, flexibility, and community so your product can ship delightful AI chat experiences without vendor lock-in.
                     </p>
                 </div>
-                <div className={`@min-4xl:max-w-full @min-4xl:grid-cols-3 mx-auto mt-12 grid max-w-sm *:text-left md:mt-16 ${spacing.gap.xl}`}>
+                <div className={`@min-4xl:max-w-full @min-4xl:grid-cols-3 mx-auto mt-12 grid max-w-sm *:text-left md:mt-16 ${spacing.gap.xl} stagger-children`}>
                     <Card className={`group border-border/60 bg-card/${opacity.medium} shadow-none backdrop-blur`}>
                         <CardHeader className="pb-3">
                             <CardDecorator>

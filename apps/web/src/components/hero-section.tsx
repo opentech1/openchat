@@ -10,7 +10,6 @@ import { PageLoader } from '@/components/ui/nice-loader';
 import { HeroHeader } from './header';
 import { HeroContent } from '@/components/hero/hero-content';
 import { captureClientEvent } from '@/lib/posthog';
-import { borderRadius } from '@/styles/design-tokens';
 
 // Lazy load below-fold sections to reduce initial bundle size
 const Features = dynamic(() => import('@/components/features-1'), {
@@ -146,16 +145,17 @@ export default function HeroSection() {
   return (
     <>
       <HeroHeader />
-      <main className="relative overflow-hidden">
+      <main className="relative">
+        {/* Subtle background - Linear style */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <div className={`absolute left-1/2 top-[-20%] h-[32rem] w-[32rem] -translate-x-1/2 ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.primary/30%)0%,transparent70%)] [filter:blur(140px)]`} />
-          <div className={`absolute -right-40 top-1/3 h-[28rem] w-[28rem] ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.accent/25%)0%,transparent70%)] [filter:blur(140px)]`} />
-          <div className={`absolute -left-32 bottom-[-10%] h-[26rem] w-[26rem] ${borderRadius.full} bg-[radial-gradient(circle_at_center,theme(colors.primary/25%)0%,transparent70%)] [filter:blur(140px)]`} />
-          <div className="absolute inset-x-0 bottom-[-35%] h-[40rem] bg-[radial-gradient(60%_50%_at_50%_50%,theme(colors.background/0%)0%,theme(colors.background)70%)]" />
+          className="pointer-events-none absolute inset-0 -z-10">
+          {/* Very subtle gradient - barely visible */}
+          <div className="absolute inset-0 bg-gradient-to-b from-muted/5 via-transparent to-transparent" />
         </div>
+
         <HeroContent onCtaClick={handleCtaClick} />
+
         <Features />
         <AIModelsSection />
         <RealtimeSection />

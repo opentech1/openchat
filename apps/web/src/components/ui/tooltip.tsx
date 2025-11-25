@@ -7,14 +7,14 @@ import { borderRadius, iconSize } from "@/styles/design-tokens"
 /**
  * TooltipProvider - Wraps tooltip components to provide global configuration
  *
- * @param delayDuration - The duration from when the mouse enters a trigger until the tooltip opens (default: 0ms)
+ * @param delayDuration - The duration from when the mouse enters a trigger until the tooltip opens (default: 400ms for hover intent)
  *
  * @accessibility
  * - Provides context for all child tooltip components
  * - Configure delay durations for better UX
  */
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 400,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
   return (
@@ -68,11 +68,14 @@ function TooltipTrigger({
 /**
  * TooltipContent - The tooltip content that appears on trigger interaction
  *
+ * Linear-style tooltip with hover intent delay, quick fade-in, and compact styling
+ *
  * @accessibility
  * - Automatically receives role="tooltip"
  * - Linked to trigger via aria-describedby
  * - Supports aria-label for additional context
  * - Keyboard accessible (Escape to close)
+ * - Automatically flips position if near screen edge
  *
  * @example
  * ```tsx
@@ -83,7 +86,7 @@ function TooltipTrigger({
  */
 function TooltipContent({
   className,
-  sideOffset = 0,
+  sideOffset = 4,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
@@ -94,13 +97,16 @@ function TooltipContent({
         role="tooltip"
         sideOffset={sideOffset}
         className={cn(
-          `bg-primary text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) ${borderRadius.sm} px-3 py-1.5 text-xs text-balance`,
+          `bg-primary text-primary-foreground z-50 w-fit ${borderRadius.sm} px-2.5 py-1.5 text-xs text-balance`,
+          "shadow-lg shadow-black/10",
+          "animate-in fade-in-0 duration-100 ease-out",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-75 data-[state=closed]:ease-in",
           className
         )}
         {...props}
       >
         {children}
-        <TooltipPrimitive.Arrow className={`bg-primary fill-primary z-50 ${iconSize.xs} translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]`} />
+        <TooltipPrimitive.Arrow className={`fill-primary ${iconSize.xs}`} />
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   )

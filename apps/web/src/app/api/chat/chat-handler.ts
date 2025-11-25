@@ -35,12 +35,14 @@ const DEFAULT_MAX_TRACKED_BUCKETS = 1_000;
 const DEFAULT_MAX_USER_CHARS = 8_000;
 
 // Stream buffering configuration
+// PERFORMANCE: Increased intervals to reduce DB write frequency during streaming
+// Previously: 80ms/24chars = ~12 writes/sec, Now: 300ms/80chars = ~3 writes/sec
 /** Default interval for flushing buffered stream chunks to database (milliseconds) */
-const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 80;
+const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 300;
 /** Default minimum characters required before flushing a stream chunk */
-const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 24;
+const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 80;
 /** Default delay between smooth stream word chunks (milliseconds) */
-const DEFAULT_STREAM_SMOOTH_DELAY_MS = 12;
+const DEFAULT_STREAM_SMOOTH_DELAY_MS = 10;
 
 const DEFAULT_RATE_LIMIT = Number(process.env.OPENROUTER_RATE_LIMIT_PER_MIN ?? DEFAULT_RATE_LIMIT_PER_MINUTE);
 const RAW_MAX_TRACKED_RATE_BUCKETS = Number(process.env.OPENROUTER_RATE_LIMIT_TRACKED_BUCKETS ?? DEFAULT_MAX_TRACKED_BUCKETS);
@@ -620,49 +622,47 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			: (crypto.randomUUID?.() ?? `assistant-${Date.now()}`);
 		const assistantCreatedAtIso = new Date().toISOString();
 
+		// PERFORMANCE: Persist user message and bootstrap assistant message in PARALLEL
+		// This cuts pre-stream latency in half by avoiding sequential DB round-trips
 		try {
-			const userResult = await persistMessageImpl({
-				userId: convexUserId,
-				chatId,
-				clientMessageId: userMessageId,
-				role: "user",
-				content: userContent,
-				createdAt: userCreatedAtIso,
-				status: "completed",
-				attachments: payload.attachments?.map(a => ({
-					storageId: toConvexStorageId(a.storageId),
-					filename: a.filename,
-					contentType: a.contentType,
-					size: a.size,
-					uploadedAt: Date.now(),
-				})),
-			});
+			const [userResult, assistantBootstrap] = await Promise.all([
+				persistMessageImpl({
+					userId: convexUserId,
+					chatId,
+					clientMessageId: userMessageId,
+					role: "user",
+					content: userContent,
+					createdAt: userCreatedAtIso,
+					status: "completed",
+					attachments: payload.attachments?.map(a => ({
+						storageId: toConvexStorageId(a.storageId),
+						filename: a.filename,
+						contentType: a.contentType,
+						size: a.size,
+						uploadedAt: Date.now(),
+					})),
+				}),
+				persistMessageImpl({
+					userId: convexUserId,
+					chatId,
+					clientMessageId: assistantMessageId,
+					role: "assistant",
+					content: "",
+					createdAt: assistantCreatedAtIso,
+					status: "streaming",
+				}),
+			]);
+
 			if (!userResult.ok) {
 				throw new Error("user streamUpsert rejected");
 			}
-		} catch (error) {
-			logger.error("Failed to persist user message", error, { chatId, messageId: userMessageId });
-			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Failed to persist message", { status: 502, headers });
-		}
-
-		try {
-			const assistantBootstrap = await persistMessageImpl({
-				userId: convexUserId,
-				chatId,
-				clientMessageId: assistantMessageId,
-				role: "assistant",
-				content: "",
-				createdAt: assistantCreatedAtIso,
-				status: "streaming",
-			});
 			if (!assistantBootstrap.ok) {
 				throw new Error("assistant streamUpsert rejected");
 			}
 		} catch (error) {
-			logger.error("Failed to bootstrap assistant message", error, { chatId, messageId: assistantMessageId });
+			logger.error("Failed to persist messages", error, { chatId, userMessageId, assistantMessageId });
 			const headers = buildCorsHeaders(request, allowOrigin);
-			return new Response("Failed to persist assistant", { status: 502, headers });
+			return new Response("Failed to persist messages", { status: 502, headers });
 		}
 
 		let assistantText = "";
@@ -786,17 +786,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 		};
 
-		// PERFORMANCE FIX: Create AbortController with timeout to prevent hanging requests
-		// Also link to request.signal so client-side abort (stop button) works
+		// STREAM PERSISTENCE: Create AbortController only for timeout protection.
+		// We intentionally DO NOT forward request.signal (browser connection close) to the abort controller.
+		// This ensures the stream continues running server-side even when the user:
+		// - Closes the tab
+		// - Reloads the page
+		// - Loses internet connection
+		// - Switches tabs/apps
+		// The stream will only abort on timeout or explicit stop (handled separately).
+		// Combined with consumeStream(), this guarantees the message is always saved.
 		const abortController = new AbortController();
 		let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-		// Forward client abort to our abort controller
-		if (request.signal) {
-			request.signal.addEventListener("abort", () => {
-				abortController.abort(new Error("Client aborted request"));
-			});
-		}
+		// NOTE: We no longer forward request.signal abort to allow stream persistence.
+		// The stream continues running via consumeStream() even if the client disconnects.
 
 		try {
 			timeoutId = setTimeout(() => {
@@ -906,6 +909,12 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					await finalize();
 				},
 			});
+			// CRITICAL: Consume the stream to ensure it runs to completion and triggers onFinish
+			// even when the client aborts the connection (tab close, reload, disconnect).
+			// This removes backpressure from the LLM provider and guarantees the message is saved.
+			// DO NOT await - fire and forget so the response can be returned immediately.
+			result.consumeStream();
+
 			const duration = Date.now() - startedAt;
 			const openrouterStatus = streamStatus === "completed" ? "ok" : streamStatus;
 			captureServerEvent("chat_message_stream", distinctId, {

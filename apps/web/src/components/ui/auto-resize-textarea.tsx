@@ -127,12 +127,15 @@ export const AutoResizeTextarea = React.forwardRef<
 			<div className={cn("relative", containerClassName)}>
 				<textarea
 					className={cn(
-						`border-input bg-background flex w-full ${borderRadius.sm} border px-3 py-2 text-sm`,
-						"transition-all duration-200 ease-in-out",
+						`flex w-full ${borderRadius.sm} border border-input bg-transparent px-4 py-3 text-sm`,
 						"placeholder:text-muted-foreground",
+						"selection:bg-primary selection:text-primary-foreground",
 						"disabled:cursor-not-allowed disabled:opacity-50",
+						"transition-[border-color,box-shadow] duration-100 ease-out",
+						"focus:border-ring focus:ring-1 focus:ring-ring/20",
+						"outline-none",
 						showRing
-							? "focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none"
+							? "focus:ring-0 focus:ring-offset-0"
 							: "",
 						className,
 					)}
@@ -147,7 +150,7 @@ export const AutoResizeTextarea = React.forwardRef<
 
 				{showRing && isFocused && (
 					<span
-						className={`ring-primary/30 pointer-events-none absolute inset-0 ${borderRadius.sm} ring-2 ring-offset-0 animate-in fade-in-0 duration-300`}
+						className={`ring-ring/20 pointer-events-none absolute inset-0 ${borderRadius.sm} ring-1 ring-offset-0 animate-in fade-in-0 duration-100`}
 					/>
 				)}
 			</div>
