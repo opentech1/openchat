@@ -189,14 +189,16 @@ export function ReasoningControls({
 					type="button"
 					disabled={disabled}
 					className={cn(
-						"inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium",
+						"inline-flex items-center gap-1.5 rounded-md border border-border bg-background text-sm font-medium",
+						// Compact on mobile (icon-only), larger on desktop
+						"size-9 justify-center sm:size-auto sm:px-3 sm:py-1.5 sm:justify-start",
 						"hover:bg-accent hover:text-accent-foreground",
 						"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
 						"disabled:cursor-not-allowed disabled:opacity-50",
 						"transition-colors",
 						currentOption !== "off" && "border-purple-500/50 bg-purple-500/5"
 					)}
-					aria-label="Select reasoning level"
+					aria-label={`Reasoning: ${currentLabel}`}
 				>
 					<Brain
 						className={cn(
@@ -204,9 +206,9 @@ export function ReasoningControls({
 							currentOption !== "off" ? "text-purple-500" : "text-muted-foreground"
 						)}
 					/>
-					<span>{currentLabel}</span>
+					<span className="hidden sm:inline">{currentLabel}</span>
 					<svg
-						className="size-4 text-muted-foreground ml-1"
+						className="hidden sm:block size-4 text-muted-foreground"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -220,6 +222,7 @@ export function ReasoningControls({
 				<Popover.Content
 					align="start"
 					sideOffset={4}
+					collisionPadding={16}
 					className={cn(
 						"z-50 min-w-[200px] overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md",
 						"data-[state=open]:animate-in data-[state=closed]:animate-out",

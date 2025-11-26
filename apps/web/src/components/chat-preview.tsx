@@ -1,23 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { SendIcon, XIcon, LoaderIcon } from "@/lib/icons";
 import * as React from "react";
-import { useAutoResizeTextarea } from "@/components/ui/auto-resize-textarea";
-import {
-  borderRadius,
-  shadows,
-  spacing,
-  opacity,
-} from "@/styles/design-tokens";
+import { borderRadius } from "@/styles/design-tokens";
 import { fetchWithCsrf } from "@/lib/csrf-client";
-import {
-  ModelSelector,
-  type ModelSelectorOption,
-} from "@/components/model-selector";
+import type { ModelSelectorOption } from "@/components/model-selector";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import {
   readCachedModels,
@@ -26,29 +15,25 @@ import {
 import { getStorageItemSync, setStorageItemSync } from "@/lib/storage";
 import { FileTextIcon } from "lucide-react";
 import Link from "next/link";
+import ChatComposer from "@/components/chat-composer";
+import { toast } from "sonner";
+import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
+import { logError } from "@/lib/logger";
+import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 
 function ChatPreview({ className }: { className?: string }) {
   const router = useRouter();
-  const [value, setValue] = useState("");
-  const [attachments, setAttachments] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [modelOptions, setModelOptions] = useState<ModelSelectorOption[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [modelsLoading, setModelsLoading] = useState(false);
-  const typingTimeoutRef = useRef<number | null>(null);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 
-  const { apiKey, isLoading: keyLoading } = useOpenRouterKey();
-  useEffect(
-    () => () => {
-      if (typingTimeoutRef.current !== null) {
-        window.clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-    },
-    [],
-  );
+  const { apiKey, isLoading: keyLoading, saveKey } = useOpenRouterKey();
 
   // Load cached models on mount
   useEffect(() => {
@@ -98,7 +83,7 @@ function ChatPreview({ className }: { className?: string }) {
           }
         }
       } catch (error) {
-        console.error("Failed to fetch models:", error);
+        logError("Failed to fetch models:", error);
       } finally {
         setModelsLoading(false);
       }
@@ -107,32 +92,66 @@ function ChatPreview({ className }: { className?: string }) {
     void fetchModels();
   }, [apiKey, keyLoading, selectedModel]);
 
-  const { textareaRef, adjustHeight, debouncedAdjustHeight } =
-    useAutoResizeTextarea({
-      minHeight: 60,
-      maxHeight: 200,
-    });
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId);
+    setStorageItemSync(LAST_MODEL_STORAGE_KEY, modelId);
+  };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      if (value.trim()) handleSendMessage();
+  const handleMissingRequirement = (reason: "apiKey" | "model") => {
+    if (reason === "apiKey") {
+      toast.error("Add your OpenRouter API key to use AI models", {
+        duration: 6000,
+        action: {
+          label: "Add key",
+          onClick: () => setShowKeyModal(true),
+        },
+      });
+    } else {
+      toast.error("Select an OpenRouter model to continue.");
     }
   };
 
-  const handleSendMessage = async () => {
-    const messageText = value.trim();
-    if (!messageText || isCreating || !selectedModel || !apiKey) return;
+  const handleSaveApiKey = async (key: string) => {
+    setApiKeyError(null);
+    setSavingApiKey(true);
+    try {
+      await saveKey(key);
+      setShowKeyModal(false);
+      registerClientProperties({ has_openrouter_key: true });
+      captureClientEvent("openrouter.key_saved", {
+        source: "modal",
+        masked_tail: key.slice(-4),
+        scope: "workspace",
+      });
+    } catch (error) {
+      logError("Failed to save OpenRouter API key", error);
+      setApiKeyError(
+        error instanceof Error && error.message
+          ? error.message
+          : "Failed to save OpenRouter API key."
+      );
+    } finally {
+      setSavingApiKey(false);
+    }
+  };
 
-    // Clear input INSTANTLY for responsive feel
-    setValue("");
-    adjustHeight(true);
+  const handleSend = async ({
+    text,
+    modelId,
+  }: {
+    text: string;
+    modelId: string;
+    apiKey: string;
+  }) => {
+    const messageText = text.trim();
+    if (!messageText || isCreating) return;
+
     setIsCreating(true);
 
     // Store message and model for chat page to auto-send
     if (typeof window !== "undefined") {
       sessionStorage.setItem("pendingMessage", messageText);
-      sessionStorage.setItem("pendingModel", selectedModel);
+      sessionStorage.setItem("pendingModel", modelId);
     }
 
     try {
@@ -149,35 +168,37 @@ function ChatPreview({ className }: { className?: string }) {
 
       const data = await response.json();
 
+      captureClientEvent("chat.created", {
+        chat_id: data.chat.id,
+        source: "dashboard",
+      });
+
       // Redirect to the new chat (message will auto-send from there)
       router.push(`/dashboard/chat/${data.chat.id}`);
     } catch (error) {
-      console.error("Failed to create chat:", error);
-      // Restore message if failed
-      setValue(messageText);
-      adjustHeight();
+      logError("Failed to create chat:", error);
+      toast.error("Failed to create chat. Please try again.");
+      // Clear session storage if failed
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("pendingMessage");
+        sessionStorage.removeItem("pendingModel");
+      }
       setIsCreating(false);
     }
   };
 
-  const handleModelChange = (modelId: string) => {
-    setSelectedModel(modelId);
-    setStorageItemSync(LAST_MODEL_STORAGE_KEY, modelId);
-  };
-
-  const _handleAttachFile = () => {
-    const mockFileName = `file-${Math.floor(Math.random() * 1000)}.pdf`;
-    setAttachments((prev) => [...prev, mockFileName]);
-  };
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Command suggestions removed
-
   return (
     <div className={cn("w-full", className)}>
+      <OpenRouterLinkModal
+        open={showKeyModal}
+        saving={savingApiKey}
+        errorMessage={apiKeyError}
+        onSubmit={handleSaveApiKey}
+        onTroubleshoot={() => setApiKeyError(null)}
+        onClose={() => setShowKeyModal(false)}
+        hasApiKey={Boolean(apiKey)}
+      />
+
       <div className="text-foreground relative w-full overflow-hidden bg-transparent p-0">
         <div className="relative mx-auto w-full max-w-2xl">
           <div className="relative z-10 space-y-12 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
@@ -193,112 +214,21 @@ function ChatPreview({ className }: { className?: string }) {
               </p>
             </div>
 
-            <div
-              className={cn(
-                `border-border bg-card/${opacity.subtle} relative border backdrop-blur supports-[backdrop-filter]:backdrop-blur-2xl animate-in fade-in-0 zoom-in-[0.985] duration-200 delay-50`,
-                borderRadius.xl,
-                shadows.xl,
-              )}
-            >
-              {/* Removed focus ring overlay for a cleaner typing experience */}
-              {/* Command palette removed */}
-
-              <div className={spacing.padding.lg}>
-                <textarea
-                  ref={textareaRef}
-                  value={value}
-                  onChange={(e) => {
-                    setValue(e.target.value);
-                    debouncedAdjustHeight();
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type your message..."
-                  className={cn(
-                    "w-full px-4 py-3",
-                    "resize-none",
-                    "bg-transparent",
-                    "border-none",
-                    "text-foreground text-sm",
-                    "focus:outline-none",
-                    "placeholder:text-muted-foreground",
-                    "min-h-[60px]",
-                  )}
-                  style={{
-                    overflow: "hidden",
-                  }}
-                  data-ph-no-capture
-                  aria-label="Message input"
-                />
-              </div>
-
-              {attachments.length > 0 && (
-                <div className={cn("flex flex-wrap px-4 pb-3 animate-in fade-in-0 duration-200", spacing.gap.sm)}>
-                  {attachments.map((file, index) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        "bg-primary/5 text-muted-foreground flex items-center px-3 py-1.5 text-xs animate-in fade-in-0 zoom-in-95 duration-200",
-                        borderRadius.md,
-                        spacing.gap.sm,
-                      )}
-                    >
-                      <span>{file}</span>
-                      <button
-                        onClick={() => removeAttachment(index)}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={`Remove ${file}`}
-                      >
-                        <XIcon className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div
-                className={cn(
-                  "border-border flex flex-col border-t sm:flex-row sm:items-center sm:justify-between",
-                  spacing.gap.lg,
-                  spacing.padding.lg,
-                )}
-              >
-                <div className={cn("flex items-center", spacing.gap.sm)}>
-                  <ModelSelector
-                    options={modelOptions}
-                    value={selectedModel}
-                    onChange={handleModelChange}
-                    disabled={isCreating || modelOptions.length === 0}
-                    loading={modelsLoading}
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSendMessage}
-                  disabled={isCreating || !value.trim() || !selectedModel || !apiKey}
-                  className={cn(
-                    "flex h-9 items-center px-4 text-sm font-medium transition-all hover:scale-[1.01] active:scale-[0.98]",
-                    borderRadius.lg,
-                    spacing.gap.sm,
-                    shadows.sm,
-                    value.trim() && selectedModel && apiKey
-                      ? "bg-primary text-primary-foreground shadow-primary/10 hover:bg-primary/90"
-                      : "bg-muted/50 text-muted-foreground",
-                  )}
-                  aria-label={isCreating ? "Creating chat" : "Send message"}
-                  aria-busy={isCreating}
-                >
-                  {isCreating ? (
-                    <LoaderIcon
-                      className="size-4 animate-[spin_2s_linear_infinite]"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <SendIcon className="size-4" aria-hidden="true" />
-                  )}
-                  <span>Send</span>
-                </button>
-              </div>
+            <div className="animate-in fade-in-0 zoom-in-[0.985] duration-200 delay-50">
+              <ChatComposer
+                placeholder="Type your message..."
+                onSend={handleSend}
+                disabled={isCreating}
+                sendDisabled={isCreating || !selectedModel}
+                modelOptions={modelOptions}
+                modelValue={selectedModel}
+                onModelChange={handleModelChange}
+                modelsLoading={modelsLoading}
+                apiKey={apiKey}
+                onMissingRequirement={handleMissingRequirement}
+                // No userId/chatId - file uploads will be hidden on dashboard
+                // (files can only be uploaded after chat is created)
+              />
             </div>
 
             {/* Prompt Library Quick Access */}
@@ -348,30 +278,9 @@ function ChatPreview({ className }: { className?: string }) {
             </div>
           </div>
         </div>
-
-        {/* Neutral look; gradients removed for performance */}
       </div>
     </div>
   );
 }
 
 export default React.memo(ChatPreview);
-
-// removed unused TypingDots and ActionButtonProps
-
-const rippleKeyframes = `
-@keyframes ripple {
-  0% { transform: scale(0.5); opacity: 0.6; }
-  100% { transform: scale(2); opacity: 0; }
-}
-`;
-
-if (typeof document !== "undefined") {
-  const STYLE_ID = "chat-preview-ripple-style";
-  if (!document.getElementById(STYLE_ID)) {
-    const style = document.createElement("style");
-    style.id = STYLE_ID;
-    style.innerHTML = rippleKeyframes;
-    document.head.appendChild(style);
-  }
-}

@@ -434,7 +434,7 @@ function ModelSelector({ options, value, onChange, disabled, loading, open: cont
 					variant="outline"
 					onClick={initiateLogin}
 					disabled={isOAuthLoading}
-					className="w-[200px] justify-start gap-2"
+					className="w-auto min-w-0 max-w-[200px] justify-start gap-2"
 				>
 					{isOAuthLoading ? (
 						<Loader2 className="size-4 animate-spin" />
@@ -458,7 +458,7 @@ function ModelSelector({ options, value, onChange, disabled, loading, open: cont
 				<Button
 					variant="outline"
 					disabled={disabled || loading || options.length === 0}
-					className="w-[200px] justify-between gap-2"
+					className="w-auto min-w-0 max-w-[140px] sm:max-w-[200px] justify-between gap-2"
 				>
 					<div className="flex items-center gap-2 flex-1 min-w-0">
 						{selectedProvider && (
