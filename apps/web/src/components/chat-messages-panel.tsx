@@ -98,6 +98,13 @@ function ChatMessagesPanelComponent({
   const shouldStickRef = useRef(true);
   const lastSignatureRef = useRef<string | null>(null);
   const lastChatIdRef = useRef<string | undefined>(chatId);
+  const isResizingRef = useRef(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration mismatch by only rendering scroll-dependent content after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Reset scroll state when switching to a different chat
   useEffect(() => {
@@ -160,6 +167,7 @@ function ChatMessagesPanelComponent({
   );
 
   useLayoutEffect(() => {
+    if (!isMounted) return; // Wait for hydration to complete
     const node = viewportRef.current;
     if (!node) return;
     if (!hasMessages) return;
@@ -171,14 +179,16 @@ function ChatMessagesPanelComponent({
       setIsAtBottom(true);
       lastSignatureRef.current = tailSignature;
     });
-  }, [hasMessages, scrollToBottom, tailSignature]);
+  }, [hasMessages, scrollToBottom, tailSignature, isMounted]);
 
   useEffect(() => {
+    if (!isMounted) return; // Wait for hydration to complete
     const node = viewportRef.current;
     if (!node) return;
     const handleScroll = () => {
       const atBottom = computeIsAtBottom(node);
-      setIsAtBottom(atBottom);
+      // Only update state if value actually changed to prevent unnecessary re-renders
+      setIsAtBottom((prev) => (prev !== atBottom ? atBottom : prev));
       shouldStickRef.current = atBottom;
     };
     const handlePointerDown = () => {
@@ -198,9 +208,10 @@ function ChatMessagesPanelComponent({
       node.removeEventListener("pointerdown", handlePointerDown);
       node.removeEventListener("wheel", handleWheel);
     };
-  }, [computeIsAtBottom]);
+  }, [computeIsAtBottom, isMounted]);
 
   useEffect(() => {
+    if (!isMounted) return; // Wait for hydration to complete
     if (!autoStick) return;
     if (!tailSignature) return;
     if (!initialSyncDoneRef.current) return;
@@ -209,7 +220,7 @@ function ChatMessagesPanelComponent({
     if (isStreaming) return;
     lastSignatureRef.current = tailSignature;
     syncScrollPosition(false);
-  }, [autoStick, tailSignature, syncScrollPosition, isStreaming]);
+  }, [autoStick, tailSignature, syncScrollPosition, isStreaming, isMounted]);
 
   useEffect(() => {
     if (tailSignature) return;
@@ -218,24 +229,36 @@ function ChatMessagesPanelComponent({
 
   useLayoutEffect(() => {
     if (!autoStick) return;
+    if (!isMounted) return; // Wait for hydration to complete
     const contentNode = contentRef.current;
     if (!contentNode) return;
     const observer = new ResizeObserver(() => {
+      // Prevent infinite loops: skip if already processing a resize
+      if (isResizingRef.current) return;
       if (!initialSyncDoneRef.current) return;
       if (!shouldStickRef.current) return;
-      scrollToBottom("smooth");
+
+      isResizingRef.current = true;
+      requestAnimationFrame(() => {
+        scrollToBottom("smooth");
+        // Reset flag after a short delay to debounce rapid resizes
+        setTimeout(() => {
+          isResizingRef.current = false;
+        }, 100);
+      });
     });
     observer.observe(contentNode);
     return () => observer.disconnect();
-  }, [autoStick, scrollToBottom]);
+  }, [autoStick, scrollToBottom, isMounted]);
 
   return (
-    <div className={cn("relative flex flex-1 min-h-0 flex-col", className)}>
-      <ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
+    <div className={cn("relative flex flex-1 min-h-0 flex-col", className)} suppressHydrationWarning>
+      <ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden" suppressHydrationWarning>
         <ScrollAreaPrimitive.Viewport
           ref={viewportRef}
           className="size-full overflow-y-auto overflow-x-hidden"
           aria-label="Conversation messages"
+          suppressHydrationWarning
         >
           <div
             ref={contentRef}
@@ -245,6 +268,7 @@ function ChatMessagesPanelComponent({
             aria-relevant="additions"
             data-ph-no-capture
             style={{ paddingBottom }}
+            suppressHydrationWarning
           >
             {hasMessages ? (
               <div className="w-full max-w-3xl mx-auto">
@@ -355,7 +379,8 @@ function ChatMessagesPanelComponent({
         </ScrollAreaPrimitive.Viewport>
         <ScrollBar orientation="vertical" />
       </ScrollAreaPrimitive.Root>
-      {!isAtBottom && hasMessages ? (
+      {/* Only render scroll-to-bottom after hydration to prevent mismatch */}
+      {isMounted && !isAtBottom && hasMessages ? (
         <Button
           type="button"
           variant="outline"
