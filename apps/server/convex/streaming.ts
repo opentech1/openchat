@@ -67,6 +67,12 @@ export const createStream = mutation({
  * Get the current body/content of a stream
  * Used by useStream hook for database fallback when not driving
  * IMPORTANT: Must return { text, status } format for useStream hook compatibility
+ *
+ * STREAM RECONNECTION: This query handles the case where a user reloads during streaming.
+ * The persistent stream component may have cleared its body, but:
+ * 1. The message has content from periodic saves
+ * 2. The message status tells us if streaming is still in progress
+ * We use the message's status (not "done") to determine the correct streaming state.
  */
 export const getStreamBody = query({
 	args: {
@@ -76,23 +82,30 @@ export const getStreamBody = query({
 		// Get stream body from persistent streaming - returns { text, status }
 		const streamBody = await persistentTextStreaming.getStreamBody(ctx, args.streamId as StreamId);
 
-		// If stream body is empty/null, check if message has content (stream may have completed)
-		if (!streamBody || (typeof streamBody === "object" && !streamBody.text)) {
-			const message = await ctx.db
-				.query("messages")
-				.withIndex("by_stream_id", (q) => q.eq("streamId", args.streamId as string))
-				.unique();
+		// Always fetch the message to check its actual status
+		const message = await ctx.db
+			.query("messages")
+			.withIndex("by_stream_id", (q) => q.eq("streamId", args.streamId as string))
+			.unique();
 
-			if (message?.content) {
-				// Return the message content with done status
-				return {
-					text: message.content,
-					status: "done" as const,
-				};
-			}
+		// If stream body has content and is still streaming, return it
+		if (streamBody && typeof streamBody === "object" && streamBody.text) {
+			return streamBody;
 		}
 
-		// Return the stream body directly - useStream hook expects { text, status }
+		// If stream body is empty but message has content, use message content
+		// CRITICAL: Use the message's status, not hardcoded "done"
+		// This allows stream reconnection to show content while still detecting streaming
+		if (message?.content) {
+			// Determine the correct status based on message status
+			const status = message.status === "streaming" ? "streaming" : "done";
+			return {
+				text: message.content,
+				status: status as "streaming" | "done",
+			};
+		}
+
+		// Fallback: return stream body (may be empty/null)
 		return streamBody;
 	},
 });
@@ -159,12 +172,23 @@ export const completeStream = internalMutation({
 		thinkingTimeMs: v.optional(v.number()),
 	},
 	handler: async (ctx, args) => {
+		// Get the message to find the chatId
+		const message = await ctx.db.get(args.messageId);
+
 		await ctx.db.patch(args.messageId, {
 			content: args.content,
 			reasoning: args.reasoning,
 			thinkingTimeMs: args.thinkingTimeMs,
 			status: "completed",
 		});
+
+		// Reset chat status to idle when streaming completes
+		if (message?.chatId) {
+			await ctx.db.patch(message.chatId, {
+				status: "idle",
+				updatedAt: Date.now(),
+			});
+		}
 	},
 });
 
@@ -238,10 +262,12 @@ export const prepareChat = mutation({
 			userId: args.userId,
 		});
 
-		// Update chat's lastMessageAt
+		// Update chat's lastMessageAt and set status to streaming
+		// This allows the sidebar to show a streaming indicator
 		await ctx.db.patch(args.chatId, {
 			lastMessageAt: now,
 			updatedAt: now,
+			status: "streaming",
 		});
 
 		return {

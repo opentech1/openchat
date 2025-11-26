@@ -55,6 +55,8 @@ const chatListItemDoc = v.object({
 	createdAt: v.number(),
 	updatedAt: v.number(),
 	lastMessageAt: v.optional(v.number()),
+	// Chat status for streaming indicator in sidebar
+	status: v.optional(v.string()),
 });
 
 // Security configuration: enforce maximum chat list limit
@@ -109,6 +111,8 @@ export const list = query({
 				createdAt: chat.createdAt,
 				updatedAt: chat.updatedAt,
 				lastMessageAt: chat.lastMessageAt,
+				// Include status for streaming indicator in sidebar
+				status: chat.status,
 			})),
 			nextCursor: results.continueCursor ?? null,
 		};

@@ -43,7 +43,7 @@ function generateCorrelationId(): string {
 }
 
 /**
- * Middleware for security headers and request tracing
+ * Proxy for security headers and request tracing (Next.js 16+)
  *
  * Provides:
  * - Request correlation IDs for distributed tracing
@@ -51,7 +51,7 @@ function generateCorrelationId(): string {
  *
  * NOTE: Authentication is NOT handled here. The convexClient() plugin from
  * @convex-dev/better-auth stores sessions in localStorage (not cookies) for
- * cross-domain compatibility with Convex. Middleware cannot access localStorage,
+ * cross-domain compatibility with Convex. Proxy cannot access localStorage,
  * so auth checks happen in server components via getUserContext().
  *
  * REQUEST CORRELATION IDS:
@@ -61,7 +61,7 @@ function generateCorrelationId(): string {
  * - This ID should be logged with all operations for that request
  * - Makes it easy to trace a request through multiple services/logs
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
 	// Extract or generate correlation ID
 	const existingCorrelationId = request.headers.get("x-request-id");
 	const correlationId = existingCorrelationId || generateCorrelationId();

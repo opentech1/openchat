@@ -166,7 +166,71 @@ describe("serializeChat", () => {
 		expect(keys).toContain("title");
 		expect(keys).toContain("updatedAt");
 		expect(keys).toContain("lastMessageAt");
-		expect(keys.length).toBe(4);
+		expect(keys).toContain("status");
+		expect(keys.length).toBe(5);
+	});
+
+	// STREAMING STATUS TESTS
+	describe("streaming status field", () => {
+		test("should serialize chat with streaming status", () => {
+			const chat: ListChat = {
+				...baseChat,
+				status: "streaming",
+			};
+
+			const result = serializeChat(chat);
+
+			expect(result.status).toBe("streaming");
+		});
+
+		test("should serialize chat with idle status", () => {
+			const chat: ListChat = {
+				...baseChat,
+				status: "idle",
+			};
+
+			const result = serializeChat(chat);
+
+			expect(result.status).toBe("idle");
+		});
+
+		test("should handle undefined status as null", () => {
+			const chat: ListChat = {
+				...baseChat,
+				status: undefined,
+			};
+
+			const result = serializeChat(chat);
+
+			expect(result.status).toBeNull();
+		});
+
+		test("should handle missing status field as null", () => {
+			const chat: ListChat = {
+				_id: "chat_123" as any,
+				title: "Test",
+				createdAt: 1700000000000,
+				updatedAt: 1700001000000,
+			};
+
+			const result = serializeChat(chat);
+
+			expect(result.status).toBeNull();
+		});
+
+		test("should preserve status across multiple serializations", () => {
+			const chat: ListChat = {
+				...baseChat,
+				status: "streaming",
+			};
+
+			const result1 = serializeChat(chat);
+			const result2 = serializeChat(chat);
+
+			expect(result1.status).toBe("streaming");
+			expect(result2.status).toBe("streaming");
+			expect(result1.status).toBe(result2.status);
+		});
 	});
 
 	test("should not include createdAt in serialized output", () => {
