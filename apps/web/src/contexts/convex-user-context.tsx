@@ -49,8 +49,9 @@ export function ConvexUserProvider({ children }: { children: React.ReactNode }) 
 
 export function useConvexUser() {
   const context = useContext(ConvexUserContext);
+  // Return loading state during SSG/SSR when provider isn't mounted yet
   if (context === undefined) {
-    throw new Error("useConvexUser must be used within a ConvexUserProvider");
+    return { convexUser: undefined, isLoading: true };
   }
   return context;
 }

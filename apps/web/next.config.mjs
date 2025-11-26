@@ -11,6 +11,10 @@ const withBundleAnalyzer = bundleAnalyzer({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	// Next.js 16: Empty turbopack config to silence "no turbopack config" error in builds
+	// We use --webpack flag in dev because Turbopack doesn't support absolute path aliases
+	// needed for deduplicating convex/react in monorepo. See webpack config below for the alias.
+	turbopack: {},
 	experimental: {
 		externalDir: true,
 		// Completely disable Next.js devtools in Bun to prevent SegmentViewNode errors

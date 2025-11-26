@@ -56,5 +56,8 @@
     "vitest": "^4.0.13",
     "ws": "^8.18.0"
   },
+  "overrides": {
+    "@peculiar/asn1-schema": "2.6.0"
+  },
   "packageManager": "bun@1.3.0"
 }

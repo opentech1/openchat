@@ -129,7 +129,14 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
       <ChatErrorBoundary chatId={props.chatId}>
         <ChatStoreProvider initialMessages={initialUiMessages}>
           {mounted ? (
-            <ChatRoom {...props} initialStreamId={activeStreamId} />
+            // CRITICAL FIX: Pass the fetched messages, not props.initialMessages
+            // When initialMessages is empty, we fetch client-side and update `messages` state
+            // We must pass the updated messages to ChatRoom, not the stale props
+            <ChatRoom
+              chatId={props.chatId}
+              initialMessages={messages}
+              initialStreamId={activeStreamId}
+            />
           ) : (
             <ChatLoader />
           )}

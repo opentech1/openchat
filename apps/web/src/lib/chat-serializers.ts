@@ -5,6 +5,8 @@ export type SerializedChat = {
 	title: string | null;
 	updatedAt: string;
 	lastMessageAt: string | null;
+	// Chat status for streaming indicator: "idle" | "streaming"
+	status?: string | null;
 };
 
 // Chat type returned by chats.list query (optimized, without redundant fields)
@@ -14,6 +16,8 @@ export type ListChat = {
 	createdAt: number;
 	updatedAt: number;
 	lastMessageAt?: number;
+	// Chat status for streaming indicator
+	status?: string;
 };
 
 export function serializeChat(chat: ListChat): SerializedChat {
@@ -22,5 +26,7 @@ export function serializeChat(chat: ListChat): SerializedChat {
 		title: chat.title,
 		updatedAt: new Date(chat.updatedAt).toISOString(),
 		lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt).toISOString() : null,
+		// Include status for streaming indicator in sidebar
+		status: chat.status ?? null,
 	};
 }

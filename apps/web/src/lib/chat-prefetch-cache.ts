@@ -40,7 +40,9 @@ function isPrefetchCache(value: unknown): value is Record<string, PrefetchEntry>
 
 const STORAGE_KEY = "openchat.chat-prefetch";
 // Access env vars directly to avoid build-time validation
-const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 60_000);
+// Default to 5 minutes TTL - messages change infrequently and stale data is fine
+// since we have real-time Convex subscriptions when the chat is actually opened
+const DEFAULT_TTL_MS = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS ?? 300_000);
 const MAX_CACHE_SIZE = Number(process.env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE ?? 50);
 
 declare global {

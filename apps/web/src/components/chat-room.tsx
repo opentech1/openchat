@@ -224,6 +224,17 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     setIsConvexStreaming(true);
   }, [activeStreamFromDb, activeStreamId]);
 
+  // STREAM RECONNECTION FIX: Sync activeStreamId from initialStreamId prop when it changes
+  // This handles the case where ChatRoomWrapper fetches messages AFTER ChatRoom mounts
+  // and discovers a streaming message. useState(initialValue) only uses the value on
+  // first render, so we need this effect to sync prop changes to state.
+  useEffect(() => {
+    if (initialStreamId && !activeStreamId) {
+      setActiveStreamId(initialStreamId);
+      setIsConvexStreaming(true);
+    }
+  }, [initialStreamId, activeStreamId]);
+
   // Track which stream IDs were created by THIS browser session
   const drivenStreamIdsRef = useRef<Set<string>>(new Set());
 
@@ -678,6 +689,20 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     observer.observe(wrapper);
     return () => observer.disconnect();
   }, []);
+
+  // STREAM RECONNECTION FIX: Sync messages from props when initialMessages changes
+  // This handles the case where ChatRoomWrapper fetches messages client-side
+  // after mounting with empty initialMessages
+  const initialMessageCountRef = useRef(initialMessages.length);
+  useEffect(() => {
+    // Only sync if we went from 0 to N messages (initial load completed)
+    // This prevents overwriting optimistic messages during normal operation
+    if (initialMessageCountRef.current === 0 && initialMessages.length > 0) {
+      const uiMessages = normalizedInitial.map(toUiMessage);
+      setMessages(uiMessages);
+    }
+    initialMessageCountRef.current = initialMessages.length;
+  }, [initialMessages.length, normalizedInitial, setMessages]);
 
   useEffect(() => {
     const entry = readChatPrefetch(chatId);

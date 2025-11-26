@@ -233,9 +233,7 @@ function ChatMessagesPanelComponent({
     <div className={cn("relative flex flex-1 min-h-0 flex-col", className)}>
       <ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden">
         <ScrollAreaPrimitive.Viewport
-          ref={(node) => {
-            viewportRef.current = node;
-          }}
+          ref={viewportRef}
           className="size-full overflow-y-auto overflow-x-hidden"
           aria-label="Conversation messages"
         >

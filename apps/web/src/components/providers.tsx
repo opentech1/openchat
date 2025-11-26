@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -13,10 +13,23 @@ import { Toaster } from "sonner";
 import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 import { ConvexUserProvider } from "@/contexts/convex-user-context";
+import { ChatListProvider } from "@/contexts/chat-list-context";
 
 // Create singleton clients at module scope to prevent recreation on re-renders
+// This follows Convex recommended pattern for Next.js: https://docs.convex.dev/quickstart/nextjs
 const queryClient = new QueryClient();
 const posthogClient = initPosthog();
+
+// Create Convex client at module scope - only in browser environment
+// During SSR/SSG (static generation), convexClient will be null and we render a fallback tree
+// This is required because:
+// 1. Next.js prerenders pages on the server during build
+// 2. The "use client" directive doesn't prevent module-level code from running on server
+// 3. Convex client requires browser APIs that don't exist on server
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+const convexClient = typeof window !== "undefined" && convexUrl
+	? new ConvexReactClient(convexUrl)
+	: null;
 
 function PosthogPageViewTracker() {
 	const pathname = usePathname();
@@ -59,58 +72,62 @@ function PosthogPageViewTracker() {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-	// Lazy initialize Convex client inside component to avoid module-level errors
-	// This follows the pattern from Convex docs: https://docs.convex.dev/quickstart/remix
-	const [convexClient] = useState(() => {
-		const url = process.env.NEXT_PUBLIC_CONVEX_URL;
-		if (!url) {
-			// During build time or SSR, use a placeholder URL
-			if (typeof window === "undefined") {
-				return new ConvexReactClient("http://localhost:3210");
-			}
-			// Provide a helpful error message for client-side
-			throw new Error(
-				"NEXT_PUBLIC_CONVEX_URL is not configured. Please add it to your .env.local file and restart the dev server with: bun run dev"
-			);
-		}
-		return new ConvexReactClient(url);
-	});
+	// During SSR/SSG, render without Convex providers
+	// This prevents "Could not find Convex client" errors during static generation
+	if (!convexClient) {
+		return (
+			<ThemeProvider
+				attribute="class"
+				defaultTheme="system"
+				enableSystem
+				disableTransitionOnChange
+			>
+				<BrandThemeProvider>
+					<QueryClientProvider client={queryClient}>
+						{children}
+					</QueryClientProvider>
+				</BrandThemeProvider>
+			</ThemeProvider>
+		);
+	}
 
 	const appTree = (
 		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
 			<ConvexUserProvider>
-				<ThemeProvider
-					attribute="class"
-					defaultTheme="system"
-					enableSystem
-					disableTransitionOnChange
-				>
-					<BrandThemeProvider>
-						<QueryClientProvider client={queryClient}>
-							<PosthogBootstrap />
-							<Suspense fallback={null}>
-								<PosthogPageViewTracker />
-							</Suspense>
-							{children}
-							<Toaster
-								richColors
-								position="bottom-right"
-								closeButton
-								theme="system"
-								toastOptions={{
-									classNames: {
-										toast: 'backdrop-blur-xl bg-background/95 border-border shadow-lg',
-										title: 'text-foreground font-medium',
-										description: 'text-muted-foreground',
-										actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
-										cancelButton: 'bg-muted text-muted-foreground hover:bg-muted/80',
-										closeButton: 'bg-background border-border hover:bg-muted',
-									},
-								}}
-							/>
-						</QueryClientProvider>
-					</BrandThemeProvider>
-				</ThemeProvider>
+				<ChatListProvider>
+					<ThemeProvider
+						attribute="class"
+						defaultTheme="system"
+						enableSystem
+						disableTransitionOnChange
+					>
+						<BrandThemeProvider>
+							<QueryClientProvider client={queryClient}>
+								<PosthogBootstrap />
+								<Suspense fallback={null}>
+									<PosthogPageViewTracker />
+								</Suspense>
+								{children}
+								<Toaster
+									richColors
+									position="bottom-right"
+									closeButton
+									theme="system"
+									toastOptions={{
+										classNames: {
+											toast: 'backdrop-blur-xl bg-background/95 border-border shadow-lg',
+											title: 'text-foreground font-medium',
+											description: 'text-muted-foreground',
+											actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
+											cancelButton: 'bg-muted text-muted-foreground hover:bg-muted/80',
+											closeButton: 'bg-background border-border hover:bg-muted',
+										},
+									}}
+								/>
+							</QueryClientProvider>
+						</BrandThemeProvider>
+					</ThemeProvider>
+				</ChatListProvider>
 			</ConvexUserProvider>
 		</ConvexBetterAuthProvider>
 	);

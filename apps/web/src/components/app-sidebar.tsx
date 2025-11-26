@@ -40,6 +40,7 @@ import { Logo } from "@/components/logo";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { LiveRegion } from "@/components/ui/live-region";
 import ThemeToggle from "@/components/theme-toggle";
+import { useChatList } from "@/contexts/chat-list-context";
 
 export type ChatListItem = {
   id: string;
@@ -49,6 +50,8 @@ export type ChatListItem = {
   updatedAtMs?: number | null;
   lastMessageAtMs?: number | null;
   lastActivityMs?: number | null;
+  // Chat status for streaming indicator: "idle" | "streaming"
+  status?: string | null;
 };
 
 export type AppSidebarProps = {
@@ -157,6 +160,19 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   const [accountOpen, setAccountOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+
+  // REAL-TIME STREAMING STATUS: Use Convex subscription for live status updates
+  // This enables the streaming indicator dot in the sidebar
+  const { chats: realtimeChats } = useChatList();
+
+  // Create a map of chat statuses from real-time data for O(1) lookup
+  const realtimeStatusMap = useMemo(() => {
+    const map = new Map<string, string | undefined>();
+    for (const chat of realtimeChats) {
+      map.set(chat._id, chat.status);
+    }
+    return map;
+  }, [realtimeChats]);
 
   // PERFORMANCE FIX: Move dedupeChats to useMemo to avoid recalculation on every render
   const dedupedInitialChats = useMemo(
@@ -381,6 +397,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
               onHoverChat={handleHoverChat}
               isLoading={isLoadingChats}
               onNavigate={onNavigate}
+              realtimeStatusMap={realtimeStatusMap}
             />
           </ErrorBoundary>
         </SidebarGroup>
@@ -500,6 +517,7 @@ function ChatList({
   onHoverChat,
   isLoading,
   onNavigate,
+  realtimeStatusMap,
 }: {
   chats: ChatListItem[];
   activePath?: string | null;
@@ -508,21 +526,11 @@ function ChatList({
   onHoverChat?: (chatId: string) => void;
   isLoading?: boolean;
   onNavigate?: () => void;
+  /** Real-time status map from Convex subscription for live streaming indicators */
+  realtimeStatusMap?: Map<string, string | undefined>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
-  const hasPrefetchedRef = useRef(false);
-
-  // Proactively prefetch top 5 chats when list loads (helps mobile where no hover)
-  useEffect(() => {
-    if (hasPrefetchedRef.current || chats.length === 0 || isLoading) return;
-    hasPrefetchedRef.current = true;
-
-    // Prefetch top 5 most recent chats in background
-    const topChats = chats.slice(0, 5);
-    for (const chat of topChats) {
-      onHoverChat?.(chat.id);
-    }
-  }, [chats, isLoading, onHoverChat]);
+  // Removed proactive prefetching - only prefetch on hover to avoid API spam
 
   // Only virtualize when we have many chats (>100)
   const shouldVirtualize = chats.length > 100;
@@ -572,6 +580,7 @@ function ChatList({
             deletingId={deletingId}
             onHoverChat={onHoverChat}
             onNavigate={onNavigate}
+            realtimeStatus={realtimeStatusMap?.get(c.id)}
           />
         ))}
       </div>
@@ -612,6 +621,7 @@ function ChatList({
                 deletingId={deletingId}
                 onHoverChat={onHoverChat}
                 onNavigate={onNavigate}
+                realtimeStatus={realtimeStatusMap?.get(chat.id)}
               />
             </div>
           );
@@ -621,6 +631,14 @@ function ChatList({
   );
 }
 
+// Streaming indicator dot animation for sidebar
+const StreamingDot = () => (
+  <span className="relative flex size-2 shrink-0">
+    <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-500/60 opacity-75" />
+    <span className="relative inline-flex size-2 rounded-full bg-blue-500" />
+  </span>
+);
+
 function ChatListItem({
   chat,
   activePath,
@@ -628,6 +646,7 @@ function ChatListItem({
   deletingId,
   onHoverChat,
   onNavigate,
+  realtimeStatus,
 }: {
   chat: ChatListItem;
   activePath?: string | null;
@@ -635,9 +654,14 @@ function ChatListItem({
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
   onNavigate?: () => void;
+  /** Real-time status from Convex subscription - takes priority over cached status */
+  realtimeStatus?: string;
 }) {
   const hrefPath = `/dashboard/chat/${chat.id}`;
   const isActive = activePath === hrefPath;
+  // Use real-time status from Convex subscription if available, otherwise fall back to cached status
+  const effectiveStatus = realtimeStatus ?? chat.status;
+  const isStreaming = effectiveStatus === "streaming";
 
   return (
     <div className="group relative">
@@ -646,7 +670,7 @@ function ChatListItem({
         prefetch
         className={cn(
           // Linear-style: clean active state with left border accent, subtle hover
-          "block truncate rounded-md px-3 py-1.5 text-sm transition-colors duration-100 ease-out relative",
+          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors duration-100 ease-out relative overflow-hidden",
           isActive
             ? "bg-accent/50 text-accent-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r"
             : "hover:bg-accent/50 hover:text-accent-foreground",
@@ -656,7 +680,8 @@ function ChatListItem({
         onFocus={() => onHoverChat?.(chat.id)}
         onClick={() => onNavigate?.()}
       >
-        {chat.title || "Untitled"}
+        {isStreaming && <StreamingDot />}
+        <span className="truncate">{chat.title || "Untitled"}</span>
       </Link>
       <button
         type="button"
