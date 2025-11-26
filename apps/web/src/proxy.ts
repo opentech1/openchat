@@ -8,7 +8,7 @@ import { type NextRequest, NextResponse } from "next/server";
  */
 const BASE_CSP_DIRECTIVES = [
 	"default-src 'self'",
-	"script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.convex.cloud https://*.convex.site https://us.i.posthog.com https://us-assets.i.posthog.com https://unpkg.com https://va.vercel-scripts.com",
+	"script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.convex.cloud https://*.convex.site https://us.i.posthog.com https://us-assets.i.posthog.com https://unpkg.com https://va.vercel-scripts.com https://static.cloudflareinsights.com",
 	"connect-src 'self' https://*.convex.cloud https://*.convex.site wss://*.convex.cloud wss://*.convex.site https://openrouter.ai https://us.i.posthog.com https://us-assets.i.posthog.com",
 	"img-src 'self' blob: data: https://*.convex.cloud https://*.convex.site https://avatar.vercel.sh https://avatars.githubusercontent.com https://models.dev",
 	"font-src 'self' data:",

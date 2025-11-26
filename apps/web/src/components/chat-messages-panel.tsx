@@ -124,7 +124,8 @@ function ChatMessagesPanelComponent({
   }, [hasMessages, messages]);
 
   // Virtualization setup - only virtualize when we have many messages (>20)
-  const shouldVirtualize = messages.length > 20;
+  // CRITICAL: Disable virtualization during initial render to prevent hydration mismatch
+  const shouldVirtualize = isMounted && messages.length > 20;
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => viewportRef.current,
@@ -132,6 +133,18 @@ function ChatMessagesPanelComponent({
     overscan: 2, // Reduced from 5 to 2 for better performance
     enabled: shouldVirtualize,
   });
+
+  // REACT 19 FIX: Create stable ref callback for virtualizer measurement
+  // This prevents infinite re-renders caused by unstable measureElement callback
+  const measureElementRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!isMounted) return; // Skip measurement during hydration
+      if (node) {
+        virtualizer.measureElement(node);
+      }
+    },
+    [virtualizer, isMounted]
+  );
 
   // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
   const virtualListContainerStyle = useMemo(
@@ -291,7 +304,7 @@ function ChatMessagesPanelComponent({
                         <div
                           key={virtualItem.key}
                           data-index={virtualItem.index}
-                          ref={virtualizer.measureElement}
+                          ref={measureElementRef}
                           style={itemStyle}
                           className="pb-4"
                         >
