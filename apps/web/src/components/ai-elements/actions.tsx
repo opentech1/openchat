@@ -8,9 +8,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { ComponentProps } from "react";
+import type { HTMLAttributes, ComponentProps } from "react";
 
-export type ActionsProps = ComponentProps<"div">;
+export type ActionsProps = HTMLAttributes<HTMLDivElement>;
 
 export const Actions = ({ className, children, ...props }: ActionsProps) => (
   <div className={cn("flex items-center gap-1", className)} {...props}>

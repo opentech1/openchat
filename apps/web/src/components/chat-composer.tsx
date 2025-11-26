@@ -759,12 +759,13 @@ function ChatComposer({
 
       <div
         className={cn(
-          "border-border flex flex-col border-t sm:flex-row sm:items-center sm:justify-between",
-          spacing.gap.lg,
+          "border-border flex items-center justify-between border-t",
+          spacing.gap.sm,
           spacing.padding.lg,
         )}
       >
-        <div className={cn("flex items-center flex-wrap", spacing.gap.sm)}>
+        {/* Controls row - single row, compact on mobile */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0 overflow-x-auto">
           <ModelSelector
             options={modelOptions}
             value={
@@ -810,13 +811,16 @@ function ChatComposer({
               disabled={disabled || isBusy}
             />
           )}
-          <ContextUsageIndicator
-            currentTokens={currentTokenCount}
-            maxTokens={maxContextTokens}
-          />
+          <div className="hidden sm:block">
+            <ContextUsageIndicator
+              currentTokens={currentTokenCount}
+              maxTokens={maxContextTokens}
+            />
+          </div>
         </div>
 
-        <div className={cn("flex flex-col items-end", spacing.gap.xs)}>
+        {/* Send button - icon only on mobile, with text on desktop */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
           {errorMessage && (
             <span
               id="composer-error"
@@ -850,11 +854,11 @@ function ChatComposer({
             }
             aria-busy={isSending}
             className={cn(
-              "flex h-9 items-center text-sm font-medium transition-all duration-100 ease-out hover:scale-[1.01] active:scale-[0.95]",
+              "flex items-center justify-center text-sm font-medium transition-all duration-100 ease-out hover:scale-[1.01] active:scale-[0.95]",
               borderRadius.lg,
-              spacing.gap.sm,
               shadows.sm,
-              "px-4",
+              // Icon only on mobile (square), text + icon on desktop
+              "size-10 sm:h-10 sm:w-auto sm:px-4 sm:gap-2",
               // INSTANT: Show Stop style immediately when sending OR streaming
               (isSending || isStreaming)
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -869,7 +873,7 @@ function ChatComposer({
             ) : (
               <SendIcon className="size-4 transition-transform duration-100 ease-out" aria-hidden="true" />
             )}
-            <span>{(isSending || isStreaming) ? "Stop" : "Send"}</span>
+            <span className="hidden sm:inline">{(isSending || isStreaming) ? "Stop" : "Send"}</span>
           </button>
         </div>
       </div>

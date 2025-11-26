@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrowDownIcon } from "@/lib/icons";
-import type { ComponentProps } from "react";
+import type { ComponentProps, HTMLAttributes } from "react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { borderRadius, iconSize, spacing } from "@/styles/design-tokens";
@@ -31,7 +31,7 @@ export const ConversationContent = ({
   <StickToBottom.Content className={cn(spacing.padding.lg, className)} {...props} />
 );
 
-export type ConversationEmptyStateProps = ComponentProps<"div"> & {
+export type ConversationEmptyStateProps = HTMLAttributes<HTMLDivElement> & {
   title?: string;
   description?: string;
   icon?: React.ReactNode;

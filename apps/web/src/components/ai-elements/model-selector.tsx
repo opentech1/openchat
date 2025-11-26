@@ -16,7 +16,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { ReactNode, ComponentProps } from "react";
+import type { ReactNode, ComponentProps, ImgHTMLAttributes, HTMLAttributes } from "react";
 
 export type ModelSelectorProps = ComponentProps<typeof Dialog>;
 
@@ -109,7 +109,7 @@ export const ModelSelectorSeparator = (props: ModelSelectorSeparatorProps) => (
 );
 
 export type ModelSelectorLogoProps = Omit<
-  ComponentProps<"img">,
+  ImgHTMLAttributes<HTMLImageElement>,
   "src" | "alt"
 > & {
   provider:
@@ -191,7 +191,7 @@ export const ModelSelectorLogo = ({
   />
 );
 
-export type ModelSelectorLogoGroupProps = ComponentProps<"div">;
+export type ModelSelectorLogoGroupProps = HTMLAttributes<HTMLDivElement>;
 
 export const ModelSelectorLogoGroup = ({
   className,
@@ -206,7 +206,7 @@ export const ModelSelectorLogoGroup = ({
   />
 );
 
-export type ModelSelectorNameProps = ComponentProps<"span">;
+export type ModelSelectorNameProps = HTMLAttributes<HTMLSpanElement>;
 
 export const ModelSelectorName = ({
   className,

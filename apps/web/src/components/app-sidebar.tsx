@@ -53,6 +53,8 @@ export type ChatListItem = {
 
 export type AppSidebarProps = {
   initialChats?: ChatListItem[];
+  onNavigate?: () => void;
+  hideHeader?: boolean;
 } & ComponentProps<typeof Sidebar>;
 
 function toDate(value: string | Date | null | undefined) {
@@ -145,7 +147,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
   return dedupeChats(list.concat([chat]));
 }
 
-function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
+function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...sidebarProps }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session } = authClient.useSession();
@@ -259,6 +261,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         source: "sidebar_button",
         storage_backend: "convex",
       });
+      onNavigate?.();
       await router.push(`/dashboard/chat/${payload.chat.id}`);
     } catch (error) {
       logError("Failed to create chat", error);
@@ -343,9 +346,11 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
         message={isCreating ? "Creating new chat..." : deletingChatId ? "Deleting chat..." : ""}
         politeness="polite"
       />
-      <SidebarHeader className="px-2 py-3">
-        <SidebarHeaderContent />
-      </SidebarHeader>
+      {!hideHeader && (
+        <SidebarHeader className="px-2 py-3">
+          <SidebarHeaderContent />
+        </SidebarHeader>
+      )}
       <SidebarContent>
         <SidebarGroup className="px-2">
           <Button
@@ -375,6 +380,7 @@ function AppSidebar({ initialChats = [], ...sidebarProps }: AppSidebarProps) {
               deletingId={deletingChatId}
               onHoverChat={handleHoverChat}
               isLoading={isLoadingChats}
+              onNavigate={onNavigate}
             />
           </ErrorBoundary>
         </SidebarGroup>
@@ -493,6 +499,7 @@ function ChatList({
   deletingId,
   onHoverChat,
   isLoading,
+  onNavigate,
 }: {
   chats: ChatListItem[];
   activePath?: string | null;
@@ -500,8 +507,22 @@ function ChatList({
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
   isLoading?: boolean;
+  onNavigate?: () => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const hasPrefetchedRef = useRef(false);
+
+  // Proactively prefetch top 5 chats when list loads (helps mobile where no hover)
+  useEffect(() => {
+    if (hasPrefetchedRef.current || chats.length === 0 || isLoading) return;
+    hasPrefetchedRef.current = true;
+
+    // Prefetch top 5 most recent chats in background
+    const topChats = chats.slice(0, 5);
+    for (const chat of topChats) {
+      onHoverChat?.(chat.id);
+    }
+  }, [chats, isLoading, onHoverChat]);
 
   // Only virtualize when we have many chats (>100)
   const shouldVirtualize = chats.length > 100;
@@ -550,6 +571,7 @@ function ChatList({
             onDelete={onDelete}
             deletingId={deletingId}
             onHoverChat={onHoverChat}
+            onNavigate={onNavigate}
           />
         ))}
       </div>
@@ -589,6 +611,7 @@ function ChatList({
                 onDelete={onDelete}
                 deletingId={deletingId}
                 onHoverChat={onHoverChat}
+                onNavigate={onNavigate}
               />
             </div>
           );
@@ -604,12 +627,14 @@ function ChatListItem({
   onDelete,
   deletingId,
   onHoverChat,
+  onNavigate,
 }: {
   chat: ChatListItem;
   activePath?: string | null;
   onDelete: (chatId: string) => void | Promise<void>;
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
+  onNavigate?: () => void;
 }) {
   const hrefPath = `/dashboard/chat/${chat.id}`;
   const isActive = activePath === hrefPath;
@@ -629,6 +654,7 @@ function ChatListItem({
         aria-current={isActive ? "page" : undefined}
         onMouseEnter={() => onHoverChat?.(chat.id)}
         onFocus={() => onHoverChat?.(chat.id)}
+        onClick={() => onNavigate?.()}
       >
         {chat.title || "Untitled"}
       </Link>

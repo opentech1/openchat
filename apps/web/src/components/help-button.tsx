@@ -10,7 +10,7 @@ export function HelpButton() {
       href="https://github.com/opentech1/openchat/issues/new"
       target="_blank"
       rel="noopener noreferrer"
-      className="fixed bottom-6 right-6 z-50"
+      className="fixed bottom-6 right-6 z-50 hidden md:block"
     >
       <Button
         size="icon"
