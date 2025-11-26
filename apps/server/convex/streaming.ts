@@ -175,6 +175,10 @@ export const completeStream = internalMutation({
 		// Get the message to find the chatId
 		const message = await ctx.db.get(args.messageId);
 
+		if (!message) {
+			throw new Error("Message not found");
+		}
+
 		await ctx.db.patch(args.messageId, {
 			content: args.content,
 			reasoning: args.reasoning,
@@ -183,12 +187,10 @@ export const completeStream = internalMutation({
 		});
 
 		// Reset chat status to idle when streaming completes
-		if (message?.chatId) {
-			await ctx.db.patch(message.chatId, {
-				status: "idle",
-				updatedAt: Date.now(),
-			});
-		}
+		await ctx.db.patch(message.chatId, {
+			status: "idle",
+			updatedAt: Date.now(),
+		});
 	},
 });
 

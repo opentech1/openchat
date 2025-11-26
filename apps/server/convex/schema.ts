@@ -36,7 +36,7 @@ export default defineSchema({
 		messageCount: v.optional(v.number()),
 		// Chat streaming status: "idle" | "streaming" - used to show spinner in sidebar
 		// and enable stream resumption on page reload
-		status: v.optional(v.string()),
+		status: v.optional(v.union(v.literal("idle"), v.literal("streaming"))),
 	})
 		.index("by_user", ["userId", "updatedAt"])
 		.index("by_user_created", ["userId", "createdAt"])
