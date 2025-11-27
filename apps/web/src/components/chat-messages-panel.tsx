@@ -134,26 +134,36 @@ function ChatMessagesPanelComponent({
     enabled: shouldVirtualize,
   });
 
+  // REACT 19 FIX: Store virtualizer in a ref to prevent React 19 from optimizing it away
+  // React 19's compiler optimizations can eliminate virtualizer.getVirtualItems() calls
+  // when the return value appears unused. By accessing through a ref, we force React
+  // to maintain the reference and not optimize away the virtualizer state updates.
+  // See: https://github.com/TanStack/virtual/issues/743
+  const virtualizerRef = useRef(virtualizer);
+  virtualizerRef.current = virtualizer;
+
   // REACT 19 FIX: Create stable ref callback for virtualizer measurement
   // This prevents infinite re-renders caused by unstable measureElement callback
   const measureElementRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (!isMounted) return; // Skip measurement during hydration
       if (node) {
-        virtualizer.measureElement(node);
+        virtualizerRef.current.measureElement(node);
       }
     },
-    [virtualizer, isMounted]
+    [isMounted]
   );
 
   // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
+  // Use virtualizerRef.current to prevent React 19 optimization issues
   const virtualListContainerStyle = useMemo(
     () => ({
-      height: `${virtualizer.getTotalSize()}px`,
+      height: `${virtualizerRef.current.getTotalSize()}px`,
       width: "100%",
       position: "relative" as const,
     }),
-    [virtualizer]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [virtualizerRef.current.getTotalSize()]
   );
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
@@ -287,8 +297,9 @@ function ChatMessagesPanelComponent({
               <div className="w-full max-w-3xl mx-auto">
                 {shouldVirtualize ? (
                   // Virtualized list for many messages
+                  // REACT 19 FIX: Use virtualizerRef.current to prevent optimization
                   <div style={virtualListContainerStyle}>
-                    {virtualizer.getVirtualItems().map((virtualItem) => {
+                    {virtualizerRef.current.getVirtualItems().map((virtualItem) => {
                       const msg = messages[virtualItem.index];
                       if (!msg) return null;
                       const isLastMsg = virtualItem.index === messages.length - 1;
