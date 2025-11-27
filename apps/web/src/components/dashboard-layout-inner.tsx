@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import AppSidebar from "@/components/app-sidebar";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
@@ -23,6 +23,12 @@ export default function DashboardLayoutClient({
   chats,
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
+  // HYDRATION FIX: Track mount state to ensure consistent server/client render
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Check if we're on a chat page and extract chatId
   const chatPageMatch = pathname?.match(/^\/dashboard\/chat\/([^/]+)$/);
@@ -49,17 +55,19 @@ export default function DashboardLayoutClient({
         tabIndex={-1}
       >
         <DashboardControls />
-        {/* Mobile navigation button */}
-        <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1 md:hidden">
-          {isOnChatPage && chatId && (
+        {/* Mobile navigation button - only show after mount to prevent hydration mismatch */}
+        {isMounted && (
+          <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1 md:hidden">
+            {isOnChatPage && chatId && (
+              <div className="rounded-lg border border-border/40 bg-background/80 backdrop-blur-sm shadow-sm">
+                <ChatExportButton chatId={chatId} />
+              </div>
+            )}
             <div className="rounded-lg border border-border/40 bg-background/80 backdrop-blur-sm shadow-sm">
-              <ChatExportButton chatId={chatId} />
+              <MobileDashboardNav initialChats={chats} />
             </div>
-          )}
-          <div className="rounded-lg border border-border/40 bg-background/80 backdrop-blur-sm shadow-sm">
-            <MobileDashboardNav initialChats={chats} />
           </div>
-        </div>
+        )}
         <div className="flex h-full w-full flex-1 flex-col overflow-x-hidden min-h-0">
           {children}
         </div>
