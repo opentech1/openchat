@@ -123,9 +123,13 @@ function ChatMessagesPanelComponent({
     return `${last.id}:${last.role}:${last.content.length}`;
   }, [hasMessages, messages]);
 
-  // Virtualization setup - only virtualize when we have many messages (>20)
-  // CRITICAL: Disable virtualization during initial render to prevent hydration mismatch
-  const shouldVirtualize = isMounted && messages.length > 20;
+  // EMERGENCY FIX: Completely disable virtualization to fix React errors #418/#185
+  // The @tanstack/react-virtual library causes infinite re-render loops during hydration
+  // even with the virtualizerRef workaround. The error occurs INSIDE the library code.
+  // TODO: Re-implement SSR-safe virtualization when @tanstack/react-virtual fixes React 19 support
+  // See: https://github.com/TanStack/virtual/issues/743
+  // See: https://github.com/TanStack/virtual/issues/924
+  const shouldVirtualize = false;
   const virtualizer = useVirtualizer({
     count: messages.length,
     getScrollElement: () => viewportRef.current,
