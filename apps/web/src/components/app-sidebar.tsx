@@ -564,13 +564,16 @@ function ChatList({
   });
 
   // PERFORMANCE FIX: Memoize inline styles for virtualized list
+  // NOTE: Use the result of getTotalSize() as dependency, not the function or virtualizer object
+  // This prevents infinite re-renders from object reference changes
+  const totalSize = virtualizer.getTotalSize();
   const virtualListContainerStyle = useMemo(
     () => ({
-      height: `${virtualizer.getTotalSize()}px`,
+      height: `${totalSize}px`,
       width: "100%",
       position: "relative" as const,
     }),
-    [virtualizer]
+    [totalSize]
   );
 
   if (isLoading)

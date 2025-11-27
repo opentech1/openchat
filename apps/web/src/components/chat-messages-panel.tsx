@@ -168,14 +168,16 @@ function ChatMessagesPanelComponent({
 
   // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
   // Use virtualizerRef.current to prevent React 19 optimization issues
+  // NOTE: We use virtualizer.getTotalSize() as dependency (not function call in array)
+  // to properly track when size changes without causing infinite loops
+  const totalSize = virtualizer.getTotalSize();
   const virtualListContainerStyle = useMemo(
     () => ({
-      height: `${virtualizerRef.current.getTotalSize()}px`,
+      height: `${totalSize}px`,
       width: "100%",
       position: "relative" as const,
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [virtualizerRef.current.getTotalSize()]
+    [totalSize]
   );
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {

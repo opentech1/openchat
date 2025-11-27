@@ -15,47 +15,67 @@ type ChatReadTimes = Record<string, number>;
  * - Only shows "unread" for messages that arrived AFTER the tracking system was initialized
  * - This prevents all existing chats from showing as unread when the feature is first used
  * - Chats are marked as read when the user views them
+ * 
+ * SSR/Hydration safety:
+ * - Returns stable empty values during SSR and initial hydration
+ * - Only loads from localStorage after hydration is complete
+ * - Uses useEffect to ensure localStorage access only happens client-side
  */
 export function useChatReadStatus() {
+  // Initialize with stable empty values for SSR
   const [readTimes, setReadTimes] = useState<ChatReadTimes>({});
   const [isLoaded, setIsLoaded] = useState(false);
   const initTimeRef = useRef<number>(0);
+  // Track if we've mounted to prevent hydration issues
+  const hasMountedRef = useRef(false);
 
-  // Load read times from localStorage on mount
+  // Load read times from localStorage ONLY after mount (not during SSR/hydration)
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    // Skip if already loaded or during SSR
+    if (hasMountedRef.current) return;
+    hasMountedRef.current = true;
     
-    // Get or set the initialization time (when tracking first started)
-    let initTime = 0;
-    try {
-      const storedInitTime = localStorage.getItem(INIT_TIME_KEY);
-      if (storedInitTime) {
-        initTime = Number.parseInt(storedInitTime, 10);
-      } else {
-        // First time using this feature - set init time to now
-        // This means existing chats won't show as unread
+    // Use requestAnimationFrame to ensure we're past hydration
+    // This prevents React error #418 (hydration mismatch)
+    const rafId = requestAnimationFrame(() => {
+      // Get or set the initialization time (when tracking first started)
+      let initTime = 0;
+      try {
+        const storedInitTime = localStorage.getItem(INIT_TIME_KEY);
+        if (storedInitTime) {
+          initTime = Number.parseInt(storedInitTime, 10);
+        } else {
+          // First time using this feature - set init time to now
+          // This means existing chats won't show as unread
+          initTime = Date.now();
+          localStorage.setItem(INIT_TIME_KEY, String(initTime));
+        }
+      } catch {
         initTime = Date.now();
-        localStorage.setItem(INIT_TIME_KEY, String(initTime));
       }
-    } catch {
-      initTime = Date.now();
-    }
-    initTimeRef.current = initTime;
+      initTimeRef.current = initTime;
+      
+      // Load stored read times
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setReadTimes(parsed);
+        }
+      } catch {
+        // Ignore parse errors
+      }
+      setIsLoaded(true);
+    });
     
-    // Load stored read times
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setReadTimes(JSON.parse(stored));
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    setIsLoaded(true);
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   // Mark a chat as read (user viewed it)
   const markAsRead = useCallback((chatId: string) => {
+    // Don't mark as read until we've loaded (prevents overwriting stored data)
+    if (!hasMountedRef.current) return;
+    
     const now = Date.now();
     setReadTimes((prev) => {
       const next = { ...prev, [chatId]: now };
@@ -76,6 +96,8 @@ export function useChatReadStatus() {
   // 4. The last message was AFTER the user last read the chat
   const isUnread = useCallback(
     (chatId: string, lastMessageAt: number | null | undefined, isActive: boolean) => {
+      // CRITICAL: Return false during SSR and initial hydration to prevent React errors
+      // This ensures server and client render the same initial state
       if (!isLoaded) return false;
       if (isActive) return false; // Currently viewing = always read
       if (!lastMessageAt) return false; // No messages = nothing to read
