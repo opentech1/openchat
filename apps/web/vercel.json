@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd ../.. && npx convex deploy --cmd 'turbo run build --filter=web'"
+  "buildCommand": "cd ../.. && npx convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'turbo run build --filter=web'"
 }
