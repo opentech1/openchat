@@ -12,7 +12,8 @@ import {
 } from "react";
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
-import { useVirtualizer } from "@tanstack/react-virtual";
+// NOTE: useVirtualizer removed - disabled due to React 19 hydration issues
+// See: https://github.com/TanStack/virtual/issues/743
 
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
@@ -131,54 +132,10 @@ function ChatMessagesPanelComponent({
     return `${last.id}:${last.role}:${last.content.length}`;
   }, [hasMessages, messages]);
 
-  // EMERGENCY FIX: Completely disable virtualization to fix React errors #418/#185
-  // The @tanstack/react-virtual library causes infinite re-render loops during hydration
-  // even with the virtualizerRef workaround. The error occurs INSIDE the library code.
-  // TODO: Re-implement SSR-safe virtualization when @tanstack/react-virtual fixes React 19 support
+  // NOTE: Virtualization disabled due to React 19 hydration issues with @tanstack/react-virtual
+  // The library causes infinite re-render loops (error #185) and hydration mismatches (#418)
   // See: https://github.com/TanStack/virtual/issues/743
   // See: https://github.com/TanStack/virtual/issues/924
-  const shouldVirtualize = false;
-  const virtualizer = useVirtualizer({
-    count: messages.length,
-    getScrollElement: () => viewportRef.current,
-    estimateSize: () => 120, // Estimated height for each message
-    overscan: 2, // Reduced from 5 to 2 for better performance
-    enabled: shouldVirtualize,
-  });
-
-  // REACT 19 FIX: Store virtualizer in a ref to prevent React 19 from optimizing it away
-  // React 19's compiler optimizations can eliminate virtualizer.getVirtualItems() calls
-  // when the return value appears unused. By accessing through a ref, we force React
-  // to maintain the reference and not optimize away the virtualizer state updates.
-  // See: https://github.com/TanStack/virtual/issues/743
-  const virtualizerRef = useRef(virtualizer);
-  virtualizerRef.current = virtualizer;
-
-  // REACT 19 FIX: Create stable ref callback for virtualizer measurement
-  // This prevents infinite re-renders caused by unstable measureElement callback
-  const measureElementRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!viewportReady) return; // Skip measurement during hydration
-      if (node) {
-        virtualizerRef.current.measureElement(node);
-      }
-    },
-    [viewportReady]
-  );
-
-  // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
-  // Use virtualizerRef.current to prevent React 19 optimization issues
-  // NOTE: We use virtualizer.getTotalSize() as dependency (not function call in array)
-  // to properly track when size changes without causing infinite loops
-  const totalSize = virtualizer.getTotalSize();
-  const virtualListContainerStyle = useMemo(
-    () => ({
-      height: `${totalSize}px`,
-      width: "100%",
-      position: "relative" as const,
-    }),
-    [totalSize]
-  );
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
     return (
@@ -363,54 +320,18 @@ function ChatMessagesPanelComponent({
           >
             {hasMessages ? (
               <div className="w-full max-w-3xl mx-auto">
-                {shouldVirtualize ? (
-                  // Virtualized list for many messages
-                  // REACT 19 FIX: Use virtualizerRef.current to prevent optimization
-                  <div style={virtualListContainerStyle}>
-                    {virtualizerRef.current.getVirtualItems().map((virtualItem) => {
-                      const msg = messages[virtualItem.index];
-                      if (!msg) return null;
-                      const isLastMsg = virtualItem.index === messages.length - 1;
-                      // PERFORMANCE FIX: Create stable style object
-                      const itemStyle = {
-                        position: "absolute" as const,
-                        top: 0,
-                        left: 0,
-                        width: "100%",
-                        transform: `translateY(${virtualItem.start}px)`,
-                      };
-                      return (
-                        <div
-                          key={virtualItem.key}
-                          data-index={virtualItem.index}
-                          ref={measureElementRef}
-                          style={itemStyle}
-                          className="pb-4"
-                        >
-                          <ChatMessageBubble
-                            message={msg}
-                            isLastMessage={isLastMsg}
-                            isStreaming={isStreaming && isLastMsg}
-                            userId={userId}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  // Non-virtualized list for few messages
-                  <div className="flex flex-col gap-4">
-                    {messages.map((msg, idx) => (
-                      <ChatMessageBubble
-                        key={msg.id}
-                        message={msg}
-                        isLastMessage={idx === messages.length - 1}
-                        isStreaming={isStreaming && idx === messages.length - 1}
-                        userId={userId}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* Non-virtualized list - virtualization disabled due to React 19 issues */}
+                <div className="flex flex-col gap-4">
+                  {messages.map((msg, idx) => (
+                    <ChatMessageBubble
+                      key={msg.id}
+                      message={msg}
+                      isLastMessage={idx === messages.length - 1}
+                      isStreaming={isStreaming && idx === messages.length - 1}
+                      userId={userId}
+                    />
+                  ))}
+                </div>
                 {/* Thinking indicator: Show when waiting for response OR streaming but no content yet */}
                 {(() => {
                   if (messages.length === 0) return null;
