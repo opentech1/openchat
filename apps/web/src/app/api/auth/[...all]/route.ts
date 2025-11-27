@@ -11,8 +11,25 @@ import { splitCookiesString } from "set-cookie-parser";
  * Since it runs on the same domain as the app, regular cookies work fine.
  *
  * IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
+ * For preview deployments, we derive the site URL from NEXT_PUBLIC_CONVEX_URL
  */
-const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+function getConvexSiteUrl(): string | undefined {
+	// First, check if explicitly set
+	if (process.env.NEXT_PUBLIC_CONVEX_SITE_URL) {
+		return process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+	}
+	
+	// For preview deployments, derive from NEXT_PUBLIC_CONVEX_URL
+	// Convert .convex.cloud to .convex.site
+	const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+	if (convexUrl && convexUrl.includes('.convex.cloud')) {
+		return convexUrl.replace('.convex.cloud', '.convex.site');
+	}
+	
+	return undefined;
+}
+
+const convexSiteUrl = getConvexSiteUrl();
 const { GET: originalGET, POST: originalPOST } = nextJsHandler(
 	convexSiteUrl ? { convexSiteUrl } : undefined
 );
