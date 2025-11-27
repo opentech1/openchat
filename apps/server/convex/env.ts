@@ -38,10 +38,15 @@ export function validateConvexEnv(): ConvexEnv {
 	const warnings: string[] = [];
 	const isProd = process.env.NODE_ENV === "production";
 
-	// Apply development defaults only in non-production environments
+	// Apply development defaults in non-production, OR always for now to support preview deployments
+	// Preview deployments may not have all env vars set via the dashboard yet
+	// TODO: Set default env vars in Convex dashboard for preview deployments
+	const shouldApplyDefaults = true; // Always apply defaults for now
+	
 	// Handle empty strings explicitly - they should trigger defaults too
-	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (!isProd ? "http://localhost:3000" : undefined));
-	const authSecret = (process.env.BETTER_AUTH_SECRET?.trim() || (!isProd ? "dev-secret" : undefined));
+	// Use production URL as default for preview deployments
+	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (shouldApplyDefaults ? "https://osschat.dev" : undefined));
+	const authSecret = (process.env.BETTER_AUTH_SECRET?.trim() || (shouldApplyDefaults ? "preview-deployment-secret-change-me" : undefined));
 
 	// Check required variables
 	if (!appUrl) {
