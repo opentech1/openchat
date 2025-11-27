@@ -1,7 +1,6 @@
-import { nextJsHandler } from "@convex-dev/better-auth/nextjs";
 import { NextResponse } from "next/server";
 import { RateLimiter, getClientIp, createRateLimitHeaders } from "@/lib/rate-limit";
-import { logWarn } from "@/lib/logger-server";
+import { logWarn, logError } from "@/lib/logger-server";
 import { splitCookiesString } from "set-cookie-parser";
 
 /**
@@ -13,7 +12,7 @@ import { splitCookiesString } from "set-cookie-parser";
  * IMPORTANT: HTTP actions are served from .convex.site, not .convex.cloud
  * For preview deployments, we derive the site URL from NEXT_PUBLIC_CONVEX_URL
  */
-function getConvexSiteUrl(): string | undefined {
+function getConvexSiteUrl(): string {
 	// First, check if explicitly set
 	if (process.env.NEXT_PUBLIC_CONVEX_SITE_URL) {
 		return process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
@@ -26,13 +25,45 @@ function getConvexSiteUrl(): string | undefined {
 		return convexUrl.replace('.convex.cloud', '.convex.site');
 	}
 	
-	return undefined;
+	// Fallback error - this should not happen in properly configured deployments
+	throw new Error(
+		"Cannot determine Convex site URL. Set NEXT_PUBLIC_CONVEX_SITE_URL or NEXT_PUBLIC_CONVEX_URL environment variable."
+	);
 }
 
-const convexSiteUrl = getConvexSiteUrl();
-const { GET: originalGET, POST: originalPOST } = nextJsHandler(
-	convexSiteUrl ? { convexSiteUrl } : undefined
-);
+/**
+ * Custom handler that proxies requests to Convex's HTTP actions
+ * This is a simplified version of nextJsHandler that handles the URL at request time
+ */
+async function convexAuthHandler(request: Request): Promise<Response> {
+	const convexSiteUrl = getConvexSiteUrl();
+	const requestUrl = new URL(request.url);
+	const targetUrl = `${convexSiteUrl}${requestUrl.pathname}${requestUrl.search}`;
+	
+	// Create a new request to the Convex site
+	const newRequest = new Request(targetUrl, {
+		method: request.method,
+		headers: request.headers,
+		body: request.body,
+		// @ts-expect-error - duplex is needed for streaming body
+		duplex: "half",
+	});
+	newRequest.headers.set("accept-encoding", "application/json");
+	
+	try {
+		const response = await fetch(newRequest, { redirect: "manual" });
+		return response;
+	} catch (error) {
+		logError("Convex auth proxy error:", error);
+		return NextResponse.json(
+			{ error: "Authentication service unavailable" },
+			{ status: 502 }
+		);
+	}
+}
+
+const originalGET = convexAuthHandler;
+const originalPOST = convexAuthHandler;
 
 // Rate limiter for auth endpoints to prevent brute force attacks
 // More restrictive in production, generous in development for smooth UX
