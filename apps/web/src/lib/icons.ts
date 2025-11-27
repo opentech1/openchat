@@ -67,6 +67,7 @@ export {
   Minus,
   MoreHorizontal,
   MoreVertical,
+  Palette,
   Settings,
   Sparkles,
   Video,

@@ -62,7 +62,8 @@ type ChatMessagesPanelProps = {
   selectedModelName?: string;
 };
 
-const SCROLL_LOCK_THRESHOLD_PX = 48;
+// Threshold for considering user "at bottom" - increased for better UX
+const SCROLL_LOCK_THRESHOLD_PX = 100;
 
 // Thinking indicator shown when model is processing but no content yet
 const ThinkingIndicator = memo(() => (
@@ -93,26 +94,33 @@ function ChatMessagesPanelComponent({
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const initialSyncDoneRef = useRef(false);
+  // Start with isAtBottom = false until we actually scroll to bottom
+  const [isAtBottom, setIsAtBottom] = useState(false);
   const shouldStickRef = useRef(true);
   const lastSignatureRef = useRef<string | null>(null);
   const lastChatIdRef = useRef<string | undefined>(chatId);
   const isResizingRef = useRef(false);
-  const [isMounted, setIsMounted] = useState(false);
+  // Track if viewport ref is attached to DOM
+  const [viewportReady, setViewportReady] = useState(false);
+  // Track if we've done initial scroll for this chat
+  const hasScrolledForChatRef = useRef(false);
 
-  // Prevent hydration mismatch by only rendering scroll-dependent content after mount
-  useEffect(() => {
-    setIsMounted(true);
+  // Callback ref to detect when viewport is attached to DOM
+  const setViewportRefCallback = useCallback((node: HTMLDivElement | null) => {
+    viewportRef.current = node;
+    if (node) {
+      setViewportReady(true);
+    }
   }, []);
 
   // Reset scroll state when switching to a different chat
   useEffect(() => {
     if (chatId && chatId !== lastChatIdRef.current) {
       lastChatIdRef.current = chatId;
-      initialSyncDoneRef.current = false;
       shouldStickRef.current = true;
       lastSignatureRef.current = null;
+      hasScrolledForChatRef.current = false;
+      setIsAtBottom(false);
     }
   }, [chatId]);
 
@@ -150,12 +158,12 @@ function ChatMessagesPanelComponent({
   // This prevents infinite re-renders caused by unstable measureElement callback
   const measureElementRef = useCallback(
     (node: HTMLDivElement | null) => {
-      if (!isMounted) return; // Skip measurement during hydration
+      if (!viewportReady) return; // Skip measurement during hydration
       if (node) {
         virtualizerRef.current.measureElement(node);
       }
     },
-    [isMounted]
+    [viewportReady]
   );
 
   // PERFORMANCE FIX: Memoize inline styles to reduce virtual DOM diffing
@@ -193,40 +201,77 @@ function ChatMessagesPanelComponent({
     [autoStick, hasMessages, scrollToBottom],
   );
 
+  // SCROLL TO BOTTOM: When viewport is ready AND messages exist
+  // This is the MAIN scroll effect that handles initial scroll to bottom
   useLayoutEffect(() => {
-    if (!isMounted) return; // Wait for hydration to complete
+    // Wait for viewport to be attached to DOM
+    if (!viewportReady) return;
+    // Wait for messages to exist
+    if (!hasMessages) return;
+    // Only scroll once per chat
+    if (hasScrolledForChatRef.current) return;
+    
     const node = viewportRef.current;
     if (!node) return;
-    if (!hasMessages) return;
-    if (initialSyncDoneRef.current) return;
+    
+    // Mark as scrolled immediately to prevent re-runs
+    hasScrolledForChatRef.current = true;
+    
+    // Aggressive scroll with multiple retries to ensure it works
+    const doScroll = () => {
+      if (!viewportRef.current) return;
+      viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+    };
+    
+    // Immediate scroll
+    doScroll();
+    
+    // Retry after RAF (DOM layout)
     requestAnimationFrame(() => {
-      initialSyncDoneRef.current = true;
-      shouldStickRef.current = true;
-      scrollToBottom("auto");
-      setIsAtBottom(true);
-      lastSignatureRef.current = tailSignature;
+      doScroll();
+      
+      // Retry again after another RAF
+      requestAnimationFrame(() => {
+        doScroll();
+        
+        // Final retry after short delay for any async content
+        setTimeout(() => {
+          doScroll();
+          // Now check if we're at bottom and update state
+          const viewport = viewportRef.current;
+          if (viewport) {
+            const atBottom = computeIsAtBottom(viewport);
+            setIsAtBottom(atBottom);
+            shouldStickRef.current = atBottom;
+            lastSignatureRef.current = tailSignature;
+          }
+        }, 50);
+      });
     });
-  }, [hasMessages, scrollToBottom, tailSignature, isMounted]);
+  }, [viewportReady, hasMessages, computeIsAtBottom, tailSignature]);
 
   useEffect(() => {
-    if (!isMounted) return; // Wait for hydration to complete
+    if (!viewportReady) return;
     const node = viewportRef.current;
     if (!node) return;
+    
     const handleScroll = () => {
       const atBottom = computeIsAtBottom(node);
-      // Only update state if value actually changed to prevent unnecessary re-renders
-      setIsAtBottom((prev) => (prev !== atBottom ? atBottom : prev));
+      setIsAtBottom(atBottom);
       shouldStickRef.current = atBottom;
     };
+    
     const handlePointerDown = () => {
       shouldStickRef.current = false;
     };
+    
     const handleWheel = () => {
       shouldStickRef.current = false;
     };
+    
     // Throttle scroll handler to sync with browser paint cycles (~60fps)
     const throttledScroll = throttleRAF(handleScroll);
-    handleScroll();
+    
     node.addEventListener("scroll", throttledScroll, { passive: true });
     node.addEventListener("pointerdown", handlePointerDown, { passive: true });
     node.addEventListener("wheel", handleWheel, { passive: true });
@@ -235,19 +280,19 @@ function ChatMessagesPanelComponent({
       node.removeEventListener("pointerdown", handlePointerDown);
       node.removeEventListener("wheel", handleWheel);
     };
-  }, [computeIsAtBottom, isMounted]);
+  }, [computeIsAtBottom, viewportReady]);
 
   useEffect(() => {
-    if (!isMounted) return; // Wait for hydration to complete
+    if (!viewportReady) return;
     if (!autoStick) return;
     if (!tailSignature) return;
-    if (!initialSyncDoneRef.current) return;
+    if (!hasScrolledForChatRef.current) return;
     if (lastSignatureRef.current === tailSignature) return;
     // Don't auto-scroll during streaming - let user control scroll position
     if (isStreaming) return;
     lastSignatureRef.current = tailSignature;
     syncScrollPosition(false);
-  }, [autoStick, tailSignature, syncScrollPosition, isStreaming, isMounted]);
+  }, [autoStick, tailSignature, syncScrollPosition, isStreaming, viewportReady]);
 
   useEffect(() => {
     if (tailSignature) return;
@@ -256,13 +301,13 @@ function ChatMessagesPanelComponent({
 
   useLayoutEffect(() => {
     if (!autoStick) return;
-    if (!isMounted) return; // Wait for hydration to complete
+    if (!viewportReady) return;
     const contentNode = contentRef.current;
     if (!contentNode) return;
     const observer = new ResizeObserver(() => {
       // Prevent infinite loops: skip if already processing a resize
       if (isResizingRef.current) return;
-      if (!initialSyncDoneRef.current) return;
+      if (!hasScrolledForChatRef.current) return;
       if (!shouldStickRef.current) return;
 
       isResizingRef.current = true;
@@ -276,13 +321,13 @@ function ChatMessagesPanelComponent({
     });
     observer.observe(contentNode);
     return () => observer.disconnect();
-  }, [autoStick, scrollToBottom, isMounted]);
+  }, [autoStick, scrollToBottom, viewportReady]);
 
   return (
     <div className={cn("relative flex flex-1 min-h-0 flex-col", className)} suppressHydrationWarning>
       <ScrollAreaPrimitive.Root className="relative flex h-full flex-1 min-h-0 overflow-hidden" suppressHydrationWarning>
         <ScrollAreaPrimitive.Viewport
-          ref={viewportRef}
+          ref={setViewportRefCallback}
           className="size-full overflow-y-auto overflow-x-hidden"
           aria-label="Conversation messages"
           suppressHydrationWarning
@@ -407,22 +452,41 @@ function ChatMessagesPanelComponent({
         </ScrollAreaPrimitive.Viewport>
         <ScrollBar orientation="vertical" />
       </ScrollAreaPrimitive.Root>
-      {/* Only render scroll-to-bottom after hydration to prevent mismatch */}
-      {isMounted && !isAtBottom && hasMessages ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={() => {
-            shouldStickRef.current = true;
-            scrollToBottom("smooth");
-          }}
-          aria-label="Scroll to bottom of conversation"
-          className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 shadow-lg"
+      {/* Scroll to bottom button - shows when not at bottom */}
+      {viewportReady && hasMessages && (
+        <div
+          className={cn(
+            "absolute bottom-8 left-1/2 z-30 -translate-x-1/2 transition-all duration-300 ease-out",
+            isAtBottom 
+              ? "pointer-events-none translate-y-4 scale-90 opacity-0" 
+              : "pointer-events-auto translate-y-0 scale-100 opacity-100"
+          )}
         >
-          <ArrowDownIcon className="size-4" />
-        </Button>
-      ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              shouldStickRef.current = true;
+              const node = viewportRef.current;
+              if (node) {
+                node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+                // Update state after scroll animation
+                setTimeout(() => {
+                  if (viewportRef.current) {
+                    setIsAtBottom(computeIsAtBottom(viewportRef.current));
+                  }
+                }, 300);
+              }
+            }}
+            aria-label="Scroll to bottom of conversation"
+            className="shadow-xl backdrop-blur-md bg-background/90 border border-border hover:bg-background hover:scale-105 active:scale-95 transition-all duration-150 gap-1.5 px-3"
+          >
+            <ArrowDownIcon className="size-4" />
+            <span className="text-xs font-medium">Scroll to bottom</span>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

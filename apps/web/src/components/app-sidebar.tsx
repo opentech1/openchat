@@ -10,7 +10,7 @@ import React, {
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { X, PanelLeft, Settings, MessageSquare } from "@/lib/icons";
+import { X, PanelLeft, Settings, MessageSquare, Loader2 } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { LiveRegion } from "@/components/ui/live-region";
 import ThemeToggle from "@/components/theme-toggle";
 import { useChatList } from "@/contexts/chat-list-context";
+import { useChatReadStatus } from "@/hooks/use-chat-read-status";
 
 export type ChatListItem = {
   id: string;
@@ -164,6 +165,9 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   // REAL-TIME STREAMING STATUS: Use Convex subscription for live status updates
   // This enables the streaming indicator dot in the sidebar
   const { chats: realtimeChats } = useChatList();
+  
+  // UNREAD TRACKING: Track when user last viewed each chat
+  const { markAsRead, isUnread } = useChatReadStatus();
 
   // Create a map of chat statuses from real-time data for O(1) lookup
   const realtimeStatusMap = useMemo(() => {
@@ -173,6 +177,15 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     }
     return map;
   }, [realtimeChats]);
+  
+  // Mark current chat as read when viewing it
+  useEffect(() => {
+    const chatMatch = pathname?.match(/^\/dashboard\/chat\/([^/]+)$/);
+    const currentChatId = chatMatch?.[1];
+    if (currentChatId) {
+      markAsRead(currentChatId);
+    }
+  }, [pathname, markAsRead]);
 
   // PERFORMANCE FIX: Move dedupeChats to useMemo to avoid recalculation on every render
   const dedupedInitialChats = useMemo(
@@ -291,6 +304,14 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
 
   const handleDelete = useCallback(async (chatId: string) => {
     setDeletingChatId(chatId);
+    
+    // Check if we're currently viewing this chat - if so, navigate away immediately
+    const isViewingDeletedChat = pathname === `/dashboard/chat/${chatId}`;
+    if (isViewingDeletedChat) {
+      // Navigate immediately for instant feedback
+      router.push("/dashboard");
+    }
+    
     try {
       const response = await fetchWithCsrf(`/api/chats/${chatId}`, {
         method: "DELETE",
@@ -311,7 +332,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     } finally {
       setDeletingChatId(null);
     }
-  }, []);
+  }, [pathname, router]);
 
   const handleHoverChat = useCallback(
     (chatId: string) => {
@@ -398,6 +419,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
               isLoading={isLoadingChats}
               onNavigate={onNavigate}
               realtimeStatusMap={realtimeStatusMap}
+              isUnread={isUnread}
             />
           </ErrorBoundary>
         </SidebarGroup>
@@ -425,25 +447,20 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
         >
           {user ? (
             <>
-              <Avatar className="size-9 ring-2 ring-border">
+              <Avatar className="size-8 ring-2 ring-border">
                 {user.image ? (
                   <AvatarImage
                     src={user.image}
                     alt={userDisplayLabel || "User"}
                   />
                 ) : null}
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                <AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">
                   {userInitials || "U"}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm font-medium">
-                  {user.name || "User"}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {user.email || "Account Settings"}
-                </span>
-              </div>
+              <span className="truncate text-sm font-medium">
+                {user.name?.split(" ")[0] || "User"}
+              </span>
             </>
           ) : (
             <span className="text-sm text-muted-foreground">Account</span>
@@ -518,6 +535,7 @@ function ChatList({
   isLoading,
   onNavigate,
   realtimeStatusMap,
+  isUnread,
 }: {
   chats: ChatListItem[];
   activePath?: string | null;
@@ -528,6 +546,8 @@ function ChatList({
   onNavigate?: () => void;
   /** Real-time status map from Convex subscription for live streaming indicators */
   realtimeStatusMap?: Map<string, string | undefined>;
+  /** Function to check if a chat has unread messages */
+  isUnread?: (chatId: string, lastMessageAt: number | null | undefined, isActive: boolean) => boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   // Removed proactive prefetching - only prefetch on hover to avoid API spam
@@ -571,18 +591,24 @@ function ChatList({
     // Non-virtualized list for few chats
     return (
       <div className="px-1 py-1" data-ph-no-capture>
-        {chats.map((c) => (
-          <ChatListItem
-            key={c.id}
-            chat={c}
-            activePath={activePath}
-            onDelete={onDelete}
-            deletingId={deletingId}
-            onHoverChat={onHoverChat}
-            onNavigate={onNavigate}
-            realtimeStatus={realtimeStatusMap?.get(c.id)}
-          />
-        ))}
+        {chats.map((c) => {
+          const chatPath = `/dashboard/chat/${c.id}`;
+          const isActive = activePath === chatPath;
+          const hasUnread = isUnread?.(c.id, c.lastMessageAtMs, isActive) ?? false;
+          return (
+            <ChatListItem
+              key={c.id}
+              chat={c}
+              activePath={activePath}
+              onDelete={onDelete}
+              deletingId={deletingId}
+              onHoverChat={onHoverChat}
+              onNavigate={onNavigate}
+              realtimeStatus={realtimeStatusMap?.get(c.id)}
+              hasUnread={hasUnread}
+            />
+          );
+        })}
       </div>
     );
   }
@@ -598,6 +624,9 @@ function ChatList({
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const chat = chats[virtualItem.index];
           if (!chat) return null;
+          const chatPath = `/dashboard/chat/${chat.id}`;
+          const isActive = activePath === chatPath;
+          const hasUnread = isUnread?.(chat.id, chat.lastMessageAtMs, isActive) ?? false;
           // PERFORMANCE FIX: Create stable style object
           const itemStyle = {
             position: "absolute" as const,
@@ -622,6 +651,7 @@ function ChatList({
                 onHoverChat={onHoverChat}
                 onNavigate={onNavigate}
                 realtimeStatus={realtimeStatusMap?.get(chat.id)}
+                hasUnread={hasUnread}
               />
             </div>
           );
@@ -631,11 +661,17 @@ function ChatList({
   );
 }
 
-// Streaming indicator dot animation for sidebar
-const StreamingDot = () => (
+// Streaming indicator - uses loading spinner for generating state
+const StreamingIndicator = () => (
+  <span className="flex shrink-0 items-center justify-center">
+    <Loader2 className="size-3.5 animate-spin text-primary" />
+  </span>
+);
+
+// Unread indicator dot - theme-colored, shown when chat has unread messages
+const UnreadDot = () => (
   <span className="relative flex size-2 shrink-0">
-    <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-500/60 opacity-75" />
-    <span className="relative inline-flex size-2 rounded-full bg-blue-500" />
+    <span className="relative inline-flex size-2 rounded-full bg-primary" />
   </span>
 );
 
@@ -647,6 +683,7 @@ function ChatListItem({
   onHoverChat,
   onNavigate,
   realtimeStatus,
+  hasUnread,
 }: {
   chat: ChatListItem;
   activePath?: string | null;
@@ -656,12 +693,17 @@ function ChatListItem({
   onNavigate?: () => void;
   /** Real-time status from Convex subscription - takes priority over cached status */
   realtimeStatus?: string;
+  /** Whether this chat has unread messages */
+  hasUnread?: boolean;
 }) {
   const hrefPath = `/dashboard/chat/${chat.id}`;
   const isActive = activePath === hrefPath;
   // Use real-time status from Convex subscription if available, otherwise fall back to cached status
   const effectiveStatus = realtimeStatus ?? chat.status;
   const isStreaming = effectiveStatus === "streaming";
+  const isDeleting = deletingId === chat.id;
+  // Show unread dot when not hovering, not active, not streaming, not deleting, and has unread messages
+  const showUnreadDot = hasUnread && !isActive && !isStreaming && !isDeleting;
 
   return (
     <div className="group relative">
@@ -670,7 +712,7 @@ function ChatListItem({
         prefetch
         className={cn(
           // Linear-style: clean active state with left border accent, subtle hover
-          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors duration-100 ease-out relative overflow-hidden",
+          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors duration-100 ease-out relative overflow-hidden pr-8",
           isActive
             ? "bg-accent/50 text-accent-foreground font-medium before:absolute before:left-0 before:top-1 before:bottom-1 before:w-0.5 before:bg-primary before:rounded-r"
             : "hover:bg-accent/50 hover:text-accent-foreground",
@@ -680,34 +722,49 @@ function ChatListItem({
         onFocus={() => onHoverChat?.(chat.id)}
         onClick={() => onNavigate?.()}
       >
-        {isStreaming && <StreamingDot />}
         <span className="truncate">{chat.title || "Untitled"}</span>
       </Link>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void onDelete(chat.id);
-        }}
-        className={cn(
-          // Linear-style: no scale effects, just subtle color transition
-          "absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center rounded-md",
-          "text-muted-foreground/70 transition-colors duration-100 ease-out",
-          "hover:bg-destructive/90 hover:text-destructive-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-          "disabled:cursor-wait disabled:opacity-50 disabled:hover:bg-transparent",
-          deletingId === chat.id ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-        )}
-        aria-label="Delete chat"
-        disabled={deletingId === chat.id}
-      >
-        {deletingId === chat.id ? (
-          <span className="animate-pulse text-sm">⋯</span>
+      {/* Right side: streaming indicator, delete button, or unread dot */}
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center">
+        {isDeleting ? (
+          <span className="inline-flex size-6 items-center justify-center">
+            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+          </span>
+        ) : isStreaming ? (
+          <span className="inline-flex size-6 items-center justify-center">
+            <StreamingIndicator />
+          </span>
         ) : (
-          <X className="size-3.5" />
+          <>
+            {/* Unread dot - visible when not hovering and has unread messages */}
+            {showUnreadDot && (
+              <span className="inline-flex size-6 items-center justify-center group-hover:hidden transition-opacity duration-150">
+                <UnreadDot />
+              </span>
+            )}
+            {/* Delete button - only visible on hover */}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void onDelete(chat.id);
+              }}
+              className={cn(
+                // Linear-style: no scale effects, just subtle color transition
+                "inline-flex size-6 items-center justify-center rounded-md",
+                "text-muted-foreground/70 transition-all duration-150 ease-out",
+                "hover:bg-destructive/90 hover:text-destructive-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                showUnreadDot ? "hidden group-hover:inline-flex" : "opacity-0 group-hover:opacity-100",
+              )}
+              aria-label="Delete chat"
+            >
+              <X className="size-3.5" />
+            </button>
+          </>
         )}
-      </button>
+      </div>
     </div>
   );
 }
