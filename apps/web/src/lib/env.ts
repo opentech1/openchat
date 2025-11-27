@@ -154,12 +154,19 @@ export function validateServerEnv(): ServerEnv {
 		? `https://${vercelUrl}`
 		: process.env.NEXT_PUBLIC_SERVER_URL;
 	
+	// For preview deployments, use production Convex URL if not set by deploy command
+	// This happens when the preview deployment uses the production Convex backend
+	const dynamicConvexUrl = process.env.NEXT_PUBLIC_CONVEX_URL 
+		|| (isVercelPreview ? "https://outgoing-setter-201.convex.cloud" : undefined);
+	
 	// Apply defaults based on environment
+	// For preview deployments, be more lenient with defaults
 	const envWithDefaults = isProdEnv ? {
 		...process.env,
 		// For preview deployments, use dynamic URLs derived from VERCEL_URL
 		NEXT_PUBLIC_APP_URL: dynamicAppUrl,
 		NEXT_PUBLIC_SERVER_URL: dynamicServerUrl,
+		NEXT_PUBLIC_CONVEX_URL: dynamicConvexUrl,
 	} : {
 		...process.env,
 		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",

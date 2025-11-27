@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "CONTEXT7_API_KEY": "ctx7sk-6cdbe935-eb8f-42c0-b814-90ebb0790734"
+      }
+    },
+    "convex": {
+      "type": "local",
+      "command": ["bunx", "convex", "mcp", "start"]
+    },
+    "playwriter": {
+      "type": "local",
+      "command": ["bunx", "playwriter@latest"]
+    }
+  }
+}
