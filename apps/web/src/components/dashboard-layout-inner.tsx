@@ -24,6 +24,8 @@ export default function DashboardLayoutClient({
 }: DashboardLayoutClientProps) {
   const pathname = usePathname();
   // HYDRATION FIX: Track mount state to ensure consistent server/client render
+  // AppSidebar uses hooks that access localStorage and Convex real-time data
+  // which causes hydration mismatches. Only render after client mount.
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -49,9 +51,19 @@ export default function DashboardLayoutClient({
           Skip to main content
         </a>
       )}
+      {/* HYDRATION FIX: Render sidebar only after mount because AppSidebar uses:
+          1. useChatReadStatus - accesses localStorage
+          2. useChatList - Convex real-time subscription
+          3. useTheme - next-themes which has SSR issues
+          These cause server/client mismatch. Deferring render to client prevents #418 errors. */}
       <div className="hidden md:block" suppressHydrationWarning>
         <div className="fixed inset-y-0 left-0">
-          <AppSidebar initialChats={chats} />
+          {isMounted ? (
+            <AppSidebar initialChats={chats} />
+          ) : (
+            // Placeholder to prevent layout shift - matches sidebar width
+            <div className="w-[var(--sb-width)] h-full bg-sidebar" />
+          )}
         </div>
       </div>
       <main
