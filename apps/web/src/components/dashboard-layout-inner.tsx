@@ -35,16 +35,21 @@ export default function DashboardLayoutClient({
   const chatId = chatPageMatch?.[1];
   const isOnChatPage = Boolean(chatId);
 
+  // HYDRATION FIX: suppressHydrationWarning on root container because browser extensions
+  // (like screen capture tools) can inject elements that cause hydration mismatches.
+  // This is safe because the layout structure is static and doesn't depend on client state.
   return (
     <div className="relative flex h-svh overflow-hidden" suppressHydrationWarning>
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-        suppressHydrationWarning
-      >
-        Skip to main content
-      </a>
-      <div className="hidden md:block">
+      {/* Skip link - only render after mount to prevent hydration mismatch */}
+      {isMounted && (
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          Skip to main content
+        </a>
+      )}
+      <div className="hidden md:block" suppressHydrationWarning>
         <div className="fixed inset-y-0 left-0">
           <AppSidebar initialChats={chats} />
         </div>
@@ -53,6 +58,7 @@ export default function DashboardLayoutClient({
         id="main-content"
         className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden md:ml-[var(--sb-width)] transition-[margin] duration-200 ease-in-out w-full focus:outline-none focus-visible:outline-none"
         tabIndex={-1}
+        suppressHydrationWarning
       >
         <DashboardControls />
         {/* Mobile navigation button - only show after mount to prevent hydration mismatch */}

@@ -63,25 +63,33 @@ export function ApiKeySectionWithOAuth({
     initiateLogin();
   }
 
-  return (
-    <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">OpenRouter OAuth</p>
-          <p className="text-xs text-muted-foreground">
-            Connect your OpenRouter account to access AI models.
-          </p>
-        </div>
-        <span
-          className={cn(
-            "text-xs font-medium",
-            hasStoredKey ? "text-emerald-600" : "text-destructive"
-          )}
-        >
-          {hasStoredKey ? "Connected" : "Not connected"}
-        </span>
-      </div>
+  // When connected, just show disconnect button inline
+  if (hasStoredKey) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={handleDisconnect}
+        disabled={disconnecting}
+        aria-label="Disconnect OpenRouter account"
+        aria-busy={disconnecting}
+        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+      >
+        {disconnecting ? (
+          <Loader2
+            className={cn("mr-1.5 animate-spin", iconSize.xs)}
+            aria-hidden="true"
+          />
+        ) : null}
+        Disconnect
+      </Button>
+    );
+  }
 
+  // When not connected, show the connect UI
+  return (
+    <div className="space-y-3">
       {/* OAuth Error Display */}
       {oauthError && (
         <p className="text-xs font-medium text-destructive" role="alert">
@@ -89,46 +97,25 @@ export function ApiKeySectionWithOAuth({
         </p>
       )}
 
-      {!hasStoredKey ? (
-        <Button
-          type="button"
-          onClick={handleOAuthConnect}
-          disabled={isOAuthLoading}
-          className="w-full"
-          size="default"
-        >
-          {isOAuthLoading ? (
-            <Loader2
-              className={cn("mr-2 animate-spin", iconSize.sm)}
-              aria-hidden="true"
-            />
-          ) : null}
-          Connect with OpenRouter
-        </Button>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between text-xs text-muted-foreground gap-2">
-          <p>
-            Your OpenRouter account is connected and encrypted in your browser before being stored.
-          </p>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleDisconnect}
-            disabled={disconnecting}
-            aria-label="Disconnect OpenRouter account"
-            aria-busy={disconnecting}
-          >
-            {disconnecting ? (
-              <Loader2
-                className={cn("mr-1 animate-spin", iconSize.xs)}
-                aria-hidden="true"
-              />
-            ) : null}
-            Disconnect
-          </Button>
-        </div>
-      )}
+      <Button
+        type="button"
+        onClick={handleOAuthConnect}
+        disabled={isOAuthLoading}
+        className="w-full"
+        size="default"
+      >
+        {isOAuthLoading ? (
+          <Loader2
+            className={cn("mr-2 animate-spin", iconSize.sm)}
+            aria-hidden="true"
+          />
+        ) : null}
+        Connect with OpenRouter
+      </Button>
+      
+      <p className="text-xs text-muted-foreground text-center">
+        Your API key will be encrypted before storage
+      </p>
     </div>
   );
 }

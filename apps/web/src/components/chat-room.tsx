@@ -1050,7 +1050,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Also don't block sending without API key - let handleSend show the toast instead
   const sendDisabled = isSubmitting || modelsLoading || !selectedModel;
 
-  const conversationPaddingBottom = Math.max(composerHeight + 48, 220);
+  // Calculate padding to ensure messages don't get hidden behind the fixed composer
+  // composerHeight + some breathing room (32px) but with a sensible minimum
+  const conversationPaddingBottom = Math.max(composerHeight + 32, 180);
 
   if (!workspaceId) {
     return (
