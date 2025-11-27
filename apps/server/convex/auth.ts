@@ -1,4 +1,5 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { oAuthProxy } from "better-auth/plugins";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { components } from "./_generated/api";
@@ -69,18 +70,22 @@ export const createAuth = (
 	const socialProviders: Record<string, any> = {};
 
 	// GitHub OAuth
+	// NOTE: redirectURI must point to production for oAuthProxy to work with preview deployments
 	if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
 		socialProviders.github = {
 			clientId: env.GITHUB_CLIENT_ID,
 			clientSecret: env.GITHUB_CLIENT_SECRET,
+			redirectURI: "https://osschat.dev/api/auth/callback/github",
 		};
 	}
 
 	// Google OAuth
+	// NOTE: redirectURI must point to production for oAuthProxy to work with preview deployments
 	if (env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET) {
 		socialProviders.google = {
 			clientId: env.GOOGLE_CLIENT_ID,
 			clientSecret: env.GOOGLE_CLIENT_SECRET,
+			redirectURI: "https://osschat.dev/api/auth/callback/google",
 		};
 	}
 
@@ -103,6 +108,12 @@ export const createAuth = (
 			// proxies auth requests on the same domain - regular cookies work fine
 			// Type assertion needed due to version mismatch between @convex-dev/better-auth and better-auth types
 			convex() as unknown as BetterAuthPlugin,
+			// OAuth Proxy plugin allows preview deployments to use production OAuth callbacks
+			// OAuth flow: Preview -> GitHub -> Production -> Redirect back to Preview
+			// This enables OAuth without adding callback URLs for each preview deployment
+			oAuthProxy({
+				productionURL: "https://osschat.dev",
+			}),
 		],
 		trustedOrigins: buildTrustedOrigins(siteUrl),
 		advanced: {
