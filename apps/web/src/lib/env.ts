@@ -7,6 +7,8 @@ import { z } from "zod";
 
 // Check if we're in production
 const isProdEnv = process.env.NODE_ENV === "production";
+// Check if we're in Vercel preview environment
+const isVercelPreview = process.env.VERCEL_ENV === "preview";
 
 // Server-side environment variables
 const serverEnvSchema = z.object({
@@ -137,8 +139,28 @@ export type ClientEnv = z.infer<typeof clientEnvSchema>;
  * Call this during server startup or in server-side code
  */
 export function validateServerEnv(): ServerEnv {
-	// Apply defaults only in development
-	const envWithDefaults = isProdEnv ? process.env : {
+	// Vercel provides VERCEL_URL for preview deployments (without protocol)
+	// We use this to dynamically set NEXT_PUBLIC_APP_URL for previews
+	const vercelUrl = process.env.VERCEL_URL;
+	
+	// Compute dynamic URL for preview deployments
+	// For preview, derive from VERCEL_URL; for production, use explicit env var
+	const dynamicAppUrl = isVercelPreview && vercelUrl 
+		? `https://${vercelUrl}` 
+		: process.env.NEXT_PUBLIC_APP_URL;
+	
+	// For preview deployments, also use the preview URL as server URL if not explicitly set
+	const dynamicServerUrl = isVercelPreview && vercelUrl && !process.env.NEXT_PUBLIC_SERVER_URL
+		? `https://${vercelUrl}`
+		: process.env.NEXT_PUBLIC_SERVER_URL;
+	
+	// Apply defaults based on environment
+	const envWithDefaults = isProdEnv ? {
+		...process.env,
+		// For preview deployments, use dynamic URLs derived from VERCEL_URL
+		NEXT_PUBLIC_APP_URL: dynamicAppUrl,
+		NEXT_PUBLIC_SERVER_URL: dynamicServerUrl,
+	} : {
 		...process.env,
 		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
