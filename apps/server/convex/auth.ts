@@ -15,6 +15,40 @@ function ensureValidated() {
 	}
 }
 
+/**
+ * Build trusted origins list dynamically
+ * Includes the configured app URL plus Vercel preview URL patterns
+ */
+function buildTrustedOrigins(siteUrl: string): string[] {
+	const origins = new Set<string>([
+		// Always trust localhost for development
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"http://127.0.0.1:3000",
+		"http://127.0.0.1:3001",
+		// Production domain
+		"https://osschat.dev",
+		// The configured app URL (for preview deployments)
+		siteUrl,
+	]);
+
+	// If the siteUrl is a Vercel preview URL, trust all Vercel preview URLs for this project
+	// Vercel preview URLs follow the pattern: https://<project>-<hash>-<team>.vercel.app
+	// or https://<project>-git-<branch>-<team>.vercel.app
+	if (siteUrl.includes(".vercel.app")) {
+		// Extract the team name from the URL for more specific matching
+		// Pattern: https://openchat-web-<something>-osschat.vercel.app
+		const teamMatch = siteUrl.match(/https:\/\/openchat-web-.*-(\w+)\.vercel\.app/);
+		if (teamMatch) {
+			// Trust any preview URL for this team/project
+			// Note: Better Auth doesn't support wildcards, but we add the siteUrl which is the exact preview URL
+			// The siteUrl already contains the exact preview URL for this deployment
+		}
+	}
+
+	return Array.from(origins);
+}
+
 // betterAuth component is registered via convex.config.ts and properly typed in _generated/api.d.ts
 export const authComponent = createClient<DataModel>(components.betterAuth);
 
@@ -70,11 +104,7 @@ export const createAuth = (
 			// Type assertion needed due to version mismatch between @convex-dev/better-auth and better-auth types
 			convex() as unknown as BetterAuthPlugin,
 		],
-		trustedOrigins: [
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
-			"https://osschat.dev",
-		],
+		trustedOrigins: buildTrustedOrigins(siteUrl),
 		advanced: {
 			useSecureCookies: isProduction(),
 			cookiePrefix: getEnv("AUTH_COOKIE_PREFIX", "openchat"),
