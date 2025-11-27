@@ -217,9 +217,15 @@ function ChatMessagesPanelComponent({
     // Mark as scrolled immediately to prevent re-runs
     hasScrolledForChatRef.current = true;
     
+    // Track cleanup state
+    let cancelled = false;
+    let raf1: number | undefined;
+    let raf2: number | undefined;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    
     // Aggressive scroll with multiple retries to ensure it works
     const doScroll = () => {
-      if (!viewportRef.current) return;
+      if (cancelled || !viewportRef.current) return;
       viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
     };
     
@@ -227,15 +233,18 @@ function ChatMessagesPanelComponent({
     doScroll();
     
     // Retry after RAF (DOM layout)
-    requestAnimationFrame(() => {
+    raf1 = requestAnimationFrame(() => {
+      if (cancelled) return;
       doScroll();
       
       // Retry again after another RAF
-      requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        if (cancelled) return;
         doScroll();
         
         // Final retry after short delay for any async content
-        setTimeout(() => {
+        timeoutId = setTimeout(() => {
+          if (cancelled) return;
           doScroll();
           // Now check if we're at bottom and update state
           const viewport = viewportRef.current;
@@ -248,6 +257,14 @@ function ChatMessagesPanelComponent({
         }, 50);
       });
     });
+    
+    // Cleanup: cancel pending RAF/timeout on unmount
+    return () => {
+      cancelled = true;
+      if (raf1 !== undefined) cancelAnimationFrame(raf1);
+      if (raf2 !== undefined) cancelAnimationFrame(raf2);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
   }, [viewportReady, hasMessages, computeIsAtBottom, tailSignature]);
 
   useEffect(() => {
