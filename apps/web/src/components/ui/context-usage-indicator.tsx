@@ -8,7 +8,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  formatTokenCount,
   calculateUsagePercentage,
   getUsageColor,
 } from "@/lib/token-counter";

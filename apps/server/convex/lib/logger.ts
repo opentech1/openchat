@@ -139,7 +139,7 @@ function sanitizeContext(context: LogContext): LogContext {
 function formatLogMessage(
 	level: string,
 	message: string,
-	context?: LogContext,
+	_context?: LogContext,
 ): string {
 	const timestamp = new Date().toISOString();
 	return `[${timestamp}] [${level.toUpperCase()}] ${message}`;

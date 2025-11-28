@@ -31,7 +31,7 @@ export const initializeStats = internalMutation({
 		// Allow re-running to fix inconsistencies
 		force: v.optional(v.boolean()),
 	},
-	handler: async (ctx, args) => {
+	handler: async (ctx, _args) => {
 		console.log("[Migration] Initialize stats - Started");
 
 		try {
@@ -136,10 +136,11 @@ export const backfillMessageCounts = internalMutation({
 			let updated = 0;
 
 			// Process in batches
+			let batchFailures = 0;
 			for (let i = 0; i < chats.length; i += batchSize) {
 				const batch = chats.slice(i, i + batchSize);
 
-				await Promise.all(
+				const results = await Promise.allSettled(
 					batch.map(async (chat) => {
 						// Count non-deleted messages for this chat
 						const messages = await ctx.db
@@ -156,12 +157,25 @@ export const backfillMessageCounts = internalMutation({
 							messageCount,
 						});
 
-						updated++;
+						return chat._id;
 					})
 				);
 
+				const failures = results.filter(r => r.status === "rejected");
+				const successes = results.filter(r => r.status === "fulfilled");
+				updated += successes.length;
+				batchFailures += failures.length;
+
+				if (failures.length > 0) {
+					console.log(`[Migration] ${failures.length} items failed in batch:`, failures.map(f => f.reason));
+				}
+
 				processed += batch.length;
 				console.log(`[Migration] Processed ${processed}/${chats.length} chats...`);
+			}
+
+			if (batchFailures > 0) {
+				console.log(`[Migration] Total failures: ${batchFailures}`);
 			}
 
 			console.log(`[Migration] Backfill message counts - Completed (${updated} chats updated)`);
@@ -355,50 +369,58 @@ export const removeOnboardingFields = internalMutation({
 			for (let i = 0; i < users.length; i += batchSize) {
 				const batch = users.slice(i, i + batchSize);
 
-				await Promise.all(
+				const results = await Promise.allSettled(
 					batch.map(async (user) => {
-						try {
-							// Check if user has any onboarding fields to remove
-							const hasOnboardingFields =
-								"onboardingCompletedAt" in user ||
-								"displayName" in user ||
-								"preferredTone" in user ||
-								"customInstructions" in user;
+						// Check if user has any onboarding fields to remove
+						const hasOnboardingFields =
+							"onboardingCompletedAt" in user ||
+							"displayName" in user ||
+							"preferredTone" in user ||
+							"customInstructions" in user;
 
-							if (hasOnboardingFields) {
-								if (dryRun) {
-									console.log(
-										`[Migration] [DRY RUN] Would remove onboarding fields from user ${user._id}`
-									);
-								} else {
-									// Remove onboarding fields by setting them to undefined
-									// Type assertion needed because these fields are deprecated and no longer in schema
-									await ctx.db.patch(user._id, {
-										onboardingCompletedAt: undefined,
-										displayName: undefined,
-										preferredTone: undefined,
-										customInstructions: undefined,
-										updatedAt: Date.now(),
-									} as any);
-									console.log(
-										`[Migration] Removed onboarding fields from user ${user._id}`
-									);
-								}
-								updated++;
+						if (hasOnboardingFields) {
+							if (dryRun) {
+								console.log(
+									`[Migration] [DRY RUN] Would remove onboarding fields from user ${user._id}`
+								);
+							} else {
+								// Remove onboarding fields by setting them to undefined
+								// Type assertion needed because these fields are deprecated and no longer in schema
+								await ctx.db.patch(user._id, {
+									onboardingCompletedAt: undefined,
+									displayName: undefined,
+									preferredTone: undefined,
+									customInstructions: undefined,
+									updatedAt: Date.now(),
+								} as any);
+								console.log(
+									`[Migration] Removed onboarding fields from user ${user._id}`
+								);
 							}
-						} catch (error) {
-							const errorMessage = error instanceof Error ? error.message : String(error);
-							console.error(
-								`[Migration] Error processing user ${user._id}:`,
-								errorMessage
-							);
-							errors.push({
-								userId: user._id,
-								error: errorMessage,
-							});
+							return { userId: user._id, updated: true };
 						}
+						return { userId: user._id, updated: false };
 					})
 				);
+
+				// Handle results
+				for (const result of results) {
+					if (result.status === "rejected") {
+						const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+						console.error(`[Migration] Error processing user in batch:`, errorMessage);
+						errors.push({
+							userId: "unknown",
+							error: errorMessage,
+						});
+					} else if (result.value.updated) {
+						updated++;
+					}
+				}
+
+				const batchFailures = results.filter(r => r.status === "rejected");
+				if (batchFailures.length > 0) {
+					console.log(`[Migration] ${batchFailures.length} items failed in batch`);
+				}
 
 				processed += batch.length;
 				console.log(`[Migration] Processed ${processed}/${users.length} users...`);

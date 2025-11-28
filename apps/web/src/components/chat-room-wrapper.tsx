@@ -44,7 +44,6 @@ type ChatRoomProps = {
 export default function ChatRoomWrapper(props: ChatRoomProps) {
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<MessageData[]>(props.initialMessages);
-  const [isLoading, setIsLoading] = useState(props.initialMessages.length === 0);
   // STREAM RECONNECTION: Track active stream for reconnection
   const [activeStreamId, setActiveStreamId] = useState<string | null>(props.initialStreamId ?? null);
   const hasFetchedRef = useRef(false);
@@ -56,7 +55,6 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
     if (props.initialMessages.length > 0) return;
 
     const fetchMessages = async () => {
-      setIsLoading(true);
       try {
         const response = await fetch(`/api/chats/${props.chatId}/prefetch`, {
           method: "GET",
@@ -91,8 +89,6 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
         }
       } catch (error) {
         logError("Failed to fetch chat messages", error);
-      } finally {
-        setIsLoading(false);
       }
     };
 

@@ -10,6 +10,8 @@ import {
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
+import { isApiError } from "@/lib/error-handling";
+import { OPENROUTER_CONFIG } from "@/config/constants";
 
 const LAST_MODEL_STORAGE_KEY = "openchat:last-model";
 
@@ -132,14 +134,14 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
             typeof data?.message === "string" && data.message.length > 0
               ? data.message
               : "Failed to fetch OpenRouter models.";
-          let providerHost = "openrouter.ai";
+          let providerHost: string = OPENROUTER_CONFIG.HOST;
           try {
             const baseUrl =
               process.env.NEXT_PUBLIC_OPENROUTER_BASE_URL ??
               "https://openrouter.ai/api/v1";
             providerHost = new URL(response.url ?? baseUrl).host;
           } catch {
-            providerHost = "openrouter.ai";
+            providerHost = OPENROUTER_CONFIG.HOST;
           }
           captureClientEvent("openrouter.models_fetch_failed", {
             status: response.status,
@@ -181,18 +183,17 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
         }
 
         logError("Failed to load OpenRouter models", error);
-        if (!(error as any)?.__posthogTracked) {
+        const apiError = isApiError(error) ? error : null;
+        if (!apiError?.__posthogTracked) {
           const status =
-            typeof (error as any)?.status === "number"
-              ? (error as any).status
-              : 0;
-          let providerHost = "openrouter.ai";
-          const providerUrl = (error as any)?.providerUrl;
+            typeof apiError?.status === "number" ? apiError.status : 0;
+          let providerHost: string = OPENROUTER_CONFIG.HOST;
+          const providerUrl = apiError?.providerUrl;
           if (typeof providerUrl === "string" && providerUrl.length > 0) {
             try {
               providerHost = new URL(providerUrl).host;
             } catch {
-              providerHost = "openrouter.ai";
+              providerHost = OPENROUTER_CONFIG.HOST;
             }
           }
           captureClientEvent("openrouter.models_fetch_failed", {

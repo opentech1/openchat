@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -136,6 +136,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 								onChange={(e) => setName(e.target.value)}
 								placeholder="Template name..."
 								className="text-lg font-semibold border-none bg-transparent focus-visible:ring-0 px-0"
+								aria-label="Template name"
 							/>
 						</div>
 					</div>
@@ -178,6 +179,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 								onChange={(e) => setCommand(e.target.value.replace(/^\//, "").toLowerCase())}
 								placeholder="review, fix, translate"
 								className="pl-7 w-48"
+								aria-label="Command trigger"
 							/>
 						</div>
 						{argumentHint && (
@@ -193,6 +195,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 							onChange={(e) => setCategory(e.target.value)}
 							placeholder="coding, writing..."
 							className="w-48"
+							aria-label="Category"
 						/>
 					</div>
 					{placeholders.length > 0 && (
@@ -238,6 +241,7 @@ Translate $1 to $2 in a $3 tone"
 							"focus:outline-none focus:ring-0",
 							"font-mono text-sm leading-relaxed"
 						)}
+						aria-label="Template content"
 					/>
 				</div>
 

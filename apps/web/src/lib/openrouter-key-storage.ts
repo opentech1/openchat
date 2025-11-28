@@ -8,13 +8,11 @@
 
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
+import type { ConvexReactClient } from "convex/react";
 import { encryptApiKey, decryptApiKey } from "./encryption";
 import { logError } from "./logger";
 
-type ConvexClient = {
-	mutation: (api: any, args?: any) => Promise<any>;
-	query: (api: any, args?: any) => Promise<any>;
-};
+type ConvexClient = Pick<ConvexReactClient, "mutation" | "query">;
 
 /**
  * Saves an OpenRouter API key to the server (encrypted)
@@ -34,7 +32,7 @@ export async function saveOpenRouterKey(
 			userId,
 			encryptedKey,
 		});
-	} catch (error) {
+	} catch (error: unknown) {
 		logError("Failed to save OpenRouter key", error);
 		throw new Error("Failed to save OpenRouter key");
 	}
@@ -59,7 +57,7 @@ export async function loadOpenRouterKey(
 
 		// Decrypt client-side using user's external ID
 		return await decryptApiKey(encryptedKey, externalUserId);
-	} catch (error) {
+	} catch (error: unknown) {
 		logError("Failed to load OpenRouter key", error);
 		return null;
 	}
@@ -79,7 +77,7 @@ export async function hasOpenRouterKey(
 		})) as string | null;
 
 		return !!encryptedKey;
-	} catch (error) {
+	} catch (error: unknown) {
 		logError("Failed to check OpenRouter key status", error);
 		return false;
 	}
@@ -96,7 +94,7 @@ export async function removeOpenRouterKey(
 		await convexClient.mutation(api.users.removeOpenRouterKey, {
 			userId,
 		});
-	} catch (error) {
+	} catch (error: unknown) {
 		logError("Failed to remove OpenRouter key", error);
 		throw new Error("Failed to remove OpenRouter key");
 	}

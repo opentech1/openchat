@@ -15,7 +15,32 @@ import { isTextPart, isFilePart } from "@/lib/error-handling";
 import { removeEmDashes } from "@/lib/text-transforms";
 import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
 
-type AnyUIMessage = UIMessage<Record<string, unknown>>;
+/**
+ * Message metadata type with optional createdAt timestamp
+ */
+type MessageMetadata = {
+	createdAt?: string | Date;
+};
+
+type AnyUIMessage = UIMessage<MessageMetadata>;
+
+/**
+ * Type guard to check if a chunk is a reasoning-delta with text
+ */
+function isReasoningDeltaWithText(chunk: { type: string }): chunk is { type: "reasoning-delta"; text: string } {
+	return chunk.type === "reasoning-delta" && "text" in chunk && typeof (chunk as { text?: unknown }).text === "string";
+}
+
+/**
+ * Helper to extract statusCode from an error object safely
+ */
+function getErrorStatusCode(error: unknown): number | undefined {
+	if (error && typeof error === "object" && "statusCode" in error) {
+		const statusCode = (error as { statusCode: unknown }).statusCode;
+		return typeof statusCode === "number" ? statusCode : undefined;
+	}
+	return undefined;
+}
 
 type RateBucket = {
 	count: number;
@@ -119,7 +144,7 @@ const MAX_TOKENS = (() => {
  */
 function buildReasoningParam(
 	config: ChatRequestPayload["reasoningConfig"],
-	modelId: string
+	_modelId: string
 ): Record<string, unknown> | undefined {
 	// When disabled, don't send any reasoning parameter at all
 	// This prevents the model from thinking/reasoning entirely
@@ -440,7 +465,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 
 			payload = JSON.parse(rawBody);
-		} catch (error) {
+		} catch (error: unknown) {
 			const headers = buildCorsHeaders(request, allowOrigin);
 			if (error instanceof SyntaxError) {
 				return new Response("Invalid JSON payload", { status: 400, headers });
@@ -475,7 +500,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				});
 				config = { provider, modelId: modelIdFromPayload };
 			}
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error("Failed to resolve model", error);
 			const headers = buildCorsHeaders(request, allowOrigin);
 			const messageText = error instanceof Error ? error.message : String(error ?? "");
@@ -611,10 +636,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		const userMessageId = typeof rawUserMessage.id === "string" && rawUserMessage.id.length > 0
 			? rawUserMessage.id
 			: (crypto.randomUUID?.() ?? `user-${Date.now()}`);
-		const userCreatedAtIso = coerceIsoDate((rawUserMessage as any)?.metadata?.createdAt);
+		const userCreatedAtIso = coerceIsoDate(rawUserMessage.metadata?.createdAt);
 		const userContent = extractMessageText(safeUserMessage);
-		if ((safeUserMessage as any).id !== userMessageId) {
-			(safeUserMessage as any).id = userMessageId;
+		if (safeUserMessage.id !== userMessageId) {
+			// UIMessage.id is mutable, safe to assign directly
+			(safeUserMessage as { id: string }).id = userMessageId;
 		}
 
 		const assistantMessageId = typeof payload?.assistantMessageId === "string" && payload.assistantMessageId.length > 0
@@ -659,7 +685,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			if (!assistantBootstrap.ok) {
 				throw new Error("assistant streamUpsert rejected");
 			}
-		} catch (error) {
+		} catch (error: unknown) {
 			logger.error("Failed to persist messages", error, { chatId, userMessageId, assistantMessageId });
 			const headers = buildCorsHeaders(request, allowOrigin);
 			return new Response("Failed to persist messages", { status: 502, headers });
@@ -739,7 +765,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				flushTimeout = null;
 				try {
 					await persistAssistant("streaming");
-				} catch (error) {
+				} catch (error: unknown) {
 					logger.error("Failed to persist assistant chunk", error);
 					if (!persistenceError) {
 						persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant chunk");
@@ -767,15 +793,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			}
 			pendingFlush = null;
 			if (pending) {
-				try {
-					await pending;
-				} catch {
-					// ignore
-				}
+			try {
+				await pending;
+			} catch (error: unknown) {
+				logger.error("Failed to await pending flush during finalize", error);
+			}
 			}
 			try {
 				await persistAssistant("completed", true);
-			} catch (error) {
+			} catch (error: unknown) {
 				logger.error("Failed to persist assistant completion", error);
 				if (!persistenceError) {
 					persistenceError = error instanceof Error ? error : new Error("Failed to persist assistant completion");
@@ -861,16 +887,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 						const textToAdd = jonMode ? removeEmDashes(chunk.text) : chunk.text;
 						assistantText += textToAdd;
 						scheduleStreamFlush();
-					} else if (chunk.type === "reasoning-delta") {
+					} else if (isReasoningDeltaWithText(chunk)) {
 						// Start timer on FIRST reasoning chunk if not started
 						if (!reasoningStartTime) {
 							reasoningStartTime = Date.now();
 							logger.debug("Reasoning started", { startTime: reasoningStartTime });
 						}
 
-						const text = (chunk as any).text;
-						if (typeof text === "string" && text.length > 0) {
-							assistantReasoning += text;
+						if (chunk.text.length > 0) {
+							assistantReasoning += chunk.text;
 							// Update end time on EVERY chunk (captures last one)
 							reasoningEndTime = Date.now();
 							scheduleStreamFlush();
@@ -954,13 +979,13 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				status: aiResponse.status,
 				headers,
 			});
-		} catch (error) {
+		} catch (error: unknown) {
 			// Ensure timeout is cleared even if error occurs before callbacks
 			if (timeoutId) clearTimeout(timeoutId);
 			logger.error("Chat handler error", error, { chatId, modelId: config.modelId });
 			try {
 				await finalize();
-			} catch (finalizeError) {
+			} catch (finalizeError: unknown) {
 				logger.error("Chat finalize error", finalizeError);
 				if (!persistenceError) {
 					persistenceError =
@@ -985,8 +1010,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				rate_limit_bucket: rateLimitBucketLabel,
 			});
 			const headers = buildCorsHeaders(request, allowOrigin);
-			const upstreamStatus =
-				typeof (error as any)?.statusCode === "number" ? (error as any).statusCode : undefined;
+			const upstreamStatus = getErrorStatusCode(error);
 			const isProduction = process.env.NODE_ENV === "production";
 
 			// Handle specific error cases with generic messages in production

@@ -448,7 +448,7 @@ type MessageAttachmentsProps = {
 
 const MessageAttachmentItem = ({
   attachment,
-  userId
+  userId: _userId
 }: {
   attachment: MessageAttachmentsProps['attachments'][0];
   userId?: string | null;

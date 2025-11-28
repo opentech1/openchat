@@ -81,6 +81,9 @@ export const REQUEST_LIMITS = {
  * Settings for OpenRouter API integration
  */
 export const OPENROUTER_CONFIG = {
+	/** Default OpenRouter host for fallback */
+	HOST: "openrouter.ai",
+
 	/** Timeout for OpenRouter stream to prevent hanging requests (milliseconds) */
 	DEFAULT_TIMEOUT_MS: 120_000, // 2 minutes
 

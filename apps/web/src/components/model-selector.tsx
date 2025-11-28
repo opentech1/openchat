@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, Brain, Image, Mic, Video, LogIn, Settings, Loader2 } from "@/lib/icons"
+import { Check, Brain, Image, Mic, Video, LogIn, Loader2 } from "@/lib/icons"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"

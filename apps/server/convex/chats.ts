@@ -2,8 +2,7 @@ import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { incrementStat, decrementStat, STAT_KEYS } from "./lib/dbStats";
-import { CHAT_LIMITS } from "./config/constants";
+import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 
 // Input sanitization for chat titles

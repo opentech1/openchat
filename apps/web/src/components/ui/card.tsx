@@ -1,7 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
-import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
+import { borderRadius, spacing } from "@/styles/design-tokens"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (

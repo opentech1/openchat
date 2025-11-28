@@ -555,6 +555,9 @@ function ChatComposer({
     uploadedFiles,
     activeReasoningConfig,
     templates,
+    jonMode,
+    convexUser,
+    incrementTemplateUsage,
   ]);
 
   // Handler for reasoning config changes
@@ -732,14 +735,14 @@ function ChatComposer({
           <div className="mt-3 flex flex-wrap gap-2">
             {uploadedFiles.map((file, index) => (
               <FilePreview
-                key={`uploaded-${index}`}
+                key={file.storageId}
                 file={file}
                 onRemove={() => handleRemoveFile(index)}
                 showRemove={true}
               />
             ))}
-            {uploadingFiles.map((file, index) => (
-              <div key={`uploading-${index}`} className="relative">
+            {uploadingFiles.map((file) => (
+              <div key={`uploading-${file.name}-${file.size}-${file.lastModified}`} className="relative">
                 <FilePreview
                   file={{
                     filename: file.name,

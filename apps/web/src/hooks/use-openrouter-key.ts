@@ -62,7 +62,7 @@ export function useOpenRouterKey() {
           setApiKey(key);
           setError(null);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (!cancelled) {
           const error = err instanceof Error ? err : new Error(String(err));
           logError("Failed to load OpenRouter key", error);
@@ -115,7 +115,7 @@ export function useOpenRouterKey() {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
         }
-      } catch (err) {
+      } catch (err: unknown) {
         const error = err instanceof Error ? err : new Error(String(err));
         logError("Failed to save OpenRouter key", error);
         setError(error);
@@ -141,7 +141,7 @@ export function useOpenRouterKey() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
       }
-    } catch (err) {
+    } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       logError("Failed to remove OpenRouter key", error);
       setError(error);

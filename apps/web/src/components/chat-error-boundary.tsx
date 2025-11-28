@@ -279,7 +279,7 @@ function ChatErrorFallback({ error, resetError, chatId }: ChatErrorFallbackProps
  * Chat error action buttons (client component with router)
  */
 function ChatErrorActions({
-  chatId,
+  chatId: _chatId,
   isChatLoadError,
 }: {
   chatId?: string;

@@ -99,11 +99,6 @@ class PostHogMetricsStore implements MetricsStore {
 		try {
 			// PostHog is client-side only, so we'll need to use their server SDK
 			// or send via API for server-side metrics
-			// For now, just log that we would send it
-			if (process.env.NODE_ENV === "development") {
-				console.log("[PostHog] Would send metric:", metric.type, metric.name, metric.value);
-			}
-
 			// TODO: Integrate with PostHog server SDK
 			// const posthog = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY);
 			// await posthog.capture({

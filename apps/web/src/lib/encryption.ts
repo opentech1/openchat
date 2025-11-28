@@ -72,7 +72,7 @@ export async function encryptData(plaintext: string, userId: string): Promise<st
 		// Encode as base64 with prefix
 		const base64 = btoa(String.fromCharCode(...combined));
 		return `${ENCRYPTION_PREFIX}${base64}`;
-	} catch (error) {
+	} catch (error: unknown) {
 		console.error("Encryption failed:", error);
 		throw new Error("Failed to encrypt data");
 	}
@@ -110,7 +110,7 @@ export async function decryptData(ciphertext: string, userId: string): Promise<s
 
 		const decoder = new TextDecoder();
 		return decoder.decode(decrypted);
-	} catch (error) {
+	} catch (error: unknown) {
 		console.error("Decryption failed:", error);
 		throw new Error("Failed to decrypt data");
 	}
