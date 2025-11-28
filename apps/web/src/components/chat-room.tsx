@@ -16,8 +16,6 @@ import { DefaultChatTransport } from "ai";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import type { Id } from "@server/convex/_generated/dataModel";
-
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
@@ -41,6 +39,7 @@ import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
 import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
 import type { ModelSelectorOption } from "@/components/model-selector";
 import { logError } from "@/lib/logger";
+import type { ReasoningConfig } from "@/lib/reasoning-config";
 import { isApiError } from "@/lib/error-handling";
 import {
   getStorageItemSync,
@@ -48,7 +47,8 @@ import {
   removeStorageItemSync,
 } from "@/lib/storage";
 import { fetchWithCsrf } from "@/lib/csrf-client";
-import { toConvexUserId, toConvexChatId } from "@/lib/type-converters";
+import { OPENROUTER_CONFIG } from "@/config/constants";
+import { toConvexChatId } from "@/lib/type-converters";
 import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from "@/config/storage-keys";
 import { getMessageThrottle } from "@/config/constants";
 import { useConvexUser } from "@/contexts/convex-user-context";
@@ -319,7 +319,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     if (stored && !selectedModel) {
       dispatch({ type: "SET_SELECTED_MODEL", payload: stored });
     }
-  }, []);
+  }, [selectedModel]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
@@ -366,14 +366,14 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             typeof data?.message === "string" && data.message.length > 0
               ? data.message
               : "Failed to fetch OpenRouter models.";
-          let providerHost = "openrouter.ai";
+          let providerHost: string = OPENROUTER_CONFIG.HOST;
           try {
             const baseUrl =
               process.env.NEXT_PUBLIC_OPENROUTER_BASE_URL ??
               "https://openrouter.ai/api/v1";
             providerHost = new URL(response.url ?? baseUrl).host;
           } catch {
-            providerHost = "openrouter.ai";
+            providerHost = OPENROUTER_CONFIG.HOST;
           }
           captureClientEvent("openrouter.models_fetch_failed", {
             status: response.status,
@@ -408,7 +408,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           persistSelectedModel(nextModel ?? null);
           dispatch({ type: "SET_SELECTED_MODEL", payload: nextModel ?? null });
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // Ignore abort errors (request was cancelled)
         if (error instanceof Error && error.name === "AbortError") {
           return;
@@ -417,13 +417,13 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         logError("Failed to load OpenRouter models", error);
         if (isApiError(error) && !error.__posthogTracked) {
           const status = typeof error.status === "number" ? error.status : 0;
-          let providerHost = "openrouter.ai";
+          let providerHost: string = OPENROUTER_CONFIG.HOST;
           const providerUrl = error.providerUrl;
           if (typeof providerUrl === "string" && providerUrl.length > 0) {
             try {
               providerHost = new URL(providerUrl).host;
             } catch {
-              providerHost = "openrouter.ai";
+              providerHost = OPENROUTER_CONFIG.HOST;
             }
           }
           captureClientEvent("openrouter.models_fetch_failed", {
@@ -509,7 +509,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           scope: "workspace",
         });
         await fetchModels(key);
-      } catch (error) {
+      } catch (error: unknown) {
         logError("Failed to save OpenRouter API key", error);
         dispatch({
           type: "SET_API_KEY_ERROR",
@@ -767,8 +767,14 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       text: string;
       modelId: string;
       apiKey: string;
-      attachments?: any[];
-      reasoningConfig?: any;
+      attachments?: Array<{
+        storageId: string;
+        filename: string;
+        contentType: string;
+        size: number;
+        url?: string;
+      }>;
+      reasoningConfig?: ReasoningConfig;
       jonMode?: boolean;
     }) => {
       const content = text.trim();
@@ -881,7 +887,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             attachment_count: attachments?.length || 0,
             persistent_streaming: true,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           logError("Failed to prepare chat", error);
           // Clear streaming state on error
           setActiveStreamId(null);
@@ -922,7 +928,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             has_attachments: Boolean(attachments && attachments.length > 0),
             attachment_count: attachments?.length || 0,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           let status: number | null = null;
 
           if (error instanceof Response) {

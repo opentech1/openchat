@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { authClient } from '@/lib/auth-client'
 import { captureClientEvent } from '@/lib/posthog'
 import { throttleRAF } from '@/lib/throttle'
-import { borderRadius, iconSize, shadows, spacing } from '@/styles/design-tokens';
+import { borderRadius, iconSize, spacing } from '@/styles/design-tokens';
 
 type MenuItem = {
     name: string;

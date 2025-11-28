@@ -67,13 +67,13 @@ function getGlobalState() {
 				if (raw) {
 					// Parse with try-catch to handle corrupted JSON
 					let parsed: unknown;
-					try {
-						parsed = JSON.parse(raw);
-					} catch (error) {
-						// Invalid JSON - clear corrupted cache and continue with empty state
-						window.sessionStorage?.removeItem(STORAGE_KEY);
-						return globalThis.__OPENCHAT_CHAT_PREFETCH__;
-					}
+				try {
+					parsed = JSON.parse(raw);
+				} catch (_error) {
+					// Invalid JSON - clear corrupted cache and continue with empty state
+					window.sessionStorage?.removeItem(STORAGE_KEY);
+					return globalThis.__OPENCHAT_CHAT_PREFETCH__;
+				}
 
 					// Validate basic structure first
 					if (!isPrefetchCache(parsed)) {

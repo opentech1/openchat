@@ -66,13 +66,22 @@ export function TemplateCard({ template, onEdit, onDelete, onClick }: TemplateCa
 			whileHover={{ scale: 1.02 }}
 			transition={{ duration: 0.2 }}
 		>
-			<Card
-				className={cn(
-					"group cursor-pointer transition-all hover:shadow-md",
-					onClick && "hover:border-primary/50"
-				)}
-				onClick={handleClick}
-			>
+		<Card
+			className={cn(
+				"group cursor-pointer transition-all hover:shadow-md",
+				onClick && "hover:border-primary/50"
+			)}
+			onClick={handleClick}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					handleClick();
+				}
+			}}
+			role="button"
+			tabIndex={0}
+			aria-label={`Open template: ${template.name}`}
+		>
 				<CardHeader>
 					<CardTitle className="flex items-center gap-2">
 						<CommandIcon className="h-4 w-4 text-primary" />

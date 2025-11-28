@@ -75,7 +75,7 @@ export const list = query({
 				try {
 					const url = await ctx.storage.getUrl(storageId);
 					return { storageId, url };
-				} catch (error) {
+				} catch (_error) {
 					return { storageId, url: null };
 				}
 			});

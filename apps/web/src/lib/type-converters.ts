@@ -107,7 +107,7 @@ export function toConvexId<T extends TableNames>(
  */
 export function safeToConvexId<T extends TableNames>(
   id: string,
-  tableName: T
+  _tableName: T
 ): Id<T> | null {
   if (!isValidConvexId(id)) {
     return null;
@@ -253,7 +253,7 @@ export function safeToConvexIds<T extends TableNames>(
  */
 export function isConvexId<T extends TableNames>(
   value: unknown,
-  tableName?: T
+  _tableName?: T
 ): value is Id<T> {
   return typeof value === "string" && isValidConvexId(value);
 }

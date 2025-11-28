@@ -413,7 +413,7 @@ export const getBatchFileUrls = query({
 			try {
 				const url = await ctx.storage.getUrl(storageId);
 				return { storageId, url };
-			} catch (error) {
+			} catch (_error) {
 				// If storage.getUrl fails, return null
 				return { storageId, url: null };
 			}

@@ -29,7 +29,7 @@ export async function getBatchFileUrls(
 		try {
 			const url = await ctx.storage.getUrl(storageId);
 			return { storageId, url };
-		} catch (error) {
+		} catch (_error) {
 			// If storage.getUrl fails (e.g., file deleted), return null
 			return { storageId, url: null };
 		}

@@ -87,48 +87,51 @@ export function ChatExportButton({ chatId, className }: ChatExportButtonProps) {
 			</PopoverTrigger>
 			<PopoverContent className="w-48 p-2" align="end">
 				<div className="flex flex-col gap-1">
-					<button
-						onClick={() => handleExport("markdown")}
-						disabled={isExporting}
-						className={cn(
-							"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"transition-colors outline-none",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-							"disabled:opacity-50 disabled:pointer-events-none",
-						)}
-					>
-						<FileText className="size-4" />
-						<span>Markdown (.md)</span>
-					</button>
-					<button
-						onClick={() => handleExport("json")}
-						disabled={isExporting}
-						className={cn(
-							"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"transition-colors outline-none",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-							"disabled:opacity-50 disabled:pointer-events-none",
-						)}
-					>
-						<FileJson className="size-4" />
-						<span>JSON (.json)</span>
-					</button>
-					<button
-						onClick={() => handleExport("pdf")}
-						disabled={isExporting}
-						className={cn(
-							"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
-							"hover:bg-accent hover:text-accent-foreground",
-							"transition-colors outline-none",
-							"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-							"disabled:opacity-50 disabled:pointer-events-none",
-						)}
-					>
-						<FileType className="size-4" />
-						<span>PDF (.pdf)</span>
-					</button>
+				<button
+					onClick={() => handleExport("markdown")}
+					disabled={isExporting}
+					aria-label="Export as Markdown"
+					className={cn(
+						"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
+						"hover:bg-accent hover:text-accent-foreground",
+						"transition-colors outline-none",
+						"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+						"disabled:opacity-50 disabled:pointer-events-none",
+					)}
+				>
+					<FileText className="size-4" />
+					<span>Markdown (.md)</span>
+				</button>
+				<button
+					onClick={() => handleExport("json")}
+					disabled={isExporting}
+					aria-label="Export as JSON"
+					className={cn(
+						"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
+						"hover:bg-accent hover:text-accent-foreground",
+						"transition-colors outline-none",
+						"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+						"disabled:opacity-50 disabled:pointer-events-none",
+					)}
+				>
+					<FileJson className="size-4" />
+					<span>JSON (.json)</span>
+				</button>
+				<button
+					onClick={() => handleExport("pdf")}
+					disabled={isExporting}
+					aria-label="Export as PDF"
+					className={cn(
+						"flex items-center gap-2 px-3 py-2 text-sm rounded-md",
+						"hover:bg-accent hover:text-accent-foreground",
+						"transition-colors outline-none",
+						"focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+						"disabled:opacity-50 disabled:pointer-events-none",
+					)}
+				>
+					<FileType className="size-4" />
+					<span>PDF (.pdf)</span>
+				</button>
 				</div>
 			</PopoverContent>
 		</Popover>

@@ -62,13 +62,13 @@ export function readCachedModels(): ModelSelectorOption[] | null {
 
 		// Parse with try-catch to handle corrupted JSON
 		let parsed: unknown;
-		try {
-			parsed = JSON.parse(raw);
-		} catch (error) {
-			// Invalid JSON - clear corrupted cache and return null
-			storage.removeItem(STORAGE_KEY);
-			return null;
-		}
+	try {
+		parsed = JSON.parse(raw);
+	} catch (_error) {
+		// Invalid JSON - clear corrupted cache and return null
+		storage.removeItem(STORAGE_KEY);
+		return null;
+	}
 
 		// Check for old cache format (with version field) and clear it
 		if (parsed && typeof parsed === 'object' && 'version' in parsed) {
@@ -89,11 +89,11 @@ export function readCachedModels(): ModelSelectorOption[] | null {
 			return null;
 		}
 
-		return parsed.models;
-	} catch (error) {
-		// Catch any other unexpected errors
-		return null;
-	}
+	return parsed.models;
+} catch (_error) {
+	// Catch any other unexpected errors
+	return null;
+}
 }
 
 export function writeCachedModels(models: ModelSelectorOption[]) {

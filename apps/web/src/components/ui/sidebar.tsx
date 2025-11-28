@@ -26,11 +26,9 @@ export function Sidebar({ className, children, defaultCollapsed = false, ...prop
 	// State management with localStorage persistence
 	// Start with defaultCollapsed to avoid hydration mismatch
 	const [collapsed, setCollapsedState] = React.useState(defaultCollapsed);
-	const [mounted, setMounted] = React.useState(false);
 
 	// Load from localStorage after mount to avoid hydration mismatch
 	React.useEffect(() => {
-		setMounted(true);
 		if (typeof window !== "undefined") {
 			const stored = localStorage.getItem(LOCAL_STORAGE_KEYS.UI.SIDEBAR_COLLAPSED);
 			if (stored !== null) {

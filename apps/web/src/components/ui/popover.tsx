@@ -4,7 +4,7 @@ import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
-import { borderRadius, shadows, spacing } from "@/styles/design-tokens"
+import { borderRadius, spacing } from "@/styles/design-tokens"
 
 const Popover = PopoverPrimitive.Root
 const PopoverTrigger = PopoverPrimitive.Trigger

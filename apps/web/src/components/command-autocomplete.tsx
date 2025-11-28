@@ -129,9 +129,9 @@ export function CommandAutocomplete({
 				)}
 			>
 				<div className="py-1">
-					{filteredTemplates.map((template, index) => {
-						const placeholders = extractPlaceholders(template.template);
-						const argumentHint = generateArgumentHint(template.template);
+				{filteredTemplates.map((template, index) => {
+					const _placeholders = extractPlaceholders(template.template);
+					const argumentHint = generateArgumentHint(template.template);
 
 						return (
 							<motion.button
@@ -140,6 +140,7 @@ export function CommandAutocomplete({
 								initial={{ opacity: 0 }}
 								animate={{ opacity: 1 }}
 								transition={{ delay: index * 0.02 }}
+								aria-label={`Use template: ${template.name}`}
 								className={cn(
 									"w-full text-left px-3 py-2 transition-colors cursor-pointer",
 									selectedIndex === index

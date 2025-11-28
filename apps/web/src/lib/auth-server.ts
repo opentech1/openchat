@@ -49,16 +49,6 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 	// Also try getting Cookie header directly via headers()
 	const rawCookieHeader = headerStore.get("cookie");
 
-	// Debug logging to understand what cookies the server receives
-	console.log("[Auth Server] cookies() returned:", allCookies.length, "cookies");
-	console.log("[Auth Server] headers().get('cookie'):", rawCookieHeader ? "has value" : "empty/null");
-	if (allCookies.length > 0) {
-		console.log("[Auth Server] Cookie names from cookies():", allCookies.map(c => c.name).join(", "));
-	}
-	if (rawCookieHeader) {
-		console.log("[Auth Server] Raw cookie header length:", rawCookieHeader.length);
-	}
-
 	// Prefer raw cookie header if available, fall back to cookies()
 	const cookieHeader = rawCookieHeader || allCookies
 		.map((c) => `${c.name}=${c.value}`)
@@ -66,7 +56,6 @@ const resolveUserContext = cache(async (): Promise<UserContext> => {
 
 	// If no cookies at all, redirect immediately
 	if (!cookieHeader) {
-		console.log("[Auth Server] No cookies found from either source, redirecting to sign-in");
 		redirect("/auth/sign-in");
 	}
 
@@ -159,7 +148,6 @@ export async function getUserContextFromRequest(request: Request): Promise<UserC
 	const cookieHeader = request.headers.get("cookie");
 
 	if (!cookieHeader) {
-		console.log("[Auth Server API] No cookie header in request");
 		return null;
 	}
 
@@ -193,19 +181,15 @@ export async function getUserContextFromRequest(request: Request): Promise<UserC
 			},
 		});
 
-		console.log("[Auth Server API] Calling auth handler directly");
-
 		const response = await authHandler(syntheticRequest);
 
 		if (!response.ok) {
-			console.log("[Auth Server API] Auth response not ok:", response.status);
 			return null;
 		}
 
 		const data = await response.json();
 
 		if (!data || !data.user) {
-			console.log("[Auth Server API] No user in session data");
 			return null;
 		}
 

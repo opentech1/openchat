@@ -13,7 +13,7 @@ import { internalAction } from "./_generated/server";
  * Email: test@example.com
  * Password: test
  */
-export default internalAction(async (ctx) => {
+export default internalAction(async (_ctx) => {
 	const deployment = process.env.NEXT_PUBLIC_DEPLOYMENT;
 	const nodeEnv = process.env.NODE_ENV;
 	const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";

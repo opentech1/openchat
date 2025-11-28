@@ -9,7 +9,6 @@ import {
 	type ReasoningConfig,
 	type ReasoningEffort,
 	supportsReasoningEffort,
-	supportsReasoningMaxTokens,
 } from "@/lib/reasoning-config";
 
 type ReasoningControlsProps = {
@@ -108,7 +107,6 @@ export function ReasoningControls({
 				? { enabled: true as const, effort: "medium" as const }
 				: { enabled: true as const, max_tokens: 4000 };
 
-			console.log("Auto-enabling reasoning for mandatory model:", modelId, newConfig);
 			onChange(newConfig);
 		}
 	}, [modelId, capabilities?.mandatoryReasoning, value.enabled, supportsEffort, onChange, hasShownToast, markToastShown]);

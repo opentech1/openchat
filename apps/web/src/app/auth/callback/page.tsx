@@ -35,14 +35,12 @@ function AuthCallbackContent() {
 					const session = await authClient.getSession();
 
 					if (session?.data?.user) {
-						console.log("[Auth Callback] Session established, redirecting...");
 						window.location.href = from || "/dashboard";
 						return;
 					}
 
 					attempts++;
 					if (attempts < maxAttempts) {
-						console.log(`[Auth Callback] Waiting for session... (attempt ${attempts}/${maxAttempts})`);
 						setTimeout(poll, 500);
 					} else {
 						console.error("[Auth Callback] Session not established after waiting");
