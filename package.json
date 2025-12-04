@@ -47,12 +47,13 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@react-grab/claude-code": "^0.0.67",
     "@testing-library/jest-dom": "^6.6.3",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.13",
     "convex": "^1.29.3",
     "oxlint": "^1.30.0",
-    "turbo": "^2.6.1",
+    "turbo": "^2.6.3",
     "vitest": "^4.0.13",
     "ws": "^8.18.0"
   },

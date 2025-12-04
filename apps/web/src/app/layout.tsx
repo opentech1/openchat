@@ -146,14 +146,20 @@ export default function RootLayout({
 						__html: stringifyStructuredData(structuredData),
 					}}
 				/>
-				{/* React Grab - Developer tool for element inspection */}
+				{/* React Grab - Developer tool for element inspection with Claude Code agent */}
 				{process.env.NODE_ENV === "development" && (
-					<Script
-						src="https://unpkg.com/react-grab/dist/index.global.js"
-						crossOrigin="anonymous"
-						strategy="beforeInteractive"
-						data-enabled="true"
-					/>
+					<>
+						<Script
+							src="https://unpkg.com/react-grab/dist/index.global.js"
+							crossOrigin="anonymous"
+							strategy="afterInteractive"
+							data-enabled="true"
+						/>
+						<Script
+							src="https://unpkg.com/@react-grab/claude-code/dist/client.global.js"
+							strategy="afterInteractive"
+						/>
+					</>
 				)}
 			</head>
 			<body className={cn("font-sans antialiased", oxanium.className)}>

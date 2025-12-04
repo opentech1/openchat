@@ -2,6 +2,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 import bundleAnalyzer from "@next/bundle-analyzer";
 import { createRequire } from "node:module";
 
+// Start React Grab Claude Code server in development for browser-to-agent integration
+if (process.env.NODE_ENV === "development") {
+	import("@react-grab/claude-code/server").then(({ startServer }) => startServer());
+}
+
 const require = createRequire(import.meta.url);
 const convexReactEntry = require.resolve("convex/react");
 
