@@ -30,6 +30,58 @@ const authRateLimiter = new RateLimiter({
 });
 
 /**
+ * Transform request cookies for development
+ * In dev, we strip __Secure- prefix from Set-Cookie headers (see below)
+ * So we need to add it back to incoming cookies so Convex can find them
+ */
+function transformRequestForDev(request: Request): Request {
+	if (process.env.NODE_ENV === "production") {
+		return request;
+	}
+
+	const cookieHeader = request.headers.get("Cookie");
+	if (!cookieHeader) {
+		return request;
+	}
+
+	// Add __Secure- prefix to known better-auth cookies
+	// better-auth uses format: {prefix}.{cookieName} (e.g., openchat.state)
+	// Note: PKCE code_verifier is stored in database, not as a cookie
+	const transformedCookies = cookieHeader
+		.split(";")
+		.map((cookie) => {
+			const trimmed = cookie.trim();
+			// Match better-auth cookies that need the __Secure- prefix restored
+			// These are the actual cookies better-auth creates:
+			// - state: OAuth state for CSRF protection
+			// - session_token: Main session token
+			// - session_data: Cached session data (if cookieCache enabled)
+			// - dont_remember: For "don't remember me" functionality
+			if (
+				trimmed.startsWith("openchat.state=") ||
+				trimmed.startsWith("openchat.session_token=") ||
+				trimmed.startsWith("openchat.session_data=") ||
+				trimmed.startsWith("openchat.dont_remember=")
+			) {
+				return `__Secure-${trimmed}`;
+			}
+			return trimmed;
+		})
+		.join("; ");
+
+	const newHeaders = new Headers(request.headers);
+	newHeaders.set("Cookie", transformedCookies);
+
+	return new Request(request.url, {
+		method: request.method,
+		headers: newHeaders,
+		body: request.body,
+		// @ts-expect-error - duplex is required for streaming bodies
+		duplex: "half",
+	});
+}
+
+/**
  * Wrap auth handler with rate limiting
  * Prevents brute force attacks on authentication endpoints
  */
@@ -126,5 +178,5 @@ async function withAuthRateLimit(
 	});
 }
 
-export const GET = (req: Request) => withAuthRateLimit(req, originalGET);
-export const POST = (req: Request) => withAuthRateLimit(req, originalPOST);
+export const GET = (req: Request) => withAuthRateLimit(transformRequestForDev(req), originalGET);
+export const POST = (req: Request) => withAuthRateLimit(transformRequestForDev(req), originalPOST);
