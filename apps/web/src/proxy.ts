@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 
 /**
  * Pre-compute CSP headers at module load to eliminate per-request overhead
@@ -19,9 +20,25 @@ const BASE_CSP_DIRECTIVES = [
 	"object-src 'none'",
 ].join("; ");
 
-const CSP_HEADER_VALUE = process.env.NODE_ENV === "production"
-	? `${BASE_CSP_DIRECTIVES}; upgrade-insecure-requests`
-	: BASE_CSP_DIRECTIVES;
+const CSP_HEADER_VALUE =
+	process.env.NODE_ENV === "production"
+		? `${BASE_CSP_DIRECTIVES}; upgrade-insecure-requests`
+		: BASE_CSP_DIRECTIVES;
+
+/**
+ * Paths that do not require authentication
+ * - Landing page
+ * - Auth sign-in page
+ * - Auth callback routes
+ * - Public stats API
+ */
+const UNAUTHENTICATED_PATHS = [
+	"/",
+	"/auth/sign-in",
+	"/auth/callback",
+	"/api/auth/callback",
+	"/api/stats",
+];
 
 /**
  * Generate a unique request correlation ID
@@ -43,39 +60,13 @@ function generateCorrelationId(): string {
 }
 
 /**
- * Proxy for security headers and request tracing (Next.js 16+)
- *
- * Provides:
- * - Request correlation IDs for distributed tracing
- * - Security headers for all responses (CSP, XSS protection, etc.)
- *
- * NOTE: Authentication is NOT handled here. The convexClient() plugin from
- * @convex-dev/better-auth stores sessions in localStorage (not cookies) for
- * cross-domain compatibility with Convex. Proxy cannot access localStorage,
- * so auth checks happen in server components via getUserContext().
- *
- * REQUEST CORRELATION IDS:
- * - Each request gets a unique X-Request-ID header
- * - If client provides one, we use it (for client-side correlation)
- * - Otherwise, we generate a new one
- * - This ID should be logged with all operations for that request
- * - Makes it easy to trace a request through multiple services/logs
+ * Apply security headers to a response
  */
-export async function proxy(request: NextRequest) {
-	// Extract or generate correlation ID
-	const existingCorrelationId = request.headers.get("x-request-id");
-	const correlationId = existingCorrelationId || generateCorrelationId();
-
-	// NOTE: Authentication is handled by server components via getUserContext()
-	// We don't check for cookies here because convexClient() from @convex-dev/better-auth
-	// stores session in localStorage (not browser cookies) for cross-domain compatibility.
-	// The middleware cannot access localStorage, so auth checks happen server-side.
-
-	// Add security headers to all responses
-	const response = NextResponse.next();
-
+function applySecurityHeaders(
+	response: NextResponse,
+	correlationId: string,
+): void {
 	// Set correlation ID for request tracing
-	// This allows logs to be correlated across services
 	response.headers.set("X-Request-ID", correlationId);
 
 	// Prevent clickjacking attacks
@@ -96,8 +87,53 @@ export async function proxy(request: NextRequest) {
 		"camera=(), microphone=(), geolocation=(), interest-cohort=()",
 	);
 
-	// Set pre-computed CSP header (computed at module load for performance)
+	// Set pre-computed CSP header
 	response.headers.set("Content-Security-Policy", CSP_HEADER_VALUE);
+}
+
+/**
+ * Create the WorkOS AuthKit middleware with proper configuration
+ *
+ * This handles:
+ * - Session management and cookie handling
+ * - Automatic redirects to AuthKit for protected routes
+ * - Token refresh
+ */
+const workosMiddleware = authkitMiddleware({
+	redirectUri: process.env.WORKOS_REDIRECT_URI,
+	middlewareAuth: {
+		enabled: true,
+		unauthenticatedPaths: UNAUTHENTICATED_PATHS,
+	},
+});
+
+/**
+ * Combined proxy for WorkOS AuthKit authentication and security headers
+ *
+ * Next.js 16 uses proxy.ts instead of middleware.ts
+ *
+ * Wraps authkitMiddleware to add:
+ * - Request correlation IDs for distributed tracing
+ * - Security headers for all responses (CSP, XSS protection, etc.)
+ */
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+	// Extract or generate correlation ID
+	const existingCorrelationId = request.headers.get("x-request-id");
+	const correlationId = existingCorrelationId || generateCorrelationId();
+
+	// Call WorkOS AuthKit middleware first - it handles authentication,
+	// session management, and redirects for unauthenticated users
+	const authkitResult = await workosMiddleware(request, {} as never);
+
+	// AuthKit middleware returns NextResponse for both redirects and normal requests
+	// If no response (void/undefined), create a default NextResponse.next()
+	const response =
+		authkitResult instanceof NextResponse
+			? authkitResult
+			: NextResponse.next();
+
+	// Apply security headers to the response
+	applySecurityHeaders(response, correlationId);
 
 	return response;
 }
@@ -106,14 +142,14 @@ export const config = {
 	matcher: [
 		/*
 		 * Match all request paths except:
-		 * - api routes (handled by API routes)
 		 * - _next/static (static files)
 		 * - _next/image (image optimization files)
 		 * - __webpack_hmr (webpack hot module replacement - dev only)
 		 * - favicon.ico, sitemap.xml, robots.txt (public files)
-		 * - images and other assets (png, jpg, svg, etc.)
+		 * - images and other assets (png, jpg, jpeg, gif, svg, webp, ico)
+		 *
+		 * Note: API routes are included for auth callback handling
 		 */
-		"/((?!api|_next/static|_next/image|__webpack_hmr|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)).*)",
+		"/((?!_next/static|_next/image|__webpack_hmr|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)).*)",
 	],
 };
-

@@ -1,16 +1,13 @@
 "use client";
 
-import dynamic from "next/dynamic";
-
-// Import with ssr: false to avoid calling Convex hooks during SSR
-const PosthogBootstrapClient = dynamic(
-	() =>
-		import("@/components/posthog-bootstrap-client").then(
-			(mod) => mod.PosthogBootstrapClient
-		),
-	{ ssr: false }
-);
+import { useMounted } from "@/hooks/use-mounted";
+import { PosthogBootstrapClient } from "@/components/posthog-bootstrap-client";
 
 export function PosthogBootstrap() {
+	const mounted = useMounted();
+
+	// Only render on client to avoid SSR hydration issues
+	if (!mounted) return null;
+
 	return <PosthogBootstrapClient />;
 }

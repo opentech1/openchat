@@ -70,7 +70,7 @@ export function VersionsSection() {
 						    ))}
 						  </ul>
 						  <Button asChild size="lg" className="mt-8 w-full">
-						    <Link href="/dashboard">
+						    <Link href="/">
 						      <span>Start Chatting</span>
 						    </Link>
 						  </Button>

@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
@@ -149,7 +149,7 @@ const initialOpenRouterState: OpenRouterState = {
 };
 
 function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
   const workspaceId = user?.id ?? null;
 

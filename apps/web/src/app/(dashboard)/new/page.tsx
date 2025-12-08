@@ -11,5 +11,5 @@ export default async function NewChatPage() {
 		image: session.image,
 	});
 	const chat = await createChatForUser(convexUserId, "New Chat");
-	redirect(`/dashboard/chat/${chat._id}`);
+	redirect(`/chat/${chat._id}`);
 }

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 type ConvexUser = {
@@ -23,7 +23,7 @@ type ConvexUserContextValue = {
 const ConvexUserContext = createContext<ConvexUserContextValue | undefined>(undefined);
 
 export function ConvexUserProvider({ children }: { children: React.ReactNode }) {
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending } = useSession();
   const user = session?.user;
   const workspaceId = user?.id ?? null;
 

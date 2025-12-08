@@ -65,11 +65,11 @@ export default function TemplatesPageClient() {
 	}, [templates, searchQuery, selectedCategory]);
 
 	const handleCreate = () => {
-		router.push("/dashboard/templates/new");
+		router.push("/templates/new");
 	};
 
 	const handleEdit = (template: PromptTemplate) => {
-		router.push(`/dashboard/templates/${template._id}`);
+		router.push(`/templates/${template._id}`);
 	};
 
 	const handleDelete = async (templateId: string) => {

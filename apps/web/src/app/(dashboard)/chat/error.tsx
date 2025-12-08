@@ -106,7 +106,7 @@ export default function ChatError({
 
 				{/* For not found or access denied, go back to dashboard */}
 				{(isNotFound || isAccessDenied) ? (
-					<Button onClick={() => router.push("/dashboard")} className="gap-2">
+					<Button onClick={() => router.push("/")} className="gap-2">
 						<ArrowLeft className="h-4 w-4" />
 						Back to Dashboard
 					</Button>
@@ -116,7 +116,7 @@ export default function ChatError({
 							<RefreshCw className="h-4 w-4" />
 							Try Again
 						</Button>
-						<Button onClick={() => router.push("/dashboard")} variant="outline" className="gap-2">
+						<Button onClick={() => router.push("/")} variant="outline" className="gap-2">
 							<ArrowLeft className="h-4 w-4" />
 							Back to Dashboard
 						</Button>
@@ -124,7 +124,7 @@ export default function ChatError({
 				)}
 
 				{/* Create new chat option */}
-				<Button onClick={() => router.push("/dashboard/new")} variant="outline" className="gap-2">
+				<Button onClick={() => router.push("/new")} variant="outline" className="gap-2">
 					<MessageSquare className="h-4 w-4" />
 					New Chat
 				</Button>

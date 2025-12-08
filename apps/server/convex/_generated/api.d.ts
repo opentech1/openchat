@@ -23,6 +23,7 @@ import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as previewSeed from "../previewSeed.js";
 import type * as promptTemplates from "../promptTemplates.js";
+import type * as stats from "../stats.js";
 import type * as streaming from "../streaming.js";
 import type * as users from "../users.js";
 
@@ -48,6 +49,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   previewSeed: typeof previewSeed;
   promptTemplates: typeof promptTemplates;
+  stats: typeof stats;
   streaming: typeof streaming;
   users: typeof users;
 }>;

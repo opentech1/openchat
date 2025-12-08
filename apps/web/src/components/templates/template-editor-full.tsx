@@ -106,7 +106,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 			}
 
 			setLastSaved(new Date());
-			router.push("/dashboard/templates");
+			router.push("/templates");
 		} catch (error) {
 			console.error("Failed to save:", error);
 			alert(error instanceof Error ? error.message : "Failed to save template");
@@ -124,7 +124,7 @@ export function TemplateEditorFull({ templateId, userId, initialData }: Template
 			<div className="border-b border-border bg-card/50 backdrop-blur-sm px-6 py-4">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-4 flex-1">
-						<Link href="/dashboard/templates">
+						<Link href="/templates">
 							<Button variant="ghost" size="sm">
 								<ArrowLeft className="size-4 mr-2" />
 								Back

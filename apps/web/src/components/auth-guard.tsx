@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 
 /**
  * Client-side authentication guard
@@ -17,7 +17,7 @@ import { authClient } from "@/lib/auth-client";
  */
 export function AuthGuard({ children }: { children: ReactNode }) {
 	const router = useRouter();
-	const { data: session, isPending } = authClient.useSession();
+	const { data: session, isPending } = useSession();
 	const [shouldRedirect, setShouldRedirect] = useState(false);
 
 	useEffect(() => {

@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { NiceLoader } from "@/components/ui/nice-loader";
+import { ClientOnly } from "@/components/client-only";
 
 /**
  * Auth Callback Content Component
@@ -35,7 +36,7 @@ function AuthCallbackContent() {
 					const session = await authClient.getSession();
 
 					if (session?.data?.user) {
-						window.location.href = from || "/dashboard";
+						window.location.href = from || "/";
 						return;
 					}
 
@@ -92,11 +93,11 @@ function AuthCallbackContent() {
 /**
  * Auth Callback Page
  *
- * Wrapped in Suspense as required by Next.js for useSearchParams
+ * Uses ClientOnly instead of Suspense to prevent hydration mismatches
  */
 export default function AuthCallbackPage() {
 	return (
-		<Suspense
+		<ClientOnly
 			fallback={
 				<div className="min-h-screen flex items-center justify-center">
 					<NiceLoader message="Loading..." size="lg" />
@@ -104,6 +105,6 @@ export default function AuthCallbackPage() {
 			}
 		>
 			<AuthCallbackContent />
-		</Suspense>
+		</ClientOnly>
 	);
 }

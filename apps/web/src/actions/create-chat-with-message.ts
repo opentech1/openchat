@@ -32,5 +32,5 @@ export async function createChatWithMessageAction(message: string) {
 	});
 
 	// Redirect to the new chat
-	redirect(`/dashboard/chat/${chat._id}`);
+	redirect(`/chat/${chat._id}`);
 }

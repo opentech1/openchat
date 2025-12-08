@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "@/lib/icons";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
+import { signOutAction } from "@/actions/sign-out";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ export function AccountSettingsModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
   const convex = useConvex();
 
@@ -52,7 +53,7 @@ export function AccountSettingsModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
+  const [isSigningOut, startSignOutTransition] = useTransition();
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [removingKey, setRemovingKey] = useState(false);
@@ -212,22 +213,17 @@ export function AccountSettingsModal({
     }
   }
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    await authClient.signOut({
-      fetchOptions: {
-        onSuccess: () => {
-          onClose();
-          toast.success("Signed out");
-          router.push("/");
-          router.refresh();
-        },
-        onError: (ctx) => {
-          logError("Failed to sign out", ctx.error);
-          toast.error("Failed to sign out");
-          setSigningOut(false);
-        },
-      },
+  function handleSignOut() {
+    startSignOutTransition(async () => {
+      try {
+        onClose();
+        toast.success("Signed out");
+        // WorkOS signOut redirects to "/" automatically
+        await signOutAction();
+      } catch (error) {
+        logError("Failed to sign out", error);
+        toast.error("Failed to sign out");
+      }
     });
   }
 
@@ -408,17 +404,17 @@ export function AccountSettingsModal({
             {/* Sign Out Section */}
             <div className="space-y-3 pt-4 border-t">
               <p className="text-sm text-muted-foreground">
-                You are signed in with Better Auth. Signing out will end your session across all tabs.
+                Signing out will end your session across all tabs.
               </p>
               <Button
                 variant="destructive"
                 className="w-full"
                 onClick={handleSignOut}
-                disabled={signingOut}
+                disabled={isSigningOut}
                 aria-label="Sign out of account"
-                aria-busy={signingOut}
+                aria-busy={isSigningOut}
               >
-                {signingOut ? "Signing out…" : "Sign out"}
+                {isSigningOut ? "Signing out…" : "Sign out"}
               </Button>
             </div>
           </div>

@@ -27,7 +27,7 @@ export function HeroContent({ onCtaClick }: HeroContentProps) {
 					<div className="flex flex-col items-center text-center">
 						{/* Badge - Clean Linear style */}
 						<Link
-						  href="/dashboard"
+						  href="/"
 						  className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
 						  onClick={onCtaClick('hero_badge', 'Hero Badge', 'hero')}
 						>
@@ -52,7 +52,7 @@ export function HeroContent({ onCtaClick }: HeroContentProps) {
 						    size="lg"
 						    className="h-11 px-6 text-base font-medium transition-transform active:scale-[0.98]"
 						  >
-						    <Link href="/dashboard" onClick={onCtaClick('hero_start_chatting', 'Start Chatting', 'hero')}>
+						    <Link href="/" onClick={onCtaClick('hero_start_chatting', 'Start Chatting', 'hero')}>
 						      Start Chatting Free
 						    </Link>
 						  </Button>
