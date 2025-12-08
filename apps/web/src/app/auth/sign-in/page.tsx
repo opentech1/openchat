@@ -63,17 +63,27 @@ export default async function SignInPage() {
 	const workos = new WorkOS(process.env.WORKOS_API_KEY);
 	const stats = await fetchStats();
 
+	// Validate required environment variables
+	const clientId = process.env.WORKOS_CLIENT_ID;
+	const redirectUri = process.env.WORKOS_REDIRECT_URI;
+
+	if (!clientId || !redirectUri) {
+		throw new Error(
+			"WorkOS configuration missing: WORKOS_CLIENT_ID and WORKOS_REDIRECT_URI are required"
+		);
+	}
+
 	// Generate provider-specific sign-in URLs using WorkOS SDK
 	const githubSignInUrl = workos.userManagement.getAuthorizationUrl({
 		provider: "GitHubOAuth",
-		clientId: process.env.WORKOS_CLIENT_ID!,
-		redirectUri: process.env.WORKOS_REDIRECT_URI!,
+		clientId,
+		redirectUri,
 	});
 
 	const googleSignInUrl = workos.userManagement.getAuthorizationUrl({
 		provider: "GoogleOAuth",
-		clientId: process.env.WORKOS_CLIENT_ID!,
-		redirectUri: process.env.WORKOS_REDIRECT_URI!,
+		clientId,
+		redirectUri,
 	});
 
 	return (
