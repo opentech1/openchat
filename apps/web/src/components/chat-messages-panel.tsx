@@ -103,13 +103,19 @@ function ChatMessagesPanelComponent({
   const isResizingRef = useRef(false);
   // Track if viewport ref is attached to DOM
   const [viewportReady, setViewportReady] = useState(false);
+  // Guard ref to prevent infinite loop from repeated state updates
+  const viewportReadySetRef = useRef(false);
   // Track if we've done initial scroll for this chat
   const hasScrolledForChatRef = useRef(false);
 
   // Callback ref to detect when viewport is attached to DOM
+  // IMPORTANT: Use a guard ref to prevent calling setViewportReady multiple times.
+  // Radix UI's composeRefs may call this callback during render, and setting state
+  // unconditionally during render causes "Maximum update depth exceeded" error.
   const setViewportRefCallback = useCallback((node: HTMLDivElement | null) => {
     viewportRef.current = node;
-    if (node) {
+    if (node && !viewportReadySetRef.current) {
+      viewportReadySetRef.current = true;
       setViewportReady(true);
     }
   }, []);
@@ -121,6 +127,9 @@ function ChatMessagesPanelComponent({
       shouldStickRef.current = true;
       lastSignatureRef.current = null;
       hasScrolledForChatRef.current = false;
+      // Reset viewport ready state for new chat
+      viewportReadySetRef.current = false;
+      setViewportReady(false);
       setIsAtBottom(false);
     }
   }, [chatId]);
