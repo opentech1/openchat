@@ -277,7 +277,7 @@ function DefaultErrorFallback({
               variant="outline"
               onClick={() => {
                 if (typeof window !== "undefined") {
-                  window.location.href = "/dashboard";
+                  window.location.href = "/";
                 }
               }}
               className="gap-2"

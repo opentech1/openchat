@@ -33,7 +33,7 @@ export default function DashboardLayoutClient({
   }, []);
 
   // Check if we're on a chat page and extract chatId
-  const chatPageMatch = pathname?.match(/^\/dashboard\/chat\/([^/]+)$/);
+  const chatPageMatch = pathname?.match(/^\/chat\/([^/]+)$/);
   const chatId = chatPageMatch?.[1];
   const isOnChatPage = Boolean(chatId);
 

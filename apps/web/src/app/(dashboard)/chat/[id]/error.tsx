@@ -115,7 +115,7 @@ export default function ChatError({
 				)}
 				<Button
 					variant="outline"
-					onClick={() => router.push("/dashboard")}
+					onClick={() => router.push("/")}
 					className="gap-2"
 					aria-label="Return to dashboard"
 				>

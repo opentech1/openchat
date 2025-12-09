@@ -14,7 +14,7 @@ import { X, PanelLeft, Settings, MessageSquare, Loader2 } from "@/lib/icons";
 import { toast } from "sonner";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useTheme } from "next-themes";
 import {
   Sidebar,
@@ -154,7 +154,7 @@ function upsertChat(list: ChatListItem[], chat: ChatListItem) {
 function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...sidebarProps }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
   const { theme: brandTheme } = useBrandTheme();
   const { hasKey: hasOpenRouterKey } = useOpenRouterKey();
@@ -180,7 +180,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   
   // Mark current chat as read when viewing it
   useEffect(() => {
-    const chatMatch = pathname?.match(/^\/dashboard\/chat\/([^/]+)$/);
+    const chatMatch = pathname?.match(/^\/chat\/([^/]+)$/);
     const currentChatId = chatMatch?.[1];
     if (currentChatId) {
       markAsRead(currentChatId);
@@ -291,7 +291,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
         storage_backend: "convex",
       });
       onNavigate?.();
-      await router.push(`/dashboard/chat/${payload.chat.id}`);
+      await router.push(`/chat/${payload.chat.id}`);
     } catch (error) {
       logError("Failed to create chat", error);
       // Show actual error message as toast title for better visibility
@@ -306,10 +306,10 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     setDeletingChatId(chatId);
     
     // Check if we're currently viewing this chat - if so, navigate away immediately
-    const isViewingDeletedChat = pathname === `/dashboard/chat/${chatId}`;
+    const isViewingDeletedChat = pathname === `/chat/${chatId}`;
     if (isViewingDeletedChat) {
       // Navigate immediately for instant feedback
-      router.push("/dashboard");
+      router.push("/");
     }
     
     try {
@@ -336,7 +336,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
 
   const handleHoverChat = useCallback(
     (chatId: string) => {
-      router.prefetch(`/dashboard/chat/${chatId}`);
+      router.prefetch(`/chat/${chatId}`);
       void prefetchChat(chatId);
     },
     [router],
@@ -366,8 +366,8 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
 
     const entryPath =
       typeof window !== "undefined"
-        ? window.location.pathname || "/dashboard"
-        : "/dashboard";
+        ? window.location.pathname || "/"
+        : "/";
     captureClientEvent("dashboard.entered", {
       chat_total: chats.length,
       has_api_key: hasOpenRouterKey,
@@ -428,7 +428,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
         {/* Settings and Theme Controls */}
         <div className="flex items-stretch gap-2">
           <Link
-            href="/dashboard/settings"
+            href="/settings"
             className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium transition-colors duration-100 ease-out hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Settings"
           >
@@ -494,7 +494,7 @@ function SidebarHeaderContent() {
         <PanelLeft className="size-4" />
       </button>
       <Link
-        href="/dashboard"
+        href="/"
         className="hover:opacity-80 transition-opacity duration-100 ease-out flex items-center gap-2 px-3 py-1.5 rounded-lg"
       >
         <Logo size="default" />
@@ -595,7 +595,7 @@ function ChatList({
     return (
       <div className="px-1 py-1" data-ph-no-capture>
         {chats.map((c) => {
-          const chatPath = `/dashboard/chat/${c.id}`;
+          const chatPath = `/chat/${c.id}`;
           const isActive = activePath === chatPath;
           const hasUnread = isUnread?.(c.id, c.lastMessageAtMs, isActive) ?? false;
           return (
@@ -627,7 +627,7 @@ function ChatList({
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const chat = chats[virtualItem.index];
           if (!chat) return null;
-          const chatPath = `/dashboard/chat/${chat.id}`;
+          const chatPath = `/chat/${chat.id}`;
           const isActive = activePath === chatPath;
           const hasUnread = isUnread?.(chat.id, chat.lastMessageAtMs, isActive) ?? false;
           // PERFORMANCE FIX: Create stable style object
@@ -699,7 +699,7 @@ function ChatListItem({
   /** Whether this chat has unread messages */
   hasUnread?: boolean;
 }) {
-  const hrefPath = `/dashboard/chat/${chat.id}`;
+  const hrefPath = `/chat/${chat.id}`;
   const isActive = activePath === hrefPath;
   // Use real-time status from Convex subscription if available, otherwise fall back to cached status
   const effectiveStatus = realtimeStatus ?? chat.status;
@@ -711,7 +711,7 @@ function ChatListItem({
   return (
     <div className="group relative">
       <Link
-        href={`/dashboard/chat/${chat.id}`}
+        href={`/chat/${chat.id}`}
         prefetch
         className={cn(
           // Linear-style: clean active state with left border accent, subtle hover

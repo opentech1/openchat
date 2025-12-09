@@ -11,6 +11,7 @@ import {
 	CommandItem,
 	CommandList,
 } from "@/components/ui/command";
+import { useMounted } from "@/hooks/use-mounted";
 
 type CommandPaletteProps = {
 	open?: boolean;
@@ -20,6 +21,7 @@ type CommandPaletteProps = {
 export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPaletteProps) {
 	const [internalOpen, setInternalOpen] = useState(false);
 	const router = useRouter();
+	const mounted = useMounted();
 
 	const open = controlledOpen ?? internalOpen;
 	const setOpen = onOpenChange ?? setInternalOpen;
@@ -45,9 +47,12 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
 	}, [toggleOpen]);
 
 	const handleNewChat = useCallback(() => {
-		router.push("/dashboard");
+		router.push("/");
 		setOpen(false);
 	}, [router, setOpen]);
+
+	// Don't render on server to prevent Radix UI ID mismatch
+	if (!mounted) return null;
 
 	return (
 		<CommandDialog open={open} onOpenChange={setOpen}>

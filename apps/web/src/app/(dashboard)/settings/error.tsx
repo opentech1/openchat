@@ -31,7 +31,7 @@ export default function SettingsError({
 			</div>
 			<div className="flex gap-2">
 				<Button onClick={reset}>Try again</Button>
-				<Button variant="outline" onClick={() => router.push("/dashboard")}>
+				<Button variant="outline" onClick={() => router.push("/")}>
 					Return to dashboard
 				</Button>
 			</div>

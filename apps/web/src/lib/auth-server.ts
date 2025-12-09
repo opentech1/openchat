@@ -1,6 +1,5 @@
 import { cache } from "react";
-import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 import { logError } from "./logger-server";
 
 export type UserContext = {
@@ -10,120 +9,44 @@ export type UserContext = {
 	image?: string | null;
 };
 
-type SessionCacheEntry = {
-	user: UserContext;
-	timestamp: number;
-};
-
-const sessionCache = new Map<string, SessionCacheEntry>();
-const SESSION_CACHE_TTL_MS = 30_000; // 30 seconds
-
 /**
- * Invalidates a session from the cache
- * Should be called on logout to prevent serving stale sessions
+ * Helper to build UserContext from WorkOS user object
+ * WorkOS User fields use nullable types (string | null), not optional (string?)
  */
-export function invalidateSessionCache(sessionToken: string): void {
-	sessionCache.delete(sessionToken);
+function buildUserContext(user: {
+	id: string;
+	email: string;
+	firstName: string | null;
+	lastName: string | null;
+	profilePictureUrl: string | null;
+}): UserContext {
+	// Build name from firstName and lastName with proper null handling
+	let name: string | null = null;
+	if (user.firstName && user.lastName) {
+		name = `${user.firstName} ${user.lastName}`;
+	} else if (user.firstName) {
+		name = user.firstName;
+	} else if (user.lastName) {
+		name = user.lastName;
+	}
+
+	return {
+		userId: user.id,
+		email: user.email,
+		name,
+		image: user.profilePictureUrl,
+	};
 }
 
 /**
- * Clears the entire session cache
- * Useful for security-critical operations
+ * Cache the withAuth call per request using React cache()
+ * This avoids duplicate auth checks within the same request across server components
  */
-export function clearSessionCache(): void {
-	sessionCache.clear();
-}
-
-// Get session from better-auth API
-// Using React cache() to avoid duplicate fetches within the same request across server components
-// Also implements Map-based caching with 30-second TTL to eliminate repeated HTTP calls
 const resolveUserContext = cache(async (): Promise<UserContext> => {
-	// Try both cookies() and headers() to diagnose the issue
-	const cookieStore = await cookies();
-	const headerStore = await headers();
+	const { user } = await withAuth({ ensureSignedIn: true });
 
-	// Forward ALL cookies to the auth API instead of manually checking specific names
-	// This ensures compatibility regardless of how better-auth/convex sets cookies
-	const allCookies = cookieStore.getAll();
-
-	// Also try getting Cookie header directly via headers()
-	const rawCookieHeader = headerStore.get("cookie");
-
-	// Prefer raw cookie header if available, fall back to cookies()
-	const cookieHeader = rawCookieHeader || allCookies
-		.map((c) => `${c.name}=${c.value}`)
-		.join("; ");
-
-	// If no cookies at all, redirect immediately
-	if (!cookieHeader) {
-		redirect("/auth/sign-in");
-	}
-
-	// Find a session-like cookie for cache key generation
-	// IMPORTANT: Only cache if we have a unique session identifier to prevent cross-user cache collisions
-	const sessionCookie = allCookies.find(
-		(c) => c.name.includes("session") || c.name.includes("token")
-	);
-	const cacheKey = sessionCookie?.value;
-
-	// Check cache first (only if we have a valid session cookie as cache key)
-	const now = Date.now();
-	if (cacheKey) {
-		const cached = sessionCache.get(cacheKey);
-		if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
-			return cached.user;
-		}
-	}
-
-	// Call better-auth API to get session
-	try {
-		const baseUrl =
-			process.env.NEXT_PUBLIC_APP_URL ||
-			process.env.SITE_URL ||
-			"http://localhost:3000";
-		const response = await fetch(`${baseUrl}/api/auth/get-session`, {
-			headers: {
-				Cookie: cookieHeader,
-			},
-			cache: "no-store",
-		});
-
-		if (!response.ok) {
-			redirect("/auth/sign-in");
-		}
-
-		const data = await response.json();
-
-		if (!data || !data.user) {
-			redirect("/auth/sign-in");
-		}
-
-		const user: UserContext = {
-			userId: data.user.id,
-			email: data.user.email,
-			name: data.user.name,
-			image: data.user.image,
-		};
-
-		// Store in cache only if we have a unique session identifier
-		if (cacheKey) {
-			sessionCache.set(cacheKey, { user, timestamp: now });
-		}
-
-		// Cleanup old entries to prevent memory leaks
-		if (sessionCache.size > 1000) {
-			for (const [key, entry] of sessionCache.entries()) {
-				if (now - entry.timestamp >= SESSION_CACHE_TTL_MS) {
-					sessionCache.delete(key);
-				}
-			}
-		}
-
-		return user;
-	} catch (error) {
-		logError("Failed to get session", error);
-		redirect("/auth/sign-in");
-	}
+	// user is guaranteed by ensureSignedIn: true
+	return buildUserContext(user);
 });
 
 export async function getUserContext(): Promise<UserContext> {
@@ -136,78 +59,46 @@ export async function getUserId(): Promise<string> {
 }
 
 /**
- * Get user context from a Request object (for API routes)
+ * Get user context for API routes
  *
- * This reads cookies directly from the request headers instead of using
- * next/headers cookies() which doesn't work in some environments.
+ * NOTE: The request parameter is kept for API compatibility but is unused.
+ * WorkOS withAuth() reads session from Next.js cookies context automatically.
  *
  * Returns null if not authenticated (does NOT redirect).
  * API routes should return 401 when this returns null.
  */
-export async function getUserContextFromRequest(request: Request): Promise<UserContext | null> {
-	const cookieHeader = request.headers.get("cookie");
-
-	if (!cookieHeader) {
-		return null;
-	}
-
-	// Find a session-like cookie for cache key generation
-	const sessionMatch = cookieHeader.match(/(?:session|token)[^=]*=([^;]+)/i);
-	const cacheKey = sessionMatch?.[1];
-
-	// Check cache first (only if we have a valid session cookie as cache key)
-	const now = Date.now();
-	if (cacheKey) {
-		const cached = sessionCache.get(cacheKey);
-		if (cached && now - cached.timestamp < SESSION_CACHE_TTL_MS) {
-			return cached.user;
-		}
-	}
-
-	// Call auth handler directly to avoid HTTP routing issues
-	// This imports the auth handler and calls it with a synthetic request
+export async function getUserContextFromRequest(
+	_request: Request // Prefixed with _ to indicate intentionally unused
+): Promise<UserContext | null> {
 	try {
-		const { nextJsHandler } = await import("@convex-dev/better-auth/nextjs");
-		const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-		const { GET: authHandler } = nextJsHandler(
-			convexSiteUrl ? { convexSiteUrl } : undefined
-		);
+		// withAuth() can be called without ensureSignedIn to check auth status
+		const { user } = await withAuth();
 
-		// Create a synthetic request for get-session
-		const syntheticRequest = new Request("http://localhost/api/auth/get-session", {
-			method: "GET",
-			headers: {
-				Cookie: cookieHeader,
-			},
-		});
-
-		const response = await authHandler(syntheticRequest);
-
-		if (!response.ok) {
+		if (!user) {
 			return null;
 		}
 
-		const data = await response.json();
-
-		if (!data || !data.user) {
-			return null;
-		}
-
-		const user: UserContext = {
-			userId: data.user.id,
-			email: data.user.email,
-			name: data.user.name,
-			image: data.user.image,
-		};
-
-		// Store in cache only if we have a unique session identifier
-		if (cacheKey) {
-			sessionCache.set(cacheKey, { user, timestamp: now });
-		}
-
-		return user;
+		return buildUserContext(user);
 	} catch (error) {
 		logError("Failed to get session from request", error);
 		return null;
 	}
+}
+
+/**
+ * Invalidates a session from the cache
+ * No-op for WorkOS - session management is handled by AuthKit
+ * Kept for API compatibility
+ */
+export function invalidateSessionCache(_sessionToken: string): void {
+	// WorkOS handles session management
+}
+
+/**
+ * Clears the entire session cache
+ * No-op for WorkOS - session management is handled by AuthKit
+ * Kept for API compatibility
+ */
+export function clearSessionCache(): void {
+	// WorkOS handles session management
 }

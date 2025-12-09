@@ -1,12 +1,15 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ClientOnly } from "@/components/client-only";
+import { useMounted } from "@/hooks/use-mounted";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ConvexReactClient } from "convex/react";
 import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { authClient } from "@/lib/auth-client";
+import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { ThemeProvider } from "./theme-provider";
 import { BrandThemeProvider } from "./brand-theme-provider";
 import { Toaster } from "sonner";
@@ -14,6 +17,30 @@ import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 import { ConvexUserProvider } from "@/contexts/convex-user-context";
 import { ChatListProvider } from "@/contexts/chat-list-context";
+
+// Client-only Toaster to prevent hydration mismatch
+function ClientToaster() {
+	const mounted = useMounted();
+	if (!mounted) return null;
+	return (
+		<Toaster
+			richColors
+			position="bottom-right"
+			closeButton
+			theme="system"
+			toastOptions={{
+				classNames: {
+					toast: 'backdrop-blur-xl bg-background/95 border-border shadow-lg',
+					title: 'text-foreground font-medium',
+					description: 'text-muted-foreground',
+					actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
+					cancelButton: 'bg-muted text-muted-foreground hover:bg-muted/80',
+					closeButton: 'bg-background border-border hover:bg-muted',
+				},
+			}}
+		/>
+	);
+}
 
 // Create singleton clients at module scope to prevent recreation on re-renders
 // This follows Convex recommended pattern for Next.js: https://docs.convex.dev/quickstart/nextjs
@@ -76,60 +103,49 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 	// This prevents "Could not find Convex client" errors during static generation
 	if (!convexClient) {
 		return (
-			<ThemeProvider
-				attribute="class"
-				defaultTheme="system"
-				enableSystem
-				disableTransitionOnChange
-			>
-				<BrandThemeProvider>
-					<QueryClientProvider client={queryClient}>
-						{children}
-					</QueryClientProvider>
-				</BrandThemeProvider>
-			</ThemeProvider>
+			<AuthKitProvider>
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="system"
+					enableSystem
+					disableTransitionOnChange
+				>
+					<BrandThemeProvider>
+						<QueryClientProvider client={queryClient}>
+							{children}
+						</QueryClientProvider>
+					</BrandThemeProvider>
+				</ThemeProvider>
+			</AuthKitProvider>
 		);
 	}
 
 	const appTree = (
-		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-			<ConvexUserProvider>
-				<ChatListProvider>
-					<ThemeProvider
-						attribute="class"
-						defaultTheme="system"
-						enableSystem
-						disableTransitionOnChange
-					>
-						<BrandThemeProvider>
-							<QueryClientProvider client={queryClient}>
-								<PosthogBootstrap />
-								<Suspense fallback={null}>
-									<PosthogPageViewTracker />
-								</Suspense>
-								{children}
-								<Toaster
-									richColors
-									position="bottom-right"
-									closeButton
-									theme="system"
-									toastOptions={{
-										classNames: {
-											toast: 'backdrop-blur-xl bg-background/95 border-border shadow-lg',
-											title: 'text-foreground font-medium',
-											description: 'text-muted-foreground',
-											actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
-											cancelButton: 'bg-muted text-muted-foreground hover:bg-muted/80',
-											closeButton: 'bg-background border-border hover:bg-muted',
-										},
-									}}
-								/>
-							</QueryClientProvider>
-						</BrandThemeProvider>
-					</ThemeProvider>
-				</ChatListProvider>
-			</ConvexUserProvider>
-		</ConvexBetterAuthProvider>
+		<AuthKitProvider>
+			<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+				<ConvexUserProvider>
+					<ChatListProvider>
+						<ThemeProvider
+							attribute="class"
+							defaultTheme="system"
+							enableSystem
+							disableTransitionOnChange
+						>
+							<BrandThemeProvider>
+								<QueryClientProvider client={queryClient}>
+									<PosthogBootstrap />
+									<ClientOnly>
+										<PosthogPageViewTracker />
+									</ClientOnly>
+									{children}
+									<ClientToaster />
+								</QueryClientProvider>
+							</BrandThemeProvider>
+						</ThemeProvider>
+					</ChatListProvider>
+				</ConvexUserProvider>
+			</ConvexBetterAuthProvider>
+		</AuthKitProvider>
 	);
 
 	if (posthogClient) {

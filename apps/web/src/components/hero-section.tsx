@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { authClient } from '@/lib/auth-client';
+import { useSession } from '@/lib/auth-client';
 import { toast } from 'sonner';
 import { PageLoader } from '@/components/ui/nice-loader';
 
@@ -50,7 +50,7 @@ function screenWidthBucket(width: number) {
 
 export default function HeroSection() {
   const router = useRouter();
-  const { data: session, isPending: isSessionLoading } = authClient.useSession();
+  const { data: session, isPending: isSessionLoading } = useSession();
   const user = session?.user;
   const visitTrackedRef = useRef(false);
   const redirectCheckedRef = useRef(false);
@@ -83,7 +83,7 @@ export default function HeroSection() {
 
       // Redirect after a short delay for smooth transition
       const timeoutId = setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/');
       }, 2000);
 
       return () => clearTimeout(timeoutId);

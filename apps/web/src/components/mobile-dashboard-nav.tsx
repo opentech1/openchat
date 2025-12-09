@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -89,7 +89,7 @@ function MobileDrawer({
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
-	const { data: session } = authClient.useSession();
+	const { data: session } = useSession();
 	const user = session?.user;
 	const { resolvedTheme, setTheme } = useTheme();
 	const [accountOpen, setAccountOpen] = useState(false);
@@ -151,7 +151,7 @@ function MobileDrawer({
 			setChats((prev) => [data.chat, ...prev]);
 			captureClientEvent("chat.created", { chat_id: data.chat.id, source: "mobile" });
 			onClose();
-			router.push(`/dashboard/chat/${data.chat.id}`);
+			router.push(`/chat/${data.chat.id}`);
 		} catch (err) {
 			logError("Create chat failed", err);
 			toast.error(err instanceof Error ? err.message : "Failed to create chat");
@@ -179,7 +179,7 @@ function MobileDrawer({
 
 	const handleChatClick = (chatId: string) => {
 		onClose();
-		router.push(`/dashboard/chat/${chatId}`);
+		router.push(`/chat/${chatId}`);
 	};
 
 	const userDisplayName = user?.name || user?.email || "User";
@@ -211,7 +211,7 @@ function MobileDrawer({
 			>
 				{/* Header */}
 				<div className="flex items-center justify-between px-4 py-3 border-b border-border">
-					<Link href="/dashboard" onClick={onClose} className="flex items-center">
+					<Link href="/" onClick={onClose} className="flex items-center">
 						<Logo size="default" />
 					</Link>
 					<button
@@ -258,14 +258,14 @@ function MobileDrawer({
 					) : (
 						<div className="px-2 space-y-0.5">
 							{chats.map((chat) => {
-								const isActive = pathname === `/dashboard/chat/${chat.id}`;
+								const isActive = pathname === `/chat/${chat.id}`;
 								return (
 									<div key={chat.id} className="group relative">
 										<button
 											type="button"
 											onClick={() => handleChatClick(chat.id)}
 											onMouseEnter={() => {
-												router.prefetch(`/dashboard/chat/${chat.id}`);
+												router.prefetch(`/chat/${chat.id}`);
 												void prefetchChat(chat.id);
 											}}
 											className={cn(
@@ -311,7 +311,7 @@ function MobileDrawer({
 					{/* Settings & Theme */}
 					<div className="flex gap-2">
 						<Link
-							href="/dashboard/settings"
+							href="/settings"
 							onClick={onClose}
 							className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-sm font-medium hover:bg-accent transition-colors"
 						>

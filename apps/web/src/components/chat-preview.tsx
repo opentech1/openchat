@@ -174,7 +174,7 @@ function ChatPreview({ className }: { className?: string }) {
       });
 
       // Redirect to the new chat (message will auto-send from there)
-      router.push(`/dashboard/chat/${data.chat.id}`);
+      router.push(`/chat/${data.chat.id}`);
     } catch (error) {
       logError("Failed to create chat:", error);
       toast.error("Failed to create chat. Please try again.");
@@ -233,7 +233,7 @@ function ChatPreview({ className }: { className?: string }) {
 
             {/* Prompt Library Quick Access */}
             <div className="flex items-center justify-center animate-in fade-in-0 duration-500 delay-300 py-2">
-              <Link href="/dashboard/templates" className="w-full max-w-md">
+              <Link href="/templates" className="w-full max-w-md">
                 <div
                   className={cn(
                     "group relative flex items-center justify-between px-6 py-4",

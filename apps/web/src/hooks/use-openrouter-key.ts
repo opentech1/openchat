@@ -14,7 +14,7 @@ import { useEffect, useState, useCallback } from "react";
 // Global event name for key changes
 const KEY_CHANGE_EVENT = "openrouter-key-changed";
 import { useConvex } from "convex/react";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import {
   saveOpenRouterKey,
   loadOpenRouterKey,
@@ -29,7 +29,7 @@ export function useOpenRouterKey() {
   const [error, setError] = useState<Error | null>(null);
 
   const convex = useConvex();
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
 
   // Check if Convex client is available before calling hooks

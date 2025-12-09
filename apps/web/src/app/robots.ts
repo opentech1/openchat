@@ -14,7 +14,7 @@ export default function robots(): MetadataRoute.Robots {
 			{
 				userAgent: "*",
 				allow: "/",
-				disallow: ["/api/", "/admin/", "/_next/", "/dashboard/", "/auth/"],
+				disallow: ["/api/", "/admin/", "/_next/", "/auth/"],
 			},
 			{
 				userAgent: ["AhrefsBot", "SemrushBot"],

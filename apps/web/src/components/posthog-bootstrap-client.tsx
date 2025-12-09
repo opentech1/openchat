@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 
 import { useBrandTheme } from "@/components/brand-theme-provider";
 import { identifyClient, registerClientProperties } from "@/lib/posthog";
@@ -10,7 +10,7 @@ import { identifyClient, registerClientProperties } from "@/lib/posthog";
 export function PosthogBootstrapClient() {
 	const { theme, resolvedTheme } = useTheme();
 	const { theme: brandTheme } = useBrandTheme();
-	const { data: session, isPending: loading } = authClient.useSession();
+	const { data: session, isPending: loading } = useSession();
 	const identifyRef = useRef<string | null>(null);
 
 	const user = session?.user;

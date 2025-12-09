@@ -307,4 +307,29 @@ export const env = {
 			fallback: "60000",
 			description: "Chat creation rate limit window (milliseconds)",
 		}),
+
+	// WorkOS AuthKit
+	workosClientId: () =>
+		getEnvVar("WORKOS_CLIENT_ID", {
+			required: false,
+			description: "WorkOS Client ID for AuthKit",
+		}),
+
+	workosApiKey: () =>
+		getEnvVar("WORKOS_API_KEY", {
+			required: false,
+			description: "WorkOS API Key for AuthKit",
+		}),
+
+	workosRedirectUri: () =>
+		getEnvVar("WORKOS_REDIRECT_URI", {
+			fallback: "http://localhost:3000/api/auth/callback",
+			description: "WorkOS OAuth redirect URI",
+		}),
+
+	workosCookiePassword: () =>
+		getEnvVar("WORKOS_COOKIE_PASSWORD", {
+			required: false,
+			description: "WorkOS cookie encryption password (min 32 chars)",
+		}),
 } as const;

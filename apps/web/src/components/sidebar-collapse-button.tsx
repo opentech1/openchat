@@ -59,7 +59,7 @@ export default function SidebarCollapseButton() {
 	}, []);
 
 	const handleNewChat = useCallback(() => {
-		router.push("/dashboard");
+		router.push("/");
 	}, [router]);
 
 	// Only show button when sidebar is collapsed

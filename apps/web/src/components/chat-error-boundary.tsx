@@ -288,11 +288,11 @@ function ChatErrorActions({
   const router = useRouter();
 
   const handleNewChat = () => {
-    router.push("/dashboard");
+    router.push("/");
   };
 
   const handleDashboard = () => {
-    router.push("/dashboard");
+    router.push("/");
   };
 
   return (

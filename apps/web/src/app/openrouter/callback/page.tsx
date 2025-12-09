@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ClientOnly } from "@/components/client-only";
 import { useConvex } from "convex/react";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { useConvexUser } from "@/contexts/convex-user-context";
 import {
   exchangeCodeForKey,
@@ -19,7 +20,7 @@ function OpenRouterCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const convex = useConvex();
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
   const { convexUser } = useConvexUser();
 
@@ -72,7 +73,7 @@ function OpenRouterCallbackContent() {
         // Success! Redirect to dashboard
         setStatus("success");
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push("/");
         }, 1500);
       } catch (error) {
         console.error("OAuth callback error:", error);
@@ -168,7 +169,7 @@ function OpenRouterCallbackContent() {
               </p>
             </div>
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push("/")}
               className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
               Return to Dashboard
@@ -182,17 +183,19 @@ function OpenRouterCallbackContent() {
 
 export default function OpenRouterCallbackPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div className="flex justify-center">
-            <Logo size="large" />
+    <ClientOnly
+      fallback={
+        <div className="flex min-h-screen items-center justify-center p-6">
+          <div className="w-full max-w-md space-y-6 text-center">
+            <div className="flex justify-center">
+              <Logo size="large" />
+            </div>
+            <div className="text-sm text-muted-foreground">Loading...</div>
           </div>
-          <div className="text-sm text-muted-foreground">Loading...</div>
         </div>
-      </div>
-    }>
+      }
+    >
       <OpenRouterCallbackContent />
-    </Suspense>
+    </ClientOnly>
   );
 }

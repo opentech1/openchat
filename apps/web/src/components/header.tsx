@@ -6,7 +6,7 @@ import { Menu, X } from '@/lib/icons'
 import { Button } from '@/components/ui/button'
 import React, { useCallback, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
-import { authClient } from '@/lib/auth-client'
+import { useSession } from '@/lib/auth-client'
 import { captureClientEvent } from '@/lib/posthog'
 import { throttleRAF } from '@/lib/throttle'
 import { borderRadius, iconSize, spacing } from '@/styles/design-tokens';
@@ -26,7 +26,7 @@ const menuItems: MenuItem[] = [
 export const HeroHeader = () => {
     const [menuState, setMenuState] = useState(false)
     const [isScrolled, setIsScrolled] = useState(false)
-    const { data: session } = authClient.useSession(); const user = session?.user
+    const { data: session } = useSession(); const user = session?.user
 
     const handleHeaderCtaClick = useCallback(() => {
         const width = typeof window !== 'undefined' ? window.innerWidth : 0
@@ -142,7 +142,7 @@ export const HeroHeader = () => {
                             <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
                                 {user ? (
                                     <Link
-                                        href="/dashboard"
+                                        href="/"
                                         onClick={closeMenu}
                                         className="text-sm font-medium">
                                         Dashboard
@@ -163,7 +163,7 @@ export const HeroHeader = () => {
                                             asChild
                                             size="sm">
                                             <Link
-                                                href="/dashboard"
+                                                href="/"
                                                 onClick={() => {
                                                     handleHeaderCtaClick()
                                                     closeMenu()

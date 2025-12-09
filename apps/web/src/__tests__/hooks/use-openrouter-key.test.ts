@@ -29,9 +29,7 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@/lib/auth-client", () => ({
-  authClient: {
-    useSession: vi.fn(),
-  },
+  useSession: vi.fn(),
 }));
 
 vi.mock("@/contexts/convex-user-context", () => ({
@@ -52,9 +50,7 @@ vi.mock("@/lib/logger", () => ({
 import { useConvex } from "convex/react";
 
 const mockUseConvex = useConvex as ReturnType<typeof vi.fn>;
-const mockUseSession = authClient.authClient.useSession as ReturnType<
-  typeof vi.fn
->;
+const mockUseSession = (authClient as unknown as { useSession: ReturnType<typeof vi.fn> }).useSession;
 const mockUseConvexUser = convexUserContext.useConvexUser as ReturnType<
   typeof vi.fn
 >;

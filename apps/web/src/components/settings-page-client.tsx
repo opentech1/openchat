@@ -8,7 +8,7 @@ import { ApiKeySectionWithOAuth } from "@/components/settings/api-key-section-wi
 import { JonModeSection } from "@/components/settings/jon-mode-section";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { cn } from "@/lib/utils";
-import { authClient } from "@/lib/auth-client";
+import { useSession } from "@/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type SettingsTab = "account" | "api" | "appearance" | "preferences";
@@ -18,7 +18,7 @@ export default function SettingsPageClient() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("account");
   const [isMounted, setIsMounted] = useState(false);
   const { hasKey, isLoading } = useOpenRouterKey();
-  const { data: session } = authClient.useSession();
+  const { data: session } = useSession();
   const user = session?.user;
 
   useEffect(() => {

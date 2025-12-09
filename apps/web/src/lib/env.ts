@@ -58,6 +58,12 @@ const serverEnvSchema = z.object({
 	SENTRY_DSN: z.string().url().optional(),
 	NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
 
+	// Optional - WorkOS AuthKit
+	WORKOS_CLIENT_ID: z.string().startsWith("client_").optional(),
+	WORKOS_API_KEY: z.string().startsWith("sk_").optional(),
+	WORKOS_REDIRECT_URI: z.string().url().optional(),
+	WORKOS_COOKIE_PASSWORD: z.string().min(32).optional(),
+
 	// Optional - Vercel
 	VERCEL_ENV: z.string().optional(),
 	VERCEL_REGION: z.string().optional(),
@@ -140,7 +146,7 @@ export function validateServerEnv(): ServerEnv {
 	// Apply defaults only in development
 	const envWithDefaults = isProdEnv ? process.env : {
 		...process.env,
-		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
+		NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
 		NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000",
 		NEXT_PUBLIC_CONVEX_URL: process.env.NEXT_PUBLIC_CONVEX_URL || "http://localhost:3210",
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || "dev-secret",

@@ -4,9 +4,8 @@ import Providers from "@/components/providers";
 import { Oxanium, Fira_Code } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { RouteFocusManager } from "@/components/route-focus-manager";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
+import { ClientAnalytics } from "@/components/client-analytics";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { generateCombinedStructuredData, stringifyStructuredData } from "@/lib/structured-data";
 
@@ -169,8 +168,7 @@ export default function RootLayout({
 						{children}
 					</Providers>
 				</ErrorBoundary>
-				<SpeedInsights />
-				<Analytics mode="production" />
+				<ClientAnalytics />
 				{/* PostHog analytics - loaded after interactive to prevent blocking render */}
 				{process.env.NEXT_PUBLIC_POSTHOG_KEY && process.env.NEXT_PUBLIC_POSTHOG_HOST ? (
 				<Script id="posthog" strategy="afterInteractive">
