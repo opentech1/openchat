@@ -59,32 +59,34 @@ async function fetchStats(): Promise<PublicStats | null> {
 }
 
 export default async function SignInPage() {
-	// Create WorkOS instance and fetch stats in parallel
-	const workos = new WorkOS(process.env.WORKOS_API_KEY);
-	const stats = await fetchStats();
-
 	// Validate required environment variables
+	const apiKey = process.env.WORKOS_API_KEY;
 	const clientId = process.env.WORKOS_CLIENT_ID;
 	const redirectUri = process.env.WORKOS_REDIRECT_URI;
 
-	if (!clientId || !redirectUri) {
-		throw new Error(
-			"WorkOS configuration missing: WORKOS_CLIENT_ID and WORKOS_REDIRECT_URI are required"
-		);
+	// If WorkOS is not configured, show a configuration required page
+	const isConfigured = apiKey && clientId && redirectUri;
+
+	// Generate sign-in URLs only if configured
+	let githubSignInUrl = "#";
+	let googleSignInUrl = "#";
+
+	if (isConfigured) {
+		const workos = new WorkOS(apiKey);
+		githubSignInUrl = workos.userManagement.getAuthorizationUrl({
+			provider: "GitHubOAuth",
+			clientId,
+			redirectUri,
+		});
+		googleSignInUrl = workos.userManagement.getAuthorizationUrl({
+			provider: "GoogleOAuth",
+			clientId,
+			redirectUri,
+		});
 	}
 
-	// Generate provider-specific sign-in URLs using WorkOS SDK
-	const githubSignInUrl = workos.userManagement.getAuthorizationUrl({
-		provider: "GitHubOAuth",
-		clientId,
-		redirectUri,
-	});
-
-	const googleSignInUrl = workos.userManagement.getAuthorizationUrl({
-		provider: "GoogleOAuth",
-		clientId,
-		redirectUri,
-	});
+	// Fetch stats in parallel (doesn't require WorkOS)
+	const stats = await fetchStats();
 
 	return (
 		<div className="grid min-h-svh lg:grid-cols-2">
@@ -104,29 +106,54 @@ export default async function SignInPage() {
 							</p>
 						</div>
 
-						<div className="space-y-3">
-							{/* GitHub Sign In Button */}
-							<a
-								href={githubSignInUrl}
-								className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
-							>
-								<Github className="size-4" />
-								Continue with GitHub
-							</a>
+						{isConfigured ? (
+							<>
+								<div className="space-y-3">
+									{/* GitHub Sign In Button */}
+									<a
+										href={githubSignInUrl}
+										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
+									>
+										<Github className="size-4" />
+										Continue with GitHub
+									</a>
 
-							{/* Google Sign In Button */}
-							<a
-								href={googleSignInUrl}
-								className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
-							>
-								<GoogleIcon className="size-4" />
-								Continue with Google
-							</a>
-						</div>
+									{/* Google Sign In Button */}
+									<a
+										href={googleSignInUrl}
+										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
+									>
+										<GoogleIcon className="size-4" />
+										Continue with Google
+									</a>
+								</div>
 
-						<p className="text-center text-xs text-muted-foreground">
-							By continuing, you agree to our Terms of Service and Privacy Policy
-						</p>
+								<p className="text-center text-xs text-muted-foreground">
+									By continuing, you agree to our Terms of Service and Privacy Policy
+								</p>
+							</>
+						) : (
+							<div className="space-y-4 text-center">
+								<div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
+									<p className="text-sm text-amber-600 dark:text-amber-400">
+										Authentication is not configured. Please set the following environment variables:
+									</p>
+									<ul className="mt-2 text-xs text-muted-foreground space-y-1">
+										<li><code>WORKOS_API_KEY</code></li>
+										<li><code>WORKOS_CLIENT_ID</code></li>
+										<li><code>WORKOS_REDIRECT_URI</code></li>
+									</ul>
+								</div>
+								<a
+									href="https://github.com/opentech1/openchat#authentication-setup"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+								>
+									View setup guide
+								</a>
+							</div>
+						)}
 					</div>
 				</div>
 			</div>
