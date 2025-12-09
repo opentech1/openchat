@@ -1,4 +1,4 @@
-import { WorkOS } from "@workos-inc/node";
+import { getSignInUrl } from "@workos-inc/authkit-nextjs";
 import { Github, MessageSquare, Users, Sparkles } from "@/lib/icons";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
@@ -60,29 +60,17 @@ async function fetchStats(): Promise<PublicStats | null> {
 
 export default async function SignInPage() {
 	// Validate required environment variables
-	const apiKey = process.env.WORKOS_API_KEY;
 	const clientId = process.env.WORKOS_CLIENT_ID;
 	const redirectUri = process.env.WORKOS_REDIRECT_URI;
 
 	// If WorkOS is not configured, show a configuration required page
-	const isConfigured = apiKey && clientId && redirectUri;
+	const isConfigured = clientId && redirectUri;
 
-	// Generate sign-in URLs only if configured
-	let githubSignInUrl = "#";
-	let googleSignInUrl = "#";
+	// Generate sign-in URL using AuthKit (handles state management properly)
+	let signInUrl = "#";
 
 	if (isConfigured) {
-		const workos = new WorkOS(apiKey);
-		githubSignInUrl = workos.userManagement.getAuthorizationUrl({
-			provider: "GitHubOAuth",
-			clientId,
-			redirectUri,
-		});
-		googleSignInUrl = workos.userManagement.getAuthorizationUrl({
-			provider: "GoogleOAuth",
-			clientId,
-			redirectUri,
-		});
+		signInUrl = await getSignInUrl();
 	}
 
 	// Fetch stats in parallel (doesn't require WorkOS)
@@ -109,23 +97,20 @@ export default async function SignInPage() {
 						{isConfigured ? (
 							<>
 								<div className="space-y-3">
-									{/* GitHub Sign In Button */}
+									{/* Sign In Button - redirects to AuthKit hosted page */}
 									<a
-										href={githubSignInUrl}
-										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
+										href={signInUrl}
+										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
 									>
-										<Github className="size-4" />
-										Continue with GitHub
+										Sign In
 									</a>
+								</div>
 
-									{/* Google Sign In Button */}
-									<a
-										href={googleSignInUrl}
-										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
-									>
-										<GoogleIcon className="size-4" />
-										Continue with Google
-									</a>
+								<div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+									<Github className="size-3.5" />
+									<span>•</span>
+									<GoogleIcon className="size-3.5" />
+									<span className="ml-1">OAuth available</span>
 								</div>
 
 								<p className="text-center text-xs text-muted-foreground">
@@ -136,10 +121,9 @@ export default async function SignInPage() {
 							<div className="space-y-4 text-center">
 								<div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
 									<p className="text-sm text-amber-600 dark:text-amber-400">
-										Authentication is not configured. Please set the following environment variables:
+										Authentication is not configured. Please set the required WorkOS environment variables.
 									</p>
 									<ul className="mt-2 text-xs text-muted-foreground space-y-1">
-										<li><code>WORKOS_API_KEY</code></li>
 										<li><code>WORKOS_CLIENT_ID</code></li>
 										<li><code>WORKOS_REDIRECT_URI</code></li>
 									</ul>
