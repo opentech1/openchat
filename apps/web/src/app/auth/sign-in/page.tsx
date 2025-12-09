@@ -70,11 +70,16 @@ export default async function SignInPage() {
 	// If WorkOS is not configured, show a configuration required page
 	const isConfigured = clientId && redirectUri;
 
-	// Generate sign-in URL using AuthKit (handles state management properly)
-	let signInUrl = "#";
+	// Generate sign-in URLs using AuthKit (handles state management properly)
+	// Then modify the URL to go directly to specific OAuth providers
+	let githubSignInUrl = "#";
+	let googleSignInUrl = "#";
 
 	if (isConfigured) {
-		signInUrl = await getSignInUrl();
+		const baseUrl = await getSignInUrl();
+		// Replace provider=authkit with provider=GitHubOAuth/GoogleOAuth for direct OAuth
+		githubSignInUrl = baseUrl.replace("provider=authkit", "provider=GitHubOAuth");
+		googleSignInUrl = baseUrl.replace("provider=authkit", "provider=GoogleOAuth");
 	}
 
 	// Fetch stats in parallel (doesn't require WorkOS)
@@ -101,20 +106,23 @@ export default async function SignInPage() {
 						{isConfigured ? (
 							<>
 								<div className="space-y-3">
-									{/* Sign In Button - redirects to AuthKit hosted page */}
+									{/* GitHub Sign In Button */}
 									<a
-										href={signInUrl}
-										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+										href={githubSignInUrl}
+										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
 									>
-										Sign In
+										<Github className="size-4" />
+										Continue with GitHub
 									</a>
-								</div>
 
-								<div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-									<Github className="size-3.5" />
-									<span>•</span>
-									<GoogleIcon className="size-3.5" />
-									<span className="ml-1">OAuth available</span>
+									{/* Google Sign In Button */}
+									<a
+										href={googleSignInUrl}
+										className="relative inline-flex w-full items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-accent hover:text-accent-foreground"
+									>
+										<GoogleIcon className="size-4" />
+										Continue with Google
+									</a>
 								</div>
 
 								<p className="text-center text-xs text-muted-foreground">
