@@ -3,6 +3,10 @@ import { Github, MessageSquare, Users, Sparkles } from "@/lib/icons";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 
+// Force dynamic rendering to ensure env vars are read at request time
+// This prevents ISR from caching a "not configured" state during builds
+export const dynamic = "force-dynamic";
+
 // Google icon component (not available in lucide-react)
 function GoogleIcon({ className }: { className?: string }) {
 	return (
