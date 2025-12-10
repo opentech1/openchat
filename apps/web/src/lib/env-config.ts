@@ -149,7 +149,7 @@ export function getEnvVarAsBoolean(
  * validateRequiredEnvVars({
  *   OPENROUTER_API_KEY: "OpenRouter API key",
  *   DATABASE_URL: "Database connection string",
- *   BETTER_AUTH_SECRET: "Authentication secret",
+ *   WORKOS_CLIENT_ID: "WorkOS AuthKit client ID",
  * });
  * ```
  */

@@ -129,7 +129,7 @@ function Wrapper() {
 
 - **Frontend**: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS
 - **Backend**: Convex (real-time database)
-- **Auth**: better-auth with GitHub/Google OAuth
+- **Auth**: WorkOS AuthKit with GitHub/Google OAuth
 - **Analytics**: PostHog, Vercel Analytics
 - **UI**: shadcn/ui components
 

@@ -12,8 +12,10 @@ import {
 } from "react";
 
 import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area";
-// NOTE: useVirtualizer removed - disabled due to React 19 hydration issues
+// NOTE: Virtualization disabled due to React 19 hydration issues with @tanstack/react-virtual.
+// The library causes infinite re-render loops (error #185) and hydration mismatches (#418).
 // See: https://github.com/TanStack/virtual/issues/743
+// See: https://github.com/TanStack/virtual/issues/924
 
 import { Button } from "@/components/ui/button";
 import { ScrollBar } from "@/components/ui/scroll-area";
@@ -140,11 +142,6 @@ function ChatMessagesPanelComponent({
     const last = messages[messages.length - 1]!;
     return `${last.id}:${last.role}:${last.content.length}`;
   }, [hasMessages, messages]);
-
-  // NOTE: Virtualization disabled due to React 19 hydration issues with @tanstack/react-virtual
-  // The library causes infinite re-render loops (error #185) and hydration mismatches (#418)
-  // See: https://github.com/TanStack/virtual/issues/743
-  // See: https://github.com/TanStack/virtual/issues/924
 
   const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
     return (

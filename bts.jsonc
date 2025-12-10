@@ -17,7 +17,7 @@
     "turborepo"
   ],
   "examples": [],
-  "auth": "better-auth",
+  "auth": "workos-authkit",
   "packageManager": "bun",
   "dbSetup": "none",
   "api": "orpc",

@@ -27,20 +27,21 @@ This document provides a comprehensive guide to configuring environment variable
 
 ## Required Variables
 
-### ✅ Authentication Secret
+### ✅ WorkOS AuthKit Configuration
 
 ```bash
-BETTER_AUTH_SECRET=your-secret-here
+WORKOS_CLIENT_ID=your_workos_client_id
+WORKOS_API_KEY=your_workos_api_key
+WORKOS_COOKIE_PASSWORD=your-32-character-or-longer-password
+WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback
 ```
 
-**Why it's required:** Used to encrypt session tokens and secure authentication.
+**Why it's required:** WorkOS AuthKit provides authentication with GitHub/Google OAuth.
 
-**How to generate:**
-```bash
-openssl rand -base64 32
-```
-
-**Default:** `dev-secret` (⚠️  INSECURE - change for production!)
+**How to get:**
+- Sign up at [WorkOS Dashboard](https://dashboard.workos.com)
+- Create a new project and get your Client ID and API Key
+- Generate a cookie password (min 32 characters): `openssl rand -base64 32`
 
 ### ✅ Convex URLs
 
@@ -107,9 +108,6 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 ```bash
 # Server-to-server internal URL (optional)
 SERVER_INTERNAL_URL=http://localhost:3000
-
-# better-auth base URL (optional, defaults to SERVER_INTERNAL_URL or NEXT_PUBLIC_SERVER_URL)
-BETTER_AUTH_URL=http://localhost:3000
 
 # Cross-subdomain cookie domain (optional, for sharing auth between subdomains)
 AUTH_COOKIE_DOMAIN=.yourdomain.com
@@ -184,18 +182,22 @@ Update `docker-compose.yml` environment section:
 
 ```yaml
 environment:
-  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
   NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
   NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
   NEXT_PUBLIC_CONVEX_URL: ${NEXT_PUBLIC_CONVEX_URL}
+  WORKOS_CLIENT_ID: ${WORKOS_CLIENT_ID}
+  WORKOS_API_KEY: ${WORKOS_API_KEY}
+  WORKOS_COOKIE_PASSWORD: ${WORKOS_COOKIE_PASSWORD}
 ```
 
 ### Production Checklist
 
-- [ ] Set `BETTER_AUTH_SECRET` to a strong random value (not `dev-secret`)
+- [ ] Set `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` from your WorkOS dashboard
+- [ ] Set `WORKOS_COOKIE_PASSWORD` to a strong random value (min 32 characters)
+- [ ] Set `WORKOS_REDIRECT_URI` to your production callback URL
 - [ ] Set `NEXT_PUBLIC_APP_URL` to your production domain
 - [ ] Set `NEXT_PUBLIC_SERVER_URL` to your API domain
-- [ ] Configure at least one OAuth provider (GitHub/Google)
+- [ ] Configure OAuth providers (GitHub/Google) in WorkOS dashboard
 - [ ] Set `NODE_ENV=production`
 - [ ] Remove or set `NEXT_PUBLIC_DEV_BYPASS_AUTH=0`
 - [ ] Verify environment validation runs on startup (app will fail to start if invalid)
@@ -211,14 +213,14 @@ Check the error message for details:
 
 ```
 ❌ Invalid environment variables:
-  - BETTER_AUTH_SECRET: Required
+  - WORKOS_CLIENT_ID: Required
   - NEXT_PUBLIC_CONVEX_URL: Invalid url
 ```
 
 Fix by setting the missing variables in your `.env.local` file.
 
 **Note:** In production, validation is stricter:
-- `BETTER_AUTH_SECRET` cannot be "dev-secret"
+- All WorkOS environment variables must be set
 - All URL variables must be explicitly set (no defaults)
 
 ### OAuth not working

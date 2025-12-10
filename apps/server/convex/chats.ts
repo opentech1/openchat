@@ -4,36 +4,8 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
-
-// Input sanitization for chat titles
-const MAX_TITLE_LENGTH = 200;
-
-function sanitizeTitle(title: string): string {
-	// Trim whitespace
-	let sanitized = title.trim();
-	
-	// Replace control characters including null bytes ([\x00-\x1F\x7F])
-	// except newlines and tabs which we'll convert to spaces
-	sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-	
-	// Convert newlines and tabs to single spaces
-	sanitized = sanitized.replace(/[\n\r\t]+/g, " ");
-	
-	// Collapse multiple spaces into one
-	sanitized = sanitized.replace(/\s+/g, " ");
-	
-	// Truncate to maximum length
-	if (sanitized.length > MAX_TITLE_LENGTH) {
-		sanitized = sanitized.slice(0, MAX_TITLE_LENGTH);
-	}
-	
-	// If empty after sanitization, provide default
-	if (sanitized.length === 0) {
-		return "New Chat";
-	}
-	
-	return sanitized;
-}
+import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { sanitizeTitle } from "./lib/sanitize";
 
 const chatDoc = v.object({
 	_id: v.id("chats"),
@@ -146,10 +118,7 @@ export const create = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many chats created. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("chats created", retryAfter);
 		}
 
 		const now = Date.now();
@@ -181,10 +150,7 @@ export const remove = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many deletions. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("deletions", retryAfter);
 		}
 
 		const chat = await ctx.db.get(args.chatId);
@@ -244,11 +210,7 @@ export const checkExportRateLimit = mutation({
 		});
 
 		if (!ok) {
-			const waitTime =
-				retryAfter !== undefined
-					? `in ${Math.ceil(retryAfter / 1000)} seconds`
-					: "later";
-			throw new Error(`Too many exports. Please try again ${waitTime}.`);
+			throwRateLimitError("exports", retryAfter);
 		}
 
 		return { ok: true } as const;
