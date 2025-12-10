@@ -49,7 +49,10 @@ export function useSession(): UseSessionResult {
 					user: {
 						id: user.id,
 						email: user.email,
-						name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+						name:
+							`${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+							user.email.split("@")[0] ||
+							"User",
 						image: user.profilePictureUrl ?? null,
 					},
 				}

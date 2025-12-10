@@ -83,7 +83,7 @@ export function validateConvexEnv(): ConvexEnv {
  * Get a required environment variable or throw
  */
 export function requireEnv(key: string): string {
-	const value = process.env[key];
+	const value = process.env[key]?.trim();
 	if (!value) {
 		throw new Error(`Environment variable ${key} is required but not set`);
 	}
