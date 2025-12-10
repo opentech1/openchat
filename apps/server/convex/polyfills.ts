@@ -1,6 +1,7 @@
 /**
- * Polyfills for better-auth to work in Convex environment
- * Source: https://github.com/get-convex/better-auth/blob/main/examples/next/convex/polyfills.ts
+ * Polyfills for Convex environment
+ *
+ * This file provides browser-like APIs that may be missing in the Convex runtime.
  */
 
 // polyfill MessageChannel without using node:events

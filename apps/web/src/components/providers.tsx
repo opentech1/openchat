@@ -7,8 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ConvexReactClient } from "convex/react";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { authClient } from "@/lib/auth-client";
+import { ConvexProvider } from "convex/react";
 import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
 import { ThemeProvider } from "./theme-provider";
 import { BrandThemeProvider } from "./brand-theme-provider";
@@ -122,7 +121,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
 	const appTree = (
 		<AuthKitProvider>
-			<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+			<ConvexProvider client={convexClient}>
 				<ConvexUserProvider>
 					<ChatListProvider>
 						<ThemeProvider
@@ -144,7 +143,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 						</ThemeProvider>
 					</ChatListProvider>
 				</ConvexUserProvider>
-			</ConvexBetterAuthProvider>
+			</ConvexProvider>
 		</AuthKitProvider>
 	);
 

@@ -4,14 +4,12 @@ import { internalAction } from "./_generated/server";
  * Preview deployment seed function
  *
  * This function is automatically run on preview deployments via the --preview-run flag.
- * It creates a test user for development and testing purposes.
  *
  * Usage in package.json build command:
  * convex deploy --cmd 'bun run build' --preview-run previewSeed --preview-create NEXT_PUBLIC_DEPLOYMENT=preview
  *
- * Test credentials:
- * Email: test@example.com
- * Password: test
+ * Note: With WorkOS AuthKit, users are managed externally. This seed function
+ * can be used to initialize any preview-specific data if needed.
  */
 export default internalAction(async (_ctx) => {
 	const deployment = process.env.NEXT_PUBLIC_DEPLOYMENT;
@@ -27,70 +25,14 @@ export default internalAction(async (_ctx) => {
 		return { success: false, message: "Not a preview deployment" };
 	}
 
-	try {
-		// Get the Convex site URL for the auth endpoint
-		const convexSiteUrl = process.env.CONVEX_SITE_URL;
-		if (!convexSiteUrl) {
-			throw new Error("CONVEX_SITE_URL not available");
-		}
+	// With WorkOS AuthKit, user authentication is handled externally.
+	// You can sign in using the WorkOS-configured OAuth providers (GitHub, Google, etc.)
+	console.log("[Preview Seed] Preview deployment ready");
+	console.log("[Preview Seed] Sign in using WorkOS AuthKit (GitHub, Google, etc.)");
 
-		const signupUrl = `${convexSiteUrl}/sign-up/email`;
-
-		console.log("[Preview Seed] Creating test user via better-auth signup endpoint");
-
-		// Call the better-auth signup endpoint
-		const response = await fetch(signupUrl, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				email: "test@example.com",
-				password: "test",
-				name: "Test User",
-			}),
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			// If user already exists, that's okay
-			if (errorText.includes("already exists") || response.status === 409) {
-				console.log("[Preview Seed] Test user already exists");
-				return {
-					success: true,
-					message: "Test user already exists",
-					credentials: {
-						email: "test@example.com",
-						password: "test",
-					},
-				};
-			}
-			throw new Error(`Signup failed: ${response.status} ${errorText}`);
-		}
-
-		const result = await response.json();
-		console.log("[Preview Seed] Successfully created test user");
-
-		return {
-			success: true,
-			message: "Test user created successfully",
-			credentials: {
-				email: "test@example.com",
-				password: "test",
-			},
-			result,
-		};
-	} catch (error) {
-		console.error("[Preview Seed] Error creating test user:", error);
-		// Don't throw - just log the error so deployment doesn't fail
-		return {
-			success: false,
-			message: error instanceof Error ? error.message : "Unknown error",
-			credentials: {
-				email: "test@example.com",
-				password: "test",
-				note: "You may need to create this user manually",
-			},
-		};
-	}
+	return {
+		success: true,
+		message: "Preview deployment initialized",
+		note: "Sign in using WorkOS AuthKit providers",
+	};
 });

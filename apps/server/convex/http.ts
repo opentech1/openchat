@@ -1,15 +1,10 @@
 import "./polyfills";
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { authComponent, createAuth } from "./auth";
 import { streamLLM } from "./streaming";
 import { api } from "./_generated/api";
 
 const http = httpRouter();
-
-// Register better-auth routes
-// CORS is required for Next.js client-side auth requests
-authComponent.registerRoutes(http, createAuth, { cors: true });
 
 http.route({
   path: "/health",
@@ -59,4 +54,3 @@ http.route({
 });
 
 export default http;
-
