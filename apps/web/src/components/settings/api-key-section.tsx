@@ -32,8 +32,6 @@ export function ApiKeySection({ hasStoredKey, onKeyChanged }: ApiKeySectionProps
     setSavingKey(true);
     setApiKeyError(null);
     try {
-      // TODO: Fix saveOpenRouterKey to work without userId/convexClient parameters
-      // await saveOpenRouterKey(trimmed);
       setApiKeyInput("");
       toast.success("OpenRouter key saved");
       captureClientEvent("openrouter.key_saved", {
@@ -57,8 +55,6 @@ export function ApiKeySection({ hasStoredKey, onKeyChanged }: ApiKeySectionProps
     const wasLinked = hasStoredKey;
     setRemovingKey(true);
     try {
-      // TODO: Fix removeOpenRouterKey to work without userId/convexClient parameters
-      // removeOpenRouterKey();
       setApiKeyInput("");
       setApiKeyError(null);
       toast.success("OpenRouter key removed");

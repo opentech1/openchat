@@ -6,6 +6,7 @@ node_modules
 .env.local
 envs.txt
 deploy/.env
+docker/.env.*
 docker/secrets/
 coverage/
 test-results/
@@ -14,7 +15,6 @@ packages/auth/dist/
 .dmux/
 apps/server/node_modules.bak/
 .auth.db
-better-auth_migrations/
 .vercel
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*

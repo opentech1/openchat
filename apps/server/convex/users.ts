@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rate-limit-utils";
 
 // User document validator with all fields including fileUploadCount
 const userDoc = v.object({
@@ -37,10 +38,7 @@ export const ensure = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many authentication attempts. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("authentication attempts", retryAfter);
 		}
 
 		const existing = await ctx.db
@@ -117,10 +115,7 @@ export const saveOpenRouterKey = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many API key updates. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("API key updates", retryAfter);
 		}
 
 		await ctx.db.patch(args.userId, {
@@ -154,10 +149,7 @@ export const removeOpenRouterKey = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many API key removals. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("API key removals", retryAfter);
 		}
 
 		await ctx.db.patch(args.userId, {

@@ -258,7 +258,6 @@ These trade-offs are acceptable because:
 3. **Analyze Large Dependencies**
    - The main `npm..bun` bundle at 13MB (2.8MB gzipped) is still large
    - Consider replacing heavy dependencies:
-     - `better-auth` - check if lighter auth solution exists
      - `ai` SDK - ensure tree-shaking is working
      - PostHog - lazy load analytics
    **Potential savings:** 50-100 KB

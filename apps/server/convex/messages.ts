@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rate-limit-utils";
 
 // Return type for list query - excludes redundant fields to reduce bandwidth
 const messageDoc = v.object({
@@ -192,10 +193,7 @@ export const send = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many messages sent. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("messages sent", retryAfter);
 		}
 
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
@@ -282,10 +280,7 @@ export const streamUpsert = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many stream updates. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("stream updates", retryAfter);
 		}
 
 		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);

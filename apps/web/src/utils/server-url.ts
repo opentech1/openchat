@@ -27,12 +27,10 @@ export function resolveServerBaseUrls() {
 		normalize(process.env.SERVER_DIRECT_URL) ||
 		normalize(process.env.SERVER_INTERNAL_URL);
 	const publicUrl = normalize(process.env.NEXT_PUBLIC_SERVER_URL);
-	const betterAuthUrl = normalize(process.env.BETTER_AUTH_URL);
 
 	let primary =
 		explicitInternal ||
 		publicUrl ||
-		betterAuthUrl ||
 		fallbackBase();
 
 	const fallback = fallbackBase();

@@ -4,6 +4,8 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { createLogger } from "./lib/logger";
 import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { sanitizeFilename } from "./lib/sanitize";
 
 // Constants & Configuration
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes (default)
@@ -54,47 +56,6 @@ const ALLOWED_TYPES = [
 	...ALLOWED_AUDIO_TYPES,
 	...ALLOWED_VIDEO_TYPES,
 ] as const;
-
-// Helper Functions
-
-/**
- * Sanitizes a filename by removing path components, dangerous characters, and limiting length.
- * @param filename - The original filename
- * @returns The sanitized filename
- */
-function sanitizeFilename(filename: string): string {
-	// Remove any path components (handle both forward and backslashes)
-	let sanitized = filename.replace(/^.*[\\\/]/, "");
-
-	// Remove dangerous characters (null bytes, control chars, etc.)
-	sanitized = sanitized.replace(/[\x00-\x1f\x7f-\x9f]/g, "");
-
-	// Remove or replace potentially dangerous characters
-	sanitized = sanitized.replace(/[<>:"|?*]/g, "_");
-
-	// Trim whitespace
-	sanitized = sanitized.trim();
-
-	// Limit length to 255 characters (common filesystem limit)
-	if (sanitized.length > 255) {
-		// Preserve the file extension if possible
-		const lastDot = sanitized.lastIndexOf(".");
-		if (lastDot > 0 && lastDot > 245) {
-			const ext = sanitized.substring(lastDot);
-			const name = sanitized.substring(0, 255 - ext.length);
-			sanitized = name + ext;
-		} else {
-			sanitized = sanitized.substring(0, 255);
-		}
-	}
-
-	// Ensure we have a valid filename
-	if (!sanitized || sanitized === "." || sanitized === "..") {
-		sanitized = "unnamed_file";
-	}
-
-	return sanitized;
-}
 
 /**
  * Validates that the file type is allowed.
@@ -183,10 +144,7 @@ export const generateUploadUrl = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many upload URL requests. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("upload URL requests", retryAfter);
 		}
 
 		// PERFORMANCE OPTIMIZATION: Fetch user and chat in parallel to reduce latency
@@ -256,10 +214,7 @@ export const saveFileMetadata = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many file uploads. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("file uploads", retryAfter);
 		}
 
 		// Validate file size
@@ -457,10 +412,7 @@ export const deleteFile = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many file deletions. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("file deletions", retryAfter);
 		}
 
 		// Find the file by storage ID

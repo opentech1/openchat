@@ -2,6 +2,8 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { rateLimiter } from "./lib/rateLimiter";
+import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { sanitizeText } from "./lib/sanitize";
 
 // Input sanitization for template fields
 const MAX_NAME_LENGTH = 100;
@@ -9,17 +11,6 @@ const MAX_COMMAND_LENGTH = 50;
 const MAX_TEMPLATE_LENGTH = 10000;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_CATEGORY_LENGTH = 50;
-
-function sanitizeText(text: string, maxLength: number): string {
-	let sanitized = text.trim();
-	// Replace control characters except newlines and tabs
-	sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-	// Truncate to maximum length
-	if (sanitized.length > maxLength) {
-		sanitized = sanitized.slice(0, maxLength);
-	}
-	return sanitized;
-}
 
 function sanitizeCommand(command: string): string {
 	let sanitized = command.trim().toLowerCase();
@@ -184,10 +175,7 @@ export const create = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many templates created. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("templates created", retryAfter);
 		}
 
 		// Sanitize inputs
@@ -263,10 +251,7 @@ export const update = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many updates. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("updates", retryAfter);
 		}
 
 		const existing = await ctx.db.get(args.templateId);
@@ -359,10 +344,7 @@ export const remove = mutation({
 		});
 
 		if (!ok) {
-			const waitTime = retryAfter !== undefined ? `in ${Math.ceil(retryAfter / 1000)} seconds` : 'later';
-			throw new Error(
-				`Too many deletions. Please try again ${waitTime}.`
-			);
+			throwRateLimitError("deletions", retryAfter);
 		}
 
 		const template = await ctx.db.get(args.templateId);

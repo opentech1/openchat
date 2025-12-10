@@ -10,16 +10,8 @@ const logger = createLogger("EnvValidation");
 export interface ConvexEnv {
 	// Required
 	NEXT_PUBLIC_APP_URL: string;
-	BETTER_AUTH_SECRET: string;
-
-	// Required for OAuth (at least one provider)
-	GITHUB_CLIENT_ID?: string;
-	GITHUB_CLIENT_SECRET?: string;
-	GOOGLE_CLIENT_ID?: string;
-	GOOGLE_CLIENT_SECRET?: string;
 
 	// Optional - Configuration
-	AUTH_COOKIE_PREFIX?: string;
 	CONVEX_SITE_URL?: string;
 
 	// Optional - Metadata
@@ -41,7 +33,6 @@ export function validateConvexEnv(): ConvexEnv {
 	// Apply development defaults only in non-production environments
 	// Handle empty strings explicitly - they should trigger defaults too
 	const appUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || (!isProd ? "http://localhost:3000" : undefined));
-	const authSecret = (process.env.BETTER_AUTH_SECRET?.trim() || (!isProd ? "dev-secret" : undefined));
 
 	// Check required variables
 	if (!appUrl) {
@@ -60,28 +51,6 @@ export function validateConvexEnv(): ConvexEnv {
 				warnings.push("NEXT_PUBLIC_APP_URL is not a valid URL, using default");
 			}
 		}
-	}
-
-	if (!authSecret) {
-		if (isProd) {
-			errors.push("BETTER_AUTH_SECRET is required");
-		} else {
-			warnings.push("BETTER_AUTH_SECRET not set, using default: dev-secret");
-		}
-	} else if (authSecret === "dev-secret" && isProd) {
-		errors.push("BETTER_AUTH_SECRET must not be 'dev-secret' in production");
-	}
-
-	// Check OAuth providers - at least one should be configured
-	// Treat empty strings as missing values
-	const hasGithub = process.env.GITHUB_CLIENT_ID?.trim() && process.env.GITHUB_CLIENT_SECRET?.trim();
-	const hasGoogle = process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim();
-
-	if (!hasGithub && !hasGoogle) {
-		warnings.push(
-			"No OAuth providers configured. " +
-			"Set GITHUB_CLIENT_ID/SECRET or GOOGLE_CLIENT_ID/SECRET to enable social login."
-		);
 	}
 
 	// Print warnings
@@ -103,12 +72,6 @@ export function validateConvexEnv(): ConvexEnv {
 
 	return {
 		NEXT_PUBLIC_APP_URL: appUrl || "http://localhost:3000",
-		BETTER_AUTH_SECRET: authSecret || "dev-secret",
-		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
-		GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
-		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-		GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-		AUTH_COOKIE_PREFIX: process.env.AUTH_COOKIE_PREFIX,
 		CONVEX_SITE_URL: process.env.CONVEX_SITE_URL,
 		NEXT_PUBLIC_DEPLOYMENT: process.env.NEXT_PUBLIC_DEPLOYMENT,
 		NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
@@ -120,7 +83,7 @@ export function validateConvexEnv(): ConvexEnv {
  * Get a required environment variable or throw
  */
 export function requireEnv(key: string): string {
-	const value = process.env[key];
+	const value = process.env[key]?.trim();
 	if (!value) {
 		throw new Error(`Environment variable ${key} is required but not set`);
 	}

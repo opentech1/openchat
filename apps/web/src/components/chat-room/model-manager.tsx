@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModelSelectorOption } from "@/components/model-selector";
-// import { saveOpenRouterKey } from "@/lib/openrouter-key-storage";
 import {
   readCachedModels,
   writeCachedModels,
@@ -227,8 +226,6 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
   const handleSaveApiKey = useCallback(
     async (key: string) => {
       try {
-        // TODO: Save to server using useOpenRouterKey hook
-        // await saveOpenRouterKey(key, userId, externalUserId, convexClient);
         setApiKey(key);
         registerClientProperties({ has_openrouter_key: true });
         captureClientEvent("openrouter.key_saved", {

@@ -26,7 +26,6 @@ const managedKeys = [
 
 const preservedDefaults = new Map<string, string>([
 	["ELECTRIC_GATEKEEPER_SECRET", "replace-with-strong-secret"],
-	["BETTER_AUTH_SECRET", "replace-with-strong-secret"],
 ]);
 
 const existingEntries = new Map<string, string>();

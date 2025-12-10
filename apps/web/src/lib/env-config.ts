@@ -149,7 +149,7 @@ export function getEnvVarAsBoolean(
  * validateRequiredEnvVars({
  *   OPENROUTER_API_KEY: "OpenRouter API key",
  *   DATABASE_URL: "Database connection string",
- *   BETTER_AUTH_SECRET: "Authentication secret",
+ *   WORKOS_CLIENT_ID: "WorkOS AuthKit client ID",
  * });
  * ```
  */
@@ -249,36 +249,6 @@ export const env = {
 		getEnvVar("OPENROUTER_API_KEY", {
 			required: false,
 			description: "OpenRouter API key (optional at build time, validated at runtime)",
-		}),
-
-	// Authentication
-	betterAuthSecret: () =>
-		getEnvVar("BETTER_AUTH_SECRET", {
-			required: true,
-			description: "Better Auth secret for session encryption",
-		}),
-
-	betterAuthUrl: () =>
-		getEnvVar("BETTER_AUTH_URL", {
-			fallback:
-				process.env.NODE_ENV === "production"
-					? ""
-					: "http://localhost:3000",
-			required: process.env.NODE_ENV === "production",
-			description: "Better Auth base URL",
-		}),
-
-	// GitHub OAuth
-	githubClientId: () =>
-		getEnvVar("GITHUB_CLIENT_ID", {
-			required: false,
-			description: "GitHub OAuth client ID",
-		}),
-
-	githubClientSecret: () =>
-		getEnvVar("GITHUB_CLIENT_SECRET", {
-			required: false,
-			description: "GitHub OAuth client secret",
 		}),
 
 	// Database
