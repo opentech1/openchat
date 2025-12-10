@@ -213,6 +213,92 @@ export const updateStreamContent = internalMutation({
 });
 
 /**
+ * Fix stuck streaming messages that never completed
+ * This can happen when a stream is interrupted (server crash, timeout, etc.)
+ * Marks stuck messages as "error" status to allow UI to recover
+ */
+export const fixStuckStreamingMessages = mutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.object({
+		fixedCount: v.number(),
+		fixedMessageIds: v.array(v.string()),
+	}),
+	handler: async (ctx, args) => {
+		// Find all streaming messages for this user
+		const streamingMessages = await ctx.db
+			.query("messages")
+			.withIndex("by_user_status", (q) =>
+				q.eq("userId", args.userId).eq("status", "streaming")
+			)
+			.collect();
+
+		const fixedIds: string[] = [];
+
+		for (const message of streamingMessages) {
+			// Mark as error status - the stream never completed
+			await ctx.db.patch(message._id, {
+				status: "error",
+			});
+			fixedIds.push(message._id);
+
+			// Also reset the chat status if it's stuck
+			const chat = await ctx.db.get(message.chatId);
+			if (chat && chat.status === "streaming") {
+				await ctx.db.patch(message.chatId, {
+					status: "idle",
+					updatedAt: Date.now(),
+				});
+			}
+		}
+
+		return {
+			fixedCount: fixedIds.length,
+			fixedMessageIds: fixedIds,
+		};
+	},
+});
+
+/**
+ * Admin-only: Fix ALL stuck streaming messages across all users
+ * Use with caution - should only be run by admins
+ */
+export const fixAllStuckStreamingMessages = internalMutation({
+	args: {},
+	returns: v.object({
+		fixedCount: v.number(),
+	}),
+	handler: async (ctx) => {
+		// Find all streaming messages
+		const streamingMessages = await ctx.db
+			.query("messages")
+			.filter((q) => q.eq(q.field("status"), "streaming"))
+			.collect();
+
+		let fixedCount = 0;
+
+		for (const message of streamingMessages) {
+			await ctx.db.patch(message._id, {
+				status: "error",
+			});
+			fixedCount++;
+
+			// Also reset the chat status if stuck
+			const chat = await ctx.db.get(message.chatId);
+			if (chat && chat.status === "streaming") {
+				await ctx.db.patch(message.chatId, {
+					status: "idle",
+					updatedAt: Date.now(),
+				});
+			}
+		}
+
+		return { fixedCount };
+	},
+});
+
+/**
  * Prepare a chat for streaming - creates user message, stream, and assistant message
  * Called by the client before starting the stream
  */

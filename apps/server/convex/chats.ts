@@ -4,7 +4,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
-import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeTitle } from "./lib/sanitize";
 
 const chatDoc = v.object({

@@ -5,7 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
-import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 
 // Return type for list query - excludes redundant fields to reduce bandwidth
 const messageDoc = v.object({

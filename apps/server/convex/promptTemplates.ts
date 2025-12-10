@@ -2,7 +2,7 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { rateLimiter } from "./lib/rateLimiter";
-import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeText } from "./lib/sanitize";
 
 // Input sanitization for template fields
