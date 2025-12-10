@@ -42,11 +42,8 @@ const nextConfig = {
 		},
 	}),
 	// SECURITY: Only expose non-sensitive variables to client
-	// Secrets (GITHUB_CLIENT_SECRET, BETTER_AUTH_SECRET, etc.) should NOT be in env block
-	// They are automatically available server-side via process.env
-	env: {
-		GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID, // Safe to expose (OAuth public client ID)
-	},
+	// Secrets should NOT be in env block - they are automatically available server-side via process.env
+	env: {},
 	typedRoutes: true,
 	// REMOVED: output: "standalone"
 	// Vercel has its own runtime and doesn't need standalone mode
@@ -79,20 +76,19 @@ const nextConfig = {
 				destination: `${server}/rpc/:path*`,
 			},
 			// Note: /api/auth routes are handled by this Next.js app directly
-			// at src/app/api/auth/[...all]/route.ts - no proxy needed
+			// via WorkOS AuthKit handleAuth() - no proxy needed
 		];
 	},
 	async headers() {
 		const isProd = process.env.NODE_ENV === "production";
 		const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
 		const electricUrl = process.env.NEXT_PUBLIC_ELECTRIC_URL || "http://localhost:3010";
-		const authUrl = process.env.BETTER_AUTH_URL;
 		const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || process.env.CONVEX_URL;
 		const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
 		const posthogAssetsHost = "https://us-assets.i.posthog.com";
 		const sentryIngest = "https://*.ingest.sentry.io";
 		const additionalConnectSet = new Set(
-			[serverUrl, electricUrl, authUrl, convexUrl, posthogHost]
+			[serverUrl, electricUrl, convexUrl, posthogHost]
 			.filter(Boolean)
 			.map((url) => {
 				try {

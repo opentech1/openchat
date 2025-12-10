@@ -2,70 +2,48 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
 import { NiceLoader } from "@/components/ui/nice-loader";
 import { ClientOnly } from "@/components/client-only";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 
 /**
  * Auth Callback Content Component
  *
- * Handles the OAuth callback. After successful OAuth login, better-auth
- * redirects here. We poll for the session and redirect to the dashboard.
+ * Handles the OAuth callback. After successful OAuth login via WorkOS AuthKit,
+ * this page checks if the user is authenticated and redirects to the dashboard.
+ *
+ * Note: The main callback is handled by /api/auth/callback via handleAuth()
+ * This page is for the legacy /auth/callback route and can redirect users
+ * who land here after authentication.
  */
 function AuthCallbackContent() {
 	const searchParams = useSearchParams();
+	const { user, loading } = useAuth();
 	const [error, setError] = useState<string | null>(null);
-	const [checking, setChecking] = useState(true);
 
 	// Extract params once to avoid dependency issues
 	const from = searchParams.get("from");
 
 	useEffect(() => {
-		let cancelled = false;
+		// Wait for auth to finish loading
+		if (loading) return;
 
-		const checkSession = async () => {
-			if (cancelled) return;
+		// If user is authenticated, redirect to the dashboard
+		if (user) {
+			window.location.href = from || "/";
+			return;
+		}
 
-			let attempts = 0;
-			const maxAttempts = 15;
+		// If auth finished loading but no user, show error after a delay
+		// (give time for session to be established)
+		const timeout = setTimeout(() => {
+			if (!user) {
+				setError("Authentication session not found. Please try signing in again.");
+			}
+		}, 3000);
 
-			const poll = async () => {
-				if (cancelled) return;
-
-				try {
-					const session = await authClient.getSession();
-
-					if (session?.data?.user) {
-						window.location.href = from || "/";
-						return;
-					}
-
-					attempts++;
-					if (attempts < maxAttempts) {
-						setTimeout(poll, 500);
-					} else {
-						console.error("[Auth Callback] Session not established after waiting");
-						setError("Authentication is taking longer than expected. Please try signing in again.");
-						setChecking(false);
-					}
-				} catch (err) {
-					console.error("[Auth Callback] Error checking session:", err);
-					if (!cancelled) {
-						setError("An error occurred during authentication.");
-						setChecking(false);
-					}
-				}
-			};
-
-			await poll();
-		};
-
-		checkSession();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [from]);
+		return () => clearTimeout(timeout);
+	}, [user, loading, from]);
 
 	if (error) {
 		return (
@@ -85,7 +63,7 @@ function AuthCallbackContent() {
 
 	return (
 		<div className="min-h-screen flex items-center justify-center">
-			<NiceLoader message={checking ? "Completing sign in..." : "Redirecting..."} size="lg" />
+			<NiceLoader message={loading ? "Completing sign in..." : "Redirecting..."} size="lg" />
 		</div>
 	);
 }

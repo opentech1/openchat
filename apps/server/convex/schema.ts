@@ -1,8 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-// Note: Better-auth tables are automatically provided by the betterAuth component
-// configured in convex.config.ts. They don't need to be imported here.
+// Note: Authentication is handled by WorkOS AuthKit (not stored in Convex)
 export default defineSchema({
 	users: defineTable({
 		externalId: v.string(),
@@ -12,7 +11,7 @@ export default defineSchema({
 		encryptedOpenRouterKey: v.optional(v.string()),
 		// File upload quota tracking
 		fileUploadCount: v.optional(v.number()),
-		// Better-auth admin plugin: ban status (for manual bans)
+		// Admin ban status (for manual bans)
 		banned: v.optional(v.boolean()),
 		bannedAt: v.optional(v.number()),
 		banReason: v.optional(v.string()),

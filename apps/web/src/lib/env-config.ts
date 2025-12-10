@@ -251,36 +251,6 @@ export const env = {
 			description: "OpenRouter API key (optional at build time, validated at runtime)",
 		}),
 
-	// Authentication
-	betterAuthSecret: () =>
-		getEnvVar("BETTER_AUTH_SECRET", {
-			required: true,
-			description: "Better Auth secret for session encryption",
-		}),
-
-	betterAuthUrl: () =>
-		getEnvVar("BETTER_AUTH_URL", {
-			fallback:
-				process.env.NODE_ENV === "production"
-					? ""
-					: "http://localhost:3000",
-			required: process.env.NODE_ENV === "production",
-			description: "Better Auth base URL",
-		}),
-
-	// GitHub OAuth
-	githubClientId: () =>
-		getEnvVar("GITHUB_CLIENT_ID", {
-			required: false,
-			description: "GitHub OAuth client ID",
-		}),
-
-	githubClientSecret: () =>
-		getEnvVar("GITHUB_CLIENT_SECRET", {
-			required: false,
-			description: "GitHub OAuth client secret",
-		}),
-
 	// Database
 	databaseUrl: () =>
 		getEnvVar("DATABASE_URL", {
