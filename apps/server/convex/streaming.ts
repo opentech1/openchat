@@ -299,6 +299,39 @@ export const fixAllStuckStreamingMessages = internalMutation({
 });
 
 /**
+ * Admin-only: Soft-delete broken error messages (empty content with error status)
+ * These messages were never completed and have no useful content
+ */
+export const cleanupBrokenErrorMessages = internalMutation({
+	args: {},
+	returns: v.object({
+		deletedCount: v.number(),
+	}),
+	handler: async (ctx) => {
+		// Find all error messages with empty content
+		const errorMessages = await ctx.db
+			.query("messages")
+			.filter((q) => q.eq(q.field("status"), "error"))
+			.collect();
+
+		let deletedCount = 0;
+		const now = Date.now();
+
+		for (const message of errorMessages) {
+			// Only delete if content is empty or very short (broken)
+			if (!message.content || message.content.trim().length < 10) {
+				await ctx.db.patch(message._id, {
+					deletedAt: now,
+				});
+				deletedCount++;
+			}
+		}
+
+		return { deletedCount };
+	},
+});
+
+/**
  * Prepare a chat for streaming - creates user message, stream, and assistant message
  * Called by the client before starting the stream
  */
