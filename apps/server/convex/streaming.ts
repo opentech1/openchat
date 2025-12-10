@@ -223,7 +223,7 @@ export const fixStuckStreamingMessages = mutation({
 	},
 	returns: v.object({
 		fixedCount: v.number(),
-		fixedMessageIds: v.array(v.string()),
+		fixedMessageIds: v.array(v.id("messages")),
 	}),
 	handler: async (ctx, args) => {
 		// Find all streaming messages for this user
@@ -234,7 +234,7 @@ export const fixStuckStreamingMessages = mutation({
 			)
 			.collect();
 
-		const fixedIds: string[] = [];
+		const fixedIds: Id<"messages">[] = [];
 
 		for (const message of streamingMessages) {
 			// Mark as error status - the stream never completed
