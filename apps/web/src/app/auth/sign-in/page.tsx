@@ -62,9 +62,9 @@ async function fetchStats(): Promise<PublicStats | null> {
 }
 
 /**
- * Generate a direct OAuth sign-in URL for WorkOS
- *
- * This bypasses the AuthKit hosted page and goes directly to the provider's OAuth page
+ * Generate OAuth sign-in URL for WorkOS using direct API
+ * This goes directly to the provider's OAuth page, bypassing AuthKit UI
+ * AuthKit handles email verification in the callback automatically
  */
 function getDirectOAuthUrl(provider: "GitHubOAuth" | "GoogleOAuth"): string | null {
 	const clientId = process.env.WORKOS_CLIENT_ID;
@@ -91,6 +91,8 @@ export default async function SignInPage() {
 	const isConfigured = clientId && redirectUri;
 
 	// Generate direct OAuth URLs for each provider
+	// Note: GitHub OAuth is NOT auto-verified by WorkOS, so users may need to verify email
+	// The callback route handles this by redirecting to /auth/verify-email when needed
 	const githubUrl = getDirectOAuthUrl("GitHubOAuth");
 	const googleUrl = getDirectOAuthUrl("GoogleOAuth");
 
