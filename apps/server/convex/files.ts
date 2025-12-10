@@ -4,7 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { createLogger } from "./lib/logger";
 import { rateLimiter } from "./lib/rateLimiter";
-import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeFilename } from "./lib/sanitize";
 
 // Constants & Configuration

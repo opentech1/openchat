@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
-import { throwRateLimitError } from "./lib/rate-limit-utils";
+import { throwRateLimitError } from "./lib/rateLimitUtils";
 
 // User document validator with all fields including fileUploadCount
 const userDoc = v.object({

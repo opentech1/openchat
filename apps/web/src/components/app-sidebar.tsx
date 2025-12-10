@@ -728,24 +728,26 @@ function ChatListItem({
         <span className="truncate">{chat.title || "Untitled"}</span>
       </Link>
       {/* Right side: streaming indicator, delete button, or unread dot */}
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center">
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center gap-0.5">
         {isDeleting ? (
           <span className="inline-flex size-6 items-center justify-center">
             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
           </span>
-        ) : isStreaming ? (
-          <span className="inline-flex size-6 items-center justify-center">
-            <StreamingIndicator />
-          </span>
         ) : (
           <>
-            {/* Unread dot - visible when not hovering and has unread messages */}
-            {showUnreadDot && (
+            {/* Streaming indicator - visible when chat is streaming */}
+            {isStreaming && (
+              <span className="inline-flex size-5 items-center justify-center group-hover:hidden transition-opacity duration-150">
+                <StreamingIndicator />
+              </span>
+            )}
+            {/* Unread dot - visible when not hovering, not streaming, and has unread messages */}
+            {showUnreadDot && !isStreaming && (
               <span className="inline-flex size-6 items-center justify-center group-hover:hidden transition-opacity duration-150">
                 <UnreadDot />
               </span>
             )}
-            {/* Delete button - only visible on hover */}
+            {/* Delete button - visible on hover (even when streaming, so users can stop/delete stuck chats) */}
             <button
               type="button"
               onClick={(event) => {
@@ -759,7 +761,7 @@ function ChatListItem({
                 "text-muted-foreground/70 transition-all duration-150 ease-out",
                 "hover:bg-destructive/90 hover:text-destructive-foreground",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-                showUnreadDot ? "hidden group-hover:inline-flex" : "opacity-0 group-hover:opacity-100",
+                (showUnreadDot || isStreaming) ? "hidden group-hover:inline-flex" : "opacity-0 group-hover:opacity-100",
               )}
               aria-label="Delete chat"
             >

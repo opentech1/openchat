@@ -213,6 +213,125 @@ export const updateStreamContent = internalMutation({
 });
 
 /**
+ * Fix stuck streaming messages that never completed
+ * This can happen when a stream is interrupted (server crash, timeout, etc.)
+ * Marks stuck messages as "error" status to allow UI to recover
+ */
+export const fixStuckStreamingMessages = mutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.object({
+		fixedCount: v.number(),
+		fixedMessageIds: v.array(v.id("messages")),
+	}),
+	handler: async (ctx, args) => {
+		// Find all streaming messages for this user
+		const streamingMessages = await ctx.db
+			.query("messages")
+			.withIndex("by_user_status", (q) =>
+				q.eq("userId", args.userId).eq("status", "streaming")
+			)
+			.collect();
+
+		const fixedIds: Id<"messages">[] = [];
+
+		for (const message of streamingMessages) {
+			// Mark as error status - the stream never completed
+			await ctx.db.patch(message._id, {
+				status: "error",
+			});
+			fixedIds.push(message._id);
+
+			// Also reset the chat status if it's stuck
+			const chat = await ctx.db.get(message.chatId);
+			if (chat && chat.status === "streaming") {
+				await ctx.db.patch(message.chatId, {
+					status: "idle",
+					updatedAt: Date.now(),
+				});
+			}
+		}
+
+		return {
+			fixedCount: fixedIds.length,
+			fixedMessageIds: fixedIds,
+		};
+	},
+});
+
+/**
+ * Admin-only: Fix ALL stuck streaming messages across all users
+ * Use with caution - should only be run by admins
+ */
+export const fixAllStuckStreamingMessages = internalMutation({
+	args: {},
+	returns: v.object({
+		fixedCount: v.number(),
+	}),
+	handler: async (ctx) => {
+		// Find all streaming messages
+		const streamingMessages = await ctx.db
+			.query("messages")
+			.filter((q) => q.eq(q.field("status"), "streaming"))
+			.collect();
+
+		let fixedCount = 0;
+
+		for (const message of streamingMessages) {
+			await ctx.db.patch(message._id, {
+				status: "error",
+			});
+			fixedCount++;
+
+			// Also reset the chat status if stuck
+			const chat = await ctx.db.get(message.chatId);
+			if (chat && chat.status === "streaming") {
+				await ctx.db.patch(message.chatId, {
+					status: "idle",
+					updatedAt: Date.now(),
+				});
+			}
+		}
+
+		return { fixedCount };
+	},
+});
+
+/**
+ * Admin-only: Soft-delete broken error messages (empty content with error status)
+ * These messages were never completed and have no useful content
+ */
+export const cleanupBrokenErrorMessages = internalMutation({
+	args: {},
+	returns: v.object({
+		deletedCount: v.number(),
+	}),
+	handler: async (ctx) => {
+		// Find all error messages with empty content
+		const errorMessages = await ctx.db
+			.query("messages")
+			.filter((q) => q.eq(q.field("status"), "error"))
+			.collect();
+
+		let deletedCount = 0;
+		const now = Date.now();
+
+		for (const message of errorMessages) {
+			// Only delete if content is empty or very short (broken)
+			if (!message.content || message.content.trim().length < 10) {
+				await ctx.db.patch(message._id, {
+					deletedAt: now,
+				});
+				deletedCount++;
+			}
+		}
+
+		return { deletedCount };
+	},
+});
+
+/**
  * Prepare a chat for streaming - creates user message, stream, and assistant message
  * Called by the client before starting the stream
  */

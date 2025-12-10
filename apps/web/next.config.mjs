@@ -117,7 +117,8 @@ const nextConfig = {
 		const scriptSrc = Array.from(scriptSrcSet);
 		const connectSrc = ["'self'", ...additionalConnect, "ws:", "wss:"];
 		// Add convexUrl to imgSrc for file attachment image previews
-		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com", "https://models.dev", convexUrl].filter(Boolean);
+		// Add workoscdn.com for WorkOS profile images
+		const imgSrc = ["'self'", "data:", "blob:", "https://ik.imagekit.io", "https://github.com", "https://models.dev", "https://workoscdn.com", convexUrl].filter(Boolean);
 		const frameSrc = ["'self'"];
 		const csp = [
 			"default-src 'self'",
