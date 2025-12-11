@@ -402,7 +402,7 @@ function ChatMessagesPanelComponent({
         clearTimeout(resizeTimeoutId);
       }
     };
-  }, [autoStick, scrollToBottom, viewportReady]);
+  }, [autoStick, scrollToBottom, viewportReady, computeIsAtBottom]);
 
   return (
     <div className={cn("relative flex flex-1 min-h-0 flex-col", className)} suppressHydrationWarning>
