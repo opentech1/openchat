@@ -148,7 +148,11 @@ function ChatMessagesPanelComponent({
     return `${last.id}:${last.role}:${last.content.length}`;
   }, [hasMessages, messages]);
 
-  const computeIsAtBottom = useCallback((node: HTMLDivElement) => {
+  const computeIsAtBottom = useCallback((node: HTMLDivElement): boolean => {
+    // Guard against false positive when DOM hasn't laid out yet
+    if (node.scrollHeight <= 0 || node.clientHeight <= 0) {
+      return false; // Can't determine - assume NOT at bottom to allow retry
+    }
     return (
       node.scrollHeight - node.scrollTop - node.clientHeight <=
       SCROLL_LOCK_THRESHOLD_PX
@@ -217,13 +221,20 @@ function ChatMessagesPanelComponent({
           if (cancelled) return;
           doScroll();
 
-          // Now check if we're at bottom and update state
+          // Verify scroll succeeded and update state accordingly
+          //
+          // Edge cases handled by computeIsAtBottom:
+          // 1. Zero dimensions (DOM not ready) → returns false → allows retry on next render
+          // 2. Content fits without scrollbar (scrollHeight === clientHeight) → returns true
+          //    (we're at bottom by definition since there's nothing to scroll)
+          // 3. Scrollbar present and at bottom → returns true
+          // 4. Scrollbar present but NOT at bottom → returns false → allows retry
           const viewport = viewportRef.current;
           if (viewport) {
             const atBottom = computeIsAtBottom(viewport);
 
             // Only mark as scrolled if we successfully reached the bottom
-            // This allows retry on next render if scroll failed
+            // This allows retry on next render if scroll failed (e.g., DOM not ready)
             if (atBottom) {
               hasScrolledForChatRef.current = true;
               shouldStickRef.current = true;
@@ -314,7 +325,10 @@ function ChatMessagesPanelComponent({
       isProgrammaticScrollRef.current = true;
       // Use instant scroll during streaming for smoother UX
       scrollToBottom("auto");
-      // Mark that we've successfully scrolled for this chat (enables non-streaming auto-scroll)
+      // Mark that we've successfully scrolled for this chat (enables non-streaming auto-scroll).
+      // NOTE: This is safe even if initial scroll effect hasn't completed yet (race condition).
+      // If streaming scroll works, the viewport is functional, so this flag should be true.
+      // Setting true to true is idempotent; setting false to true here is correct behavior.
       hasScrolledForChatRef.current = true;
       // Clear programmatic scroll flag after scroll completes
       requestAnimationFrame(() => {
@@ -346,7 +360,29 @@ function ChatMessagesPanelComponent({
     const observer = new ResizeObserver(() => {
       // Prevent infinite loops: skip if already processing a resize
       if (isResizingRef.current) return;
-      if (!hasScrolledForChatRef.current) return;
+
+      // Handle case where initial scroll failed due to zero dimensions
+      // ResizeObserver detects when content/viewport gets dimensions
+      if (!hasScrolledForChatRef.current) {
+        const viewport = viewportRef.current;
+        // Viewport now has valid dimensions - trigger initial scroll retry
+        if (viewport && viewport.scrollHeight > 0 && viewport.clientHeight > 0) {
+          // Mark programmatic scroll to prevent wheel handler interference
+          isProgrammaticScrollRef.current = true;
+          scrollToBottom("auto");
+          // Verify scroll succeeded after RAF (let browser complete scroll)
+          requestAnimationFrame(() => {
+            const v = viewportRef.current;
+            if (v && computeIsAtBottom(v)) {
+              hasScrolledForChatRef.current = true;
+              shouldStickRef.current = true;
+            }
+            isProgrammaticScrollRef.current = false;
+          });
+        }
+        return;
+      }
+
       if (!shouldStickRef.current) return;
 
       isResizingRef.current = true;
