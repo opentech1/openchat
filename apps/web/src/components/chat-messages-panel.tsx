@@ -97,9 +97,12 @@ function ChatMessagesPanelComponent({
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  // Start with isAtBottom = false until we actually scroll to bottom
-  const [isAtBottom, setIsAtBottom] = useState(false);
+  // Start with isAtBottom = true to prevent scroll button flash on initial render
+  // This will be corrected after initial scroll verification
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const shouldStickRef = useRef(true);
+  // Track if we're in the middle of programmatic scroll (to ignore wheel/pointer events)
+  const isProgrammaticScrollRef = useRef(false);
   const lastSignatureRef = useRef<string | null>(null);
   const lastChatIdRef = useRef<string | undefined>(chatId);
   const isResizingRef = useRef(false);
@@ -123,16 +126,18 @@ function ChatMessagesPanelComponent({
   }, []);
 
   // Reset scroll state when switching to a different chat
+  // NOTE: Do NOT reset viewportReadySetRef or viewportReady here!
+  // The viewport DOM node stays the same when switching chats, so the callback ref won't fire again.
+  // If we reset these, viewportReady stays false forever for the new chat, breaking all scroll effects.
   useEffect(() => {
     if (chatId && chatId !== lastChatIdRef.current) {
       lastChatIdRef.current = chatId;
       shouldStickRef.current = true;
       lastSignatureRef.current = null;
       hasScrolledForChatRef.current = false;
-      // Reset viewport ready state for new chat
-      viewportReadySetRef.current = false;
-      setViewportReady(false);
-      setIsAtBottom(false);
+      isProgrammaticScrollRef.current = false;
+      // Keep isAtBottom true to prevent scroll button flash while loading
+      setIsAtBottom(true);
     }
   }, [chatId]);
 
@@ -173,59 +178,71 @@ function ChatMessagesPanelComponent({
     if (!viewportReady) return;
     // Wait for messages to exist
     if (!hasMessages) return;
-    // Only scroll once per chat
+    // Only scroll once per chat (but allow retry if previous attempt failed)
     if (hasScrolledForChatRef.current) return;
-    
+
     const node = viewportRef.current;
     if (!node) return;
-    
-    // Mark as scrolled immediately to prevent re-runs
-    hasScrolledForChatRef.current = true;
-    
+
     // Track cleanup state
     let cancelled = false;
     let raf1: number | undefined;
     let raf2: number | undefined;
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    
+
+    // Mark that we're doing programmatic scroll to prevent user scroll detection
+    isProgrammaticScrollRef.current = true;
+
     // Aggressive scroll with multiple retries to ensure it works
     const doScroll = () => {
       if (cancelled || !viewportRef.current) return;
       viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
     };
-    
+
     // Immediate scroll
     doScroll();
-    
+
     // Retry after RAF (DOM layout)
     raf1 = requestAnimationFrame(() => {
       if (cancelled) return;
       doScroll();
-      
+
       // Retry again after another RAF
       raf2 = requestAnimationFrame(() => {
         if (cancelled) return;
         doScroll();
-        
+
         // Final retry after short delay for any async content
         timeoutId = setTimeout(() => {
           if (cancelled) return;
           doScroll();
+
           // Now check if we're at bottom and update state
           const viewport = viewportRef.current;
           if (viewport) {
             const atBottom = computeIsAtBottom(viewport);
+
+            // Only mark as scrolled if we successfully reached the bottom
+            // This allows retry on next render if scroll failed
+            if (atBottom) {
+              hasScrolledForChatRef.current = true;
+              shouldStickRef.current = true;
+            }
+
             setIsAtBottom(atBottom);
-            shouldStickRef.current = atBottom;
             lastSignatureRef.current = tailSignature;
           }
+
+          // Clear programmatic scroll flag after verification
+          isProgrammaticScrollRef.current = false;
         }, 50);
       });
     });
-    
+
     // Cleanup: cancel pending RAF/timeout on unmount
     return () => {
       cancelled = true;
+      isProgrammaticScrollRef.current = false;
       if (raf1 !== undefined) cancelAnimationFrame(raf1);
       if (raf2 !== undefined) cancelAnimationFrame(raf2);
       if (timeoutId !== undefined) clearTimeout(timeoutId);
@@ -236,24 +253,37 @@ function ChatMessagesPanelComponent({
     if (!viewportReady) return;
     const node = viewportRef.current;
     if (!node) return;
-    
+
     const handleScroll = () => {
       const atBottom = computeIsAtBottom(node);
       setIsAtBottom(atBottom);
-      shouldStickRef.current = atBottom;
+      // Only update shouldStickRef if we're at bottom (re-enable sticking)
+      // Don't disable it here - let wheel/pointer handlers do that
+      if (atBottom) {
+        shouldStickRef.current = true;
+      }
     };
-    
+
     const handlePointerDown = () => {
-      shouldStickRef.current = false;
+      // Ignore if this is part of programmatic scroll
+      if (isProgrammaticScrollRef.current) return;
+      // User is interacting - check if they're scrolling away from bottom
+      // We'll let the scroll handler determine if they end up at bottom
     };
-    
-    const handleWheel = () => {
-      shouldStickRef.current = false;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Ignore if this is part of programmatic scroll
+      if (isProgrammaticScrollRef.current) return;
+      // Only break stick if user scrolls UP (negative deltaY)
+      // Scrolling down should maintain the stick behavior
+      if (e.deltaY < 0) {
+        shouldStickRef.current = false;
+      }
     };
-    
+
     // Throttle scroll handler to sync with browser paint cycles (~60fps)
     const throttledScroll = throttleRAF(handleScroll);
-    
+
     node.addEventListener("scroll", throttledScroll, { passive: true });
     node.addEventListener("pointerdown", handlePointerDown, { passive: true });
     node.addEventListener("wheel", handleWheel, { passive: true });
@@ -268,14 +298,36 @@ function ChatMessagesPanelComponent({
     if (!viewportReady) return;
     if (!autoStick) return;
     if (!tailSignature) return;
-    if (!hasScrolledForChatRef.current) return;
     if (lastSignatureRef.current === tailSignature) return;
-    // During streaming, only auto-scroll if user hasn't manually scrolled away
-    // This ensures new content stays visible while allowing users to scroll up to read
-    if (!shouldStickRef.current) return;
-    lastSignatureRef.current = tailSignature;
-    syncScrollPosition(isStreaming ? true : false); // Use instant scroll during streaming for smoother UX
-  }, [autoStick, tailSignature, syncScrollPosition, isStreaming, viewportReady]);
+
+    // During streaming, be more aggressive about scrolling to bottom
+    // Only respect user scroll-away intent if they explicitly scrolled UP
+    if (isStreaming) {
+      // During streaming: always scroll unless user scrolled away
+      if (!shouldStickRef.current) {
+        // User scrolled away - don't force scroll
+        lastSignatureRef.current = tailSignature;
+        return;
+      }
+      lastSignatureRef.current = tailSignature;
+      // Mark as programmatic scroll to prevent wheel events from breaking stick
+      isProgrammaticScrollRef.current = true;
+      // Use instant scroll during streaming for smoother UX
+      scrollToBottom("auto");
+      // Mark that we've successfully scrolled for this chat (enables non-streaming auto-scroll)
+      hasScrolledForChatRef.current = true;
+      // Clear programmatic scroll flag after scroll completes
+      requestAnimationFrame(() => {
+        isProgrammaticScrollRef.current = false;
+      });
+    } else {
+      // Not streaming: require initial scroll to have succeeded
+      if (!hasScrolledForChatRef.current) return;
+      if (!shouldStickRef.current) return;
+      lastSignatureRef.current = tailSignature;
+      syncScrollPosition(false);
+    }
+  }, [autoStick, tailSignature, syncScrollPosition, isStreaming, viewportReady, scrollToBottom]);
 
   useEffect(() => {
     if (tailSignature) return;
@@ -287,6 +339,10 @@ function ChatMessagesPanelComponent({
     if (!viewportReady) return;
     const contentNode = contentRef.current;
     if (!contentNode) return;
+
+    // Track timeout ID for cleanup to prevent memory leaks
+    let resizeTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
     const observer = new ResizeObserver(() => {
       // Prevent infinite loops: skip if already processing a resize
       if (isResizingRef.current) return;
@@ -297,13 +353,19 @@ function ChatMessagesPanelComponent({
       requestAnimationFrame(() => {
         scrollToBottom("smooth");
         // Reset flag after a short delay to debounce rapid resizes
-        setTimeout(() => {
+        resizeTimeoutId = setTimeout(() => {
           isResizingRef.current = false;
         }, 100);
       });
     });
     observer.observe(contentNode);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      // Clear pending timeout to prevent leak
+      if (resizeTimeoutId !== undefined) {
+        clearTimeout(resizeTimeoutId);
+      }
+    };
   }, [autoStick, scrollToBottom, viewportReady]);
 
   return (
