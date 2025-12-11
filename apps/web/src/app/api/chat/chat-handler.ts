@@ -14,6 +14,7 @@ import { hasReasoningCapability } from "@/lib/model-capabilities";
 import { isTextPart, isFilePart } from "@/lib/error-handling";
 import { removeEmDashes } from "@/lib/text-transforms";
 import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
+import { streamOps, streamingWorkflow, isRedisStreamingAvailable } from "@/lib/redis";
 
 /**
  * Message metadata type with optional createdAt timestamp
@@ -60,12 +61,12 @@ const DEFAULT_MAX_TRACKED_BUCKETS = 1_000;
 const DEFAULT_MAX_USER_CHARS = 8_000;
 
 // Stream buffering configuration
-// PERFORMANCE: Increased intervals to reduce DB write frequency during streaming
-// Previously: 80ms/24chars = ~12 writes/sec, Now: 300ms/80chars = ~3 writes/sec
+// PERFORMANCE: Fast flush intervals for responsive UI streaming
+// ~12 writes/sec provides smooth, real-time streaming experience
 /** Default interval for flushing buffered stream chunks to database (milliseconds) */
-const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 300;
+const DEFAULT_STREAM_FLUSH_INTERVAL_MS = 80;
 /** Default minimum characters required before flushing a stream chunk */
-const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 80;
+const DEFAULT_STREAM_MIN_CHARS_PER_FLUSH = 24;
 /** Default delay between smooth stream word chunks (milliseconds) */
 const DEFAULT_STREAM_SMOOTH_DELAY_MS = 10;
 
@@ -705,7 +706,44 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		let reasoningStartTime: number | null = null;
 		let reasoningEndTime: number | null = null;
 
+		// Redis streaming: use Redis for token streaming instead of periodic Convex writes
+		const useRedisStreaming = isRedisStreamingAvailable();
+		let redisStreamId: string | null = null;
+		let pendingTokenBatch: string[] = [];
+		let tokenBatchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+		// Batch tokens for Redis - flush frequently for responsive streaming
+		const REDIS_TOKEN_BATCH_SIZE = 5;
+		const REDIS_TOKEN_BATCH_INTERVAL_MS = 20;
+
+		const flushTokenBatch = async () => {
+			if (pendingTokenBatch.length === 0 || !redisStreamId) return;
+			const batch = pendingTokenBatch;
+			pendingTokenBatch = [];
+			try {
+				await streamOps.appendTokenBatch(redisStreamId, batch);
+			} catch (error) {
+				logger.error("Failed to append token batch to Redis", error);
+				// Don't fail the stream on Redis errors - content is still in assistantText
+			}
+		};
+
+		const scheduleTokenBatchFlush = () => {
+			if (tokenBatchTimeout) return;
+			tokenBatchTimeout = setTimeout(async () => {
+				tokenBatchTimeout = null;
+				await flushTokenBatch();
+			}, REDIS_TOKEN_BATCH_INTERVAL_MS);
+		};
+
 		const persistAssistant = async (status: "streaming" | "completed", force = false) => {
+			// REDIS STREAMING: Skip periodic Convex writes during streaming when using Redis
+			// Tokens are pushed to Redis instead; only write to Convex on completion
+			if (useRedisStreaming && status === "streaming" && !force) {
+				// Content is being streamed via Redis, skip Convex intermediate writes
+				return;
+			}
+
 			const pendingLength = assistantText.length;
 			const pendingReasoningLength = assistantReasoning.length;
 			const delta = pendingLength - lastPersistedLength;
@@ -735,7 +773,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					hasReasoning: !!reasoningToSend,
 					thinkingTimeMs,
 					thinkingTimeSec: thinkingTimeMs ? (thinkingTimeMs / 1000).toFixed(1) : 0,
-					reasoningPreview: reasoningToSend ? reasoningToSend.slice(0, 100) : "NONE"
+					reasoningPreview: reasoningToSend ? reasoningToSend.slice(0, 100) : "NONE",
+					useRedisStreaming,
 				});
 			}
 
@@ -782,10 +821,19 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 		const finalize = async () => {
 			if (finalized) return;
 			finalized = true;
+
+			// Clear Convex streaming flush timeout
 			if (flushTimeout) {
 				clearTimeout(flushTimeout);
 				flushTimeout = null;
 			}
+
+			// Clear Redis token batch timeout
+			if (tokenBatchTimeout) {
+				clearTimeout(tokenBatchTimeout);
+				tokenBatchTimeout = null;
+			}
+
 			const pending = pendingFlush;
 			if (pendingResolve) {
 				pendingResolve();
@@ -799,6 +847,23 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				logger.error("Failed to await pending flush during finalize", error);
 			}
 			}
+
+			// REDIS STREAMING: Flush remaining tokens and finalize Redis stream
+			if (useRedisStreaming && redisStreamId) {
+				try {
+					// Flush any remaining batched tokens
+					await flushTokenBatch();
+					// Finalize Redis stream with completed metadata
+					const totalTokens = assistantText.split(/\s+/).length; // Simple word-based token estimate
+					await streamingWorkflow.finalizeStream(redisStreamId, assistantText, totalTokens);
+					logger.debug("Redis stream finalized", { redisStreamId, totalTokens, contentLength: assistantText.length });
+				} catch (error: unknown) {
+					logger.error("Failed to finalize Redis stream", error);
+					// Don't fail the response on Redis errors - Convex write is the source of truth
+				}
+			}
+
+			// Single Convex write with complete content (for both Redis and non-Redis paths)
 			try {
 				await persistAssistant("completed", true);
 			} catch (error: unknown) {
@@ -871,6 +936,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				]
 				: safeMessages;
 
+			// REDIS STREAMING: Initialize Redis stream before LLM call
+			// Uses assistantMessageId as the restoration ID for client reconnection
+			if (useRedisStreaming) {
+				try {
+					redisStreamId = await streamingWorkflow.initializeStream(assistantMessageId);
+					logger.debug("Redis stream initialized", { redisStreamId, restorationId: assistantMessageId });
+				} catch (error) {
+					logger.error("Failed to initialize Redis stream, falling back to Convex streaming", error);
+					// Clear the flag to fall back to Convex streaming
+					// Note: useRedisStreaming is const, so we use redisStreamId as the effective flag
+					redisStreamId = null;
+				}
+			}
+
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(messagesForModel),
@@ -886,7 +965,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 						// Jon Mode: Post-processing failsafe - remove em-dashes from chunks
 						const textToAdd = jonMode ? removeEmDashes(chunk.text) : chunk.text;
 						assistantText += textToAdd;
-						scheduleStreamFlush();
+
+						// REDIS STREAMING: Push tokens to Redis instead of periodic Convex writes
+						if (redisStreamId) {
+							pendingTokenBatch.push(textToAdd);
+							// Flush batch when it reaches threshold or schedule a timed flush
+							if (pendingTokenBatch.length >= REDIS_TOKEN_BATCH_SIZE) {
+								await flushTokenBatch();
+							} else {
+								scheduleTokenBatchFlush();
+							}
+						} else {
+							// Fallback: periodic Convex writes (original behavior)
+							scheduleStreamFlush();
+						}
 					} else if (isReasoningDeltaWithText(chunk)) {
 						// Start timer on FIRST reasoning chunk if not started
 						if (!reasoningStartTime) {
@@ -898,7 +990,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 							assistantReasoning += chunk.text;
 							// Update end time on EVERY chunk (captures last one)
 							reasoningEndTime = Date.now();
-							scheduleStreamFlush();
+
+							// REDIS STREAMING: Also push reasoning chunks to Redis
+							if (redisStreamId) {
+								// Prefix reasoning chunks so clients can differentiate
+								pendingTokenBatch.push(`[reasoning]${chunk.text}`);
+								if (pendingTokenBatch.length >= REDIS_TOKEN_BATCH_SIZE) {
+									await flushTokenBatch();
+								} else {
+									scheduleTokenBatchFlush();
+								}
+							} else {
+								// Fallback: periodic Convex writes
+								scheduleStreamFlush();
+							}
 						}
 					}
 				},
@@ -919,6 +1024,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 						reasoningLength: assistantReasoning.length,
 						hasReasoning: assistantReasoning.length > 0,
 						thinkingTimeMs: duration,
+						redisStreaming: !!redisStreamId,
+						redisStreamId: redisStreamId ?? "none",
 					});
 					await finalize();
 				},
@@ -955,6 +1062,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				origin: requestOriginValue,
 				ip_hash: ipHash,
 				rate_limit_bucket: rateLimitBucketLabel,
+				// Redis streaming analytics
+				redis_streaming_enabled: useRedisStreaming,
+				redis_stream_active: !!redisStreamId,
 			});
 
 			const aiResponse = result.toUIMessageStreamResponse({
@@ -970,6 +1080,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			corsHeaders.forEach((value, key) => {
 				headers.set(key, value);
 			});
+
+			// REDIS STREAMING: Pass stream ID to client for SSE subscription
+			// Client can use this to connect to /api/stream/[id] for real-time tokens
+			// Set AFTER CORS headers to ensure Access-Control-Expose-Headers is not overwritten
+			if (redisStreamId) {
+				headers.set("X-Stream-Id", redisStreamId);
+				// Expose custom header in CORS for client-side JavaScript access
+				headers.set("Access-Control-Expose-Headers", "X-Stream-Id");
+			}
 
 			if (persistenceError) {
 				throw persistenceError;

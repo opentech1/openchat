@@ -11,6 +11,7 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { setStat, STAT_KEYS } from "./lib/dbStats";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Initialize database statistics counters
@@ -447,6 +448,237 @@ export const removeOnboardingFields = internalMutation({
 			};
 		} catch (error) {
 			console.error("[Migration] Remove onboarding fields - Failed", error);
+			throw error;
+		}
+	},
+});
+
+/**
+ * Migrate profile data from users table to profiles table
+ *
+ * Phase 4 of Auth/Profile Separation: Creates profile records for all existing users
+ * by copying profile-related fields (name, avatarUrl, encryptedOpenRouterKey, fileUploadCount)
+ * from the users table to the new profiles table.
+ *
+ * IMPORTANT: This migration is idempotent - safe to run multiple times.
+ * It checks if a profile already exists for each user before creating a new one.
+ *
+ * @example
+ * ```bash
+ * # Run via Convex CLI:
+ * npx convex run migrations:migrateProfilesToNewTable
+ *
+ * # With cursor for pagination (for large datasets):
+ * npx convex run migrations:migrateProfilesToNewTable '{"cursor": "last_user_id"}'
+ * ```
+ */
+export const migrateProfilesToNewTable = internalMutation({
+	args: {
+		// Cursor for pagination - pass the last user ID from previous batch
+		cursor: v.optional(v.id("users")),
+		// Number of users to process per batch
+		batchSize: v.optional(v.number()),
+		// Dry run mode - log what would be changed without making changes
+		dryRun: v.optional(v.boolean()),
+	},
+	handler: async (ctx, args) => {
+		const batchSize = args.batchSize ?? 100;
+		const dryRun = args.dryRun ?? false;
+
+		console.log("[Migration] Migrate profiles to new table - Started");
+		console.log(`[Migration] Batch size: ${batchSize}, Dry run: ${dryRun}`);
+
+		try {
+			// Get users, starting from cursor if provided
+			let usersQuery = ctx.db.query("users").order("asc");
+
+			// If cursor is provided, we need to filter to users after the cursor
+			const allUsers = await usersQuery.take(batchSize + 1);
+
+			// Filter to users after cursor if provided
+			let users = args.cursor
+				? allUsers.filter((u) => u._id > args.cursor!)
+				: allUsers;
+
+			// Check if there are more users after this batch
+			const hasMore = users.length > batchSize;
+			const batch = hasMore ? users.slice(0, batchSize) : users;
+
+			console.log(`[Migration] Processing ${batch.length} users...`);
+
+			let migrated = 0;
+			let skipped = 0;
+			const errors: Array<{ userId: string; error: string }> = [];
+
+			for (const user of batch) {
+				try {
+					// Check if profile already exists for this user
+					const existingProfile = await ctx.db
+						.query("profiles")
+						.withIndex("by_user", (q) => q.eq("userId", user._id))
+						.first();
+
+					if (existingProfile) {
+						skipped++;
+						continue;
+					}
+
+					if (dryRun) {
+						console.log(
+							`[Migration] [DRY RUN] Would create profile for user ${user._id}`
+						);
+						migrated++;
+					} else {
+						// Create profile with data from user
+						const now = Date.now();
+						await ctx.db.insert("profiles", {
+							userId: user._id,
+							name: user.name,
+							avatarUrl: user.avatarUrl,
+							encryptedOpenRouterKey: user.encryptedOpenRouterKey,
+							fileUploadCount: user.fileUploadCount ?? 0,
+							createdAt: user.createdAt ?? now,
+							updatedAt: user.updatedAt ?? now,
+						});
+						migrated++;
+						console.log(`[Migration] Created profile for user ${user._id}`);
+					}
+				} catch (error) {
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+					console.error(
+						`[Migration] Error creating profile for user ${user._id}:`,
+						errorMessage
+					);
+					errors.push({
+						userId: user._id,
+						error: errorMessage,
+					});
+				}
+			}
+
+			const message = dryRun
+				? `[Migration] Migrate profiles - Dry run completed (${migrated} profiles would be created, ${skipped} skipped)`
+				: `[Migration] Migrate profiles - Batch completed (${migrated} profiles created, ${skipped} skipped)`;
+
+			console.log(message);
+
+			if (errors.length > 0) {
+				console.error(`[Migration] Encountered ${errors.length} errors:`, errors);
+			}
+
+			return {
+				success: true,
+				dryRun,
+				migrated,
+				skipped,
+				hasMore,
+				nextCursor: hasMore ? batch[batch.length - 1]._id : null,
+				errors: errors.length,
+				errorDetails: errors.slice(0, 10),
+			};
+		} catch (error) {
+			console.error("[Migration] Migrate profiles to new table - Failed", error);
+			throw error;
+		}
+	},
+});
+
+/**
+ * Verify profile migration consistency
+ *
+ * Checks that all users have corresponding profiles and that the data matches.
+ * Useful for debugging and ensuring migration worked correctly.
+ *
+ * @example
+ * ```bash
+ * # Run via Convex CLI:
+ * npx convex run migrations:verifyProfileMigration
+ * ```
+ */
+export const verifyProfileMigration = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		console.log("[Migration] Verify profile migration - Started");
+
+		try {
+			const users = await ctx.db.query("users").collect();
+			const missingProfiles: string[] = [];
+			const dataMismatches: Array<{
+				userId: string;
+				field: string;
+				userValue: unknown;
+				profileValue: unknown;
+			}> = [];
+
+			for (const user of users) {
+				const profile = await ctx.db
+					.query("profiles")
+					.withIndex("by_user", (q) => q.eq("userId", user._id))
+					.first();
+
+				if (!profile) {
+					missingProfiles.push(user._id);
+					continue;
+				}
+
+				// Check data consistency
+				if (user.name !== profile.name) {
+					dataMismatches.push({
+						userId: user._id,
+						field: "name",
+						userValue: user.name,
+						profileValue: profile.name,
+					});
+				}
+				if (user.avatarUrl !== profile.avatarUrl) {
+					dataMismatches.push({
+						userId: user._id,
+						field: "avatarUrl",
+						userValue: user.avatarUrl,
+						profileValue: profile.avatarUrl,
+					});
+				}
+				if (user.encryptedOpenRouterKey !== profile.encryptedOpenRouterKey) {
+					dataMismatches.push({
+						userId: user._id,
+						field: "encryptedOpenRouterKey",
+						userValue: user.encryptedOpenRouterKey,
+						profileValue: profile.encryptedOpenRouterKey,
+					});
+				}
+			}
+
+			if (missingProfiles.length > 0) {
+				console.log(
+					`[Migration] Found ${missingProfiles.length} users without profiles:`,
+					missingProfiles.slice(0, 10)
+				);
+			}
+
+			if (dataMismatches.length > 0) {
+				console.log(
+					`[Migration] Found ${dataMismatches.length} data mismatches:`,
+					dataMismatches.slice(0, 10)
+				);
+			}
+
+			if (missingProfiles.length === 0 && dataMismatches.length === 0) {
+				console.log("[Migration] All profiles are consistent!");
+			}
+
+			console.log("[Migration] Verify profile migration - Completed");
+
+			return {
+				success: true,
+				totalUsers: users.length,
+				missingProfiles: missingProfiles.length,
+				dataMismatches: dataMismatches.length,
+				missingSamples: missingProfiles.slice(0, 10),
+				mismatchSamples: dataMismatches.slice(0, 10),
+			};
+		} catch (error) {
+			console.error("[Migration] Verify profile migration - Failed", error);
 			throw error;
 		}
 	},

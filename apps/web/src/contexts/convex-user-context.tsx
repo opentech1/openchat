@@ -1,9 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useMemo } from "react";
-import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { useSession } from "@/lib/auth-client";
+import { useConvexQuery } from "@/hooks/use-convex-query";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 type ConvexUser = {
@@ -28,12 +28,12 @@ export function ConvexUserProvider({ children }: { children: React.ReactNode }) 
   const workspaceId = user?.id ?? null;
 
   // Single shared query for the Convex user
-  const convexUser = useQuery(
+  const { data: convexUser, isLoading: queryLoading } = useConvexQuery(
     api.users.getByExternalId,
     workspaceId ? { externalId: workspaceId } : "skip"
   );
 
-  const isLoading = isPending || (workspaceId !== null && convexUser === undefined);
+  const isLoading = isPending || queryLoading;
 
   const contextValue = useMemo(
     () => ({ convexUser, isLoading }),

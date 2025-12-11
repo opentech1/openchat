@@ -34,8 +34,6 @@ export const LOCAL_STORAGE_KEYS = {
 	CACHE: {
 		/** Cached list of available OpenRouter models */
 		MODEL_LIST: "openchat:model-cache",
-		/** Prefetched chat messages for faster navigation */
-		CHAT_PREFETCH: "openchat:chat-prefetch",
 	},
 
 	/** UI state and preferences */

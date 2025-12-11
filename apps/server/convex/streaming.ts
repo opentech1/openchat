@@ -7,6 +7,8 @@ import {
 	type StreamId,
 } from "@convex-dev/persistent-text-streaming";
 import type { Id } from "./_generated/dataModel";
+import { redisStreamOps } from "./lib/redisRest";
+import { createLogger } from "./lib/logger";
 
 // Initialize the persistent text streaming component
 export const persistentTextStreaming = new PersistentTextStreaming(
@@ -15,6 +17,8 @@ export const persistentTextStreaming = new PersistentTextStreaming(
 
 // Re-export StreamId type and validator for use in other files
 export { StreamIdValidator, type StreamId };
+
+const logger = createLogger("StreamingLLM");
 
 /**
  * Create a new stream and associate it with a message
@@ -416,9 +420,19 @@ type StreamRequestBody = {
 	};
 };
 
+// Redis streaming configuration
+const REDIS_TOKEN_BATCH_SIZE = 10; // Flush every 10 tokens
+const REDIS_TOKEN_BATCH_INTERVAL_MS = 50; // Or every 50ms
+
 /**
  * HTTP Action for streaming LLM responses
  * This runs on Convex infrastructure and continues even if client disconnects
+ *
+ * REDIS STREAMING:
+ * When Redis is available (UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN set),
+ * tokens are also pushed to Redis for low-latency client streaming via SSE.
+ * Client can connect to /api/stream/[redisStreamId] for real-time tokens.
+ * The X-Stream-Id header contains the Redis stream ID for client connection.
  */
 export const streamLLM = httpAction(async (ctx, request) => {
 	// Handle CORS preflight
@@ -462,7 +476,39 @@ export const streamLLM = httpAction(async (ctx, request) => {
 		let reasoningStartTime: number | null = null;
 		let reasoningEndTime: number | null = null;
 		let chunkCount = 0;
-		const CHUNKS_PER_UPDATE = 50; // Save to DB every 50 chunks
+		const CHUNKS_PER_UPDATE = 10; // More frequent saves for responsive UI
+
+		// Redis streaming state
+		const useRedisStreaming = redisStreamOps.isAvailable();
+		let redisStreamId: string | null = null;
+		let pendingTokenBatch: string[] = [];
+		let lastBatchFlush = Date.now();
+
+		// Initialize Redis stream if available
+		if (useRedisStreaming) {
+			try {
+				// Use messageId as restoration ID for client reconnection
+				redisStreamId = await redisStreamOps.initializeStream(messageId);
+				logger.debug("Redis stream initialized", { redisStreamId, messageId });
+			} catch (error) {
+				logger.error("Failed to initialize Redis stream, falling back to Convex-only streaming", error);
+				redisStreamId = null;
+			}
+		}
+
+		// Helper to flush token batch to Redis
+		const flushTokenBatch = async () => {
+			if (pendingTokenBatch.length === 0 || !redisStreamId) return;
+			const batch = pendingTokenBatch;
+			pendingTokenBatch = [];
+			lastBatchFlush = Date.now();
+			try {
+				await redisStreamOps.appendTokenBatch(redisStreamId, batch);
+			} catch (error) {
+				logger.error("Failed to append token batch to Redis", error);
+				// Don't fail the stream on Redis errors - content is still saved to Convex
+			}
+		};
 
 		// Generator function for the stream
 		// This function runs to completion even if client disconnects
@@ -503,6 +549,14 @@ export const streamLLM = httpAction(async (ctx, request) => {
 
 			if (!response.ok) {
 				const errorText = await response.text();
+				// Mark Redis stream as errored if initialized
+				if (redisStreamId) {
+					try {
+						await redisStreamOps.errorStream(redisStreamId, `OpenRouter error: ${response.status}`);
+					} catch (e) {
+						logger.error("Failed to mark Redis stream as errored", e);
+					}
+				}
 				throw new Error(`OpenRouter error: ${response.status} - ${errorText}`);
 			}
 
@@ -535,7 +589,26 @@ export const streamLLM = httpAction(async (ctx, request) => {
 							fullContent += delta.content;
 							await chunkAppender(delta.content);
 
-							// Periodic database save for reconnection support
+							// Redis streaming: batch tokens for efficient network usage
+							if (redisStreamId) {
+								pendingTokenBatch.push(delta.content);
+								const now = Date.now();
+								// Flush batch when size threshold reached or time interval elapsed (with non-empty check)
+								if (
+									pendingTokenBatch.length >= REDIS_TOKEN_BATCH_SIZE ||
+									(pendingTokenBatch.length > 0 && now - lastBatchFlush >= REDIS_TOKEN_BATCH_INTERVAL_MS)
+								) {
+									try {
+										await flushTokenBatch();
+									} catch (error) {
+										logger.error("Failed to flush token batch", error);
+										// Don't rethrow - continue streaming
+									}
+								}
+							}
+
+							// Always do periodic database saves for reliable streaming
+							// This ensures content is persisted regardless of Redis status
 							chunkCount++;
 							if (chunkCount % CHUNKS_PER_UPDATE === 0) {
 								await actionCtx.runMutation(internal.streaming.updateStreamContent, {
@@ -553,6 +626,24 @@ export const streamLLM = httpAction(async (ctx, request) => {
 							}
 							fullReasoning += delta.reasoning_content;
 							reasoningEndTime = Date.now();
+
+							// Also stream reasoning to Redis with prefix
+							if (redisStreamId) {
+								pendingTokenBatch.push(`[reasoning]${delta.reasoning_content}`);
+								const now = Date.now();
+								// Flush batch when size threshold reached or time interval elapsed (with non-empty check)
+								if (
+									pendingTokenBatch.length >= REDIS_TOKEN_BATCH_SIZE ||
+									(pendingTokenBatch.length > 0 && now - lastBatchFlush >= REDIS_TOKEN_BATCH_INTERVAL_MS)
+								) {
+									try {
+										await flushTokenBatch();
+									} catch (error) {
+										logger.error("Failed to flush token batch", error);
+										// Don't rethrow - continue streaming
+									}
+								}
+							}
 						}
 					} catch (parseError) {
 						// Log JSON parse errors for debugging OpenRouter protocol issues
@@ -564,10 +655,32 @@ export const streamLLM = httpAction(async (ctx, request) => {
 				}
 			}
 
+			// Flush any remaining tokens to Redis
+			if (redisStreamId) {
+				try {
+					await flushTokenBatch();
+				} catch (error) {
+					logger.error("Failed to flush final token batch", error);
+					// Don't rethrow - continue to finalize stream
+				}
+			}
+
 			// Calculate thinking time
 			const thinkingTimeMs = reasoningStartTime && reasoningEndTime
 				? reasoningEndTime - reasoningStartTime
 				: undefined;
+
+			// Finalize Redis stream
+			if (redisStreamId) {
+				try {
+					const totalTokens = fullContent.split(/\s+/).length; // Simple word-based estimate
+					await redisStreamOps.finalizeStream(redisStreamId, fullContent, totalTokens);
+					logger.debug("Redis stream finalized", { redisStreamId, totalTokens });
+				} catch (error) {
+					logger.error("Failed to finalize Redis stream", error);
+					// Don't fail - Convex write is the source of truth
+				}
+			}
 
 			// CRITICAL: Update the message record with final content
 			// This runs even if the client disconnects - ensuring content is saved
@@ -593,6 +706,12 @@ export const streamLLM = httpAction(async (ctx, request) => {
 		const headers = new Headers(streamResponse.headers);
 		headers.set("Access-Control-Allow-Origin", "*");
 		headers.set("Vary", "Origin");
+
+		// Add Redis stream ID header for client SSE connection
+		if (redisStreamId) {
+			headers.set("X-Stream-Id", redisStreamId);
+			headers.set("Access-Control-Expose-Headers", "X-Stream-Id");
+		}
 
 		return new Response(streamResponse.body, {
 			status: streamResponse.status,

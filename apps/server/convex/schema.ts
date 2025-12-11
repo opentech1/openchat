@@ -6,6 +6,8 @@ export default defineSchema({
 	users: defineTable({
 		externalId: v.string(),
 		email: v.optional(v.string()),
+		// NOTE: Profile fields below are kept for backwards compatibility during migration
+		// They will be removed after profiles table migration is complete
 		name: v.optional(v.string()),
 		avatarUrl: v.optional(v.string()),
 		encryptedOpenRouterKey: v.optional(v.string()),
@@ -22,6 +24,25 @@ export default defineSchema({
 		.index("by_external_id", ["externalId"])
 		.index("by_email", ["email"])
 		.index("by_banned", ["banned"]),
+
+	// Profile data separated from auth data (T3Chat pattern)
+	// This allows lean users table for auth + profiles for app-specific data
+	profiles: defineTable({
+		userId: v.id("users"), // FK to users table
+		name: v.optional(v.string()),
+		avatarUrl: v.optional(v.string()),
+		encryptedOpenRouterKey: v.optional(v.string()),
+		fileUploadCount: v.optional(v.number()),
+		// Future expansion for user preferences
+		preferences: v.optional(
+			v.object({
+				theme: v.optional(v.string()),
+				// Add more preferences as needed
+			})
+		),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	}).index("by_user", ["userId"]),
 	chats: defineTable({
 		userId: v.id("users"),
 		// Title can be encrypted (prefixed with enc_v1:)

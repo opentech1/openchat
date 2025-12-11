@@ -12,7 +12,7 @@ The schema lives in `apps/server/convex/schema.ts` and is generated into `@serve
 ## Read path
 1. **Session bootstrap** – all server requests call `ensureConvexUser` from `apps/web/src/lib/convex-server.ts`. This mutation either returns the existing Convex user id or inserts a new one with synced profile metadata.
 2. **Dashboard layout** – `apps/web/src/app/dashboard/layout.tsx` loads the sidebar chats via `chats.list`, serialises them with `serializeChat`, and passes them to the client component.
-3. **Chat pages** – `apps/web/src/app/dashboard/chat/[id]/page.tsx` fetches messages with `messages.list` and normalises them for the feed. The same list endpoint powers the `/api/chats/[id]/prefetch` route, which hydrates `chat-prefetch-cache.ts` for hover previews.
+3. **Chat pages** – `apps/web/src/app/dashboard/chat/[id]/page.tsx` fetches messages with `messages.list` and normalises them for the feed.
 
 All reads use the `ConvexHttpClient`, which respects `CONVEX_URL`/`NEXT_PUBLIC_CONVEX_URL` so both server and browser requests point at the active deployment.
 
@@ -22,11 +22,6 @@ All reads use the `ConvexHttpClient`, which respects `CONVEX_URL`/`NEXT_PUBLIC_C
 3. **Streaming updates** – the `createChatHandler` in `apps/web/src/app/api/chat/chat-handler.ts` streams OpenRouter responses. Each delta calls `messages.streamUpsert` with either a Convex `messageId` or a client-generated id, guaranteeing that retries and reconnects merge instead of duplicating rows. When the assistant finishes, the mutation patches the parent chat’s timestamps.
 4. **Client transport** – on the browser we use `DefaultChatTransport` from the `ai` SDK. It listens to the SSE stream exposed by the handler and reflects persisted message ids back into the store so optimistic UI and Convex stay aligned.
 
-## Client caching & revalidation
-- `chat-prefetch-cache.ts` keeps a sessionStorage-backed cache keyed by chat id with a tunable TTL (`NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS`).
-- `prefetchChat` warms this cache by calling the Next.js prefetch route and is triggered on sidebar hover.
-- When navigating, the chat room reads from the cache first and falls back to the server-rendered payload, minimising Convex reads during fast tab switching.
-
 ## Realtime considerations
 Convex watches give us live updates out of the box, but the current Next.js surface still relies on request/response patterns. When we adopt Convex subscriptions on the client, the existing mutations already emit consistent timestamps and ids, so the change will be additive: wire `convex/react` hooks in the chat room and sidebar, and rely on the same queries used for SSR.
 
@@ -35,5 +30,4 @@ Convex watches give us live updates out of the box, but the current Next.js surf
 - `convex-rules.txt` documents the “new function syntax” expectations. Keep new work aligned so codegen remains stable across the monorepo.
 
 ## Open questions
-- Should we surface Convex mutations to the browser for real-time optimistic updates, or continue routing through Next’s API for policy enforcement?
-- When introducing subscriptions, decide whether to keep the session storage prefetch layer or replace it with live query caches.
+- Should we surface Convex mutations to the browser for real-time optimistic updates, or continue routing through Next's API for policy enforcement?

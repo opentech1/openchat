@@ -5,7 +5,6 @@ import React, {
   useEffect,
   useLayoutEffect,
   useMemo,
-  useReducer,
   useRef,
   useState,
 } from "react";
@@ -19,9 +18,11 @@ import { api } from "@server/convex/_generated/api";
 import ChatComposer from "@/components/chat-composer";
 import ChatMessagesFeed from "@/components/chat-messages-feed";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
+import { useModelSelection } from "@/hooks/use-model-selection";
 import { useJonMode } from "@/hooks/use-jon-mode";
 import { useProgressiveWaitDetection } from "@/hooks/use-progressive-wait-detection";
-// useMessageStream hook no longer needed - using direct Convex useQuery for reactivity
+import { useStreamSubscription } from "@/hooks/use-stream-subscription";
+import { useChatSession } from "@/hooks/use-chat-session";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -31,25 +32,12 @@ import {
   registerClientProperties,
 } from "@/lib/posthog";
 import { LiveRegion } from "@/components/ui/live-region";
-import {
-  readCachedModels,
-  writeCachedModels,
-} from "@/lib/openrouter-model-cache";
-import { readChatPrefetch, storeChatPrefetch } from "@/lib/chat-prefetch-cache";
-import type { PrefetchMessage } from "@/lib/chat-prefetch-cache";
-import type { ModelSelectorOption } from "@/components/model-selector";
+import { ChatSkeleton } from "@/components/skeletons/chat-skeleton";
 import { logError } from "@/lib/logger";
 import type { ReasoningConfig } from "@/lib/reasoning-config";
 import { isApiError } from "@/lib/error-handling";
-import {
-  getStorageItemSync,
-  setStorageItemSync,
-  removeStorageItemSync,
-} from "@/lib/storage";
-import { fetchWithCsrf } from "@/lib/csrf-client";
-import { OPENROUTER_CONFIG } from "@/config/constants";
 import { toConvexChatId } from "@/lib/type-converters";
-import { LOCAL_STORAGE_KEYS, SESSION_STORAGE_KEYS } from "@/config/storage-keys";
+import { SESSION_STORAGE_KEYS } from "@/config/storage-keys";
 import { getMessageThrottle } from "@/config/constants";
 import { useConvexUser } from "@/contexts/convex-user-context";
 
@@ -75,87 +63,33 @@ type ChatRoomProps = {
 
 const MESSAGE_THROTTLE_MS = getMessageThrottle();
 
-// OpenRouter state reducer (apiKey now managed by useOpenRouterKey hook)
-type OpenRouterState = {
-  savingApiKey: boolean;
-  apiKeyError: string | null;
-  modelsError: string | null;
-  modelsLoading: boolean;
-  modelOptions: ModelSelectorOption[];
-  selectedModel: string | null;
-  checkedApiKey: boolean;
-  keyPromptDismissed: boolean;
-};
-
-type OpenRouterAction =
-  | { type: "SET_SAVING_API_KEY"; payload: boolean }
-  | { type: "SET_API_KEY_ERROR"; payload: string | null }
-  | { type: "SET_MODELS_ERROR"; payload: string | null }
-  | { type: "SET_MODELS_LOADING"; payload: boolean }
-  | { type: "SET_MODEL_OPTIONS"; payload: ModelSelectorOption[] }
-  | { type: "SET_SELECTED_MODEL"; payload: string | null }
-  | { type: "SET_CHECKED_API_KEY"; payload: boolean }
-  | { type: "SET_KEY_PROMPT_DISMISSED"; payload: boolean }
-  | { type: "CLEAR_MODELS" }
-  | { type: "RESET_ERRORS" };
-
-function openRouterReducer(
-  state: OpenRouterState,
-  action: OpenRouterAction,
-): OpenRouterState {
-  switch (action.type) {
-    case "SET_SAVING_API_KEY":
-      return { ...state, savingApiKey: action.payload };
-    case "SET_API_KEY_ERROR":
-      return { ...state, apiKeyError: action.payload };
-    case "SET_MODELS_ERROR":
-      return { ...state, modelsError: action.payload };
-    case "SET_MODELS_LOADING":
-      return { ...state, modelsLoading: action.payload };
-    case "SET_MODEL_OPTIONS":
-      return { ...state, modelOptions: action.payload };
-    case "SET_SELECTED_MODEL":
-      return { ...state, selectedModel: action.payload };
-    case "SET_CHECKED_API_KEY":
-      return { ...state, checkedApiKey: action.payload };
-    case "SET_KEY_PROMPT_DISMISSED":
-      return { ...state, keyPromptDismissed: action.payload };
-    case "CLEAR_MODELS":
-      return {
-        ...state,
-        modelOptions: [],
-        selectedModel: null,
-      };
-    case "RESET_ERRORS":
-      return {
-        ...state,
-        apiKeyError: null,
-        modelsError: null,
-      };
-    default:
-      return state;
-  }
-}
-
-const initialOpenRouterState: OpenRouterState = {
-  savingApiKey: false,
-  apiKeyError: null,
-  modelsError: null,
-  modelsLoading: false,
-  modelOptions: [],
-  selectedModel: null,
-  checkedApiKey: false,
-  keyPromptDismissed: true, // Start dismissed - only show when user clicks "Add key" in toast
-};
-
 function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   const { data: session } = useSession();
   const user = session?.user;
   const workspaceId = user?.id ?? null;
 
   // Get Convex user from shared context
-  const { convexUser } = useConvexUser();
+  const { convexUser, isLoading: convexUserLoading } = useConvexUser();
   const convexUserId = convexUser?._id ?? null;
+
+  // ============================================================================
+  // MESSAGES LOADING: Fetch messages from Convex using useChatSession
+  // This is the PRIMARY source of messages - initialMessages is just for SSR
+  // ============================================================================
+  const { messages: convexMessages, isLoading: messagesLoading, isSkipped: messagesSkipped } = useChatSession({
+    chatId,
+    userId: convexUserId,
+  });
+
+  // DEBUG: Log useChatSession state
+  console.log("[MESSAGES] useChatSession state", {
+    chatId,
+    convexUserId,
+    messagesLoading,
+    messagesSkipped,
+    convexMessagesCount: convexMessages?.length ?? "null",
+    hasMessages: Boolean(convexMessages && convexMessages.length > 0),
+  });
 
   const router = useRouter();
   const pathname = usePathname();
@@ -174,24 +108,31 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Jon Mode: Get em-dash prevention setting
   const { jonMode } = useJonMode();
 
-  // Use reducer for OpenRouter state management (excluding apiKey which comes from hook)
-  const [openRouterState, dispatch] = useReducer(
-    openRouterReducer,
-    initialOpenRouterState,
-  );
+  // ============================================================================
+  // Model Selection Hook (replaces openRouterReducer)
+  // This hook handles: model fetching, caching, localStorage persistence
+  // ============================================================================
   const {
-    savingApiKey,
-    apiKeyError,
-    modelsError,
-    modelsLoading,
-    modelOptions,
-    selectedModel,
-    checkedApiKey,
-    keyPromptDismissed,
-  } = openRouterState;
+    models: modelOptions,
+    selectedModel: selectedModelFromHook,
+    selectedModelId: selectedModel,
+    isLoading: modelsLoading,
+    error: modelsErrorObj,
+    setSelectedModelId,
+    refreshModels,
+  } = useModelSelection({
+    apiKey: apiKey ?? undefined,
+    onInvalidApiKey: removeKey,
+  });
 
-  const storedModelIdRef = useRef<string | null>(null);
-  const fetchModelsAbortControllerRef = useRef<AbortController | null>(null);
+  // Convert error object to string for display
+  const modelsError = modelsErrorObj?.message ?? null;
+
+  // UI-only state for modal and API key saving
+  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [keyPromptDismissed, setKeyPromptDismissed] = useState(true);
+
   const [pendingMessage, setPendingMessage] = useState<string>("");
   const [shouldAutoSend, setShouldAutoSend] = useState(false);
   const autoSendAttemptedRef = useRef(false);
@@ -199,6 +140,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Streaming state - use local state for immediate updates, query for reconnection detection
   const [activeStreamId, setActiveStreamId] = useState<string | null>(initialStreamId ?? null);
   const [isConvexStreaming, setIsConvexStreaming] = useState(Boolean(initialStreamId));
+
+  // Redis SSE streaming state - for faster, T3Chat-style token delivery
+  const [redisStreamId, setRedisStreamId] = useState<string | null>(null);
+
+  console.log("[STREAM] State snapshot", { chatId, convexUserId, activeStreamId, isConvexStreaming });
   const prepareChat = useMutation(api.streaming.prepareChat);
 
   // STREAM RECONNECTION: Query to detect active streams on reload
@@ -238,14 +184,6 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Track which stream IDs were created by THIS browser session
   const drivenStreamIdsRef = useRef<Set<string>>(new Set());
 
-  // Real-time stream content from Convex
-  const streamBody = useQuery(
-    api.streaming.getStreamBody,
-    activeStreamId ? { streamId: activeStreamId as any } : "skip"
-  );
-  const streamText = streamBody?.text || "";
-  const streamHookStatus = streamBody?.status as "pending" | "streaming" | "done" | "error" | "timeout" | undefined;
-
   // Check for pending message and model from dashboard on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -257,12 +195,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     }
     const pendingModel = sessionStorage.getItem(SESSION_STORAGE_KEYS.PENDING_MODEL);
     if (pendingModel) {
-      dispatch({ type: "SET_SELECTED_MODEL", payload: pendingModel });
-      setStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL, pendingModel);
-      storedModelIdRef.current = pendingModel;
+      // Use the hook's setSelectedModelId which handles localStorage persistence
+      setSelectedModelId(pendingModel);
       sessionStorage.removeItem(SESSION_STORAGE_KEYS.PENDING_MODEL);
     }
-  }, []);
+  }, [setSelectedModelId]);
 
   // Combined initialization effect for workspace and API key telemetry
   useEffect(() => {
@@ -278,49 +215,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     });
   }, [workspaceId, apiKey]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const cached = readCachedModels();
-    if (cached && cached.length > 0) {
-      dispatch({ type: "SET_MODEL_OPTIONS", payload: cached });
-      const stored = storedModelIdRef.current;
-      const initialModel =
-        stored && cached.some((option) => option.value === stored)
-          ? stored
-          : (cached[0]?.value ?? null);
-      if (initialModel) {
-        dispatch({ type: "SET_SELECTED_MODEL", payload: initialModel });
-      }
-    }
-  }, []);
-
-  const persistSelectedModel = useCallback((next: string | null) => {
-    if (next) {
-      setStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL, next);
-    } else {
-      removeStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL);
-    }
-    storedModelIdRef.current = next;
-  }, []);
-
-  const applySelectedModel = useCallback(
-    (next: string | null) => {
-      if (selectedModel !== next) {
-        persistSelectedModel(next);
-        dispatch({ type: "SET_SELECTED_MODEL", payload: next });
-      }
-    },
-    [persistSelectedModel, selectedModel],
-  );
-
-  useEffect(() => {
-    const stored = getStorageItemSync(LOCAL_STORAGE_KEYS.USER.LAST_MODEL);
-    storedModelIdRef.current = stored;
-    if (stored && !selectedModel) {
-      dispatch({ type: "SET_SELECTED_MODEL", payload: stored });
-    }
-  }, [selectedModel]);
-
+  // Clean up openrouter query param from URL if present
   useEffect(() => {
     const params = new URLSearchParams(searchParamsString);
     if (params.has("openrouter")) {
@@ -337,209 +232,46 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     }
   }, [pathname, router, searchParamsString]);
 
-  const fetchModels = useCallback(
-    async (key: string) => {
-      // Cancel any in-flight request to prevent race conditions
-      if (fetchModelsAbortControllerRef.current) {
-        fetchModelsAbortControllerRef.current.abort();
-      }
-
-      const abortController = new AbortController();
-      fetchModelsAbortControllerRef.current = abortController;
-
-      dispatch({ type: "SET_MODELS_LOADING", payload: true });
-      dispatch({ type: "SET_MODELS_ERROR", payload: null });
-      try {
-        const response = await fetchWithCsrf("/api/openrouter/models", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ apiKey: key }),
-          signal: abortController.signal,
-        });
-        const data = await response.json();
-        if (!response.ok || !data?.ok) {
-          if (response.status === 401) {
-            void removeKey();
-            dispatch({ type: "CLEAR_MODELS" });
-          }
-          const errorMessage =
-            typeof data?.message === "string" && data.message.length > 0
-              ? data.message
-              : "Failed to fetch OpenRouter models.";
-          let providerHost: string = OPENROUTER_CONFIG.HOST;
-          try {
-            const baseUrl =
-              process.env.NEXT_PUBLIC_OPENROUTER_BASE_URL ??
-              "https://openrouter.ai/api/v1";
-            providerHost = new URL(response.url ?? baseUrl).host;
-          } catch {
-            providerHost = OPENROUTER_CONFIG.HOST;
-          }
-          captureClientEvent("openrouter.models_fetch_failed", {
-            status: response.status,
-            error_message: errorMessage,
-            provider_host: providerHost,
-            has_api_key: Boolean(key),
-          });
-          throw Object.assign(new Error(errorMessage), {
-            __posthogTracked: true,
-            status: response.status,
-            providerUrl: response.url,
-          });
-        }
-        const parsedModels = data.models as ModelSelectorOption[];
-        dispatch({ type: "SET_MODEL_OPTIONS", payload: parsedModels });
-        writeCachedModels(parsedModels);
-        const fallback = parsedModels[0]?.value ?? null;
-        const storedPreferred = storedModelIdRef.current;
-        let nextModel: string | null = selectedModel;
-        if (
-          storedPreferred &&
-          parsedModels.some((model) => model.value === storedPreferred)
-        ) {
-          nextModel = storedPreferred;
-        } else if (
-          !selectedModel ||
-          !parsedModels.some((model) => model.value === selectedModel)
-        ) {
-          nextModel = fallback;
-        }
-        if (nextModel !== selectedModel) {
-          persistSelectedModel(nextModel ?? null);
-          dispatch({ type: "SET_SELECTED_MODEL", payload: nextModel ?? null });
-        }
-      } catch (error: unknown) {
-        // Ignore abort errors (request was cancelled)
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-
-        logError("Failed to load OpenRouter models", error);
-        if (isApiError(error) && !error.__posthogTracked) {
-          const status = typeof error.status === "number" ? error.status : 0;
-          let providerHost: string = OPENROUTER_CONFIG.HOST;
-          const providerUrl = error.providerUrl;
-          if (typeof providerUrl === "string" && providerUrl.length > 0) {
-            try {
-              providerHost = new URL(providerUrl).host;
-            } catch {
-              providerHost = OPENROUTER_CONFIG.HOST;
-            }
-          }
-          captureClientEvent("openrouter.models_fetch_failed", {
-            status,
-            error_message:
-              error instanceof Error && error.message
-                ? error.message
-                : "Failed to load OpenRouter models.",
-            provider_host: providerHost,
-            has_api_key: Boolean(key),
-          });
-        }
-        dispatch({ type: "CLEAR_MODELS" });
-        dispatch({
-          type: "SET_MODELS_ERROR",
-          payload:
-            error instanceof Error && error.message
-              ? error.message
-              : "Failed to load OpenRouter models.",
-        });
-      } finally {
-        // Only clear loading if this is still the active request
-        if (fetchModelsAbortControllerRef.current === abortController) {
-          dispatch({ type: "SET_MODELS_LOADING", payload: false });
-          fetchModelsAbortControllerRef.current = null;
-        }
-      }
-    },
-    [persistSelectedModel, selectedModel, removeKey],
-  );
-
-  // Cleanup: abort pending requests on unmount
-  useEffect(() => {
-    return () => {
-      if (fetchModelsAbortControllerRef.current) {
-        fetchModelsAbortControllerRef.current.abort();
-        fetchModelsAbortControllerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Fetch models when API key is loaded
-  useEffect(() => {
-    // Mark that we've checked for API key once the hook finishes loading
-    if (!keyLoading) {
-      dispatch({ type: "SET_CHECKED_API_KEY", payload: true });
-    }
-
-    // Fetch models when key becomes available
-    if (apiKey && !keyLoading) {
-      void fetchModels(apiKey);
-    }
-  }, [apiKey, keyLoading, fetchModels]);
-
-  useEffect(() => {
-    if (modelOptions.length === 0) return;
-    const stored = storedModelIdRef.current;
-    if (!stored || selectedModel) return;
-    const exists = modelOptions.some((option) => option.value === stored);
-    if (exists) {
-      dispatch({ type: "SET_SELECTED_MODEL", payload: stored });
-    }
-  }, [modelOptions, selectedModel]);
-
-  // No longer showing toast for missing API key - placeholder message is sufficient
-
+  // Open the key modal when API key becomes available (user just added it)
   useEffect(() => {
     if (!apiKey) return;
-    dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
+    setKeyPromptDismissed(false);
   }, [apiKey]);
 
+  // Handler for saving API key from modal
   const handleSaveApiKey = useCallback(
     async (key: string) => {
-      dispatch({ type: "SET_API_KEY_ERROR", payload: null });
-      dispatch({ type: "SET_SAVING_API_KEY", payload: true });
+      setApiKeyError(null);
+      setSavingApiKey(true);
       try {
         await saveKey(key);
-        dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
+        setKeyPromptDismissed(false);
         registerClientProperties({ has_openrouter_key: true });
         captureClientEvent("openrouter.key_saved", {
           source: "modal",
           masked_tail: key.slice(-4),
           scope: "workspace",
         });
-        await fetchModels(key);
+        // useModelSelection will automatically fetch models when apiKey changes
+        await refreshModels();
       } catch (error: unknown) {
         logError("Failed to save OpenRouter API key", error);
-        dispatch({
-          type: "SET_API_KEY_ERROR",
-          payload:
-            error instanceof Error && error.message
-              ? error.message
-              : "Failed to save OpenRouter API key.",
-        });
+        setApiKeyError(
+          error instanceof Error && error.message
+            ? error.message
+            : "Failed to save OpenRouter API key."
+        );
       } finally {
-        dispatch({ type: "SET_SAVING_API_KEY", payload: false });
+        setSavingApiKey(false);
       }
     },
-    [saveKey, fetchModels],
+    [saveKey, refreshModels],
   );
 
   const normalizedInitial = useMemo(
     () => initialMessages.map(normalizeMessage),
     [initialMessages],
   );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const payload = normalizedInitial.map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.createdAt.toISOString(),
-    }));
-    storeChatPrefetch(chatId, payload);
-  }, [chatId, normalizedInitial]);
 
   const composerRef = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(320);
@@ -553,7 +285,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           label: "Add key",
           onClick: () => {
             // Open the modal to add key
-            dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: false });
+            setKeyPromptDismissed(false);
           },
         },
       });
@@ -670,6 +402,45 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     },
   });
 
+  // Redis SSE streaming for faster token delivery (T3Chat-style)
+  // This subscribes to a Redis stream and updates messages in real-time
+  const { status: sseStatus } = useStreamSubscription({
+    streamId: redisStreamId,
+    onToken: useCallback((token: string) => {
+      // Accumulate tokens and update the last assistant message
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg?.role === "assistant") {
+          const currentText = lastMsg.parts.find((p): p is { type: "text"; text: string } => p.type === "text")?.text || "";
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMsg, parts: [{ type: "text" as const, text: currentText + token }] }
+          ];
+        }
+        return prev;
+      });
+    }, []),  // setMessages from useChat is stable
+    onComplete: useCallback(() => {
+      console.log("[SSE] Stream complete");
+      setRedisStreamId(null);
+    }, []),
+    onError: useCallback((error: Error) => {
+      console.error("[SSE] Error", error);
+      setRedisStreamId(null);
+    }, []),
+    autoReconnect: true,
+  });
+
+  // Convex query for stream body - provides reliable token display
+  // This is now the PRIMARY method for displaying tokens (simpler than Redis SSE)
+  console.log("[STREAM] Convex query check", { activeStreamId, isConvexStreaming });
+  const streamBody = useQuery(
+    api.streaming.getStreamBody,
+    activeStreamId ? { streamId: activeStreamId as any } : "skip"
+  );
+  const streamText = streamBody?.text || "";
+  const streamHookStatus = streamBody?.status as "pending" | "streaming" | "done" | "error" | "timeout" | undefined;
+
   useLayoutEffect(() => {
     const wrapper = composerRef.current;
     if (
@@ -690,70 +461,60 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     return () => observer.disconnect();
   }, []);
 
-  // STREAM RECONNECTION FIX: Sync messages from props when initialMessages changes
-  // This handles the case where ChatRoomWrapper fetches messages client-side
-  // after mounting with empty initialMessages
+  // ============================================================================
+  // MESSAGES SYNC: Sync Convex messages to useChat UI state
+  // This is the PRIMARY sync mechanism - Convex queries are the source of truth
+  // Only sync on initial load (when useChat has 0 messages and Convex has messages)
+  // This prevents overwriting optimistic messages during normal operation
+  // ============================================================================
+  const hasInitializedMessagesRef = useRef(false);
+  useEffect(() => {
+    // DEBUG: Log sync effect execution
+    console.log("[MESSAGES] Sync effect running", {
+      hasInitialized: hasInitializedMessagesRef.current,
+      messagesLoading,
+      messagesSkipped,
+      convexMessagesCount: convexMessages?.length ?? "null",
+      currentUiMessagesCount: messages.length,
+    });
+
+    // Skip if already initialized or still loading
+    if (hasInitializedMessagesRef.current) {
+      console.log("[MESSAGES] Sync skipped: already initialized");
+      return;
+    }
+    if (messagesLoading) {
+      console.log("[MESSAGES] Sync skipped: still loading");
+      return;
+    }
+    if (!convexMessages || convexMessages.length === 0) {
+      console.log("[MESSAGES] Sync skipped: no messages", { convexMessages, messagesSkipped });
+      return;
+    }
+
+    // Only sync once on initial load
+    hasInitializedMessagesRef.current = true;
+
+    // Convert Convex messages to UI format
+    const uiMessages = convexMessages.map(toUiMessage);
+    console.log("[MESSAGES] ✅ Syncing from Convex", { count: uiMessages.length, firstMessage: uiMessages[0] });
+    setMessages(uiMessages);
+  }, [convexMessages, messagesLoading, messagesSkipped, messages.length, setMessages]);
+
+  // Legacy sync for SSR initialMessages (fallback if Convex query fails)
   const initialMessageCountRef = useRef(initialMessages.length);
   useEffect(() => {
+    // Skip if Convex messages already loaded
+    if (hasInitializedMessagesRef.current) return;
     // Only sync if we went from 0 to N messages (initial load completed)
     // This prevents overwriting optimistic messages during normal operation
     if (initialMessageCountRef.current === 0 && initialMessages.length > 0) {
       const uiMessages = normalizedInitial.map(toUiMessage);
       setMessages(uiMessages);
+      hasInitializedMessagesRef.current = true;
     }
     initialMessageCountRef.current = initialMessages.length;
   }, [initialMessages.length, normalizedInitial, setMessages]);
-
-  useEffect(() => {
-    const entry = readChatPrefetch(chatId);
-    if (!entry) return;
-    const normalized = entry.messages.map((message) =>
-      normalizeMessage({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        createdAt: message.createdAt,
-      }),
-    );
-    const uiMessages = normalized.map(toUiMessage);
-    setMessages(uiMessages);
-  }, [chatId, setMessages]);
-
-  useEffect(() => {
-    if (status !== "ready") return;
-    if (!messages.length) return;
-    const payload = messages
-      .map((message) => {
-        const textPart = message.parts.find(
-          (part): part is { type: "text"; text: string } =>
-            part.type === "text" && typeof part.text === "string",
-        );
-        const role =
-          message.role === "assistant"
-            ? "assistant"
-            : message.role === "user"
-              ? "user"
-              : null;
-        if (!role) return null;
-        return {
-          id: message.id,
-          role,
-          content: textPart?.text ?? "",
-          createdAt:
-            (message.metadata?.createdAt &&
-              new Date(message.metadata.createdAt).toISOString()) ||
-            new Date().toISOString(),
-        };
-      })
-      .filter((message): message is PrefetchMessage => Boolean(message));
-
-    if (payload.length === 0) return;
-
-    const timeoutId = setTimeout(() => {
-      storeChatPrefetch(chatId, payload);
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [chatId, messages, status]);
 
   const handleSend = useCallback(
     async ({
@@ -777,6 +538,15 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       reasoningConfig?: ReasoningConfig;
       jonMode?: boolean;
     }) => {
+      // DEBUG: Entry point logging
+      console.log("[STREAM] ===== handleSend ENTRY =====");
+      console.log("[STREAM] Input:", { textLength: text.length, textPreview: text.slice(0, 50), modelId, hasApiKey: Boolean(requestApiKey) });
+      console.log("[STREAM] Auth state:", { workspaceId, convexUserId, convexUserLoading });
+      console.log("[STREAM] Env:", {
+        hasConvexSiteUrl: Boolean(process.env.NEXT_PUBLIC_CONVEX_SITE_URL),
+        convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL
+      });
+
       const content = text.trim();
       if (!content) return;
       if (!modelId) {
@@ -788,6 +558,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         return;
       }
 
+      console.log("[STREAM] handleSend started", { chatId, convexUserId, modelId, contentLength: content.length });
+
       // Use Convex persistent streaming for true stream persistence
       // This ensures the stream continues even if the user closes the tab
       if (convexUserId) {
@@ -797,6 +569,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           const createdAt = new Date().toISOString();
 
           // 1. Create user message, stream, and assistant placeholder in Convex
+          console.log("[STREAM] Calling prepareChat...", { chatId, userId: convexUserId });
           const result = await prepareChat({
             chatId: toConvexChatId(chatId),
             userId: convexUserId,
@@ -804,6 +577,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             userMessageId,
             assistantMessageId,
           });
+          console.log("[STREAM] prepareChat result", { result, streamId: result?.streamId, assistantMessageId: result?.assistantMessageId });
 
           // 2. Add messages to local UI immediately for instant feedback
           setMessages((prev) => [
@@ -823,7 +597,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           ]);
 
           // 3. Set active stream state and track as driven (created in THIS session)
-          // This triggers the stream body query to start fetching content
+          // This triggers the Convex stream body query to start fetching content
           setActiveStreamId(result.streamId as string);
           setIsConvexStreaming(true);
           drivenStreamIdsRef.current.add(result.streamId as string);
@@ -840,8 +614,16 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
           // 5. Start the stream on Convex (fire and forget - continues even if we disconnect)
           const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+          console.log("[STREAM] convexSiteUrl", { convexSiteUrl, hasUrl: Boolean(convexSiteUrl) });
           if (convexSiteUrl) {
-            fetch(`${convexSiteUrl}/stream-llm`, {
+            const streamUrl = `${convexSiteUrl}/stream-llm`;
+            console.log("[STREAM] Starting fetch to /stream-llm", { streamUrl, streamId: result.streamId, messageId: result.assistantMessageId });
+            // Fire and forget - the server will stream to Convex, and our query will pick it up
+            // Don't await or drain the response - let the Convex query handle displaying tokens
+            // Clear any previous Redis stream before starting new one
+            setRedisStreamId(null);
+
+            fetch(streamUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -852,24 +634,53 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 messages: conversationMessages,
                 reasoningConfig,
               }),
-            }).catch((err) => {
-              logError("Failed to start stream", err);
-              // Clear streaming state and driven stream tracking on error
-              setActiveStreamId(null);
-              setIsConvexStreaming(false);
-              drivenStreamIdsRef.current.delete(result.streamId as string);
-              // Remove the placeholder assistant message
-              setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
-              toast.error("Failed to connect to AI service", {
-                description: "Check your connection and try again.",
-                duration: 5000,
+            })
+              .then((response) => {
+                console.log("[STREAM] Received response", {
+                  status: response.status,
+                  statusText: response.statusText,
+                  ok: response.ok
+                });
+
+                // Capture X-Stream-Id header for Redis SSE streaming
+                const headerStreamId = response.headers.get("X-Stream-Id");
+                if (headerStreamId) {
+                  console.log("[STREAM] Got Redis stream ID", { headerStreamId });
+                  setRedisStreamId(headerStreamId);
+                }
+
+                // Drain response body to allow connection to complete properly
+                if (response.body) {
+                  const reader = response.body.getReader();
+                  (async () => {
+                    while (true) {
+                      const { done } = await reader.read();
+                      if (done) break;
+                    }
+                  })();
+                }
+              })
+              .catch((err) => {
+                console.log("[STREAM] Fetch error", { error: err?.message || err, stack: err?.stack });
+                logError("Failed to start stream", err);
+                // Clear streaming state and driven stream tracking on error
+                setActiveStreamId(null);
+                setIsConvexStreaming(false);
+                setRedisStreamId(null);
+                drivenStreamIdsRef.current.delete(result.streamId as string);
+                // Remove the placeholder assistant message
+                setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
+                toast.error("Failed to connect to AI service", {
+                  description: "Check your connection and try again.",
+                  duration: 5000,
+                });
               });
-            });
           } else {
             // No Convex site URL configured - this is a configuration error
             logError("NEXT_PUBLIC_CONVEX_SITE_URL not configured", new Error("Missing env var"));
             setActiveStreamId(null);
             setIsConvexStreaming(false);
+            setRedisStreamId(null);
             drivenStreamIdsRef.current.delete(result.streamId as string);
             setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
             toast.error("AI service not configured", {
@@ -892,6 +703,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           // Clear streaming state on error
           setActiveStreamId(null);
           setIsConvexStreaming(false);
+          setRedisStreamId(null);
           toast.error("Failed to send message");
           throw error;
         }
@@ -949,13 +761,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               chat_id: chatId,
             });
           } else if (status === 401) {
+            // removeKey triggers useModelSelection to clear models via onInvalidApiKey callback
             await removeKey();
-            dispatch({ type: "CLEAR_MODELS" });
-            dispatch({
-              type: "SET_MODELS_ERROR",
-              payload:
-                "OpenRouter rejected your API key. Re-enter it to continue.",
-            });
             toast.error("OpenRouter API key invalid", {
               description:
                 "We cleared the saved key. Add a valid key to keep chatting.",
@@ -970,15 +777,15 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     [chatId, convexUserId, prepareChat, messages, setMessages, sendMessage, handleMissingRequirement, removeKey],
   );
 
-  // STREAM RECONNECTION: Update assistant message content using Convex stream body
-  // This provides real-time updates from the persistent stream
+  // Update assistant message content using Convex stream body query
+  // This is the PRIMARY method for displaying streaming tokens (simpler than Redis SSE)
   useEffect(() => {
     if (!activeStreamId) return;
 
     // Find and update the last assistant message with stream content
     if (streamText) {
       setMessages((prev) => {
-        // Use findLastIndex to get the last assistant message (not findIndex with broken logic)
+        // Use findLastIndex to get the last assistant message
         const lastAssistantIdx = prev.findLastIndex((m) => m.role === "assistant");
         if (lastAssistantIdx === -1) return prev;
 
@@ -1005,6 +812,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       // Reset streaming state so UI no longer shows loading indicators
       setActiveStreamId(null);
       setIsConvexStreaming(false);
+      setRedisStreamId(null);
 
       if (streamHookStatus === "error" || streamHookStatus === "timeout") {
         toast.error(streamHookStatus === "timeout" ? "Response timed out" : "Failed to get response", {
@@ -1015,11 +823,12 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     }
   }, [activeStreamId, streamText, streamHookStatus, setMessages]);
 
+  // Model selection handler - uses hook's setSelectedModelId for persistence
   const handleModelSelection = useCallback(
     (next: string) => {
-      applySelectedModel(next);
+      setSelectedModelId(next);
     },
-    [applySelectedModel],
+    [setSelectedModelId],
   );
 
   // Auto-send pending message from dashboard
@@ -1049,7 +858,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   const { waitState, elapsedSeconds } = useProgressiveWaitDetection(isSubmitting || isStreaming);
   const isLinked = Boolean(apiKey);
   // Only show modal when user explicitly wants to add key (via toast action or settings)
-  const showKeyModal = !keyPromptDismissed && checkedApiKey && !isLinked;
+  // Now keyLoading replaces the old checkedApiKey - once key hook finishes loading, we can show modal
+  const showKeyModal = !keyPromptDismissed && !keyLoading && !isLinked;
   // Don't disable composer - let users type even without key
   const composerDisabled = false;
   // Don't disable send button when streaming - user needs to be able to click stop
@@ -1060,12 +870,43 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // composerHeight + some breathing room (32px) but with a sensible minimum
   const conversationPaddingBottom = Math.max(composerHeight + 32, 180);
 
-  if (!workspaceId) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading workspace…
-      </div>
-    );
+  // ============================================================================
+  // Consolidated Loading State
+  // Single derived state replaces 7+ individual loading booleans
+  // ============================================================================
+  const chatState = useMemo(() => {
+    // DEBUG: Log loading state calculation
+    console.log("[LOADING] chatState check", {
+      workspaceId,
+      keyLoading,
+      modelsLoading,
+      convexUserLoading,
+      convexUserId,
+      messagesLoading,
+      messagesSkipped,
+    });
+
+    // No workspace = still authenticating
+    if (!workspaceId) return "loading" as const;
+    // API key still loading from hook = loading
+    if (keyLoading) return "loading" as const;
+    // Models still loading = loading
+    if (modelsLoading) return "loading" as const;
+    // Convex user still loading = loading (prevents null convexUserId on send)
+    if (convexUserLoading) return "loading" as const;
+    // Convex user not available (not found/not authenticated) - keep loading
+    // This prevents showing empty chat when user is still resolving
+    if (!convexUserId) return "loading" as const;
+    // Messages still loading from Convex = loading
+    // This ensures we don't show an empty chat when messages exist in the database
+    if (messagesLoading) return "loading" as const;
+    // Ready to use
+    return "ready" as const;
+  }, [workspaceId, keyLoading, modelsLoading, convexUserLoading, convexUserId, messagesLoading, messagesSkipped]);
+
+  // Show skeleton during initial load
+  if (chatState === "loading") {
+    return <ChatSkeleton messageCount={4} showComposer />;
   }
 
   return (
@@ -1081,11 +922,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         errorMessage={apiKeyError ?? modelsError}
         onSubmit={handleSaveApiKey}
         onTroubleshoot={() => {
-          dispatch({ type: "RESET_ERRORS" });
-          if (apiKey) void fetchModels(apiKey);
+          setApiKeyError(null);
+          if (apiKey) void refreshModels();
         }}
         onClose={() => {
-          dispatch({ type: "SET_KEY_PROMPT_DISMISSED", payload: true });
+          setKeyPromptDismissed(true);
         }}
         hasApiKey={Boolean(apiKey)}
       />
@@ -1100,7 +941,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         chatId={chatId}
         waitState={waitState}
         elapsedSeconds={elapsedSeconds}
-        selectedModelName={modelOptions.find((m) => m.value === selectedModel)?.label}
+        selectedModelName={selectedModelFromHook?.label}
       />
 
       <div className="pointer-events-none fixed bottom-4 left-4 right-4 z-30 flex justify-center transition-all duration-200 ease-in-out md:left-[calc(var(--sb-width)+1rem)] md:right-4">
@@ -1111,7 +952,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               sendDisabled={sendDisabled}
               disabled={composerDisabled}
               onSend={handleSend}
-              modelOptions={modelOptions}
+              modelOptions={modelOptions ?? []}
               modelValue={selectedModel}
               onModelChange={handleModelSelection}
               modelsLoading={modelsLoading}

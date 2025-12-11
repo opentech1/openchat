@@ -124,14 +124,6 @@ export const UI_CONFIG = {
 	COMPOSER_PADDING: 48,
 } as const;
 
-/**
- * Cache Configuration
- * Settings for client-side caching
- */
-export const CACHE_CONFIG = {
-	/** Debounce delay for chat prefetch updates (milliseconds) */
-	PREFETCH_DEBOUNCE_MS: 500,
-} as const;
 
 /**
  * Helper function to get environment-configurable rate limit

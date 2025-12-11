@@ -75,8 +75,6 @@ const serverEnvSchema = z.object({
 	CORS_ORIGIN: z.string().optional(),
 
 	// Optional - Cache configuration
-	NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS: z.string().regex(/^\d+$/).optional(),
-	NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE: z.string().regex(/^\d+$/).optional(),
 	NEXT_PUBLIC_MODEL_CACHE_TTL_MS: z.string().regex(/^\d+$/).optional(),
 
 	// Optional - Rate limiting configuration
@@ -121,8 +119,6 @@ const clientEnvSchema = z.object({
 	NEXT_PUBLIC_ELECTRIC_URL: z.string().url().optional(),
 	NEXT_PUBLIC_APP_VERSION: z.string().optional(),
 	NEXT_PUBLIC_DEPLOYMENT: z.string().optional(),
-	NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS: z.string().regex(/^\d+$/).optional(),
-	NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE: z.string().regex(/^\d+$/).optional(),
 	NEXT_PUBLIC_MODEL_CACHE_TTL_MS: z.string().regex(/^\d+$/).optional(),
 });
 
@@ -184,8 +180,6 @@ export function validateClientEnv(): ClientEnv {
 		NEXT_PUBLIC_ELECTRIC_URL: process.env.NEXT_PUBLIC_ELECTRIC_URL,
 		NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
 		NEXT_PUBLIC_DEPLOYMENT: process.env.NEXT_PUBLIC_DEPLOYMENT,
-		NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS: process.env.NEXT_PUBLIC_CHAT_PREFETCH_TTL_MS,
-		NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE: process.env.NEXT_PUBLIC_CHAT_PREFETCH_MAX_SIZE,
 		NEXT_PUBLIC_MODEL_CACHE_TTL_MS: process.env.NEXT_PUBLIC_MODEL_CACHE_TTL_MS,
 	};
 	

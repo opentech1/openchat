@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Provider as ChatStoreProvider } from "@ai-sdk-tools/store";
 import dynamic from "next/dynamic";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ChatLoader } from "@/components/ui/nice-loader";
 import { ChatErrorBoundary } from "@/components/chat-error-boundary";
-import { logError } from "@/lib/logger";
 
 // Lazy load the heavy ChatRoom component (600+ lines)
 // NOTE: Don't add loading here - the wrapper already handles loading state
@@ -43,61 +42,14 @@ type ChatRoomProps = {
 
 export default function ChatRoomWrapper(props: ChatRoomProps) {
   const [mounted, setMounted] = useState(false);
-  const [messages, setMessages] = useState<MessageData[]>(props.initialMessages);
-  // STREAM RECONNECTION: Track active stream for reconnection
-  const [activeStreamId, setActiveStreamId] = useState<string | null>(props.initialStreamId ?? null);
-  const hasFetchedRef = useRef(false);
 
-  // CLIENT-SIDE MESSAGE FETCHING: Load messages from API when initialMessages is empty
-  // This handles the case where server-side fetching isn't available (e.g., Edge environments)
-  useEffect(() => {
-    if (hasFetchedRef.current) return;
-    if (props.initialMessages.length > 0) return;
-
-    const fetchMessages = async () => {
-      try {
-        const response = await fetch(`/api/chats/${props.chatId}/prefetch`, {
-          method: "GET",
-          credentials: "include",
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.ok && data.messages && Array.isArray(data.messages)) {
-            const fetchedMessages = data.messages.map((m: { id: string; role: string; content: string; reasoning?: string; thinkingTimeMs?: number; createdAt: string; status?: string; streamId?: string; attachments?: MessageData["attachments"] }) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              reasoning: m.reasoning,
-              thinkingTimeMs: m.thinkingTimeMs,
-              createdAt: m.createdAt,
-              status: m.status,
-              streamId: m.streamId,
-              attachments: m.attachments,
-            }));
-            setMessages(fetchedMessages);
-
-            // STREAM RECONNECTION: Detect streaming messages and reconnect
-            const streamingMessage = fetchedMessages.find(
-              (m: MessageData) => m.status === "streaming" && m.streamId
-            );
-            if (streamingMessage?.streamId) {
-              setActiveStreamId(streamingMessage.streamId);
-            }
-
-            hasFetchedRef.current = true;
-          }
-        }
-      } catch (error) {
-        logError("Failed to fetch chat messages", error);
-      }
-    };
-
-    void fetchMessages();
-  }, [props.chatId, props.initialMessages.length]);
+  // NOTE: Messages are loaded via Convex real-time queries in ChatRoom component.
+  // The initialMessages prop provides server-side prefetched data for instant display,
+  // and ChatRoom's useChatSession hook handles real-time updates.
 
   const initialUiMessages = useMemo(
     () =>
-      messages.map((message) =>
+      props.initialMessages.map((message) =>
         toUiMessage(
           normalizeMessage({
             id: message.id,
@@ -110,7 +62,7 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
           }),
         ),
       ),
-    [messages],
+    [props.initialMessages],
   );
 
   useEffect(() => {
@@ -125,13 +77,10 @@ export default function ChatRoomWrapper(props: ChatRoomProps) {
       <ChatErrorBoundary chatId={props.chatId}>
         <ChatStoreProvider initialMessages={initialUiMessages}>
           {mounted ? (
-            // CRITICAL FIX: Pass the fetched messages, not props.initialMessages
-            // When initialMessages is empty, we fetch client-side and update `messages` state
-            // We must pass the updated messages to ChatRoom, not the stale props
             <ChatRoom
               chatId={props.chatId}
-              initialMessages={messages}
-              initialStreamId={activeStreamId}
+              initialMessages={props.initialMessages}
+              initialStreamId={props.initialStreamId}
             />
           ) : (
             <ChatLoader />

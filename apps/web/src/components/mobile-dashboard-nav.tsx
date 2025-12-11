@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { captureClientEvent } from "@/lib/posthog";
 import { AccountSettingsModalLazy as AccountSettingsModal } from "@/components/lazy/account-settings-modal-lazy";
-import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
 import { Logo } from "@/components/logo";
@@ -266,7 +265,6 @@ function MobileDrawer({
 											onClick={() => handleChatClick(chat.id)}
 											onMouseEnter={() => {
 												router.prefetch(`/chat/${chat.id}`);
-												void prefetchChat(chat.id);
 											}}
 											className={cn(
 												"w-full text-left truncate rounded-lg px-3 py-2.5 text-sm transition-colors",
