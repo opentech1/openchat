@@ -17,6 +17,8 @@ const chatDoc = v.object({
 	lastMessageAt: v.optional(v.number()),
 	deletedAt: v.optional(v.number()),
 	messageCount: v.optional(v.number()),
+	// Chat streaming status: "idle" | "streaming" - used for stream resumption
+	status: v.optional(v.union(v.literal("idle"), v.literal("streaming"))),
 });
 
 // Optimized chat list response: exclude redundant fields to reduce bandwidth

@@ -33,7 +33,6 @@ import {
 import { AccountSettingsModalLazy as AccountSettingsModal } from "@/components/lazy/account-settings-modal-lazy";
 import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
 import { useBrandTheme } from "@/components/brand-theme-provider";
-import { prefetchChat } from "@/lib/chat-prefetch-cache";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
 import { Logo } from "@/components/logo";
@@ -337,7 +336,6 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   const handleHoverChat = useCallback(
     (chatId: string) => {
       router.prefetch(`/chat/${chatId}`);
-      void prefetchChat(chatId);
     },
     [router],
   );

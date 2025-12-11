@@ -1,9 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useMemo } from "react";
-import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { useConvexUser } from "./convex-user-context";
+import { useConvexQuery } from "@/hooks/use-convex-query";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 /**
@@ -44,12 +44,12 @@ export function ChatListProvider({ children }: { children: React.ReactNode }) {
 
 	// Real-time subscription to chat list - updates automatically when any chat changes
 	// This includes status changes (idle -> streaming -> idle)
-	const chatListResult = useQuery(
+	const { data: chatListResult, isLoading: queryLoading } = useConvexQuery(
 		api.chats.list,
 		userId ? { userId, limit: 200 } : "skip"
 	);
 
-	const isLoading = userLoading || (userId !== undefined && chatListResult === undefined);
+	const isLoading = userLoading || queryLoading;
 	const hasError = userId !== undefined && chatListResult === undefined && !isLoading;
 
 	const contextValue = useMemo<ChatListContextValue>(
