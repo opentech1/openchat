@@ -270,10 +270,11 @@ function ChatMessagesPanelComponent({
     if (!tailSignature) return;
     if (!hasScrolledForChatRef.current) return;
     if (lastSignatureRef.current === tailSignature) return;
-    // Don't auto-scroll during streaming - let user control scroll position
-    if (isStreaming) return;
+    // During streaming, only auto-scroll if user hasn't manually scrolled away
+    // This ensures new content stays visible while allowing users to scroll up to read
+    if (!shouldStickRef.current) return;
     lastSignatureRef.current = tailSignature;
-    syncScrollPosition(false);
+    syncScrollPosition(isStreaming ? true : false); // Use instant scroll during streaming for smoother UX
   }, [autoStick, tailSignature, syncScrollPosition, isStreaming, viewportReady]);
 
   useEffect(() => {
