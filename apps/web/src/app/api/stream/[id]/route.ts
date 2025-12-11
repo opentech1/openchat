@@ -47,11 +47,8 @@ export async function GET(
 	request: Request,
 	{ params }: { params: Promise<{ id: string }> }
 ) {
-	console.log("[SSE-ROUTE] GET request received");
-
 	// Validate Redis is configured
 	if (!redis.isConfigured()) {
-		console.log("[SSE-ROUTE] Redis not configured!");
 		return new Response(
 			JSON.stringify({ error: "Streaming not available" }),
 			{
@@ -64,7 +61,6 @@ export async function GET(
 	const { id: streamId } = await params;
 	const { searchParams } = new URL(request.url);
 	const cursor = searchParams.get("cursor") || "0-0";
-	console.log("[SSE-ROUTE] Starting stream", { streamId, cursor });
 
 	// Validate streamId format (alphanumeric with dashes)
 	if (!/^[a-z0-9-]+$/i.test(streamId)) {
@@ -82,7 +78,6 @@ export async function GET(
 
 	const stream = new ReadableStream({
 		async start(controller) {
-			console.log("[SSE-ROUTE] ReadableStream started", { streamId });
 			let currentCursor = cursor;
 			let keepAliveInterval: ReturnType<typeof setInterval> | undefined;
 			let isComplete = false;
@@ -135,7 +130,6 @@ export async function GET(
 					);
 
 					if (result.entries.length > 0) {
-						console.log("[SSE-ROUTE] Got entries from Redis", { count: result.entries.length, streamId });
 						for (const entry of result.entries) {
 							// Send SSE event for each token
 							sendEvent(null, {
@@ -150,7 +144,6 @@ export async function GET(
 					// Check for stream completion
 					const metadata = await streamOps.getMetadata(streamId);
 					if (metadata) {
-						console.log("[SSE-ROUTE] Got metadata", { status: metadata.status, streamId });
 						if (metadata.status === "completed") {
 							// Read any remaining entries
 							const finalResult = await streamOps.readFromCursor(
@@ -190,7 +183,6 @@ export async function GET(
 					}
 				}
 			} catch (error) {
-				console.log("[SSE-ROUTE] Error in stream loop", { error, streamId });
 				// Send error event if possible
 				const errorMessage =
 					error instanceof Error ? error.message : "Unknown error";
@@ -200,7 +192,6 @@ export async function GET(
 					// Controller may be closed
 				}
 			} finally {
-				console.log("[SSE-ROUTE] Stream cleanup", { streamId, isComplete });
 				if (keepAliveInterval) {
 					clearInterval(keepAliveInterval);
 				}

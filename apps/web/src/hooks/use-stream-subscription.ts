@@ -164,9 +164,7 @@ export function useStreamSubscription({
 	 * Connect to stream
 	 */
 	const connect = useCallback(() => {
-		console.log("[useStreamSubscription] connect() called", { streamId, isMounted: isMountedRef.current });
 		if (!streamId || !isMountedRef.current) {
-			console.log("[useStreamSubscription] Skipping connect - no streamId or unmounted");
 			return;
 		}
 
@@ -176,43 +174,37 @@ export function useStreamSubscription({
 		setStatus("connecting");
 
 		const url = `/api/stream/${streamId}?cursor=${cursorRef.current}`;
-		console.log("[useStreamSubscription] Creating EventSource", { url, cursor: cursorRef.current });
 		const eventSource = new EventSource(url);
 		eventSourceRef.current = eventSource;
 
 		eventSource.onopen = () => {
-			console.log("[useStreamSubscription] EventSource opened", { readyState: eventSource.readyState });
 			if (!isMountedRef.current) return;
 			setStatus("connected");
 			reconnectAttemptsRef.current = 0;
 		};
 
 		eventSource.onmessage = (event) => {
-			console.log("[useStreamSubscription] Message received", { dataLength: event.data?.length, dataPreview: event.data?.substring(0, 100) });
 			if (!isMountedRef.current) return;
 
 			try {
 				const data = JSON.parse(event.data) as StreamToken;
 				cursorRef.current = data.id;
-				console.log("[useStreamSubscription] Parsed token", { id: data.id, deltaLength: data.delta?.length, deltaPreview: data.delta?.substring(0, 30) });
 
 				if (data.delta) {
 					onTokenRef.current(data.delta, data);
 				}
 			} catch (error) {
-				console.error("[useStreamSubscription] Failed to parse message:", error, { rawData: event.data });
+				console.error("[useStreamSubscription] Failed to parse message:", error);
 			}
 		};
 
 		eventSource.addEventListener("complete", (event) => {
-			console.log("[useStreamSubscription] Complete event received", { data: (event as MessageEvent).data });
 			if (!isMountedRef.current) return;
 
 			try {
 				const metadata = JSON.parse(
 					(event as MessageEvent).data
 				) as StreamCompletion;
-				console.log("[useStreamSubscription] Stream completed successfully", { metadata });
 				setStatus("complete");
 				eventSource.close();
 				onCompleteRef.current(metadata);
@@ -228,7 +220,6 @@ export function useStreamSubscription({
 		});
 
 		eventSource.addEventListener("error", (event) => {
-			console.log("[useStreamSubscription] Error event received", { type: event.type, data: (event as MessageEvent).data });
 			if (!isMountedRef.current) return;
 
 			// Try to parse error data if available
@@ -238,18 +229,13 @@ export function useStreamSubscription({
 				if (data.error) {
 					errorMessage = data.error;
 				}
-				console.log("[useStreamSubscription] Parsed error", { errorMessage, data });
 			} catch {
 				// No error data available
-				console.log("[useStreamSubscription] No parseable error data");
 			}
 
 			// Handle reconnection
 			if (autoReconnect && reconnectAttemptsRef.current < maxReconnectAttempts) {
 				reconnectAttemptsRef.current++;
-				console.warn(
-					`[useStreamSubscription] Reconnecting (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`
-				);
 				eventSource.close();
 
 				setTimeout(() => {
@@ -265,22 +251,17 @@ export function useStreamSubscription({
 		});
 
 		// Handle browser-level EventSource error (connection failed)
-		eventSource.onerror = (errorEvent) => {
-			console.log("[useStreamSubscription] EventSource onerror", { readyState: eventSource.readyState, error: errorEvent });
+		eventSource.onerror = () => {
 			if (!isMountedRef.current) return;
 
 			// EventSource already handles reconnection for temporary failures
 			// Only handle permanent failures
 			if (eventSource.readyState === EventSource.CLOSED) {
-				console.log("[useStreamSubscription] EventSource CLOSED, attempting reconnect logic");
 				if (
 					autoReconnect &&
 					reconnectAttemptsRef.current < maxReconnectAttempts
 				) {
 					reconnectAttemptsRef.current++;
-					console.warn(
-						`[useStreamSubscription] Connection closed, reconnecting (attempt ${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`
-					);
 
 					setTimeout(() => {
 						if (isMountedRef.current) {
@@ -311,22 +292,18 @@ export function useStreamSubscription({
 
 	// Auto-connect when streamId changes
 	useEffect(() => {
-		console.log("[useStreamSubscription] useEffect triggered", { streamId, initialCursor });
 		isMountedRef.current = true;
 
 		if (streamId) {
 			// Reset cursor when streamId changes (new stream)
 			cursorRef.current = initialCursor;
-			console.log("[useStreamSubscription] Calling connect for streamId", { streamId });
 			connect();
 		} else {
-			console.log("[useStreamSubscription] No streamId, setting idle");
 			setStatus("idle");
 			disconnect();
 		}
 
 		return () => {
-			console.log("[useStreamSubscription] Cleanup - unmounting", { streamId });
 			isMountedRef.current = false;
 			disconnect();
 		};
