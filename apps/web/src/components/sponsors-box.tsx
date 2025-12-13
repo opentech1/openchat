@@ -63,9 +63,15 @@ export const SponsorsBox = memo(function SponsorsBox() {
 		setStorageItemSync(LOCAL_STORAGE_KEYS.FLAGS.SPONSORS_BOX_DISMISSED, "true");
 	};
 
+	// Check on initial render to avoid flash of content
+	// This runs synchronously after mount to catch dismissal state before useEffect
+	const initialDismissed = mounted && typeof window !== "undefined"
+		? getStorageItemSync(LOCAL_STORAGE_KEYS.FLAGS.SPONSORS_BOX_DISMISSED) === "true"
+		: false;
+
 	// Prevent hydration mismatch - render nothing until mounted
 	// Also don't render if user has dismissed the box
-	if (!mounted || isDismissed) {
+	if (!mounted || isDismissed || initialDismissed) {
 		return null;
 	}
 
