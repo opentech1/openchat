@@ -20,8 +20,8 @@ jobs:
 
       - name: Run canary tests
         env:
-          PROD_CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          PROD_CONVEX_URL: "https://outgoing-setter-201.convex.cloud"
           CANARY_TIMEOUT_MS: "15000"
-          CANARY_MAX_RETRIES: "5"
-          CANARY_RETRY_DELAY_MS: "10000"
+          CANARY_MAX_RETRIES: "3"
+          CANARY_RETRY_DELAY_MS: "5000"
         run: bun ./scripts/prod-canary.ts
