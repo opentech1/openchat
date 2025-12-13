@@ -74,8 +74,10 @@ export async function GET(request: Request) {
 	if (isRedisCacheAvailable()) {
 		const cacheKey = chatsCache.key(userId, limit, cursor);
 		// Don't await cache set - fire and forget for better latency
-		chatsCache.set(cacheKey, response, CHATS_CACHE_TTL).catch((err) => {
-			logError("[chats] Failed to cache response", err);
+		chatsCache.set(cacheKey, response, CHATS_CACHE_TTL).catch((error) => {
+			// Log prominently - silent failures mean subsequent requests hit database
+			console.error("[chats] Cache write failed - subsequent requests will hit database:",
+				error instanceof Error ? error.message : String(error));
 		});
 	}
 

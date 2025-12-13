@@ -725,6 +725,7 @@ export const userCache = {
 		ttlSeconds: number = 60,
 	): Promise<boolean> => {
 		// Set both new and legacy keys for backwards compatibility during migration
+		// TODO: Remove legacy key support after migration confirmed complete (added: Dec 2025)
 		const newKeyResult = await cacheSet(userCache.key(externalId), data, { ttlSeconds });
 
 		// Also set legacy key

@@ -21,6 +21,7 @@ type UserMemoryCacheEntry = {
 };
 const userMemoryCache = new Map<string, UserMemoryCacheEntry>();
 const MEMORY_CACHE_TTL_MS = 5000; // 5 seconds - short TTL for in-memory fallback
+const MAX_MEMORY_CACHE_SIZE = 500; // Hard limit to prevent unbounded growth
 
 // Redis cache TTL (longer since it's distributed)
 const REDIS_CACHE_TTL_SECONDS = 60; // 60 seconds
@@ -77,6 +78,18 @@ export async function ensureConvexUser(sessionUser: SessionUser) {
 				userMemoryCache.delete(key);
 			}
 		}
+	}
+
+	// Hard limit check - if cache still too large after TTL cleanup, evict oldest entries
+	if (userMemoryCache.size > MAX_MEMORY_CACHE_SIZE) {
+		const entriesToDelete = Math.floor(userMemoryCache.size / 2);
+		let deleted = 0;
+		for (const key of userMemoryCache.keys()) {
+			if (deleted >= entriesToDelete) break;
+			userMemoryCache.delete(key);
+			deleted++;
+		}
+		console.warn(`[cache] Memory cache exceeded ${MAX_MEMORY_CACHE_SIZE}, cleared ${deleted} entries`);
 	}
 
 	// 3. Call Convex mutation to get/create user
