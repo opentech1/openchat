@@ -159,7 +159,7 @@ jobs:
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
 
-          if [ "$HTTP_CODE" = "200" ]; then
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
             echo "✅ Changelog entry generated successfully"
             echo "$RESPONSE_BODY"
           else
