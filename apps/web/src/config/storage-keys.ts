@@ -48,6 +48,8 @@ export const LOCAL_STORAGE_KEYS = {
 	FLAGS: {
 		/** Dismissed auto-redirect notification */
 		DISMISSED_REDIRECTS: "openchat:dismissed-auto-redirect",
+		/** Sponsors box dismissed by user */
+		SPONSORS_BOX_DISMISSED: "openchat:sponsors-box-dismissed",
 	},
 } as const;
 
