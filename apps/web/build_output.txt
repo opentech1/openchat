@@ -1,0 +1,57 @@
+
+> web@0.1.0 build
+> next build --webpack
+
+   ▲ Next.js 16.0.7 (webpack)
+   - Environments: .env.local
+   - Experiments (use with caution):
+     ✓ externalDir
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 14.4s
+   Running TypeScript ...
+   Collecting page data using 9 workers ...
+ ⚠ Using edge runtime on a page currently disables static generation for that page
+   Generating static pages using 9 workers (0/19) ...
+   Generating static pages using 9 workers (4/19) 
+   Generating static pages using 9 workers (9/19) 
+   Generating static pages using 9 workers (14/19) 
+ ✓ Generating static pages using 9 workers (19/19) in 901.1ms
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/auth/callback
+├ ƒ /api/auth/convex/token
+├ ƒ /api/auth/resend-verification
+├ ƒ /api/auth/verify-email
+├ ƒ /api/chat
+├ ƒ /api/chat/send
+├ ƒ /api/chats
+├ ƒ /api/chats/[id]
+├ ƒ /api/chats/[id]/export
+├ ƒ /api/csrf
+├ ƒ /api/openrouter/models
+├ ƒ /api/stream/[id]
+├ ƒ /auth
+├ ○ /auth/callback
+├ ƒ /auth/sign-in
+├ ○ /auth/verify-email
+├ ƒ /chat/[id]
+├ ƒ /new
+├ ○ /openrouter/callback
+├ ○ /robots.txt
+├ ○ /settings
+├ ƒ /sitemap.xml
+├ ○ /templates
+├ ƒ /templates/[id]
+└ ○ /templates/new
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
