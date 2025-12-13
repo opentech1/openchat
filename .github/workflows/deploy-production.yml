@@ -129,7 +129,7 @@ jobs:
         if: success()
         env:
           AUTOCHANGELOG_WEBHOOK_URL: ${{ secrets.AUTOCHANGELOG_WEBHOOK_URL }}
-          AUTOCHANGELOG_SECRET: ${{ secrets.AUTOCHANGELOG_SECRET }}
+          AUTOCHANGELOG_SECRET: ${{ secrets.AUTOCHANGELOG_WEBHOOK_SECRET }}
         run: |
           echo "📝 Generating changelog entry..."
 

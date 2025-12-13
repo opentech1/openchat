@@ -33,7 +33,7 @@ This directory contains automated workflows for OpenChat's CI/CD pipeline.
 **Environment Variables:**
 - `CONVEX_DEPLOY_KEY` - Required secret for Convex deployment authentication
 - `AUTOCHANGELOG_WEBHOOK_URL` - Optional: AutoChangelog webhook URL
-- `AUTOCHANGELOG_SECRET` - Optional: AutoChangelog webhook secret
+- `AUTOCHANGELOG_WEBHOOK_SECRET` - Optional: AutoChangelog webhook secret
 
 ### 3. Claude Code (`claude.yml`)
 
@@ -65,7 +65,7 @@ This is the deploy key for your Convex production deployment.
 3. Copy the value
 4. Add it to GitHub Secrets
 
-#### `AUTOCHANGELOG_WEBHOOK_URL` & `AUTOCHANGELOG_SECRET` (Optional)
+#### `AUTOCHANGELOG_WEBHOOK_URL` & `AUTOCHANGELOG_WEBHOOK_SECRET` (Optional)
 
 These enable automatic changelog generation after each deployment via [AutoChangelog](https://autochangelog.com).
 
@@ -75,7 +75,7 @@ These enable automatic changelog generation after each deployment via [AutoChang
 2. Find your repository (opentech1/openchat)
 3. Click "Installation Instructions"
 4. Copy the **Webhook URL** → add as `AUTOCHANGELOG_WEBHOOK_URL`
-5. Copy the **Webhook Secret** → add as `AUTOCHANGELOG_SECRET`
+5. Copy the **Webhook Secret** → add as `AUTOCHANGELOG_WEBHOOK_SECRET`
 
 The changelog will be auto-generated and published to [updates.osschat.dev](https://updates.osschat.dev/) after each successful deployment.
 
