@@ -125,6 +125,48 @@ jobs:
           echo "2. Monitor deployment at dashboard link above"
           echo "3. Run manual smoke tests if needed"
 
+      - name: Generate changelog entry
+        if: success()
+        env:
+          AUTOCHANGELOG_WEBHOOK_URL: ${{ secrets.AUTOCHANGELOG_WEBHOOK_URL }}
+          AUTOCHANGELOG_SECRET: ${{ secrets.AUTOCHANGELOG_SECRET }}
+        run: |
+          echo "📝 Generating changelog entry..."
+
+          # Skip if secrets are not configured
+          if [ -z "$AUTOCHANGELOG_WEBHOOK_URL" ] || [ -z "$AUTOCHANGELOG_SECRET" ]; then
+            echo "⚠️  AutoChangelog secrets not configured, skipping changelog generation"
+            exit 0
+          fi
+
+          # Get the latest git tag for version, or use patch bump
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$VERSION" ]; then
+            BODY="{\"version\": \"$VERSION\"}"
+          else
+            BODY='{"bump": "patch"}'
+          fi
+
+          # Compute HMAC-SHA256 signature
+          SIGNATURE="sha256=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTOCHANGELOG_SECRET" | cut -d' ' -f2)"
+
+          # Send webhook request
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$AUTOCHANGELOG_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Signature: $SIGNATURE" \
+            -d "$BODY")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✅ Changelog entry generated successfully"
+            echo "$RESPONSE_BODY"
+          else
+            echo "⚠️  Changelog generation returned HTTP $HTTP_CODE (non-fatal)"
+            echo "$RESPONSE_BODY"
+          fi
+
       - name: Notify on failure
         if: failure()
         run: |

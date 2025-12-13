@@ -28,9 +28,12 @@ This directory contains automated workflows for OpenChat's CI/CD pipeline.
 4. **Verify Deployment** - Confirms successful deployment
 5. **Run Migrations** - Executes database migrations automatically
 6. **Verify Data** - Checks data consistency post-migration
+7. **Generate Changelog** - Creates an AutoChangelog entry for the release
 
 **Environment Variables:**
 - `CONVEX_DEPLOY_KEY` - Required secret for Convex deployment authentication
+- `AUTOCHANGELOG_WEBHOOK_URL` - Optional: AutoChangelog webhook URL
+- `AUTOCHANGELOG_SECRET` - Optional: AutoChangelog webhook secret
 
 ### 3. Claude Code (`claude.yml`)
 
@@ -61,6 +64,20 @@ This is the deploy key for your Convex production deployment.
 2. Find the `CONVEX_DEPLOY_KEY` environment variable
 3. Copy the value
 4. Add it to GitHub Secrets
+
+#### `AUTOCHANGELOG_WEBHOOK_URL` & `AUTOCHANGELOG_SECRET` (Optional)
+
+These enable automatic changelog generation after each deployment via [AutoChangelog](https://autochangelog.com).
+
+**How to get them:**
+
+1. Go to [AutoChangelog Repositories](https://autochangelog.com/repositories)
+2. Find your repository (opentech1/openchat)
+3. Click "Installation Instructions"
+4. Copy the **Webhook URL** → add as `AUTOCHANGELOG_WEBHOOK_URL`
+5. Copy the **Webhook Secret** → add as `AUTOCHANGELOG_SECRET`
+
+The changelog will be auto-generated and published to [updates.osschat.dev](https://updates.osschat.dev/) after each successful deployment.
 
 ### Testing the Workflow
 
@@ -170,7 +187,8 @@ graph TD
     C --> D[Deploy Convex]
     D --> E[Run Migrations]
     E --> F[Verify Data]
-    A --> G[Vercel Auto-Deploy Web]
+    F --> G[Generate Changelog]
+    A --> H[Vercel Auto-Deploy Web]
 ```
 
 ## Security Best Practices
