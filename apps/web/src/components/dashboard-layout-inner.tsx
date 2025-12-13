@@ -6,6 +6,7 @@ import AppSidebar from "@/components/app-sidebar";
 import MobileDashboardNav from "@/components/mobile-dashboard-nav";
 import { DashboardControls } from "@/components/dashboard-controls";
 import { HelpButton } from "@/components/help-button";
+import { ChangelogButton } from "@/components/changelog-button";
 import { ChatExportButton } from "@/components/chat-export-button";
 
 type DashboardLayoutClientProps = {
@@ -89,6 +90,7 @@ export default function DashboardLayoutClient({
         <div className="flex h-full w-full flex-1 flex-col overflow-x-hidden min-h-0">
           {children}
         </div>
+        <ChangelogButton />
         <HelpButton />
       </main>
     </div>
