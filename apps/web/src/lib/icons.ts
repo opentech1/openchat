@@ -113,6 +113,7 @@ export {
   Key,
   Link as LinkIcon,
   LogIn,
+  Megaphone,
   Rocket,
   Server,
   Wrench,
