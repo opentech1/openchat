@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getConvexUserFromRequest, createChatForUser, listChats } from "@/lib/convex-server";
 import { serializeChat } from "@/lib/chat-serializers";
 import { createChatSchema, createValidationErrorResponse } from "@/lib/validation";
-import { logError } from "@/lib/logger-server";
+import { logError, logDebug } from "@/lib/logger-server";
 import { createRateLimiter } from "@/lib/rate-limit";
 import { getSessionTokenForRateLimit } from "@/lib/api/session-helpers";
 import { validateCsrfForRequest } from "@/lib/api/security-helpers";
+import { chatsCache, isRedisCacheAvailable, type CachedChatsResponse } from "@/lib/cache";
 
 // Rate limiting configuration
 const MIN_RATE_LIMIT = 1; // Minimum rate limit to prevent bypass via misconfiguration
@@ -27,6 +28,9 @@ async function getRateLimiter() {
 	return rateLimiterPromise;
 }
 
+// Cache configuration
+const CHATS_CACHE_TTL = 120; // 2 minutes
+
 export async function GET(request: Request) {
 	// Use request-based auth to read cookies directly from request headers
 	const authResult = await getConvexUserFromRequest(request);
@@ -39,10 +43,48 @@ export async function GET(request: Request) {
 	const url = new URL(request.url);
 	const cursor = url.searchParams.get("cursor") || undefined;
 	const limitParam = url.searchParams.get("limit");
-	const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+	const limit = limitParam ? parseInt(limitParam, 10) : 20; // Default limit for cache key consistency
 
+	// Try cache first if Redis is available
+	if (isRedisCacheAvailable()) {
+		const cacheKey = chatsCache.key(userId, limit, cursor);
+		const cached = await chatsCache.get(cacheKey);
+
+		if (cached) {
+			logDebug(`[chats] Cache HIT for key: ${cacheKey}`);
+			return NextResponse.json(cached, {
+				headers: {
+					"X-Cache": "HIT",
+					"Cache-Control": "private, max-age=120",
+				},
+			});
+		}
+		logDebug(`[chats] Cache MISS for key: ${cacheKey}`);
+	}
+
+	// Fetch from Convex
 	const result = await listChats(userId, cursor, limit);
-	return NextResponse.json({ chats: result.chats.map(serializeChat), nextCursor: result.nextCursor });
+	// Type annotation ensures response structure matches CachedChatsResponse
+	const response: CachedChatsResponse = {
+		chats: result.chats.map(serializeChat),
+		nextCursor: result.nextCursor ?? null,
+	};
+
+	// Cache the result if Redis is available
+	if (isRedisCacheAvailable()) {
+		const cacheKey = chatsCache.key(userId, limit, cursor);
+		// Don't await cache set - fire and forget for better latency
+		chatsCache.set(cacheKey, response, CHATS_CACHE_TTL).catch((err) => {
+			logError("[chats] Failed to cache response", err);
+		});
+	}
+
+	return NextResponse.json(response, {
+		headers: {
+			"X-Cache": "MISS",
+			"Cache-Control": "private, max-age=120",
+		},
+	});
 }
 
 export async function POST(request: Request) {
@@ -108,6 +150,15 @@ export async function POST(request: Request) {
 	try {
 		const [, userId] = authResult;
 		const chat = await createChatForUser(userId, validatedTitle);
+
+		// Invalidate user's chat list cache after creating a new chat
+		if (isRedisCacheAvailable()) {
+			// Don't await - fire and forget for better latency
+			chatsCache.invalidateForUser(userId).catch((err) => {
+				logError("[chats] Failed to invalidate cache", err);
+			});
+		}
+
 		return NextResponse.json({ chat: serializeChat(chat) });
 	} catch (error) {
 		logError("Error creating chat", error);

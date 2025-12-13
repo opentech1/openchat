@@ -5,6 +5,7 @@ import { withCsrfProtection, CSRF_COOKIE_NAME } from "@/lib/csrf";
 import { chatIdSchema, createValidationErrorResponse } from "@/lib/validation";
 import { logError } from "@/lib/logger-server";
 import { auditChatDelete, getRequestMetadata } from "@/lib/audit-logger";
+import { chatsCache, isRedisCacheAvailable } from "@/lib/cache";
 
 export async function DELETE(
 	request: Request,
@@ -38,6 +39,14 @@ export async function DELETE(
 			// Delete chat
 			const chatId = validatedId as Id<"chats">;
 			await deleteChatForUser(convexUserId, chatId);
+
+			// Invalidate user's chat list cache after deleting a chat
+			if (isRedisCacheAvailable()) {
+				// Don't await - fire and forget for better latency
+				chatsCache.invalidateForUser(convexUserId).catch((err) => {
+					logError("[chats] Failed to invalidate cache", err);
+				});
+			}
 
 			// SECURITY: Audit log chat deletion
 			const { ipAddress, userAgent } = getRequestMetadata(request);
