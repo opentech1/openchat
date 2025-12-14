@@ -221,34 +221,41 @@ export function hasVideoCapability(modelId: string): boolean {
 /**
  * Detect if a model has mandatory reasoning that cannot be disabled.
  *
- * Some models like GPT-5, O1, O3, and Grok series have built-in reasoning
- * that is always active and cannot be turned off via API parameters.
+ * IMPORTANT: Only OpenAI's o1 and o3 series have truly mandatory reasoning.
+ * These models have built-in reasoning that is always active and cannot be
+ * turned off via API parameters.
  *
- * Models with mandatory reasoning:
- * - OpenAI: GPT-5, o1, o3 series
- * - xAI: Grok models
+ * Models with mandatory reasoning (VERY LIMITED LIST):
+ * - OpenAI o1 series: o1, o1-mini, o1-pro, o1-preview
+ * - OpenAI o3 series: o3, o3-mini
+ *
+ * Models that do NOT have mandatory reasoning (reasoning is optional):
+ * - Anthropic Claude (all versions) - use `thinking` parameter
+ * - xAI Grok (all versions) - use `reasoning: { enabled: true/false }`
+ * - Google Gemini (all versions) - use `thinkingConfig` parameter
+ * - DeepSeek R1/Reasoner - reasoning can be toggled
+ * - All other reasoning models - 99% can disable reasoning
  *
  * @param modelId - Full model identifier
  * @returns true if model always uses reasoning (cannot be disabled)
  *
  * @example
  * ```typescript
- * if (hasMandatoryReasoning("x-ai/grok-4-fast")) {
- *   // Show warning that reasoning cannot be disabled
- *   // Reset to default reasoning level instead
- * }
+ * hasMandatoryReasoning("openai/o1")           // true
+ * hasMandatoryReasoning("openai/o3-mini")      // true
+ * hasMandatoryReasoning("x-ai/grok-4-fast")    // false
+ * hasMandatoryReasoning("anthropic/claude-4")  // false
+ * hasMandatoryReasoning("google/gemini-2.5")   // false
  * ```
  */
 export function hasMandatoryReasoning(modelId: string): boolean {
 	const lowerModelId = modelId.toLowerCase();
 	return (
-		lowerModelId.includes("gpt-5") ||
 		lowerModelId.includes("/o1") ||
 		lowerModelId.includes("/o3") ||
 		lowerModelId.includes("o1-pro") ||
 		lowerModelId.includes("o1-mini") ||
-		lowerModelId.includes("o3-mini") ||
-		lowerModelId.includes("grok")
+		lowerModelId.includes("o3-mini")
 	);
 }
 

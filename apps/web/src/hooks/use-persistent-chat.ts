@@ -99,7 +99,7 @@ export interface StartStreamOptions {
   /** Reasoning config for models that support it */
   reasoningConfig?: {
     enabled: boolean;
-    effort?: "medium" | "high";
+    effort?: "low" | "medium" | "high";
     max_tokens?: number;
   };
 }
@@ -490,7 +490,7 @@ export type SendMessageOptions = {
   conversationHistory?: ChatMessage[];
   reasoningConfig?: {
     enabled: boolean;
-    effort?: "medium" | "high";
+    effort?: "low" | "medium" | "high";
     max_tokens?: number;
   };
 };
