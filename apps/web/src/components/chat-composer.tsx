@@ -22,13 +22,14 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
-import { ReasoningControls } from "./reasoning-controls";
+import { ReasoningSettingsButton } from "./reasoning-settings-button";
+import { ReasoningSettingsPopover } from "./reasoning-settings-popover";
 import {
   type ReasoningConfig,
   DEFAULT_REASONING_CONFIG,
   getDefaultReasoningForModel,
 } from "@/lib/reasoning-config";
-import { getModelCapabilities } from "@/lib/model-capabilities";
+import { getModelCapabilities, hasReasoningCapability } from "@/lib/model-capabilities";
 import { ContextUsageIndicator } from "@/components/ui/context-usage-indicator";
 import { countTokens, countMessagesTokens } from "@/lib/token-counter";
 import type { UIMessage } from "ai";
@@ -805,14 +806,18 @@ function ChatComposer({
               }}
             />
           )}
-          {selectedModelCapabilities?.reasoning && (
-            <ReasoningControls
-              value={activeReasoningConfig}
-              onChange={handleReasoningConfigChange}
+          {hasReasoningCapability(activeModelId) && (
+            <ReasoningSettingsPopover
               modelId={activeModelId}
-              capabilities={selectedModelCapabilities}
+              reasoningConfig={activeReasoningConfig}
+              onReasoningConfigChange={handleReasoningConfigChange}
               disabled={disabled || isBusy}
-            />
+            >
+              <ReasoningSettingsButton
+                reasoningConfig={activeReasoningConfig}
+                disabled={disabled || isBusy}
+              />
+            </ReasoningSettingsPopover>
           )}
           <div className="hidden sm:block">
             <ContextUsageIndicator

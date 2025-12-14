@@ -219,7 +219,7 @@ type ChatRequestPayload = {
 	}>;
 	reasoningConfig?: {
 		enabled: boolean;
-		effort?: "medium" | "high";
+		effort?: "low" | "medium" | "high";
 		max_tokens?: number;
 		exclude?: boolean;
 	};

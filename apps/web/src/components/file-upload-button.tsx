@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { Paperclip } from "@/lib/icons";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
 	Tooltip,
 	TooltipContent,
@@ -239,26 +239,15 @@ export function FileUploadButton({
 			<TooltipProvider delayDuration={100}>
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<button
+						<Button
 							type="button"
+							variant="outline"
 							onClick={handleButtonClick}
 							disabled={disabled}
-							className={cn(
-								"inline-flex items-center justify-center",
-								"size-9",
-								"text-sm",
-								"rounded-lg border",
-								"bg-background shadow-xs",
-								"transition-all",
-								"hover:bg-accent hover:text-accent-foreground",
-								"dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
-								"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-								"disabled:pointer-events-none disabled:opacity-50",
-							)}
 							aria-label="Upload file"
 						>
 							<Paperclip className="size-4" />
-						</button>
+						</Button>
 					</TooltipTrigger>
 					<TooltipContent>
 						<span>Upload file</span>

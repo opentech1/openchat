@@ -415,7 +415,7 @@ type StreamRequestBody = {
 	}>;
 	reasoningConfig?: {
 		enabled: boolean;
-		effort?: "medium" | "high";
+		effort?: "low" | "medium" | "high";
 		max_tokens?: number;
 	};
 };
@@ -468,8 +468,9 @@ export const streamLLM = httpAction(async (ctx, request) => {
 			content: m.content,
 		}));
 
-		// Determine if model supports reasoning
-		const hasReasoning = reasoningConfig?.enabled && modelId.includes("deepseek");
+		// Determine if reasoning is enabled
+		// Trust the config - UI only shows reasoning controls for models that support it
+		const hasReasoning = reasoningConfig?.enabled;
 
 		let fullContent = "";
 		let fullReasoning = "";
@@ -619,7 +620,7 @@ export const streamLLM = httpAction(async (ctx, request) => {
 							}
 						}
 
-						// Handle reasoning content (DeepSeek format)
+						// Handle reasoning content (OpenRouter standard format)
 						if (delta?.reasoning_content) {
 							if (!reasoningStartTime) {
 								reasoningStartTime = Date.now();

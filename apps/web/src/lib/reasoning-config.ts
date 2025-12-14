@@ -15,10 +15,20 @@ import { hasMandatoryReasoning } from "./model-capabilities";
 
 /**
  * Reasoning effort level for OpenAI-style models
+ * - low: ~25% of max_tokens for reasoning (quick)
  * - medium: ~50% of max_tokens for reasoning (balanced)
  * - high: ~80% of max_tokens for reasoning (thorough)
  */
-export type ReasoningEffort = "medium" | "high";
+export type ReasoningEffort = "low" | "medium" | "high";
+
+/**
+ * Preset reasoning levels for unified UI
+ * - none: Reasoning disabled
+ * - low: Quick reasoning (~4K tokens)
+ * - medium: Balanced reasoning (~8K tokens)
+ * - high: Thorough reasoning (~16K tokens)
+ */
+export type ReasoningLevel = "none" | "low" | "medium" | "high";
 
 /**
  * Reasoning configuration that can be sent to OpenRouter API
@@ -35,11 +45,33 @@ export type ReasoningConfig = {
 };
 
 /**
+ * Extended reasoning configuration with UI state
+ * Used for tracking whether user is in advanced (custom token) mode
+ */
+export interface ReasoningConfigExtended extends ReasoningConfig {
+	/** True when using custom token count instead of preset levels */
+	advancedMode?: boolean;
+	/** Preset level when not in advanced mode */
+	level?: ReasoningLevel;
+}
+
+/**
  * Default reasoning configuration (off by default)
  */
 export const DEFAULT_REASONING_CONFIG: ReasoningConfig = {
 	enabled: false,
 };
+
+/**
+ * Token amounts for each preset reasoning level
+ * Used when converting levels to max_tokens for Anthropic/Gemini models
+ */
+export const REASONING_PRESETS = {
+	none: 0,
+	low: 4096,
+	medium: 8192,
+	high: 16384,
+} as const;
 
 /**
  * Get the model provider from model ID
@@ -168,4 +200,136 @@ export function getReasoningLevelLabel(config: ReasoningConfig): string {
  */
 export function clampAnthropicReasoningTokens(tokens: number): number {
 	return Math.max(1024, Math.min(32000, tokens));
+}
+
+/**
+ * Convert a preset reasoning level to a ReasoningConfig
+ *
+ * Uses effort for models that support it (OpenAI, Grok),
+ * otherwise uses max_tokens (Anthropic, Gemini).
+ *
+ * @param level - Preset reasoning level
+ * @param modelId - Model identifier to determine config type
+ * @returns ReasoningConfig appropriate for the model
+ *
+ * @example
+ * ```typescript
+ * const config = levelToReasoningConfig("high", "anthropic/claude-sonnet-4");
+ * // { enabled: true, max_tokens: 16384 }
+ *
+ * const config2 = levelToReasoningConfig("high", "x-ai/grok-2");
+ * // { enabled: true, effort: "high" }
+ * ```
+ */
+export function levelToReasoningConfig(
+	level: ReasoningLevel,
+	modelId: string
+): ReasoningConfig {
+	// Validate level input
+	const validLevels: ReasoningLevel[] = ["none", "low", "medium", "high"];
+	if (!validLevels.includes(level)) {
+		console.warn(`Invalid reasoning level: ${level}, defaulting to "medium"`);
+		level = "medium";
+	}
+
+	if (level === "none") {
+		return { enabled: false };
+	}
+
+	// Use effort for models that support it, otherwise use max_tokens
+	// Cast level to ReasoningEffort since we already checked level !== "none"
+	if (supportsReasoningEffort(modelId)) {
+		return { enabled: true, effort: level as ReasoningEffort };
+	}
+
+	return { enabled: true, max_tokens: REASONING_PRESETS[level] };
+}
+
+/**
+ * Convert a ReasoningConfig back to a preset level for UI display
+ *
+ * Maps effort values directly to levels. For max_tokens,
+ * finds the closest preset level.
+ *
+ * @param config - ReasoningConfig to convert
+ * @returns Closest matching ReasoningLevel
+ *
+ * @example
+ * ```typescript
+ * reasoningConfigToLevel({ enabled: false }) // "none"
+ * reasoningConfigToLevel({ enabled: true, effort: "high" }) // "high"
+ * reasoningConfigToLevel({ enabled: true, max_tokens: 10000 }) // "medium"
+ * ```
+ */
+export function reasoningConfigToLevel(config: ReasoningConfig): ReasoningLevel {
+	if (!config.enabled) return "none";
+
+	// If using effort, map directly
+	if (config.effort) {
+		if (config.effort === "low") return "low";
+		if (config.effort === "medium") return "medium";
+		if (config.effort === "high") return "high";
+	}
+
+	// If using max_tokens, use midpoint boundaries for better UX
+	if (config.max_tokens) {
+		const lowMedBoundary =
+			(REASONING_PRESETS.low + REASONING_PRESETS.medium) / 2; // 6144
+		const medHighBoundary =
+			(REASONING_PRESETS.medium + REASONING_PRESETS.high) / 2; // 12288
+
+		if (config.max_tokens <= lowMedBoundary) return "low";
+		if (config.max_tokens <= medHighBoundary) return "medium";
+		return "high";
+	}
+
+	return "medium"; // default
+}
+
+/**
+ * Get display text for the reasoning badge in UI
+ *
+ * Shows preset level name for standard configs, or token count
+ * for custom (advanced mode) configs.
+ *
+ * @param config - ReasoningConfig to get badge text for
+ * @returns Short display string (e.g., "NONE", "LOW", "MED", "HIGH", "8K")
+ *
+ * @example
+ * ```typescript
+ * getReasoningBadgeText({ enabled: false }) // "NONE"
+ * getReasoningBadgeText({ enabled: true, effort: "medium" }) // "MED"
+ * getReasoningBadgeText({ enabled: true, max_tokens: 8192 }) // "MED" (preset value)
+ * getReasoningBadgeText({ enabled: true, max_tokens: 8000 }) // "8K" (custom value)
+ * getReasoningBadgeText({ enabled: true, max_tokens: 500 }) // "500"
+ * ```
+ */
+export function getReasoningBadgeText(config: ReasoningConfig): string {
+	if (!config.enabled) return "NONE";
+
+	// If using effort, show level
+	if (config.effort) {
+		const level = reasoningConfigToLevel(config);
+		return level === "medium" ? "MED" : level.toUpperCase();
+	}
+
+	// If using max_tokens, check if it's a preset or custom
+	if (config.max_tokens) {
+		const presetValues: readonly number[] = Object.values(REASONING_PRESETS);
+		const isPreset = presetValues.includes(config.max_tokens);
+
+		if (isPreset) {
+			// Show level name for preset values
+			const level = reasoningConfigToLevel(config);
+			return level === "medium" ? "MED" : level.toUpperCase();
+		}
+
+		// Custom value - show token count
+		if (config.max_tokens >= 1000) {
+			return `${Math.round(config.max_tokens / 1000)}K`;
+		}
+		return config.max_tokens.toString();
+	}
+
+	return "ON"; // Fallback for enabled but no specific config
 }
