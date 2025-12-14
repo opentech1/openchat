@@ -190,7 +190,7 @@ export function ReasoningSettingsPopover({
 								"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
 								disabled && "opacity-50 cursor-not-allowed"
 							)}
-							aria-valuetext={PRESET_DISPLAY_LABELS[PRESET_LABELS[sliderValue] ?? "medium"]}
+							aria-valuetext={PRESET_DISPLAY_LABELS[(PRESET_LABELS[sliderValue] ?? "medium") as PresetLevel]}
 						/>
 
 						{/* Labels below slider */}
