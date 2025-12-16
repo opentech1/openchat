@@ -20,3 +20,4 @@ ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
 /.playwright-mcp/
 *.bak
+preflight.yml

@@ -51,6 +51,7 @@ export {
   Search01Icon as SearchIcon,
   SentIcon as SendIcon,
   Square01Icon as SquareIcon,
+  StopIcon as StopIcon,
   Delete01Icon as Trash,
   Upload01Icon as Upload,
   Cancel01Icon as X,

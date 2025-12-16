@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { SendIcon, LoaderIcon, SquareIcon } from "@/lib/icons";
+import { SendIcon, LoaderIcon, StopIcon } from "@/lib/icons";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -185,6 +185,7 @@ export type ChatComposerProps = {
     attachments?: FileAttachment[];
     reasoningConfig?: ReasoningConfig;
     jonMode?: boolean;
+    createdChatId?: Id<"chats">; // Chat ID if one was created during file upload
   }) => void | Promise<void>;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -200,6 +201,11 @@ export type ChatComposerProps = {
   initialValue?: string;
   userId?: Id<"users"> | null;
   chatId?: Id<"chats"> | null;
+  /**
+   * Callback to create a chat when needed (e.g., for file upload on root page).
+   * Returns the created chat ID.
+   */
+  onCreateChat?: () => Promise<Id<"chats"> | null>;
   reasoningConfig?: ReasoningConfig;
   onReasoningConfigChange?: (config: ReasoningConfig) => void;
   messages?: UIMessage[];
@@ -221,7 +227,8 @@ function ChatComposer({
   onMissingRequirement,
   initialValue = "",
   userId,
-  chatId,
+  chatId: externalChatId,
+  onCreateChat,
   reasoningConfig: externalReasoningConfig,
   onReasoningConfigChange,
   messages = [],
@@ -255,6 +262,13 @@ function ChatComposer({
   const [showCommandAutocomplete, setShowCommandAutocomplete] = useState(false);
   const [partialCommand, setPartialCommand] = useState<string | null>(null);
   const [isCommandValid, setIsCommandValid] = useState(false);
+
+  // Internal chat ID state - used when a chat is created during file upload on root page
+  const [internalChatId, setInternalChatId] = useState<Id<"chats"> | null>(null);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
+
+  // Effective chatId: use external if provided, otherwise use internally created one
+  const chatId = externalChatId ?? internalChatId;
 
   const { textareaRef, adjustHeight, debouncedAdjustHeight } =
     useAutoResizeTextarea({ minHeight: 60, maxHeight: 200 });
@@ -390,8 +404,8 @@ function ChatComposer({
   // File upload handler
   const handleFileSelect = useCallback(
     async (file: File) => {
-      // Check if we have userId and chatId
-      if (!userId || !chatId) {
+      // Check if we have userId
+      if (!userId) {
         toast.error("Unable to upload file. Please try again.");
         return;
       }
@@ -406,8 +420,30 @@ function ChatComposer({
       dispatchFileUpload({ type: "ADD_UPLOADING", payload: file });
 
       try {
+        // Determine which chatId to use - may need to create one
+        let effectiveChatId = chatId;
+
+        // If no chatId and we have onCreateChat, create a chat first
+        if (!effectiveChatId && onCreateChat) {
+          setIsCreatingChat(true);
+          try {
+            const newChatId = await onCreateChat();
+            if (!newChatId) {
+              throw new Error("Failed to create chat for file upload");
+            }
+            effectiveChatId = newChatId;
+            setInternalChatId(newChatId);
+          } finally {
+            setIsCreatingChat(false);
+          }
+        }
+
+        if (!effectiveChatId) {
+          throw new Error("Unable to upload file: no chat available");
+        }
+
         // Step 1: Generate upload URL
-        const uploadUrl = await generateUploadUrl({ userId, chatId });
+        const uploadUrl = await generateUploadUrl({ userId, chatId: effectiveChatId });
 
         // Step 2: Upload file to Convex storage
         const uploadResponse = await fetch(uploadUrl, {
@@ -427,7 +463,7 @@ function ChatComposer({
         // Step 3: Save file metadata and get URL
         const { filename: sanitizedFilename, url } = await saveFileMetadata({
           userId,
-          chatId,
+          chatId: effectiveChatId,
           storageId,
           filename: file.name,
           contentType: file.type,
@@ -463,7 +499,7 @@ function ChatComposer({
         dispatchFileUpload({ type: "REMOVE_UPLOADING", payload: file });
       }
     },
-    [userId, chatId, quota, generateUploadUrl, saveFileMetadata]
+    [userId, chatId, quota, generateUploadUrl, saveFileMetadata, onCreateChat]
   );
 
   // Remove uploaded file
@@ -527,6 +563,8 @@ function ChatComposer({
         attachments: attachmentsToSend,
         reasoningConfig: activeReasoningConfig,
         jonMode: jonMode,
+        // Pass the internally created chatId if one was created during file upload
+        createdChatId: internalChatId ?? undefined,
       });
     } catch (error) {
       logError("Failed to send message", error);
@@ -559,6 +597,7 @@ function ChatComposer({
     jonMode,
     convexUser,
     incrementTemplateUsage,
+    internalChatId,
   ]);
 
   // Handler for reasoning config changes
@@ -787,10 +826,10 @@ function ChatComposer({
             open={modelSelectorOpen}
             onOpenChange={setModelSelectorOpen}
           />
-          {userId && chatId && (
+          {userId && (chatId || onCreateChat) && (
             <FileUploadButton
               onFileSelect={handleFileSelect}
-              disabled={disabled || isBusy || uploadingFiles.length > 0}
+              disabled={disabled || isBusy || uploadingFiles.length > 0 || isCreatingChat}
               modelCapabilities={selectedModelCapabilities}
               onUnsupportedModel={() => {
                 // Find a model with file support
@@ -877,7 +916,7 @@ function ChatComposer({
           >
             {/* INSTANT: Show Stop icon immediately when sending OR streaming */}
             {(isSending || isStreaming) ? (
-              <SquareIcon className="size-4" aria-hidden="true" />
+              <StopIcon className="size-4" aria-hidden="true" />
             ) : (
               <SendIcon className="size-4 transition-transform duration-100 ease-out" aria-hidden="true" />
             )}

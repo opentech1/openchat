@@ -13,7 +13,7 @@ import type { WaitState } from "@/hooks/use-progressive-wait-detection";
 
 export type ChatMessagesFeedProps = {
   initialMessages: NormalizedMessage[];
-  optimisticMessages: UIMessage<{ createdAt?: string; thinkingTimeMs?: number }>[];
+  optimisticMessages: UIMessage<{ createdAt?: string; thinkingTimeMs?: number; reasoningRequested?: boolean }>[];
   paddingBottom: number;
   className?: string;
   loading?: boolean;
@@ -83,13 +83,21 @@ export function ChatMessagesFeed({
            a.storageId === msg.attachments![i]?.storageId
          ));
 
+      // CRITICAL FIX: Compare thinkingTimeMs to ensure reasoning duration updates correctly
+      const sameThinkingTime = previous.thinkingTimeMs === msg.thinkingTimeMs;
+
+      // Compare reasoningRequested for redacted state
+      const sameReasoningRequested = previous.reasoningRequested === msg.reasoningRequested;
+
       if (
         sameRole &&
         sameContent &&
         sameCreated &&
         prevUpdated === nextUpdated &&
         sameParts &&
-        sameAttachments
+        sameAttachments &&
+        sameThinkingTime &&
+        sameReasoningRequested
       ) {
         return previous;
       }
@@ -109,6 +117,7 @@ export function ChatMessagesFeed({
         content: msg.content,
         parts: msg.parts,
         thinkingTimeMs: msg.thinkingTimeMs,
+        reasoningRequested: msg.reasoningRequested,
         attachments: msg.attachments,
       })),
     [merged]

@@ -5,7 +5,9 @@ import type { ModelSelectorOption } from "@/components/model-selector";
 import {
   readCachedModels,
   writeCachedModels,
+  clearCachedModels,
 } from "@/lib/openrouter-model-cache";
+import { KEY_CHANGE_EVENT } from "@/hooks/use-openrouter-key";
 import { captureClientEvent, registerClientProperties } from "@/lib/posthog";
 import { logError } from "@/lib/logger";
 import { fetchWithCsrf } from "@/lib/csrf-client";
@@ -63,6 +65,26 @@ export function useModelManager(): ModelManagerState & ModelManagerActions {
     if (stored) {
       setSelectedModelState((prev) => prev ?? stored);
     }
+  }, []);
+
+  // Listen for API key changes and clear model state when key is removed
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleKeyChange = () => {
+      // Clear models immediately - if key was removed, UI should show "Connect" button
+      // If key was added, new models will be fetched by the component using this hook
+      clearCachedModels();
+      setModelOptions([]);
+      setSelectedModelState(null);
+      setApiKey(null);
+      setModelsError(null);
+    };
+
+    window.addEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+    return () => {
+      window.removeEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+    };
   }, []);
 
   // Apply stored model when options become available

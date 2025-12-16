@@ -219,3 +219,77 @@ export const checkExportRateLimit = mutation({
 	},
 });
 
+// ============================================================================
+// Chat Read Status Functions
+// ============================================================================
+
+/**
+ * Mark a chat as read by updating the lastReadAt timestamp.
+ * Creates a new record if one doesn't exist, otherwise updates the existing one.
+ */
+export const markChatAsRead = mutation({
+	args: {
+		userId: v.id("users"),
+		chatId: v.id("chats"),
+	},
+	returns: v.object({ ok: v.boolean() }),
+	handler: async (ctx, args) => {
+		// Verify user owns the chat
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
+			return { ok: false };
+		}
+
+		const now = Date.now();
+
+		// Check if a read status record already exists
+		const existing = await ctx.db
+			.query("chatReadStatus")
+			.withIndex("by_user_chat", (q) =>
+				q.eq("userId", args.userId).eq("chatId", args.chatId)
+			)
+			.unique();
+
+		if (existing) {
+			// Update existing record
+			await ctx.db.patch(existing._id, { lastReadAt: now });
+		} else {
+			// Create new record
+			await ctx.db.insert("chatReadStatus", {
+				userId: args.userId,
+				chatId: args.chatId,
+				lastReadAt: now,
+			});
+		}
+
+		return { ok: true };
+	},
+});
+
+/**
+ * Get all chat read statuses for a user.
+ * Returns a map of chatId -> lastReadAt timestamp.
+ */
+export const getChatReadStatuses = query({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.array(
+		v.object({
+			chatId: v.id("chats"),
+			lastReadAt: v.number(),
+		})
+	),
+	handler: async (ctx, args) => {
+		const statuses = await ctx.db
+			.query("chatReadStatus")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+
+		return statuses.map((s) => ({
+			chatId: s.chatId,
+			lastReadAt: s.lastReadAt,
+		}));
+	},
+});
+

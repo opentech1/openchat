@@ -11,8 +11,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 
-// Global event name for key changes
-const KEY_CHANGE_EVENT = "openrouter-key-changed";
+// Global event name for key changes - exported for use by other modules
+export const KEY_CHANGE_EVENT = "openrouter-key-changed";
 import { useConvex } from "convex/react";
 import { useSession } from "@/lib/auth-client";
 import {

@@ -193,9 +193,9 @@ describe("Example: Testing with Fixtures and Mocks", () => {
       // First chunk has role
       expect(chunks[0].choices[0].delta.role).toBe("assistant");
 
-      // Some chunks have reasoning
+      // Some chunks have reasoning (OpenRouter uses reasoning_details array)
       const reasoningChunks = chunks.filter(
-        c => c.choices[0].delta.reasoning_content
+        c => c.choices[0].delta.reasoning_details
       );
       expect(reasoningChunks.length).toBeGreaterThan(0);
 

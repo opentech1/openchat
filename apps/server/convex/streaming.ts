@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, httpAction, internalMutation } from "./_generated/server";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import {
 	PersistentTextStreaming,
 	StreamIdValidator,
@@ -86,15 +86,19 @@ export const getStreamBody = query({
 		// Get stream body from persistent streaming - returns { text, status }
 		const streamBody = await persistentTextStreaming.getStreamBody(ctx, args.streamId as StreamId);
 
-		// Always fetch the message to check its actual status
+		// Always fetch the message to check its actual status and get reasoning
 		const message = await ctx.db
 			.query("messages")
 			.withIndex("by_stream_id", (q) => q.eq("streamId", args.streamId as string))
 			.unique();
 
-		// If stream body has content and is still streaming, return it
+		// If stream body has content and is still streaming, return it with reasoning from message
 		if (streamBody && typeof streamBody === "object" && streamBody.text) {
-			return streamBody;
+			return {
+				...streamBody,
+				reasoning: message?.reasoning ?? null,
+				thinkingTimeMs: message?.thinkingTimeMs ?? null,
+			};
 		}
 
 		// If stream body is empty but message has content, use message content
@@ -106,11 +110,13 @@ export const getStreamBody = query({
 			return {
 				text: message.content,
 				status: status as "streaming" | "done",
+				reasoning: message.reasoning ?? null,
+				thinkingTimeMs: message.thinkingTimeMs ?? null,
 			};
 		}
 
-		// Fallback: return stream body (may be empty/null)
-		return streamBody;
+		// Fallback: return stream body with null reasoning (may be empty/null)
+		return streamBody ? { ...streamBody, reasoning: null, thinkingTimeMs: null } : streamBody;
 	},
 });
 
@@ -165,6 +171,76 @@ export const getStreamStatus = query({
 });
 
 /**
+ * Cancel an active stream
+ * Called by the client when user clicks stop button
+ * The streamLLM action will check for this status and stop streaming
+ */
+export const cancelStream = mutation({
+	args: {
+		streamId: v.string(),
+		userId: v.id("users"),
+	},
+	returns: v.object({
+		success: v.boolean(),
+	}),
+	handler: async (ctx, args) => {
+		// Find the message associated with this stream
+		const message = await ctx.db
+			.query("messages")
+			.withIndex("by_stream_id", (q) => q.eq("streamId", args.streamId))
+			.unique();
+
+		if (!message) {
+			return { success: false };
+		}
+
+		// Verify user owns the message
+		if (message.userId !== args.userId) {
+			return { success: false };
+		}
+
+		// Only cancel if currently streaming
+		if (message.status !== "streaming") {
+			return { success: false };
+		}
+
+		// Mark as cancelled
+		await ctx.db.patch(message._id, {
+			status: "cancelled",
+		});
+
+		// Also reset the chat status
+		const chat = await ctx.db.get(message.chatId);
+		if (chat && chat.status === "streaming") {
+			await ctx.db.patch(message.chatId, {
+				status: "idle",
+				updatedAt: Date.now(),
+			});
+		}
+
+		return { success: true };
+	},
+});
+
+/**
+ * Check if a stream has been cancelled (internal query for streamLLM)
+ */
+export const isStreamCancelled = query({
+	args: {
+		streamId: v.string(),
+	},
+	returns: v.boolean(),
+	handler: async (ctx, args) => {
+		const message = await ctx.db
+			.query("messages")
+			.withIndex("by_stream_id", (q) => q.eq("streamId", args.streamId))
+			.unique();
+
+		return message?.status === "cancelled";
+	},
+});
+
+/**
  * Mark a stream as complete and update the message content
  * Internal mutation - called from HTTP action after streaming completes
  */
@@ -174,6 +250,7 @@ export const completeStream = internalMutation({
 		content: v.string(),
 		reasoning: v.optional(v.string()),
 		thinkingTimeMs: v.optional(v.number()),
+		reasoningRequested: v.optional(v.boolean()),
 	},
 	handler: async (ctx, args) => {
 		// Get the message to find the chatId
@@ -187,6 +264,7 @@ export const completeStream = internalMutation({
 			content: args.content,
 			reasoning: args.reasoning,
 			thinkingTimeMs: args.thinkingTimeMs,
+			reasoningRequested: args.reasoningRequested,
 			status: "completed",
 		});
 
@@ -477,7 +555,12 @@ export const streamLLM = httpAction(async (ctx, request) => {
 		let reasoningStartTime: number | null = null;
 		let reasoningEndTime: number | null = null;
 		let chunkCount = 0;
+		let reasoningChunkCount = 0;
+		let isCancelled = false;
+		let lastCancellationCheck = Date.now();
 		const CHUNKS_PER_UPDATE = 10; // More frequent saves for responsive UI
+		const REASONING_CHUNKS_PER_UPDATE = 5; // Even more frequent saves for reasoning (it comes first)
+		const CANCELLATION_CHECK_INTERVAL_MS = 500; // Check for cancellation every 500ms
 
 		// Redis streaming state
 		const useRedisStreaming = redisStreamOps.isAvailable();
@@ -570,6 +653,22 @@ export const streamLLM = httpAction(async (ctx, request) => {
 			let buffer = "";
 
 			while (true) {
+				// Check for cancellation periodically (every CANCELLATION_CHECK_INTERVAL_MS)
+				const now = Date.now();
+				if (now - lastCancellationCheck >= CANCELLATION_CHECK_INTERVAL_MS) {
+					lastCancellationCheck = now;
+					const cancelled = await actionCtx.runQuery(api.streaming.isStreamCancelled, {
+						streamId: streamId,
+					});
+					if (cancelled) {
+						isCancelled = true;
+						logger.debug("Stream cancelled by user", { streamId });
+						// Close the reader to stop receiving data
+						await reader.cancel();
+						break;
+					}
+				}
+
 				const { done, value } = await reader.read();
 				if (done) break;
 
@@ -620,17 +719,44 @@ export const streamLLM = httpAction(async (ctx, request) => {
 							}
 						}
 
-						// Handle reasoning content (OpenRouter standard format)
-						if (delta?.reasoning_content) {
+						// Handle reasoning content from OpenRouter
+						// OpenRouter returns reasoning in different formats depending on model:
+						// - delta.reasoning_details: array of objects - type varies by provider:
+						//   - Anthropic: { type: "reasoning.text", text: "..." }
+						//   - Others: { type: "text", text: "..." }
+						// - delta.reasoning: string format (some providers)
+						// - choice.reasoning_details: array at choice level (non-streaming)
+						let reasoningChunk: string | null = null;
+
+						// Check for reasoning_details array (OpenRouter's primary format)
+						if (delta?.reasoning_details && Array.isArray(delta.reasoning_details)) {
+							// Extract text from reasoning_details array
+							// Handle multiple type formats: "text", "reasoning.text", "reasoning", etc.
+							reasoningChunk = delta.reasoning_details
+								.filter((item: { type?: string; text?: string }) => {
+									// Accept any type that contains "text" or "reasoning" and has text content
+									const itemType = item.type?.toLowerCase() || "";
+									const hasValidType = itemType.includes("text") || itemType.includes("reasoning") || itemType === "";
+									return hasValidType && item.text;
+								})
+								.map((item: { type?: string; text?: string }) => item.text)
+								.join("");
+						}
+						// Fallback: check for reasoning string
+						else if (delta?.reasoning && typeof delta.reasoning === "string") {
+							reasoningChunk = delta.reasoning;
+						}
+
+						if (reasoningChunk) {
 							if (!reasoningStartTime) {
 								reasoningStartTime = Date.now();
 							}
-							fullReasoning += delta.reasoning_content;
+							fullReasoning += reasoningChunk;
 							reasoningEndTime = Date.now();
 
 							// Also stream reasoning to Redis with prefix
 							if (redisStreamId) {
-								pendingTokenBatch.push(`[reasoning]${delta.reasoning_content}`);
+								pendingTokenBatch.push(`[reasoning]${reasoningChunk}`);
 								const now = Date.now();
 								// Flush batch when size threshold reached or time interval elapsed (with non-empty check)
 								if (
@@ -644,6 +770,18 @@ export const streamLLM = httpAction(async (ctx, request) => {
 										// Don't rethrow - continue streaming
 									}
 								}
+							}
+
+							// CRITICAL: Also save reasoning to DB for getStreamBody query
+							// Reasoning comes before content, so we need frequent saves here
+							// to enable real-time reasoning display via Convex queries
+							reasoningChunkCount++;
+							if (reasoningChunkCount % REASONING_CHUNKS_PER_UPDATE === 0) {
+								await actionCtx.runMutation(internal.streaming.updateStreamContent, {
+									messageId: messageId as Id<"messages">,
+									content: fullContent,
+									reasoning: fullReasoning,
+								});
 							}
 						}
 					} catch (parseError) {
@@ -685,11 +823,28 @@ export const streamLLM = httpAction(async (ctx, request) => {
 
 			// CRITICAL: Update the message record with final content
 			// This runs even if the client disconnects - ensuring content is saved
+			// Skip if cancelled - the cancelStream mutation already set the status
+			if (isCancelled) {
+				// Just save the partial content, status is already "cancelled"
+				await actionCtx.runMutation(internal.streaming.updateStreamContent, {
+					messageId: messageId as Id<"messages">,
+					content: fullContent,
+					reasoning: fullReasoning.length > 0 ? fullReasoning : undefined,
+				});
+				logger.debug("Stream cancelled, saved partial content", {
+					streamId,
+					contentLength: fullContent.length,
+					reasoningLength: fullReasoning.length
+				});
+				return;
+			}
+
 			await actionCtx.runMutation(internal.streaming.completeStream, {
 				messageId: messageId as Id<"messages">,
 				content: fullContent,
 				reasoning: fullReasoning.length > 0 ? fullReasoning : undefined,
 				thinkingTimeMs,
+				reasoningRequested: hasReasoning,
 			});
 		};
 

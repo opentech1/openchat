@@ -40,6 +40,7 @@ export type StreamStatus =
 export interface StreamToken {
 	id: string;
 	delta: string;
+	reasoning?: string;
 	ts?: number;
 }
 
@@ -64,6 +65,12 @@ export interface UseStreamSubscriptionOptions {
 	 * Called for each token received
 	 */
 	onToken: (token: string, data: StreamToken) => void;
+
+	/**
+	 * Called for each reasoning token received (optional)
+	 * If not provided, reasoning is still accumulated and available via return value
+	 */
+	onReasoning?: (reasoning: string, data: StreamToken) => void;
 
 	/**
 	 * Called when stream completes successfully
@@ -111,6 +118,16 @@ export interface UseStreamSubscriptionReturn {
 	cursor: string;
 
 	/**
+	 * Accumulated text content from stream
+	 */
+	text: string;
+
+	/**
+	 * Accumulated reasoning content from stream
+	 */
+	reasoning: string;
+
+	/**
 	 * Manually reconnect to stream
 	 */
 	reconnect: () => void;
@@ -127,6 +144,7 @@ export interface UseStreamSubscriptionReturn {
 export function useStreamSubscription({
 	streamId,
 	onToken,
+	onReasoning,
 	onComplete,
 	onError,
 	initialCursor = "0-0",
@@ -135,6 +153,8 @@ export function useStreamSubscription({
 	reconnectDelay = 1000,
 }: UseStreamSubscriptionOptions): UseStreamSubscriptionReturn {
 	const [status, setStatus] = useState<StreamStatus>("idle");
+	const [text, setText] = useState<string>("");
+	const [reasoning, setReasoning] = useState<string>("");
 	const eventSourceRef = useRef<EventSource | null>(null);
 	const cursorRef = useRef<string>(initialCursor);
 	const reconnectAttemptsRef = useRef<number>(0);
@@ -142,11 +162,13 @@ export function useStreamSubscription({
 
 	// Stable callback refs to avoid reconnection on callback changes
 	const onTokenRef = useRef(onToken);
+	const onReasoningRef = useRef(onReasoning);
 	const onCompleteRef = useRef(onComplete);
 	const onErrorRef = useRef(onError);
 
 	// Update refs on each render
 	onTokenRef.current = onToken;
+	onReasoningRef.current = onReasoning;
 	onCompleteRef.current = onComplete;
 	onErrorRef.current = onError;
 
@@ -190,8 +212,16 @@ export function useStreamSubscription({
 				const data = JSON.parse(event.data) as StreamToken;
 				cursorRef.current = data.id;
 
+				// Handle regular text delta
 				if (data.delta) {
+					setText((prev) => prev + data.delta);
 					onTokenRef.current(data.delta, data);
+				}
+
+				// Handle reasoning content
+				if (data.reasoning) {
+					setReasoning((prev) => prev + data.reasoning);
+					onReasoningRef.current?.(data.reasoning, data);
 				}
 			} catch (error) {
 				console.error("[useStreamSubscription] Failed to parse message:", error);
@@ -295,11 +325,15 @@ export function useStreamSubscription({
 		isMountedRef.current = true;
 
 		if (streamId) {
-			// Reset cursor when streamId changes (new stream)
+			// Reset cursor and accumulated content when streamId changes (new stream)
 			cursorRef.current = initialCursor;
+			setText("");
+			setReasoning("");
 			connect();
 		} else {
 			setStatus("idle");
+			setText("");
+			setReasoning("");
 			disconnect();
 		}
 
@@ -312,6 +346,8 @@ export function useStreamSubscription({
 	return {
 		status,
 		cursor: cursorRef.current,
+		text,
+		reasoning,
 		reconnect,
 		disconnect,
 	};

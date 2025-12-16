@@ -6,7 +6,8 @@ import { AccountSettingsModal } from "@/components/account-settings-modal";
 import ThemeSelector from "@/components/settings/theme-selector";
 import { ApiKeySectionWithOAuth } from "@/components/settings/api-key-section-with-oauth";
 import { JonModeSection } from "@/components/settings/jon-mode-section";
-import { useOpenRouterKey } from "@/hooks/use-openrouter-key";
+import { useOpenRouterKey, KEY_CHANGE_EVENT } from "@/hooks/use-openrouter-key";
+import { clearCachedModels } from "@/lib/openrouter-model-cache";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,7 +27,13 @@ export default function SettingsPageClient() {
   }, []);
 
   function handleKeyChanged() {
-    // Refresh state after key change
+    // Clear cached models immediately to ensure UI updates instantly
+    clearCachedModels();
+    // Dispatch the key change event to notify all listeners (model manager, model selector, etc.)
+    // This ensures the model selector shows "Connect OpenRouter" button when key is removed
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(KEY_CHANGE_EVENT));
+    }
   }
 
   const displayName = user?.name || user?.email || "User";

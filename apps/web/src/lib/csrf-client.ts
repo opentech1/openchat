@@ -75,7 +75,8 @@ export async function withCsrfToken(
 }
 
 /**
- * Fetch wrapper that automatically includes CSRF token for state-changing methods
+ * Fetch wrapper that automatically includes CSRF token for state-changing methods.
+ * Automatically retries once with a fresh token if CSRF validation fails.
  */
 export async function fetchWithCsrf(
 	input: RequestInfo | URL,
@@ -110,10 +111,34 @@ export async function fetchWithCsrf(
 		// Add CSRF token
 		headersObj[CSRF_HEADER_NAME] = token;
 
-		return fetch(input, {
+		const response = await fetch(input, {
 			...init,
 			headers: headersObj,
 		});
+
+		// If CSRF validation failed (403), clear cache and retry once with fresh token
+		if (response.status === 403) {
+			const clonedResponse = response.clone();
+			try {
+				const body = await clonedResponse.json();
+				if (body.error?.includes("CSRF") || body.message?.includes("CSRF")) {
+					// Clear cached token and get a fresh one
+					clearCsrfToken();
+					const freshToken = await getCsrfToken();
+					headersObj[CSRF_HEADER_NAME] = freshToken;
+
+					// Retry the request with fresh token
+					return fetch(input, {
+						...init,
+						headers: headersObj,
+					});
+				}
+			} catch {
+				// If we can't parse the response, return original response
+			}
+		}
+
+		return response;
 	}
 
 	return fetch(input, init);
