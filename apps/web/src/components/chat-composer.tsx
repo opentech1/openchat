@@ -185,6 +185,7 @@ export type ChatComposerProps = {
     attachments?: FileAttachment[];
     reasoningConfig?: ReasoningConfig;
     jonMode?: boolean;
+    localDate?: string;
   }) => void | Promise<void>;
   disabled?: boolean;
   sendDisabled?: boolean;
@@ -520,6 +521,16 @@ function ChatComposer({
 
     dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
+      // Generate local date string for context (e.g., "Monday, December 16, 2024 at 2:30 PM")
+      const localDate = new Date().toLocaleString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
       await onSend({
         text: messageToSend,
         modelId: currentModelId,
@@ -527,6 +538,7 @@ function ChatComposer({
         attachments: attachmentsToSend,
         reasoningConfig: activeReasoningConfig,
         jonMode: jonMode,
+        localDate,
       });
     } catch (error) {
       logError("Failed to send message", error);

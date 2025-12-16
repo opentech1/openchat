@@ -13,7 +13,7 @@ import type { IRateLimiter } from "@/lib/rate-limit";
 import { hasReasoningCapability } from "@/lib/model-capabilities";
 import { isTextPart, isFilePart } from "@/lib/error-handling";
 import { removeEmDashes } from "@/lib/text-transforms";
-import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
+import { EM_DASH_PREVENTION_SYSTEM_PROMPT, generateDateContextPrompt } from "@/lib/jon-mode-prompts";
 import { streamOps, streamingWorkflow, isRedisStreamingAvailable } from "@/lib/redis";
 
 /**
@@ -224,6 +224,7 @@ type ChatRequestPayload = {
 		exclude?: boolean;
 	};
 	jonMode?: boolean;
+	localDate?: string;
 };
 
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
@@ -906,6 +907,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			// Jon Mode: Extract em-dash prevention setting
 			const jonMode = payload.jonMode ?? false;
 
+			// Date context: Extract local date from client
+			const localDate = payload.localDate;
+
 			// DEBUG: Log reasoning config to understand what's being sent
 			logger.debug("Reasoning configuration", {
 				modelId: config.modelId,
@@ -925,12 +929,21 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				})
 			});
 
-			// Jon Mode: Prepend system prompt if enabled
-			const messagesForModel = jonMode
+			// Build system prompts array (date context + optional Jon Mode)
+			const systemPromptParts: string[] = [];
+			if (localDate) {
+				systemPromptParts.push(generateDateContextPrompt(localDate));
+			}
+			if (jonMode) {
+				systemPromptParts.push(EM_DASH_PREVENTION_SYSTEM_PROMPT);
+			}
+
+			// Prepend system prompts if any are configured
+			const messagesForModel = systemPromptParts.length > 0
 				? [
 					{
 						role: "system" as const,
-						parts: [{ type: "text" as const, text: EM_DASH_PREVENTION_SYSTEM_PROMPT }]
+						parts: [{ type: "text" as const, text: systemPromptParts.join("\n\n") }]
 					},
 					...safeMessages
 				]

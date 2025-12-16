@@ -524,6 +524,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       attachments,
       reasoningConfig,
       jonMode: jonModeParam,
+      localDate,
     }: {
       text: string;
       modelId: string;
@@ -537,6 +538,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       }>;
       reasoningConfig?: ReasoningConfig;
       jonMode?: boolean;
+      localDate?: string;
     }) => {
       // DEBUG: Entry point logging
       console.log("[STREAM] ===== handleSend ENTRY =====");
@@ -729,6 +731,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 attachments,
                 reasoningConfig,
                 jonMode: jonModeParam,
+                localDate,
               },
             },
           );
@@ -840,12 +843,21 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     autoSendAttemptedRef.current = true;
     setShouldAutoSend(false);
 
-    // Auto-send the message
+    // Auto-send the message with local date context
+    const localDate = new Date().toLocaleString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
     void handleSend({
       text: pendingMessage,
       modelId: selectedModel,
       apiKey: apiKey,
       jonMode: jonMode,
+      localDate,
     });
   }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, jonMode, status, handleSend]);
 
