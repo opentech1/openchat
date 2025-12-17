@@ -920,6 +920,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     // This is CRITICAL - without it, isConvexStreaming stays true forever
     if (streamHookStatus === "done" || streamHookStatus === "error" || streamHookStatus === "timeout") {
       drivenStreamIdsRef.current.delete(activeStreamId);
+      // Clear AbortController ref on natural completion to prevent reuse issues
+      abortControllerRef.current = null;
       // Reset streaming state so UI no longer shows loading indicators
       setActiveStreamId(null);
       setIsConvexStreaming(false);
