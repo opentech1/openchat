@@ -1,11 +1,11 @@
-import { convertToCoreMessages, smoothStream, streamText, type UIMessage } from "ai";
+import { convertToCoreMessages, smoothStream, stepCountIs, streamText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createHash } from "crypto";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 import { captureServerEvent } from "@/lib/posthog-server";
 import { getUserContextFromRequest } from "@/lib/auth-server";
-import { ensureConvexUser, streamUpsertMessage } from "@/lib/convex-server";
+import { ensureConvexUser, streamUpsertMessage, checkAndIncrementSearchUsage } from "@/lib/convex-server";
 import { resolveAllowedOrigins, validateRequestOrigin } from "@/lib/request-origin";
 import { createLogger } from "@/lib/logger";
 import { toConvexUserId, toConvexChatId, toConvexStorageId } from "@/lib/type-converters";
@@ -13,8 +13,9 @@ import type { IRateLimiter } from "@/lib/rate-limit";
 import { hasReasoningCapability } from "@/lib/model-capabilities";
 import { isTextPart, isFilePart } from "@/lib/error-handling";
 import { removeEmDashes } from "@/lib/text-transforms";
-import { EM_DASH_PREVENTION_SYSTEM_PROMPT } from "@/lib/jon-mode-prompts";
+import { EM_DASH_PREVENTION_SYSTEM_PROMPT, generateDateContextPrompt } from "@/lib/jon-mode-prompts";
 import { streamOps, streamingWorkflow, isRedisStreamingAvailable } from "@/lib/redis";
+import { createSearchTool } from "@/lib/tools/search-tool";
 
 /**
  * Message metadata type with optional createdAt timestamp
@@ -184,6 +185,16 @@ const OPENROUTER_TIMEOUT_MS = (() => {
 	return Math.min(parsed, 300000); // Cap at 5 minutes to prevent indefinite hangs
 })();
 
+// Type for tool invocation data to persist
+type ToolInvocationData = {
+	toolName: string;
+	toolCallId: string;
+	state: "input-streaming" | "input-available" | "output-available" | "output-error";
+	input?: unknown;
+	output?: unknown;
+	errorText?: string;
+};
+
 type StreamPersistRequest = {
 	userId: string;
 	chatId: string;
@@ -192,6 +203,7 @@ type StreamPersistRequest = {
 	content: string;
 	reasoning?: string;
 	thinkingTimeMs?: number;
+	toolInvocations?: ToolInvocationData[];
 	createdAt: string;
 	status: "streaming" | "completed";
 	attachments?: Array<{
@@ -224,6 +236,10 @@ type ChatRequestPayload = {
 		exclude?: boolean;
 	};
 	jonMode?: boolean;
+	/** User's local date/time for date context in system prompt */
+	localDate?: string;
+	/** Enable web search tool - allows model to search the web for current information */
+	searchEnabled?: boolean;
 };
 
 function clampUserText(message: AnyUIMessage): AnyUIMessage {
@@ -348,6 +364,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				content: input.content,
 				reasoning: input.reasoning,
 				thinkingTimeMs: input.thinkingTimeMs,
+				toolInvocations: input.toolInvocations,
 				status: input.status,
 				createdAt: new Date(input.createdAt).getTime(),
 				attachments: input.attachments,
@@ -694,6 +711,8 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 
 		let assistantText = "";
 		let assistantReasoning = "";
+		// Track tool invocations by toolCallId for deduplication and state updates
+		const toolInvocationsMap = new Map<string, ToolInvocationData>();
 		let lastPersistedLength = 0;
 		let lastPersistedReasoningLength = 0;
 		let flushTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -750,7 +769,11 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			const reasoningDelta = pendingReasoningLength - lastPersistedReasoningLength;
 			if (!force && status === "streaming") {
 				if (delta <= 0 && reasoningDelta <= 0) return;
-				if (delta < STREAM_MIN_CHARS_PER_FLUSH && reasoningDelta < STREAM_MIN_CHARS_PER_FLUSH) return;
+				// REAL-TIME REASONING: Always flush if there's new reasoning content
+				// For text, require minimum threshold to batch small chunks
+				const hasNewReasoning = reasoningDelta > 0;
+				const hasEnoughText = delta >= STREAM_MIN_CHARS_PER_FLUSH;
+				if (!hasNewReasoning && !hasEnoughText) return;
 			}
 			if (delta <= 0 && reasoningDelta <= 0 && !force) {
 				return;
@@ -766,14 +789,20 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				? reasoningEndTime - reasoningStartTime
 				: undefined;
 
+			// Convert tool invocations map to array for persistence
+			const toolInvocationsToSend = toolInvocationsMap.size > 0
+				? Array.from(toolInvocationsMap.values())
+				: undefined;
+
 			if (status === "completed") {
-				logger.debug("Final save - Reasoning status", {
+				logger.debug("Final save - Reasoning and tool status", {
 					textLength: assistantText.length,
 					reasoningLength: reasoningToSend ? reasoningToSend.length : 0,
 					hasReasoning: !!reasoningToSend,
 					thinkingTimeMs,
 					thinkingTimeSec: thinkingTimeMs ? (thinkingTimeMs / 1000).toFixed(1) : 0,
 					reasoningPreview: reasoningToSend ? reasoningToSend.slice(0, 100) : "NONE",
+					toolInvocationsCount: toolInvocationsToSend?.length ?? 0,
 					useRedisStreaming,
 				});
 			}
@@ -786,6 +815,7 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				content: assistantText,
 				reasoning: reasoningToSend,
 				thinkingTimeMs,
+				toolInvocations: toolInvocationsToSend,
 				createdAt: assistantCreatedAtIso,
 				status,
 			});
@@ -906,6 +936,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 			// Jon Mode: Extract em-dash prevention setting
 			const jonMode = payload.jonMode ?? false;
 
+			// Date context: Extract local date for system prompt
+			const localDate = payload.localDate;
+
 			// DEBUG: Log reasoning config to understand what's being sent
 			logger.debug("Reasoning configuration", {
 				modelId: config.modelId,
@@ -925,12 +958,21 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				})
 			});
 
-			// Jon Mode: Prepend system prompt if enabled
-			const messagesForModel = jonMode
+			// Build system prompts array (date context + optional Jon Mode)
+			const systemPromptParts: string[] = [];
+			if (localDate) {
+				systemPromptParts.push(generateDateContextPrompt(localDate));
+			}
+			if (jonMode) {
+				systemPromptParts.push(EM_DASH_PREVENTION_SYSTEM_PROMPT);
+			}
+
+			// Prepend system prompts if any
+			const messagesForModel = systemPromptParts.length > 0
 				? [
 					{
 						role: "system" as const,
-						parts: [{ type: "text" as const, text: EM_DASH_PREVENTION_SYSTEM_PROMPT }]
+						parts: [{ type: "text" as const, text: systemPromptParts.join("\n\n") }]
 					},
 					...safeMessages
 				]
@@ -950,6 +992,25 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				}
 			}
 
+			// SEARCH TOOL: Create search tool if enabled and API key is available
+			const searchEnabled = payload.searchEnabled ?? false;
+			const valyuApiKey = process.env.VALYU_API_KEY;
+			const tools = searchEnabled && valyuApiKey
+				? {
+					search: createSearchTool(valyuApiKey, {
+						checkAndIncrementUsage: async (userId) => checkAndIncrementSearchUsage(userId),
+						userId: toConvexUserId(convexUserId),
+					}),
+				}
+				: undefined;
+
+			if (searchEnabled) {
+				logger.debug("Search tool enabled", {
+					hasApiKey: !!valyuApiKey,
+					userId: convexUserId,
+				});
+			}
+
 			const result = await streamTextImpl({
 				model,
 				messages: convertToCoreMessagesImpl(messagesForModel),
@@ -959,6 +1020,25 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				experimental_transform: hasReasoning && reasoning ? undefined : smoothStream({
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
+				}),
+				// SEARCH TOOL: Enable multi-step tool calling when tools are available
+				// stopWhen with stepCountIs allows the model to call tools and then generate a text response
+				// stepCountIs(3) allows up to 3 steps: tool call(s) + final text response
+				// toolChoice 'auto' lets the model decide when to use tools
+				// prepareStep disables further tool calls after first successful execution to prevent loops
+				...(tools && {
+					tools,
+					stopWhen: stepCountIs(3),
+					prepareStep: async ({ steps }) => {
+						// After first step with tool results, disable further tool calls
+						// This prevents infinite tool loops and forces text response generation
+						const lastStep = steps[steps.length - 1];
+						if (lastStep && lastStep.toolCalls?.length > 0 && lastStep.toolResults?.length > 0) {
+							return { toolChoice: 'none' };
+						}
+						return {};
+					},
+					toolChoice: "auto" as const,
 				}),
 				onChunk: async ({ chunk }) => {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
@@ -1005,6 +1085,41 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 								scheduleStreamFlush();
 							}
 						}
+					} else if (chunk.type === "tool-call") {
+						// TOOL INVOCATION: Capture tool call start
+						// AI SDK uses 'input' instead of 'args' for tool call parameters
+						const toolChunk = chunk as unknown as { type: "tool-call"; toolCallId: string; toolName: string; input: unknown };
+						toolInvocationsMap.set(toolChunk.toolCallId, {
+							toolName: toolChunk.toolName,
+							toolCallId: toolChunk.toolCallId,
+							state: "input-available",
+							input: toolChunk.input,
+						});
+						logger.debug("Tool call captured", {
+							toolName: toolChunk.toolName,
+							toolCallId: toolChunk.toolCallId,
+						});
+					} else if (chunk.type === "tool-result") {
+						// TOOL INVOCATION: Capture tool result
+						const resultChunk = chunk as unknown as { type: "tool-result"; toolCallId: string; toolName: string; result: unknown };
+						const existing = toolInvocationsMap.get(resultChunk.toolCallId);
+						if (existing) {
+							existing.state = "output-available";
+							existing.output = resultChunk.result;
+						} else {
+							// Handle case where we missed the tool-call (shouldn't happen normally)
+							toolInvocationsMap.set(resultChunk.toolCallId, {
+								toolName: resultChunk.toolName,
+								toolCallId: resultChunk.toolCallId,
+								state: "output-available",
+								output: resultChunk.result,
+							});
+						}
+						logger.debug("Tool result captured", {
+							toolName: resultChunk.toolName,
+							toolCallId: resultChunk.toolCallId,
+							hasOutput: !!resultChunk.result,
+						});
 					}
 				},
 				onFinish: async (_event) => {
@@ -1065,6 +1180,9 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 				// Redis streaming analytics
 				redis_streaming_enabled: useRedisStreaming,
 				redis_stream_active: !!redisStreamId,
+				// Search tool analytics
+				search_enabled: searchEnabled,
+				search_tool_available: !!tools,
 			});
 
 			const aiResponse = result.toUIMessageStreamResponse({

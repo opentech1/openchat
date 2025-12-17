@@ -71,6 +71,15 @@ type ConvexMessage = {
   reasoning?: string;
   thinkingTimeMs?: number;
   reasoningRequested?: boolean;
+  // Tool invocations (e.g., search results) - persisted separately from content
+  toolInvocations?: Array<{
+    toolName: string;
+    toolCallId: string;
+    state: string;
+    input?: unknown;
+    output?: unknown;
+    errorText?: string;
+  }>;
   status?: string;
   streamId?: string;
   attachments?: Array<{
@@ -127,6 +136,9 @@ function toUIMessage(msg: ConvexMessage): UIMessage {
     reasoning: msg.reasoning,
     thinkingTimeMs: msg.thinkingTimeMs,
     reasoningRequested: msg.reasoningRequested,
+    // CRITICAL: Pass toolInvocations so they persist across page reloads
+    // Without this, search results disappear after refresh
+    toolInvocations: msg.toolInvocations,
     attachments: msg.attachments?.map((a) => ({
       storageId: String(a.storageId),
       filename: a.filename,

@@ -30,6 +30,14 @@ const nextConfig = {
 			// @ts-ignore - undocumented option to disable devtools entirely
 			disableDevtools: true,
 		}),
+		// PERFORMANCE: Optimize package imports for faster dev compilation
+		// Only include packages that don't have peer dependency issues
+		optimizePackageImports: [
+			'hugeicons-react',
+			'motion',
+			'sonner',
+			'cmdk',
+		],
 	},
 	serverExternalPackages: ["better-sqlite3"],
 	// Optimize webpack for better HMR with Bun

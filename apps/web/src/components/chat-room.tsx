@@ -25,6 +25,7 @@ import { useProgressiveWaitDetection } from "@/hooks/use-progressive-wait-detect
 import { useStreamSubscription } from "@/hooks/use-stream-subscription";
 import { useChatSession } from "@/hooks/use-chat-session";
 import { useReasoningPersistence } from "@/hooks/use-reasoning-persistence";
+import { useSearchPersistence } from "@/hooks/use-search-persistence";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -137,6 +138,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
   // Reasoning configuration state - persisted to localStorage with cross-tab sync
   const { reasoningConfig, setReasoningConfig } = useReasoningPersistence();
+
+  // Search configuration state - persisted to localStorage with cross-tab sync
+  const { searchConfig, setSearchConfig } = useSearchPersistence();
 
   const [pendingMessage, setPendingMessage] = useState<string>("");
   const [shouldAutoSend, setShouldAutoSend] = useState(false);
@@ -579,7 +583,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       apiKey: requestApiKey,
       attachments,
       reasoningConfig,
+      searchConfig: searchConfigParam,
       jonMode: jonModeParam,
+      localDate,
     }: {
       text: string;
       modelId: string;
@@ -592,7 +598,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         url?: string;
       }>;
       reasoningConfig?: ReasoningConfig;
+      searchConfig?: { enabled: boolean };
       jonMode?: boolean;
+      localDate?: string;
     }) => {
       // DEBUG: Entry point logging
       console.log("[STREAM] ===== handleSend ENTRY =====");
@@ -622,7 +630,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
       // Use Convex persistent streaming for true stream persistence
       // This ensures the stream continues even if the user closes the tab
-      if (convexUserId) {
+      // IMPORTANT: Skip Convex streaming when search is enabled - search tools
+      // are only supported in the Next.js API route (/api/chat), not the Convex
+      // streaming endpoint (/stream-llm) which doesn't have AI SDK tool support
+      const useConvexStreaming = convexUserId && !searchConfigParam?.enabled;
+      if (useConvexStreaming) {
         try {
           const userMessageId = crypto.randomUUID?.() ?? `user-${Date.now()}`;
           const assistantMessageId = crypto.randomUUID?.() ?? `assistant-${Date.now()}`;
@@ -697,6 +709,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 modelId,
                 messages: conversationMessages,
                 reasoningConfig,
+                searchEnabled: searchConfigParam?.enabled ?? false,
+                localDate,
               }),
               signal: controller.signal,
             })
@@ -796,7 +810,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           throw error;
         }
       } else {
-        // Fallback to original flow if Convex user not available
+        // Fallback to original flow if Convex user not available or search is enabled
+        // Search tools require the Next.js API route which has AI SDK tool support
         const id = crypto.randomUUID?.() ?? `${Date.now()}`;
         const createdAt = new Date().toISOString();
         try {
@@ -817,6 +832,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 attachments,
                 reasoningConfig,
                 jonMode: jonModeParam,
+                searchEnabled: searchConfigParam?.enabled ?? false,
+                localDate,
               },
             },
           );
@@ -827,6 +844,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             has_api_key: Boolean(requestApiKey),
             has_attachments: Boolean(attachments && attachments.length > 0),
             attachment_count: attachments?.length || 0,
+            search_enabled: searchConfigParam?.enabled ?? false,
           });
         } catch (error: unknown) {
           let status: number | null = null;
@@ -1118,6 +1136,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               jonMode={jonMode}
               reasoningConfig={reasoningConfig}
               onReasoningConfigChange={setReasoningConfig}
+              searchConfig={searchConfig}
+              onSearchConfigChange={setSearchConfig}
             />
           </ErrorBoundary>
         </div>

@@ -189,6 +189,16 @@ export async function sendMessagePair(args: {
 	});
 }
 
+// Type for tool invocation data passed to streamUpsertMessage
+export type ToolInvocationData = {
+	toolName: string;
+	toolCallId: string;
+	state: string; // "input-streaming" | "input-available" | "output-available" | "output-error"
+	input?: unknown;
+	output?: unknown;
+	errorText?: string;
+};
+
 export async function streamUpsertMessage(args: {
 	userId: Id<"users">;
 	chatId: Id<"chats">;
@@ -198,6 +208,7 @@ export async function streamUpsertMessage(args: {
 	content: string;
 	reasoning?: string;
 	thinkingTimeMs?: number;
+	toolInvocations?: ToolInvocationData[];
 	status?: "streaming" | "completed";
 	createdAt?: number;
 	attachments?: Array<{
@@ -218,6 +229,7 @@ export async function streamUpsertMessage(args: {
 		content: args.content,
 		reasoning: args.reasoning,
 		thinkingTimeMs: args.thinkingTimeMs,
+		toolInvocations: args.toolInvocations,
 		status: args.status,
 		createdAt: args.createdAt,
 		attachments: args.attachments,
@@ -281,3 +293,48 @@ export type MessageDoc = Doc<"messages">;
 
 // Re-export cache invalidation for use by other modules
 export { invalidateUserCache };
+
+/**
+ * Check and increment search usage for a user
+ * Returns whether the user is allowed to search and remaining searches
+ *
+ * Used by search tools to enforce daily search limits
+ */
+export async function checkAndIncrementSearchUsage(userId: Id<"users">): Promise<{
+	allowed: boolean;
+	remaining: number;
+	newCount?: number;
+}> {
+	const client = await getClient();
+
+	try {
+		const result = await client.mutation(api.search.incrementSearchUsage, { userId });
+		return {
+			allowed: true,
+			remaining: result.remaining,
+			newCount: result.newCount,
+		};
+	} catch (error) {
+		// Check if it's a limit reached error
+		if (error instanceof Error && error.message.includes("Daily search limit reached")) {
+			return {
+				allowed: false,
+				remaining: 0,
+			};
+		}
+		// Re-throw unexpected errors
+		throw error;
+	}
+}
+
+/**
+ * Check search limit without incrementing (read-only)
+ * Use this to display remaining searches to the user
+ */
+export async function checkSearchLimit(userId: Id<"users">): Promise<{
+	canSearch: boolean;
+	remaining: number;
+}> {
+	const client = await getClient();
+	return client.query(api.search.checkSearchLimit, { userId });
+}

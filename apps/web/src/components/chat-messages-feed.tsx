@@ -65,14 +65,33 @@ export function ChatMessagesFeed({
       const prevUpdated = previous.updatedAt?.getTime() ?? null;
       const nextUpdated = msg.updatedAt?.getTime() ?? null;
 
-      // CRITICAL FIX: Compare parts array to detect reasoning changes
+      // CRITICAL FIX: Compare parts array to detect reasoning and tool invocation changes
       const sameParts =
         (previous.parts === msg.parts) ||
         (!previous.parts && !msg.parts) ||
         (previous.parts?.length === msg.parts?.length &&
-         previous.parts?.every((p, i) =>
-           p.type === msg.parts![i]?.type && p.text === msg.parts![i]?.text
-         ));
+         previous.parts?.every((p, i) => {
+           const other = msg.parts![i];
+           if (!other) return false;
+           if (p.type !== other.type) return false;
+           // For text and reasoning parts, compare text
+           if (p.type === "text" || p.type === "reasoning") {
+             const pWithText = p as { text: string };
+             const otherWithText = other as { text: string };
+             return pWithText.text === otherWithText.text;
+           }
+           // For tool invocation parts, compare state and key fields
+           if (p.type === "tool-invocation") {
+             const pTool = p as { toolCallId: string; state: string; toolName: string };
+             const otherTool = other as { toolCallId: string; state: string; toolName: string };
+             return (
+               pTool.toolCallId === otherTool.toolCallId &&
+               pTool.state === otherTool.state &&
+               pTool.toolName === otherTool.toolName
+             );
+           }
+           return true;
+         }));
 
       // Compare attachments
       const sameAttachments =

@@ -7,6 +7,16 @@ import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 
+// Tool invocation validator - used in multiple places
+const toolInvocationValidator = v.object({
+	toolName: v.string(),
+	toolCallId: v.string(),
+	state: v.string(), // "input-streaming" | "input-available" | "output-available" | "output-error"
+	input: v.optional(v.any()),
+	output: v.optional(v.any()),
+	errorText: v.optional(v.string()),
+});
+
 // Return type for list query - excludes redundant fields to reduce bandwidth
 const messageDoc = v.object({
 	_id: v.id("messages"),
@@ -18,6 +28,8 @@ const messageDoc = v.object({
 	// REASONING REDACTED: Whether reasoning was requested for this message
 	// Used to show "redacted" state when provider doesn't return reasoning data
 	reasoningRequested: v.optional(v.boolean()),
+	// Tool invocations that occurred during message generation
+	toolInvocations: v.optional(v.array(toolInvocationValidator)),
 	// STREAM RECONNECTION: Include status and streamId to support reconnecting to active streams
 	status: v.optional(v.string()),
 	streamId: v.optional(v.string()),
@@ -120,6 +132,8 @@ export const list = query({
 			thinkingTimeMs: msg.thinkingTimeMs,
 			// REASONING REDACTED: Include to detect when reasoning was requested but not returned
 			reasoningRequested: msg.reasoningRequested,
+			// TOOL INVOCATIONS: Include for persistence across page reloads
+			toolInvocations: msg.toolInvocations,
 			// STREAM RECONNECTION: Include status and streamId for reconnecting to active streams on reload
 			status: msg.status,
 			streamId: msg.streamId,
@@ -259,6 +273,7 @@ export const streamUpsert = mutation({
 		content: v.string(),
 		reasoning: v.optional(v.string()),
 		thinkingTimeMs: v.optional(v.number()),
+		toolInvocations: v.optional(v.array(toolInvocationValidator)),
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
 		attachments: v.optional(
@@ -299,6 +314,7 @@ export const streamUpsert = mutation({
 			content: args.content,
 			reasoning: args.reasoning,
 			thinkingTimeMs: args.thinkingTimeMs,
+			toolInvocations: args.toolInvocations,
 			createdAt: timestamp,
 			status: args.status ?? "streaming",
 			clientMessageId: args.clientMessageId,
@@ -337,6 +353,16 @@ function validateRole(role: string): MessageRole {
 	return role as MessageRole;
 }
 
+// Type for tool invocation data
+type ToolInvocationData = {
+	toolName: string;
+	toolCallId: string;
+	state: string;
+	input?: unknown;
+	output?: unknown;
+	errorText?: string;
+};
+
 async function insertOrUpdateMessage(
 	ctx: MutationCtx,
 	args: {
@@ -345,6 +371,7 @@ async function insertOrUpdateMessage(
 		content: string;
 		reasoning?: string | null;
 		thinkingTimeMs?: number | null;
+		toolInvocations?: ToolInvocationData[] | null;
 		createdAt: number;
 		status: string;
 		clientMessageId?: string | null;
@@ -406,6 +433,7 @@ async function insertOrUpdateMessage(
 			content: args.content,
 			reasoning: args.reasoning ?? undefined,
 			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
+			toolInvocations: args.toolInvocations ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
@@ -429,6 +457,7 @@ async function insertOrUpdateMessage(
 			content: args.content,
 			reasoning: args.reasoning ?? undefined,
 			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
+			toolInvocations: args.toolInvocations ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,

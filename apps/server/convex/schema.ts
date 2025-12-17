@@ -13,6 +13,9 @@ export default defineSchema({
 		encryptedOpenRouterKey: v.optional(v.string()),
 		// File upload quota tracking
 		fileUploadCount: v.optional(v.number()),
+		// Daily search usage tracking
+		searchUsageCount: v.optional(v.number()),
+		searchUsageDate: v.optional(v.string()), // "YYYY-MM-DD" format (UTC)
 		// Admin ban status (for manual bans)
 		banned: v.optional(v.boolean()),
 		bannedAt: v.optional(v.number()),
@@ -78,6 +81,20 @@ export default defineSchema({
 		// Whether reasoning was requested for this message (used to show "redacted" state when
 		// provider doesn't return reasoning data)
 		reasoningRequested: v.optional(v.boolean()),
+		// Tool invocations that occurred during this message's generation
+		// Persisted separately from content so they render correctly on page reload
+		toolInvocations: v.optional(
+			v.array(
+				v.object({
+					toolName: v.string(),
+					toolCallId: v.string(),
+					state: v.string(), // "input-streaming" | "input-available" | "output-available" | "output-error"
+					input: v.optional(v.any()),
+					output: v.optional(v.any()),
+					errorText: v.optional(v.string()),
+				})
+			)
+		),
 		// Token usage for this message
 		tokenUsage: v.optional(
 			v.object({

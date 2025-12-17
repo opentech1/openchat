@@ -122,6 +122,7 @@ export {
   Database01Icon as Server,
   Wrench01Icon as Wrench,
   FlashIcon as Zap,
+  InternetIcon as WebSearchIcon,
 } from 'hugeicons-react';
 
 // Type exports - HugeiconsProps is the equivalent of LucideProps

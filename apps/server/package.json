@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "convex dev",
+    "dev": "bun run --run convex dev",
     "build": "if [ \"$NEXT_PUBLIC_DEPLOYMENT\" = \"preview\" ]; then convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build' --preview-run previewSeed --preview-create $VERCEL_GIT_COMMIT_REF; else convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd 'cd ../web && bunx next build'; fi",
-    "deploy": "npx convex deploy",
+    "deploy": "bunx --bun convex deploy",
     "deploy:prod": "./scripts/deploy-prod.sh",
     "check-types": "tsc --noEmit || true",
     "test": "echo \"No Convex tests yet\""

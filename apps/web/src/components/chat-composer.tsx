@@ -29,7 +29,9 @@ import {
   DEFAULT_REASONING_CONFIG,
   getDefaultReasoningForModel,
 } from "@/lib/reasoning-config";
+import { type SearchConfig, DEFAULT_SEARCH_CONFIG } from "@/lib/search-config";
 import { getModelCapabilities, hasReasoningCapability } from "@/lib/model-capabilities";
+import { SearchSettingsButton } from "./search-settings-button";
 import { ContextUsageIndicator } from "@/components/ui/context-usage-indicator";
 import { countTokens, countMessagesTokens } from "@/lib/token-counter";
 import type { UIMessage } from "ai";
@@ -184,7 +186,9 @@ export type ChatComposerProps = {
     apiKey: string;
     attachments?: FileAttachment[];
     reasoningConfig?: ReasoningConfig;
+    searchConfig?: SearchConfig;
     jonMode?: boolean;
+    localDate?: string;
     createdChatId?: Id<"chats">; // Chat ID if one was created during file upload
   }) => void | Promise<void>;
   disabled?: boolean;
@@ -208,6 +212,8 @@ export type ChatComposerProps = {
   onCreateChat?: () => Promise<Id<"chats"> | null>;
   reasoningConfig?: ReasoningConfig;
   onReasoningConfigChange?: (config: ReasoningConfig) => void;
+  searchConfig?: SearchConfig;
+  onSearchConfigChange?: (config: SearchConfig) => void;
   messages?: UIMessage[];
   jonMode?: boolean;
 };
@@ -231,6 +237,8 @@ function ChatComposer({
   onCreateChat,
   reasoningConfig: externalReasoningConfig,
   onReasoningConfigChange,
+  searchConfig: externalSearchConfig,
+  onSearchConfigChange,
   messages = [],
   jonMode,
 }: ChatComposerProps) {
@@ -253,6 +261,11 @@ function ChatComposer({
   // Reasoning configuration state
   const [internalReasoningConfig, setInternalReasoningConfig] = useState<ReasoningConfig>(
     () => externalReasoningConfig ?? DEFAULT_REASONING_CONFIG
+  );
+
+  // Search configuration state
+  const [internalSearchConfig, setInternalSearchConfig] = useState<SearchConfig>(
+    () => externalSearchConfig ?? DEFAULT_SEARCH_CONFIG
   );
 
   // Model selector open state for keyboard shortcut
@@ -347,6 +360,16 @@ function ChatComposer({
 
   // Memoize the active reasoning config
   const activeReasoningConfig = externalReasoningConfig ?? internalReasoningConfig;
+
+  // Sync external search config
+  useEffect(() => {
+    if (externalSearchConfig !== undefined) {
+      setInternalSearchConfig(externalSearchConfig);
+    }
+  }, [externalSearchConfig]);
+
+  // Memoize the active search config
+  const activeSearchConfig = externalSearchConfig ?? internalSearchConfig;
 
   // Calculate total context usage including conversation history
   const currentTokenCount = useMemo(() => {
@@ -556,13 +579,25 @@ function ChatComposer({
 
     dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
+      // Generate local date string for date context
+      const localDate = new Date().toLocaleString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
       await onSend({
         text: messageToSend,
         modelId: currentModelId,
         apiKey,
         attachments: attachmentsToSend,
         reasoningConfig: activeReasoningConfig,
+        searchConfig: activeSearchConfig,
         jonMode: jonMode,
+        localDate,
         // Pass the internally created chatId if one was created during file upload
         createdChatId: internalChatId ?? undefined,
       });
@@ -611,6 +646,16 @@ function ChatComposer({
     },
     [onReasoningConfigChange]
   );
+
+  // Handler for search toggle (simple on/off)
+  const handleSearchToggle = useCallback(() => {
+    const newConfig: SearchConfig = { enabled: !activeSearchConfig.enabled };
+    if (onSearchConfigChange) {
+      onSearchConfigChange(newConfig);
+    } else {
+      setInternalSearchConfig(newConfig);
+    }
+  }, [activeSearchConfig.enabled, onSearchConfigChange]);
 
   // Memoize event handlers to prevent unnecessary re-renders of ChatComposerTextarea
   const handleTextareaChange = useCallback(
@@ -858,6 +903,11 @@ function ChatComposer({
               />
             </ReasoningSettingsPopover>
           )}
+          <SearchSettingsButton
+            searchConfig={activeSearchConfig}
+            onToggle={handleSearchToggle}
+            disabled={disabled || isBusy}
+          />
           <div className="hidden sm:block">
             <ContextUsageIndicator
               currentTokens={currentTokenCount}

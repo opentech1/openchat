@@ -27,13 +27,29 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
+import {
+  ToolInvocation,
+  ToolInvocationContent,
+  ToolInvocationTrigger,
+} from "@/components/ai-elements/tool-invocation";
 import { FilePreview } from "@/components/file-preview";
 import { ProgressiveThinkingIndicator } from "@/components/progressive-thinking-indicator";
 import type { WaitState } from "@/hooks/use-progressive-wait-detection";
 
+type ToolInvocationPart = {
+  type: "tool-invocation";
+  toolName: string;
+  toolCallId: string;
+  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  input?: unknown;
+  output?: unknown;
+  errorText?: string;
+};
+
 type MessagePart =
   | { type: "text"; text: string }
-  | { type: "reasoning"; text: string };
+  | { type: "reasoning"; text: string }
+  | ToolInvocationPart;
 
 type ChatMessage = {
   id: string;
@@ -683,7 +699,37 @@ const ChatMessageBubble = memo(
                   }
                   return null;
                 })()}
-                {/* Render text parts AFTER reasoning */}
+                {/* Render tool invocations */}
+                {message.parts!
+                  .filter((part): part is ToolInvocationPart => part.type === "tool-invocation")
+                  .map((part) => {
+                    // Extract query from search tool input
+                    const query = part.toolName === "search" && part.input && typeof part.input === "object"
+                      ? (part.input as { query?: string }).query
+                      : undefined;
+                    // Extract result count from output
+                    const resultCount = part.output && typeof part.output === "object" && "results" in part.output
+                      ? (part.output as { results?: unknown[] }).results?.length
+                      : undefined;
+                    // Determine if tool is still running
+                    const isToolRunning = part.state === "input-streaming" || part.state === "input-available";
+
+                    return (
+                      <ToolInvocation
+                        key={`${message.id}-tool-${part.toolCallId}`}
+                        toolName={part.toolName}
+                        state={part.state}
+                        query={query}
+                        resultCount={resultCount}
+                        errorText={part.errorText}
+                        defaultOpen={isToolRunning}
+                      >
+                        <ToolInvocationTrigger />
+                        <ToolInvocationContent />
+                      </ToolInvocation>
+                    );
+                  })}
+                {/* Render text parts AFTER reasoning and tool invocations */}
                 {message.parts!
                   .filter((part): part is { type: "text"; text: string } => part.type === "text")
                   .map((part, index) => (
@@ -724,13 +770,31 @@ const ChatMessageBubble = memo(
     );
   },
   (prev, next) => {
-    // CRITICAL FIX: Compare parts array to detect reasoning changes
+    // CRITICAL FIX: Compare parts array to detect reasoning and tool invocation changes
     const sameParts =
       prev.message.parts?.length === next.message.parts?.length &&
-      (prev.message.parts?.every((p, i) =>
-        p.type === next.message.parts![i]?.type &&
-        p.text === next.message.parts![i]?.text
-      ) ?? true);
+      (prev.message.parts?.every((p, i) => {
+        const other = next.message.parts![i];
+        if (!other) return false;
+        if (p.type !== other.type) return false;
+        // For text and reasoning parts, compare text
+        if (p.type === "text" || p.type === "reasoning") {
+          const pWithText = p as { text: string };
+          const otherWithText = other as { text: string };
+          return pWithText.text === otherWithText.text;
+        }
+        // For tool invocation parts, compare state and key fields
+        if (p.type === "tool-invocation") {
+          const pTool = p as ToolInvocationPart;
+          const otherTool = other as ToolInvocationPart;
+          return (
+            pTool.toolCallId === otherTool.toolCallId &&
+            pTool.state === otherTool.state &&
+            pTool.toolName === otherTool.toolName
+          );
+        }
+        return true;
+      }) ?? true);
 
     // Compare attachments
     const sameAttachments =
