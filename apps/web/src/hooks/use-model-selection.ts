@@ -38,6 +38,7 @@ import {
   writeCachedModels,
   clearCachedModels,
 } from "@/lib/openrouter-model-cache";
+import { KEY_CHANGE_EVENT } from "@/hooks/use-openrouter-key";
 import { LOCAL_STORAGE_KEYS } from "@/config/storage-keys";
 import { fetchWithCsrf } from "@/lib/csrf-client";
 import { captureClientEvent } from "@/lib/posthog";
@@ -216,6 +217,24 @@ export function useModelSelection(
         error: null,
       });
     }
+  }, []);
+
+  // Listen for API key changes and clear model state when key is removed
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleKeyChange = () => {
+      // Clear models immediately - if key was removed, UI should update instantly
+      // If key was added, new models will be fetched when apiKey prop changes
+      clearCachedModels();
+      cacheInitializedRef.current = false; // Allow re-initialization from cache
+      setFetchState(INITIAL_FETCH_STATE);
+    };
+
+    window.addEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+    return () => {
+      window.removeEventListener(KEY_CHANGE_EVENT, handleKeyChange);
+    };
   }, []);
 
   // Selected model ID from localStorage using useSyncExternalStore

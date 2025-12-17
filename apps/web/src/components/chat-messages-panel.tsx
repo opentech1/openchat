@@ -41,6 +41,7 @@ type ChatMessage = {
   content: string;
   parts?: MessagePart[];
   thinkingTimeMs?: number;
+  reasoningRequested?: boolean;
   attachments?: Array<{
     storageId: string;
     filename: string;
@@ -486,13 +487,7 @@ function ChatMessagesPanelComponent({
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center">
-                <p className="text-muted-foreground text-sm" data-ph-no-capture>
-                  No messages yet. Say hi!
-                </p>
-              </div>
-            )}
+            ) : null}
           </div>
         </ScrollAreaPrimitive.Viewport>
         <ScrollBar orientation="vertical" />
@@ -648,42 +643,80 @@ const ChatMessageBubble = memo(
         ) : (
           <div className="flex flex-col gap-2 max-w-full">
             {hasParts ? (
-              message.parts!.map((part, index) => {
-                if (part.type === "reasoning") {
-                  // Reasoning is streaming if this is the last message, we're streaming, and this is the last part
-                  const isReasoningStreaming = isLastMessage && isStreaming && index === message.parts!.length - 1;
-                  // Convert thinkingTimeMs to seconds for the Reasoning component
-                  const duration = message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined;
-                  return (
-                    <Reasoning
-                      key={`${message.id}-reasoning-${index}`}
-                      className="w-full"
-                      isStreaming={isReasoningStreaming}
-                      defaultOpen={isReasoningStreaming}
-                      duration={duration}
+              <>
+                {/* Render reasoning FIRST (before text) - either actual or redacted */}
+                {(() => {
+                  const reasoningPart = message.parts!.find(p => p.type === "reasoning");
+                  const hasReasoningPart = !!reasoningPart;
+
+                  if (hasReasoningPart) {
+                    // Render actual reasoning
+                    const textPart = message.parts!.find(p => p.type === "text");
+                    const hasTextContent = textPart && textPart.text.length > 0;
+                    const isReasoningStreaming = isLastMessage && isStreaming && !hasTextContent;
+                    const duration = message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined;
+                    return (
+                      <Reasoning
+                        key={`${message.id}-reasoning`}
+                        className="w-full"
+                        isStreaming={isReasoningStreaming}
+                        defaultOpen={isReasoningStreaming}
+                        duration={duration}
+                      >
+                        <ReasoningTrigger />
+                        <ReasoningContent>{reasoningPart.text}</ReasoningContent>
+                      </Reasoning>
+                    );
+                  } else if (message.reasoningRequested) {
+                    // Render redacted reasoning (requested but not provided)
+                    return (
+                      <Reasoning
+                        key={`${message.id}-reasoning-redacted`}
+                        className="w-full"
+                        redacted
+                        defaultOpen={false}
+                      >
+                        <ReasoningTrigger />
+                        <ReasoningContent>{""}</ReasoningContent>
+                      </Reasoning>
+                    );
+                  }
+                  return null;
+                })()}
+                {/* Render text parts AFTER reasoning */}
+                {message.parts!
+                  .filter((part): part is { type: "text"; text: string } => part.type === "text")
+                  .map((part, index) => (
+                    <SafeStreamdown
+                      key={`${message.id}-text-${index}`}
+                      className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                      data-ph-no-capture
                     >
-                      <ReasoningTrigger />
-                      <ReasoningContent>{part.text}</ReasoningContent>
-                    </Reasoning>
-                  );
-                }
-                return (
-                  <SafeStreamdown
-                    key={`${message.id}-text-${index}`}
-                    className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
-                    data-ph-no-capture
-                  >
-                    {part.text}
-                  </SafeStreamdown>
-                );
-              })
+                      {part.text}
+                    </SafeStreamdown>
+                  ))}
+              </>
             ) : (
-              <SafeStreamdown
-                className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
-                data-ph-no-capture
-              >
-                {message.content}
-              </SafeStreamdown>
+              <>
+                {/* Show redacted reasoning FIRST if reasoning was requested but no parts exist */}
+                {message.reasoningRequested && (
+                  <Reasoning
+                    key={`${message.id}-reasoning-redacted`}
+                    className="w-full"
+                    redacted
+                    defaultOpen={false}
+                  >
+                    <ReasoningTrigger />
+                    <ReasoningContent>{""}</ReasoningContent>
+                  </Reasoning>
+                )}
+                <SafeStreamdown
+                  className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"
+                  data-ph-no-capture
+                >
+                  {message.content}
+                </SafeStreamdown>
+              </>
             )}
           </div>
         )}
@@ -706,13 +739,22 @@ const ChatMessageBubble = memo(
         a.storageId === next.message.attachments![i]?.storageId
       ) ?? true);
 
+    // CRITICAL FIX: Compare thinkingTimeMs to ensure reasoning duration updates correctly
+    const sameThinkingTime = prev.message.thinkingTimeMs === next.message.thinkingTimeMs;
+
+    // Compare reasoningRequested for redacted state
+    const sameReasoningRequested = prev.message.reasoningRequested === next.message.reasoningRequested;
+
     return (
       prev.message.id === next.message.id &&
       prev.message.role === next.message.role &&
       prev.message.content === next.message.content &&
       prev.isStreaming === next.isStreaming &&
+      prev.isLastMessage === next.isLastMessage &&
       sameParts &&
-      sameAttachments
+      sameAttachments &&
+      sameThinkingTime &&
+      sameReasoningRequested
     );
   },
 );

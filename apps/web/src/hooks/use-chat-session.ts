@@ -70,6 +70,7 @@ type ConvexMessage = {
   content: string;
   reasoning?: string;
   thinkingTimeMs?: number;
+  reasoningRequested?: boolean;
   status?: string;
   streamId?: string;
   attachments?: Array<{
@@ -125,6 +126,7 @@ function toUIMessage(msg: ConvexMessage): UIMessage {
     content: msg.content,
     reasoning: msg.reasoning,
     thinkingTimeMs: msg.thinkingTimeMs,
+    reasoningRequested: msg.reasoningRequested,
     attachments: msg.attachments?.map((a) => ({
       storageId: String(a.storageId),
       filename: a.filename,

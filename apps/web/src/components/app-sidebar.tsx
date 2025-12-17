@@ -146,10 +146,6 @@ function dedupeChats(list: ChatListItem[]) {
   return sortChats(Array.from(map.values()));
 }
 
-function upsertChat(list: ChatListItem[], chat: ChatListItem) {
-  return dedupeChats(list.concat([chat]));
-}
-
 function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...sidebarProps }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -161,12 +157,30 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
 
-  // REAL-TIME STREAMING STATUS: Use Convex subscription for live status updates
-  // This enables the streaming indicator dot in the sidebar
-  const { chats: realtimeChats } = useChatList();
-  
+  // REAL-TIME CHAT LIST: Use Convex subscription for instant updates
+  // This enables:
+  // - New chats appearing instantly when created from any page
+  // - Streaming indicator in sidebar (shows which chat is actively generating)
+  // - Live title updates when chat titles change
+  const { chats: realtimeChats, isLoading: realtimeLoading } = useChatList();
+
   // UNREAD TRACKING: Track when user last viewed each chat
   const { markAsRead, isUnread } = useChatReadStatus();
+
+  // Convert Convex real-time chats to ChatListItem format for the sidebar
+  // This is the PRIMARY source of truth for the chat list
+  const realtimeChatList = useMemo<ChatListItem[]>(() => {
+    return realtimeChats.map(chat => ({
+      id: chat._id,
+      title: chat.title,
+      updatedAt: new Date(chat.updatedAt),
+      lastMessageAt: chat.lastMessageAt ? new Date(chat.lastMessageAt) : null,
+      updatedAtMs: chat.updatedAt,
+      lastMessageAtMs: chat.lastMessageAt ?? null,
+      lastActivityMs: Math.max(chat.lastMessageAt ?? 0, chat.updatedAt),
+      status: chat.status,
+    }));
+  }, [realtimeChats]);
 
   // Create a map of chat statuses from real-time data for O(1) lookup
   const realtimeStatusMap = useMemo(() => {
@@ -186,75 +200,23 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     }
   }, [pathname, markAsRead]);
 
-  // PERFORMANCE FIX: Move dedupeChats to useMemo to avoid recalculation on every render
-  const dedupedInitialChats = useMemo(
-    () => dedupeChats(initialChats),
-    [initialChats],
-  );
-  const [chats, setChats] = useState<ChatListItem[]>(() => dedupedInitialChats);
-
-  useEffect(() => {
-    // Only sync from props if initialChats has actual data
-    // When empty, we rely on client-side fetching and don't want to overwrite
-    if (dedupedInitialChats.length > 0) {
-      setChats(dedupedInitialChats);
+  // REAL-TIME CHAT LIST: Use Convex subscription as primary source
+  // The realtimeChatList is already sorted by lastActivityMs (most recent first)
+  // We sort it here to ensure consistent ordering
+  const chats = useMemo(() => {
+    // If we have real-time data from Convex, use it (sorted by activity)
+    if (realtimeChatList.length > 0) {
+      return sortChats(realtimeChatList);
     }
-  }, [dedupedInitialChats]);
-
-  // CLIENT-SIDE CHAT FETCHING: Load chats from API when initialChats is empty
-  // This handles the case where server-side fetching isn't available (e.g., AuthGuard)
-  const [isLoadingChats, setIsLoadingChats] = useState(true); // Start as loading
-  const [hasFetchedChats, setHasFetchedChats] = useState(false);
-
-  useEffect(() => {
-    // Skip if we already have chats from initialChats
+    // Fall back to initialChats during SSR/initial load
     if (initialChats.length > 0) {
-      setHasFetchedChats(true);
-      setIsLoadingChats(false);
-      return;
+      return dedupeChats(initialChats);
     }
+    return [];
+  }, [realtimeChatList, initialChats]);
 
-    // Wait for user session to be available
-    if (!user?.id) {
-      // Keep loading state while waiting for session
-      return;
-    }
-
-    // Already fetched, don't fetch again
-    if (hasFetchedChats) {
-      return;
-    }
-
-    const fetchChats = async () => {
-      setIsLoadingChats(true);
-      try {
-        // Load all chats at once (limit=200 is the max)
-        const response = await fetch("/api/chats?limit=200", {
-          method: "GET",
-          credentials: "include",
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.chats && Array.isArray(data.chats)) {
-            setChats(dedupeChats(data.chats));
-          } else {
-            setChats([]);
-          }
-        } else {
-          logError("Failed to fetch chats: HTTP " + response.status);
-          setChats([]);
-        }
-      } catch (error) {
-        logError("Failed to fetch chats", error);
-        setChats([]);
-      } finally {
-        setIsLoadingChats(false);
-        setHasFetchedChats(true);
-      }
-    };
-
-    void fetchChats();
-  }, [user?.id, initialChats.length, hasFetchedChats]);
+  // Loading state: show loading while Convex is fetching and we have no data
+  const isLoadingChats = realtimeLoading && chats.length === 0;
 
   useEffect(() => {
     if (!user?.id) return;
@@ -282,7 +244,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
       if (!response.ok || !payload.chat) {
         throw new Error(payload.error || "Failed to create chat");
       }
-      setChats((prev) => upsertChat(prev, payload.chat!));
+      // No need to manually update chat list - Convex subscription will auto-update
       captureClientEvent("chat.created", {
         chat_id: payload.chat.id,
         title_length: payload.chat.title?.length ?? 0,
@@ -299,18 +261,18 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     } finally {
       setIsCreating(false);
     }
-  }, [isCreating, router]);
+  }, [isCreating, router, onNavigate]);
 
   const handleDelete = useCallback(async (chatId: string) => {
     setDeletingChatId(chatId);
-    
+
     // Check if we're currently viewing this chat - if so, navigate away immediately
     const isViewingDeletedChat = pathname === `/chat/${chatId}`;
     if (isViewingDeletedChat) {
       // Navigate immediately for instant feedback
       router.push("/");
     }
-    
+
     try {
       const response = await fetchWithCsrf(`/api/chats/${chatId}`, {
         method: "DELETE",
@@ -322,7 +284,7 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
           (payload as { error?: string }).error || "Failed to delete chat",
         );
       }
-      setChats((prev) => sortChats(prev.filter((chat) => chat.id !== chatId)));
+      // No need to manually update chat list - Convex subscription will auto-update
     } catch (error) {
       logError("Failed to delete chat", error);
       // Show actual error message as toast title for better visibility
@@ -574,8 +536,7 @@ function ChatList({
     [totalSize]
   );
 
-  if (isLoading)
-    return <p className="px-2 text-xs text-muted-foreground animate-pulse">Loading chats...</p>;
+  if (isLoading) return null;
 
   if (chats.length === 0)
     return (

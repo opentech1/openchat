@@ -15,6 +15,9 @@ const messageDoc = v.object({
 	content: v.string(),
 	reasoning: v.optional(v.string()),
 	thinkingTimeMs: v.optional(v.number()),
+	// REASONING REDACTED: Whether reasoning was requested for this message
+	// Used to show "redacted" state when provider doesn't return reasoning data
+	reasoningRequested: v.optional(v.boolean()),
 	// STREAM RECONNECTION: Include status and streamId to support reconnecting to active streams
 	status: v.optional(v.string()),
 	streamId: v.optional(v.string()),
@@ -115,6 +118,8 @@ export const list = query({
 			content: msg.content,
 			reasoning: msg.reasoning,
 			thinkingTimeMs: msg.thinkingTimeMs,
+			// REASONING REDACTED: Include to detect when reasoning was requested but not returned
+			reasoningRequested: msg.reasoningRequested,
 			// STREAM RECONNECTION: Include status and streamId for reconnecting to active streams on reload
 			status: msg.status,
 			streamId: msg.streamId,

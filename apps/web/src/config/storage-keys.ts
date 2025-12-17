@@ -22,6 +22,8 @@ export const LOCAL_STORAGE_KEYS = {
 		LAST_MODEL: "openchat:last-model",
 		/** Jon Mode: Prevents AI from using em-dashes */
 		JON_MODE: "openchat:jon-mode",
+		/** Reasoning configuration (enabled, effort, max_tokens) */
+		REASONING_CONFIG: "openchat:reasoning-config",
 	},
 
 	/** Session and authentication */

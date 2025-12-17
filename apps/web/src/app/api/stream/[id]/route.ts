@@ -43,6 +43,29 @@ const KEEPALIVE_INTERVAL_MS = 15000;
  */
 const MAX_STREAM_DURATION_MS = 300000; // 5 minutes
 
+/**
+ * Prefix used by streaming.ts to mark reasoning tokens
+ */
+const REASONING_PREFIX = "[reasoning]";
+
+/**
+ * Parse a delta string to extract reasoning content if present
+ * @param delta - Raw delta string from Redis stream
+ * @returns Object with delta and optional reasoning fields
+ */
+function parseReasoningFromDelta(delta: string): {
+	delta: string;
+	reasoning?: string;
+} {
+	if (delta.startsWith(REASONING_PREFIX)) {
+		return {
+			delta: "",
+			reasoning: delta.slice(REASONING_PREFIX.length),
+		};
+	}
+	return { delta };
+}
+
 export async function GET(
 	request: Request,
 	{ params }: { params: Promise<{ id: string }> }
@@ -131,10 +154,12 @@ export async function GET(
 
 					if (result.entries.length > 0) {
 						for (const entry of result.entries) {
-							// Send SSE event for each token
+							// Parse reasoning prefix and send SSE event
+							const parsed = parseReasoningFromDelta(entry.delta);
 							sendEvent(null, {
 								id: entry.id,
-								delta: entry.delta,
+								delta: parsed.delta,
+								...(parsed.reasoning && { reasoning: parsed.reasoning }),
 								ts: entry.ts,
 							});
 							currentCursor = entry.id;
@@ -152,9 +177,12 @@ export async function GET(
 								1000
 							);
 							for (const entry of finalResult.entries) {
+								// Parse reasoning prefix and send SSE event
+								const parsed = parseReasoningFromDelta(entry.delta);
 								sendEvent(null, {
 									id: entry.id,
-									delta: entry.delta,
+									delta: parsed.delta,
+									...(parsed.reasoning && { reasoning: parsed.reasoning }),
 									ts: entry.ts,
 								});
 							}

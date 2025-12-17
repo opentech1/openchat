@@ -75,6 +75,9 @@ export default defineSchema({
 		reasoning: v.optional(v.string()),
 		// Time spent thinking in milliseconds (for reasoning models)
 		thinkingTimeMs: v.optional(v.number()),
+		// Whether reasoning was requested for this message (used to show "redacted" state when
+		// provider doesn't return reasoning data)
+		reasoningRequested: v.optional(v.boolean()),
 		// Token usage for this message
 		tokenUsage: v.optional(
 			v.object({
@@ -167,4 +170,13 @@ export default defineSchema({
 		.index("by_category", ["userId", "category", "deletedAt"])
 		.index("by_public", ["isPublic", "deletedAt"])
 		.index("by_draft", ["userId", "isDraft", "deletedAt"]),
+	// Track when users last read each chat (for unread indicators)
+	// This persists across sessions/devices, unlike localStorage
+	chatReadStatus: defineTable({
+		userId: v.id("users"),
+		chatId: v.id("chats"),
+		lastReadAt: v.number(), // timestamp when user last viewed this chat
+	})
+		.index("by_user", ["userId"])
+		.index("by_user_chat", ["userId", "chatId"]),
 });

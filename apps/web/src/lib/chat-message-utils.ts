@@ -10,6 +10,7 @@ export type MessageLike = {
 	content: string;
 	reasoning?: string;
 	thinkingTimeMs?: number;
+	reasoningRequested?: boolean;
 	attachments?: Array<{
 		storageId: string;
 		filename: string;
@@ -33,6 +34,7 @@ export type NormalizedMessage = {
 	content: string;
 	parts?: MessagePart[];
 	thinkingTimeMs?: number;
+	reasoningRequested?: boolean;
 	attachments?: Array<{
 		storageId: string;
 		filename: string;
@@ -103,6 +105,7 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 		content: message.content,
 		parts: parts.length > 0 ? parts : undefined,
 		thinkingTimeMs: message.thinkingTimeMs,
+		reasoningRequested: message.reasoningRequested,
 		attachments: normalizedAttachments,
 		createdAt,
 		updatedAt,
@@ -112,6 +115,7 @@ export function normalizeMessage(message: MessageLike): NormalizedMessage {
 export function normalizeUiMessage(message: UIMessage<{
 	createdAt?: string;
 	thinkingTimeMs?: number;
+	reasoningRequested?: boolean;
 	attachments?: Array<{
 		storageId: string;
 		filename: string;
@@ -139,8 +143,9 @@ export function normalizeUiMessage(message: UIMessage<{
 			text: part.text,
 		}));
 
-	// Extract thinkingTimeMs from metadata if available
+	// Extract thinkingTimeMs and reasoningRequested from metadata if available
 	const thinkingTimeMs = message.metadata?.thinkingTimeMs;
+	const reasoningRequested = message.metadata?.reasoningRequested;
 
 	return {
 		...normalizeMessage({
@@ -148,14 +153,16 @@ export function normalizeUiMessage(message: UIMessage<{
 			role: message.role,
 			content,
 			thinkingTimeMs,
+			reasoningRequested,
 			created_at: message.metadata?.createdAt,
 		}),
 		parts: parts.length > 0 ? parts : undefined,
 		thinkingTimeMs, // Ensure it's preserved even after normalizeMessage
+		reasoningRequested, // Ensure it's preserved even after normalizeMessage
 	};
 }
 
-export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: string; thinkingTimeMs?: number }> {
+export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: string; thinkingTimeMs?: number; reasoningRequested?: boolean }> {
 	return {
 		id: message.id,
 		role: message.role,
@@ -163,6 +170,7 @@ export function toUiMessage(message: NormalizedMessage): UIMessage<{ createdAt: 
 		metadata: {
 			createdAt: message.createdAt.toISOString(),
 			thinkingTimeMs: message.thinkingTimeMs,
+			reasoningRequested: message.reasoningRequested,
 		},
 	};
 }

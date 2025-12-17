@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import { useSession } from "@/lib/auth-client";
 import { useChat } from "@ai-sdk-tools/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -23,6 +24,7 @@ import { useJonMode } from "@/hooks/use-jon-mode";
 import { useProgressiveWaitDetection } from "@/hooks/use-progressive-wait-detection";
 import { useStreamSubscription } from "@/hooks/use-stream-subscription";
 import { useChatSession } from "@/hooks/use-chat-session";
+import { useReasoningPersistence } from "@/hooks/use-reasoning-persistence";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -133,6 +135,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [keyPromptDismissed, setKeyPromptDismissed] = useState(true);
 
+  // Reasoning configuration state - persisted to localStorage with cross-tab sync
+  const { reasoningConfig, setReasoningConfig } = useReasoningPersistence();
+
   const [pendingMessage, setPendingMessage] = useState<string>("");
   const [shouldAutoSend, setShouldAutoSend] = useState(false);
   const autoSendAttemptedRef = useRef(false);
@@ -144,8 +149,20 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Redis SSE streaming state - for faster, T3Chat-style token delivery
   const [redisStreamId, setRedisStreamId] = useState<string | null>(null);
 
+  // INSTANT STOP: Ref to immediately block updates when stop is clicked
+  // This is checked synchronously in callbacks before any state updates
+  const isStoppedRef = useRef(false);
+
+  // INSTANT STOP: State to immediately affect isStreaming calculation
+  // Unlike the ref, this triggers a re-render so the UI updates immediately
+  const [manuallyStopped, setManuallyStopped] = useState(false);
+
+  // AbortController for cancelling the fetch request to /stream-llm
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   console.log("[STREAM] State snapshot", { chatId, convexUserId, activeStreamId, isConvexStreaming });
   const prepareChat = useMutation(api.streaming.prepareChat);
+  const cancelStream = useMutation(api.streaming.cancelStream);
 
   // STREAM RECONNECTION: Query to detect active streams on reload
   const activeStreamFromDb = useQuery(
@@ -163,23 +180,27 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     if (activeStreamFromDb === undefined) return; // Query still loading
     if (!activeStreamFromDb) return; // No active stream in DB
     if (activeStreamId) return; // Already have an active stream locally
+    // INSTANT STOP: Don't reconnect if user manually stopped
+    if (manuallyStopped) return;
 
     // Found an active stream from database - reconnect!
     hasAttemptedReconnect.current = true;
     setActiveStreamId(activeStreamFromDb);
     setIsConvexStreaming(true);
-  }, [activeStreamFromDb, activeStreamId]);
+  }, [activeStreamFromDb, activeStreamId, manuallyStopped]);
 
   // STREAM RECONNECTION FIX: Sync activeStreamId from initialStreamId prop when it changes
   // This handles the case where ChatRoomWrapper fetches messages AFTER ChatRoom mounts
   // and discovers a streaming message. useState(initialValue) only uses the value on
   // first render, so we need this effect to sync prop changes to state.
   useEffect(() => {
+    // INSTANT STOP: Don't reconnect if user manually stopped
+    if (manuallyStopped) return;
     if (initialStreamId && !activeStreamId) {
       setActiveStreamId(initialStreamId);
       setIsConvexStreaming(true);
     }
-  }, [initialStreamId, activeStreamId]);
+  }, [initialStreamId, activeStreamId, manuallyStopped]);
 
   // Track which stream IDs were created by THIS browser session
   const drivenStreamIdsRef = useRef<Set<string>>(new Set());
@@ -404,17 +425,50 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
   // Redis SSE streaming for faster token delivery (T3Chat-style)
   // This subscribes to a Redis stream and updates messages in real-time
-  const { status: sseStatus } = useStreamSubscription({
+  const { status: sseStatus, text: sseText, reasoning: sseReasoning } = useStreamSubscription({
     streamId: redisStreamId,
     onToken: useCallback((token: string) => {
+      // INSTANT STOP: Check ref synchronously before any updates
+      if (isStoppedRef.current) return;
+
       // Accumulate tokens and update the last assistant message
       setMessages((prev) => {
+        // Double-check in case stop happened during state update
+        if (isStoppedRef.current) return prev;
+
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.role === "assistant") {
           const currentText = lastMsg.parts.find((p): p is { type: "text"; text: string } => p.type === "text")?.text || "";
           return [
             ...prev.slice(0, -1),
             { ...lastMsg, parts: [{ type: "text" as const, text: currentText + token }] }
+          ];
+        }
+        return prev;
+      });
+    }, []),  // setMessages from useChat is stable
+    onReasoning: useCallback((reasoning: string) => {
+      // INSTANT STOP: Check ref synchronously before any updates
+      if (isStoppedRef.current) return;
+
+      // Accumulate reasoning tokens and update the last assistant message
+      setMessages((prev) => {
+        // Double-check in case stop happened during state update
+        if (isStoppedRef.current) return prev;
+
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg?.role === "assistant") {
+          const currentReasoning = lastMsg.parts.find((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")?.text || "";
+          const textPart = lastMsg.parts.find((p): p is { type: "text"; text: string } => p.type === "text");
+          const newParts: Array<{ type: "text" | "reasoning"; text: string }> = [
+            { type: "reasoning" as const, text: currentReasoning + reasoning },
+          ];
+          if (textPart) {
+            newParts.push(textPart);
+          }
+          return [
+            ...prev.slice(0, -1),
+            { ...lastMsg, parts: newParts }
           ];
         }
         return prev;
@@ -439,6 +493,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     activeStreamId ? { streamId: activeStreamId as any } : "skip"
   );
   const streamText = streamBody?.text || "";
+  const streamReasoning = (streamBody as { reasoning?: string | null })?.reasoning || "";
+  const streamThinkingTimeMs = (streamBody as { thinkingTimeMs?: number | null })?.thinkingTimeMs ?? undefined;
   const streamHookStatus = streamBody?.status as "pending" | "streaming" | "done" | "error" | "timeout" | undefined;
 
   useLayoutEffect(() => {
@@ -547,6 +603,10 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL
       });
 
+      // INSTANT STOP: Reset stopped state when starting new message
+      isStoppedRef.current = false;
+      setManuallyStopped(false);
+
       const content = text.trim();
       if (!content) return;
       if (!modelId) {
@@ -623,6 +683,10 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             // Clear any previous Redis stream before starting new one
             setRedisStreamId(null);
 
+            // Create AbortController for this request so we can cancel it on stop
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+
             fetch(streamUrl, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -634,6 +698,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 messages: conversationMessages,
                 reasoningConfig,
               }),
+              signal: controller.signal,
             })
               .then((response) => {
                 console.log("[STREAM] Received response", {
@@ -652,15 +717,38 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 // Drain response body to allow connection to complete properly
                 if (response.body) {
                   const reader = response.body.getReader();
-                  (async () => {
-                    while (true) {
-                      const { done } = await reader.read();
-                      if (done) break;
+                  void (async () => {
+                    try {
+                      while (true) {
+                        const { done } = await reader.read();
+                        if (done) break;
+                      }
+                    } catch (err) {
+                      // Ignore AbortError and stream abort errors - expected when user clicks stop
+                      if (err instanceof Error) {
+                        if (err.name === "AbortError" || err.message?.includes("aborted")) {
+                          return;
+                        }
+                      }
+                      // Log but don't re-throw - this is a cleanup operation
+                      console.log("[STREAM] Body drain error:", err);
                     }
-                  })();
+                  })().catch(() => {
+                    // Catch any unhandled rejection to prevent error overlay
+                  });
                 }
               })
               .catch((err) => {
+                // Check if this was an intentional abort (user clicked stop)
+                const isAbortError = err?.name === "AbortError" ||
+                  (err instanceof Error && err.message?.includes("aborted"));
+                if (isAbortError) {
+                  console.log("[STREAM] Fetch aborted by user");
+                  // Don't show error toast for intentional abort
+                  // State is already cleared by onStop handler
+                  return;
+                }
+
                 console.log("[STREAM] Fetch error", { error: err?.message || err, stack: err?.stack });
                 logError("Failed to start stream", err);
                 // Clear streaming state and driven stream tracking on error
@@ -781,24 +869,47 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // This is the PRIMARY method for displaying streaming tokens (simpler than Redis SSE)
   useEffect(() => {
     if (!activeStreamId) return;
+    // INSTANT STOP: Don't update if stopped
+    if (isStoppedRef.current) return;
 
-    // Find and update the last assistant message with stream content
-    if (streamText) {
+    // Find and update the last assistant message with stream content (including reasoning)
+    if (streamText || streamReasoning) {
       setMessages((prev) => {
+        // INSTANT STOP: Double-check in case stop happened during state update
+        if (isStoppedRef.current) return prev;
+
         // Use findLastIndex to get the last assistant message
         const lastAssistantIdx = prev.findLastIndex((m) => m.role === "assistant");
         if (lastAssistantIdx === -1) return prev;
 
         const msg = prev[lastAssistantIdx];
-        // Only update if content actually changed to avoid unnecessary re-renders
+        // Check if content actually changed to avoid unnecessary re-renders
         const currentText = msg?.parts.find((p): p is { type: "text"; text: string } => p.type === "text")?.text || "";
-        if (currentText === streamText) return prev;
+        const currentReasoning = msg?.parts.find((p): p is { type: "reasoning"; text: string } => p.type === "reasoning")?.text || "";
+        const currentThinkingTimeMs = msg?.metadata?.thinkingTimeMs;
+
+        if (currentText === streamText && currentReasoning === streamReasoning && currentThinkingTimeMs === streamThinkingTimeMs) {
+          return prev;
+        }
 
         const updated = [...prev];
         if (msg) {
+          // Build parts array with reasoning first (if present), then text
+          const parts: Array<{ type: "text" | "reasoning"; text: string }> = [];
+          if (streamReasoning) {
+            parts.push({ type: "reasoning" as const, text: streamReasoning });
+          }
+          if (streamText) {
+            parts.push({ type: "text" as const, text: streamText });
+          }
+
           updated[lastAssistantIdx] = {
             ...msg,
-            parts: [{ type: "text" as const, text: streamText }],
+            parts: parts.length > 0 ? parts : [{ type: "text" as const, text: "" }],
+            metadata: {
+              createdAt: msg.metadata?.createdAt ?? new Date().toISOString(),
+              thinkingTimeMs: streamThinkingTimeMs,
+            },
           };
         }
         return updated;
@@ -809,6 +920,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     // This is CRITICAL - without it, isConvexStreaming stays true forever
     if (streamHookStatus === "done" || streamHookStatus === "error" || streamHookStatus === "timeout") {
       drivenStreamIdsRef.current.delete(activeStreamId);
+      // Clear AbortController ref on natural completion to prevent reuse issues
+      abortControllerRef.current = null;
       // Reset streaming state so UI no longer shows loading indicators
       setActiveStreamId(null);
       setIsConvexStreaming(false);
@@ -821,7 +934,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         });
       }
     }
-  }, [activeStreamId, streamText, streamHookStatus, setMessages]);
+  }, [activeStreamId, streamText, streamReasoning, streamThinkingTimeMs, streamHookStatus, setMessages]);
 
   // Model selection handler - uses hook's setSelectedModelId for persistence
   const handleModelSelection = useCallback(
@@ -850,7 +963,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   }, [shouldAutoSend, pendingMessage, selectedModel, apiKey, jonMode, status, handleSend]);
 
   // Combine AI SDK status with Convex streaming status
-  const isStreaming = status === "streaming" || isConvexStreaming;
+  // INSTANT STOP: If manually stopped, immediately show as not streaming
+  const isStreaming = !manuallyStopped && (status === "streaming" || isConvexStreaming);
   const isSubmitting = status === "submitted";
   const _busy = isSubmitting || isStreaming;
 
@@ -959,8 +1073,42 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               apiKey={apiKey}
               isStreaming={isStreaming}
               onStop={() => {
-                // Stop AI SDK stream (Convex stream continues and completes on server)
-                // The activeStreamId will automatically update when stream completes
+                // INSTANT STOP: Set ref FIRST to block all pending updates synchronously
+                isStoppedRef.current = true;
+
+                // Capture streamId before clearing state
+                const streamIdToCancel = activeStreamId;
+
+                // INSTANT STOP: Use flushSync to force synchronous re-render
+                // This ensures the UI updates immediately when user clicks stop
+                flushSync(() => {
+                  setManuallyStopped(true);
+                  setIsConvexStreaming(false);
+                  setActiveStreamId(null);
+                  setRedisStreamId(null);
+                });
+
+                // Abort the fetch request to /stream-llm if active
+                if (abortControllerRef.current) {
+                  try {
+                    abortControllerRef.current.abort();
+                  } catch {
+                    // Ignore abort errors
+                  }
+                  abortControllerRef.current = null;
+                }
+
+                // Cancel the stream on the server (stops the LLM request)
+                if (streamIdToCancel && convexUserId) {
+                  void cancelStream({
+                    streamId: streamIdToCancel,
+                    userId: convexUserId,
+                  }).catch(() => {
+                    // Ignore errors - stream may have already completed
+                  });
+                }
+
+                // Stop AI SDK stream (if using AI SDK transport)
                 stop();
               }}
               onMissingRequirement={handleMissingRequirement}
@@ -968,6 +1116,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               chatId={toConvexChatId(chatId)}
               messages={messages}
               jonMode={jonMode}
+              reasoningConfig={reasoningConfig}
+              onReasoningConfigChange={setReasoningConfig}
             />
           </ErrorBoundary>
         </div>

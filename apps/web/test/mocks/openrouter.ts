@@ -126,6 +126,14 @@ export const mockModels: MockOpenRouterModel[] = [
 ];
 
 /**
+ * OpenRouter reasoning detail item
+ */
+export interface ReasoningDetailItem {
+  type: "text";
+  text: string;
+}
+
+/**
  * Mock OpenRouter chat completion response
  */
 export interface MockChatCompletionResponse {
@@ -137,7 +145,7 @@ export interface MockChatCompletionResponse {
     message: {
       role: string;
       content: string;
-      reasoning_content?: string;
+      reasoning_details?: ReasoningDetailItem[];
     };
     finish_reason: string;
   }>;
@@ -185,7 +193,8 @@ export function createMockChatCompletionResponse(
   };
 
   if (reasoning) {
-    message.reasoning_content = reasoning;
+    // OpenRouter returns reasoning as an array of detail objects
+    message.reasoning_details = [{ type: "text", text: reasoning }];
   }
 
   return {
@@ -219,7 +228,7 @@ export interface MockStreamChunk {
     delta: {
       role?: string;
       content?: string;
-      reasoning_content?: string;
+      reasoning_details?: ReasoningDetailItem[];
     };
     finish_reason: string | null;
   }>;
@@ -273,6 +282,7 @@ export function createMockStreamChunks(
   });
 
   // Reasoning chunks if provided
+  // OpenRouter returns reasoning as an array of detail objects
   if (reasoning) {
     for (let i = 0; i < reasoning.length; i += chunkSize) {
       const chunk = reasoning.substring(i, i + chunkSize);
@@ -283,7 +293,7 @@ export function createMockStreamChunks(
         choices: [
           {
             index: 0,
-            delta: { reasoning_content: chunk },
+            delta: { reasoning_details: [{ type: "text", text: chunk }] },
             finish_reason: null,
           },
         ],
