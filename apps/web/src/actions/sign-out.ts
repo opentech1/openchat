@@ -10,9 +10,8 @@ import { redirect } from "next/navigation";
 export async function signOutAction() {
 	const cookieStore = await cookies();
 
-	// Clear Better Auth session cookies
-	cookieStore.delete("better-auth.session_token");
-	cookieStore.delete("__Secure-better-auth.session_token");
+	// Clear Better Auth session cookie (ba_session is set by hybridStorage in auth-client.ts)
+	cookieStore.delete("ba_session");
 
 	// Redirect to sign-in page
 	redirect("/auth/sign-in");

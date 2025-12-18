@@ -27,7 +27,9 @@ function syncSessionToCookie() {
 	for (const key of keys) {
 		const value = localStorage.getItem(key);
 		if (value) {
-			document.cookie = `${AUTH_SESSION_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+			const isSecure = window.location.protocol === "https:";
+			const secureFlag = isSecure ? "; Secure" : "";
+			document.cookie = `${AUTH_SESSION_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${secureFlag}`;
 			break; // Only need one session cookie
 		}
 	}
@@ -50,7 +52,9 @@ const hybridStorage = {
 		// Also store in a cookie for server-side access
 		// Use a single cookie with the full session data
 		if (key.includes("session")) {
-			document.cookie = `${AUTH_SESSION_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+			const isSecure = window.location.protocol === "https:";
+			const secureFlag = isSecure ? "; Secure" : "";
+			document.cookie = `${AUTH_SESSION_COOKIE}=${encodeURIComponent(value)}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax${secureFlag}`;
 		}
 	},
 	getItem: (key: string) => {

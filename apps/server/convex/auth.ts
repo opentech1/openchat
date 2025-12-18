@@ -24,7 +24,10 @@ export const createAuth = (
 	{ optionsOnly } = { optionsOnly: false }
 ) => {
 	// Get URLs at runtime - CONVEX_SITE_URL is the base for OAuth callbacks
-	const convexSiteUrl = process.env.CONVEX_SITE_URL!;
+	const convexSiteUrl = process.env.CONVEX_SITE_URL;
+	if (!convexSiteUrl) {
+		throw new Error("CONVEX_SITE_URL environment variable is not set");
+	}
 	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
 	
 	// Build authConfig at runtime when CONVEX_SITE_URL is available
