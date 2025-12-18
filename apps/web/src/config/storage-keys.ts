@@ -24,6 +24,8 @@ export const LOCAL_STORAGE_KEYS = {
 		JON_MODE: "openchat:jon-mode",
 		/** Reasoning configuration (enabled, effort, max_tokens) */
 		REASONING_CONFIG: "openchat:reasoning-config",
+		/** Web search configuration (enabled) */
+		SEARCH_CONFIG: "openchat:search-config",
 	},
 
 	/** Session and authentication */

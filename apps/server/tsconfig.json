@@ -12,6 +12,9 @@
   },
   "include": [
     "./convex/**/*.ts"
+  ],
+  "exclude": [
+    "./convex/**/*.test.ts"
   ]
 }
 

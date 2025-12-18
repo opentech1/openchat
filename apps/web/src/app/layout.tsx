@@ -154,6 +154,10 @@ export default function RootLayout({
 							strategy="afterInteractive"
 							data-enabled="true"
 						/>
+            <Script
+              src="//unpkg.com/@react-grab/opencode/dist/client.global.js"
+              strategy="lazyOnload"
+            />
 						<Script
 							src="https://unpkg.com/@react-grab/claude-code/dist/client.global.js"
 							strategy="afterInteractive"

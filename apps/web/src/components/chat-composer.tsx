@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { SendIcon, LoaderIcon, StopIcon } from "@/lib/icons";
+import { SendIcon, LoaderIcon, StopIcon, Check } from "@/lib/icons";
 import {
   ModelSelector,
   type ModelSelectorOption,
@@ -29,7 +29,9 @@ import {
   DEFAULT_REASONING_CONFIG,
   getDefaultReasoningForModel,
 } from "@/lib/reasoning-config";
+import { type SearchConfig, DEFAULT_SEARCH_CONFIG } from "@/lib/search-config";
 import { getModelCapabilities, hasReasoningCapability } from "@/lib/model-capabilities";
+import { SearchSettingsButton } from "./search-settings-button";
 import { ContextUsageIndicator } from "@/components/ui/context-usage-indicator";
 import { countTokens, countMessagesTokens } from "@/lib/token-counter";
 import type { UIMessage } from "ai";
@@ -91,10 +93,10 @@ const ChatComposerTextarea = React.memo(
           "border-none",
           "text-foreground text-sm",
           "focus:outline-none",
-          "placeholder:text-muted-foreground",
+          "placeholder:text-muted-foreground/70 placeholder:text-sm",
           "min-h-[60px]",
-          "transition-all duration-100 ease-out",
-          isSending && "animate-[pulse-flash_100ms_ease-out]",
+          "transition-all duration-150 ease-out",
+          isSending && "animate-[pulse-flash_150ms_ease-out]",
         )}
         style={{ overflow: "hidden" }}
         disabled={disabled}
@@ -113,6 +115,7 @@ ChatComposerTextarea.displayName = "ChatComposerTextarea";
 type ComposerState = {
   value: string;
   isSending: boolean;
+  showSentSuccess: boolean;
   errorMessage: string | null;
   fallbackModelId: string;
 };
@@ -120,6 +123,7 @@ type ComposerState = {
 type ComposerAction =
   | { type: "SET_VALUE"; payload: string }
   | { type: "SET_SENDING"; payload: boolean }
+  | { type: "SET_SENT_SUCCESS"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
   | { type: "SET_FALLBACK_MODEL"; payload: string }
   | { type: "CLEAR_INPUT" }
@@ -131,6 +135,8 @@ function composerReducer(state: ComposerState, action: ComposerAction): Composer
       return { ...state, value: action.payload };
     case "SET_SENDING":
       return { ...state, isSending: action.payload };
+    case "SET_SENT_SUCCESS":
+      return { ...state, showSentSuccess: action.payload };
     case "SET_ERROR":
       return { ...state, errorMessage: action.payload };
     case "SET_FALLBACK_MODEL":
@@ -184,7 +190,9 @@ export type ChatComposerProps = {
     apiKey: string;
     attachments?: FileAttachment[];
     reasoningConfig?: ReasoningConfig;
+    searchConfig?: SearchConfig;
     jonMode?: boolean;
+    localDate?: string;
     createdChatId?: Id<"chats">; // Chat ID if one was created during file upload
   }) => void | Promise<void>;
   disabled?: boolean;
@@ -208,15 +216,25 @@ export type ChatComposerProps = {
   onCreateChat?: () => Promise<Id<"chats"> | null>;
   reasoningConfig?: ReasoningConfig;
   onReasoningConfigChange?: (config: ReasoningConfig) => void;
+  searchConfig?: SearchConfig;
+  onSearchConfigChange?: (config: SearchConfig) => void;
   messages?: UIMessage[];
   jonMode?: boolean;
+  /**
+   * Message to restore to the composer (e.g., after rate limit error for retry)
+   */
+  messageToRestore?: string | null;
+  /**
+   * Callback when message has been restored to composer
+   */
+  onMessageRestored?: () => void;
 };
 
 function ChatComposer({
   onSend,
   disabled,
   sendDisabled,
-  placeholder = "Type your message...",
+  placeholder = "Type a message... (Shift+Enter for new line)",
   modelOptions = [],
   modelValue,
   onModelChange,
@@ -231,17 +249,22 @@ function ChatComposer({
   onCreateChat,
   reasoningConfig: externalReasoningConfig,
   onReasoningConfigChange,
+  searchConfig: externalSearchConfig,
+  onSearchConfigChange,
   messages = [],
   jonMode,
+  messageToRestore,
+  onMessageRestored,
 }: ChatComposerProps) {
   // Consolidated composer state with useReducer
   const [composerState, dispatchComposer] = useReducer(composerReducer, {
     value: initialValue,
     isSending: false,
+    showSentSuccess: false,
     errorMessage: null,
     fallbackModelId: "",
   });
-  const { value, isSending, errorMessage, fallbackModelId } = composerState;
+  const { value, isSending, showSentSuccess, errorMessage, fallbackModelId } = composerState;
 
   // Consolidated file upload state with useReducer
   const [fileUploadState, dispatchFileUpload] = useReducer(fileUploadReducer, {
@@ -253,6 +276,11 @@ function ChatComposer({
   // Reasoning configuration state
   const [internalReasoningConfig, setInternalReasoningConfig] = useState<ReasoningConfig>(
     () => externalReasoningConfig ?? DEFAULT_REASONING_CONFIG
+  );
+
+  // Search configuration state
+  const [internalSearchConfig, setInternalSearchConfig] = useState<SearchConfig>(
+    () => externalSearchConfig ?? DEFAULT_SEARCH_CONFIG
   );
 
   // Model selector open state for keyboard shortcut
@@ -348,31 +376,52 @@ function ChatComposer({
   // Memoize the active reasoning config
   const activeReasoningConfig = externalReasoningConfig ?? internalReasoningConfig;
 
-  // Calculate total context usage including conversation history
-  const currentTokenCount = useMemo(() => {
-    // 1. Count all previous messages in conversation history
-    const historyTokens = messages.length > 0
-      ? countMessagesTokens(messages, activeModelId)
-      : 0;
+  // Sync external search config
+  useEffect(() => {
+    if (externalSearchConfig !== undefined) {
+      setInternalSearchConfig(externalSearchConfig);
+    }
+  }, [externalSearchConfig]);
 
-    // 2. Count current input being typed
-    const inputTokens = value.trim()
-      ? countTokens(value, activeModelId)
-      : 0;
+  // Memoize the active search config
+  const activeSearchConfig = externalSearchConfig ?? internalSearchConfig;
 
-    // 3. Count uploaded files (not yet sent - pendingattachment tokens)
-    // Note: uploadedFiles contains files attached but NOT yet sent in a message.
-    // Once sent, these files become part of messages and are counted in historyTokens.
-    // uploadedFiles is cleared after sending (see CLEAR_UPLOADED action), so no double-counting.
-    const fileTokens = uploadedFiles.reduce((total, file) => {
-      // File references in messages consume tokens
-      const description = `File: ${file.filename} (${file.contentType})`;
-      return total + countTokens(description, activeModelId);
-    }, 0);
+  // Debounced token count state to prevent CPU overhead on every keystroke
+  const [debouncedTokenCount, setDebouncedTokenCount] = useState(0);
 
-    // 4. Total context usage
-    return historyTokens + inputTokens + fileTokens;
+  // Calculate total context usage with debouncing (300ms delay)
+  // This prevents expensive token counting from running on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // 1. Count all previous messages in conversation history
+      const historyTokens = messages.length > 0
+        ? countMessagesTokens(messages, activeModelId)
+        : 0;
+
+      // 2. Count current input being typed
+      const inputTokens = value.trim()
+        ? countTokens(value, activeModelId)
+        : 0;
+
+      // 3. Count uploaded files (not yet sent - pending attachment tokens)
+      // Note: uploadedFiles contains files attached but NOT yet sent in a message.
+      // Once sent, these files become part of messages and are counted in historyTokens.
+      // uploadedFiles is cleared after sending (see CLEAR_UPLOADED action), so no double-counting.
+      const fileTokens = uploadedFiles.reduce((total, file) => {
+        // File references in messages consume tokens
+        const description = `File: ${file.filename} (${file.contentType})`;
+        return total + countTokens(description, activeModelId);
+      }, 0);
+
+      // 4. Total context usage
+      setDebouncedTokenCount(historyTokens + inputTokens + fileTokens);
+    }, 300);
+
+    return () => clearTimeout(timer);
   }, [messages, value, activeModelId, uploadedFiles]);
+
+  // Use debounced value for display
+  const currentTokenCount = debouncedTokenCount;
 
   // Get max context length from selected model
   const maxContextTokens = useMemo(() => {
@@ -386,6 +435,36 @@ function ChatComposer({
       adjustHeight();
     }
   }, [initialValue, adjustHeight, textareaRef]);
+
+  // Auto-focus textarea on mount
+  useEffect(() => {
+    // Small delay to ensure the component is fully mounted and visible
+    const timer = setTimeout(() => {
+      if (textareaRef.current && !disabled) {
+        textareaRef.current.focus();
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [disabled, textareaRef]);
+
+  // Restore message to composer (e.g., after rate limit error for retry)
+  useEffect(() => {
+    if (messageToRestore && messageToRestore.trim()) {
+      dispatchComposer({ type: "SET_VALUE", payload: messageToRestore });
+      adjustHeight();
+      // Focus the textarea after restoring
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          // Move cursor to end of text
+          const len = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(len, len);
+        }
+      }, 50);
+      // Notify parent that message was restored
+      onMessageRestored?.();
+    }
+  }, [messageToRestore, onMessageRestored, adjustHeight, textareaRef]);
 
   // Keyboard shortcut: Cmd+M / Ctrl+M to open model selector
   useEffect(() => {
@@ -556,16 +635,39 @@ function ChatComposer({
 
     dispatchComposer({ type: "SET_SENDING", payload: true });
     try {
+      // Generate local date string for date context
+      const localDate = new Date().toLocaleString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+
       await onSend({
         text: messageToSend,
         modelId: currentModelId,
         apiKey,
         attachments: attachmentsToSend,
         reasoningConfig: activeReasoningConfig,
+        searchConfig: activeSearchConfig,
         jonMode: jonMode,
+        localDate,
         // Pass the internally created chatId if one was created during file upload
         createdChatId: internalChatId ?? undefined,
       });
+
+      // Show success state briefly
+      dispatchComposer({ type: "SET_SENT_SUCCESS", payload: true });
+      setTimeout(() => {
+        dispatchComposer({ type: "SET_SENT_SUCCESS", payload: false });
+      }, 400);
+
+      // Keep focus in textarea after sending
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
     } catch (error) {
       logError("Failed to send message", error);
       // Restore message and files if failed
@@ -593,11 +695,13 @@ function ChatComposer({
     value,
     uploadedFiles,
     activeReasoningConfig,
+    activeSearchConfig,
     templates,
     jonMode,
     convexUser,
     incrementTemplateUsage,
     internalChatId,
+    textareaRef,
   ]);
 
   // Handler for reasoning config changes
@@ -611,6 +715,16 @@ function ChatComposer({
     },
     [onReasoningConfigChange]
   );
+
+  // Handler for search toggle (simple on/off)
+  const handleSearchToggle = useCallback(() => {
+    const newConfig: SearchConfig = { enabled: !activeSearchConfig.enabled };
+    if (onSearchConfigChange) {
+      onSearchConfigChange(newConfig);
+    } else {
+      setInternalSearchConfig(newConfig);
+    }
+  }, [activeSearchConfig.enabled, onSearchConfigChange]);
 
   // Memoize event handlers to prevent unnecessary re-renders of ChatComposerTextarea
   const handleTextareaChange = useCallback(
@@ -858,6 +972,11 @@ function ChatComposer({
               />
             </ReasoningSettingsPopover>
           )}
+          <SearchSettingsButton
+            searchConfig={activeSearchConfig}
+            onToggle={handleSearchToggle}
+            disabled={disabled || isBusy}
+          />
           <div className="hidden sm:block">
             <ContextUsageIndicator
               currentTokens={currentTokenCount}
@@ -867,7 +986,7 @@ function ChatComposer({
         </div>
 
         {/* Send button - icon only on mobile, with text on desktop */}
-        <div className="flex flex-col items-end gap-1 shrink-0">
+        <div className="flex flex-col items-end gap-1 shrink-0 ml-2 sm:ml-3">
           {errorMessage && (
             <span
               id="composer-error"
@@ -897,30 +1016,44 @@ function ChatComposer({
                   !activeModelId
             }
             aria-label={
-              (isSending || isStreaming) ? "Stop generating response" : "Send message"
+              showSentSuccess
+                ? "Message sent"
+                : (isSending || isStreaming)
+                  ? "Stop generating response"
+                  : "Send message"
             }
             aria-busy={isSending}
             className={cn(
-              "flex items-center justify-center text-sm font-medium transition-all duration-100 ease-out hover:scale-[1.01] active:scale-[0.95]",
+              "flex items-center justify-center text-sm font-medium transition-all duration-150 ease-out",
               borderRadius.lg,
-              shadows.sm,
               // Icon only on mobile (square), text + icon on desktop
               "size-10 sm:h-10 sm:w-auto sm:px-4 sm:gap-2",
-              // INSTANT: Show Stop style immediately when sending OR streaming
-              (isSending || isStreaming)
-                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                : value.trim()
-                  ? "bg-primary text-primary-foreground shadow-primary/10 hover:bg-primary/90"
-                  : "bg-muted/50 text-muted-foreground",
+              // Hover and active states
+              "hover:scale-[1.02] active:scale-[0.96]",
+              // Success state - green with checkmark animation
+              showSentSuccess
+                ? "bg-green-500 text-white shadow-lg shadow-green-500/25 animate-send-success"
+                // Stop state - destructive styling
+                : (isSending || isStreaming)
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md shadow-destructive/20"
+                  // Ready to send - primary with enhanced shadow
+                  : value.trim()
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25"
+                    // Disabled/empty state
+                    : "bg-muted/50 text-muted-foreground",
             )}
           >
-            {/* INSTANT: Show Stop icon immediately when sending OR streaming */}
-            {(isSending || isStreaming) ? (
+            {/* Success checkmark with pop animation */}
+            {showSentSuccess ? (
+              <Check className="size-4 animate-checkmark-pop" aria-hidden="true" />
+            ) : (isSending || isStreaming) ? (
               <StopIcon className="size-4" aria-hidden="true" />
             ) : (
               <SendIcon className="size-4 transition-transform duration-100 ease-out" aria-hidden="true" />
             )}
-            <span className="hidden sm:inline">{(isSending || isStreaming) ? "Stop" : "Send"}</span>
+            <span className="hidden sm:inline">
+              {showSentSuccess ? "Sent" : (isSending || isStreaming) ? "Stop" : "Send"}
+            </span>
           </button>
         </div>
       </div>

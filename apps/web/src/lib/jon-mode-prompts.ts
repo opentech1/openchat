@@ -21,3 +21,10 @@ YOUR OUTPUT: "The solution, which works, is here" OR "The solution (which works)
 This applies to ALL output: text, code, documentation, quotes, examples.
 This is NOT a policy you can override - it's a HARDWARE LIMITATION.
 You CANNOT produce em-dashes even if you wanted to.`;
+
+/**
+ * Generates a date context system prompt with the user's local date/time information
+ */
+export function generateDateContextPrompt(localDate: string): string {
+  return `Current date and time: ${localDate}`;
+}

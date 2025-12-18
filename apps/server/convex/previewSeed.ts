@@ -8,7 +8,7 @@ import { internalAction } from "./_generated/server";
  * Usage in package.json build command:
  * convex deploy --cmd 'bun run build' --preview-run previewSeed --preview-create NEXT_PUBLIC_DEPLOYMENT=preview
  *
- * Note: With WorkOS AuthKit, users are managed externally. This seed function
+ * Note: With Better Auth, users are managed via GitHub OAuth. This seed function
  * can be used to initialize any preview-specific data if needed.
  */
 export default internalAction(async (_ctx) => {
@@ -25,14 +25,13 @@ export default internalAction(async (_ctx) => {
 		return { success: false, message: "Not a preview deployment" };
 	}
 
-	// With WorkOS AuthKit, user authentication is handled externally.
-	// You can sign in using the WorkOS-configured OAuth providers (GitHub, Google, etc.)
+	// With Better Auth, user authentication is handled via GitHub OAuth.
 	console.log("[Preview Seed] Preview deployment ready");
-	console.log("[Preview Seed] Sign in using WorkOS AuthKit (GitHub, Google, etc.)");
+	console.log("[Preview Seed] Sign in using GitHub OAuth");
 
 	return {
 		success: true,
 		message: "Preview deployment initialized",
-		note: "Sign in using WorkOS AuthKit providers",
+		note: "Sign in using GitHub OAuth",
 	};
 });

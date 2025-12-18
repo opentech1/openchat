@@ -41,6 +41,17 @@ import { LiveRegion } from "@/components/ui/live-region";
 import ThemeToggle from "@/components/theme-toggle";
 import { useChatList } from "@/contexts/chat-list-context";
 import { useChatReadStatus } from "@/hooks/use-chat-read-status";
+import { invalidateChatsCache } from "@/lib/cache-utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type ChatListItem = {
   id: string;
@@ -156,6 +167,8 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
   const [accountOpen, setAccountOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null);
+  // Chat pending deletion confirmation (shows the dialog)
+  const [chatPendingDelete, setChatPendingDelete] = useState<ChatListItem | null>(null);
 
   // REAL-TIME CHAT LIST: Use Convex subscription for instant updates
   // This enables:
@@ -244,7 +257,8 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
       if (!response.ok || !payload.chat) {
         throw new Error(payload.error || "Failed to create chat");
       }
-      // No need to manually update chat list - Convex subscription will auto-update
+      // Convex subscription will auto-update, but also notify other components (mobile nav, etc.)
+      invalidateChatsCache();
       captureClientEvent("chat.created", {
         chat_id: payload.chat.id,
         title_length: payload.chat.title?.length ?? 0,
@@ -284,7 +298,9 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
           (payload as { error?: string }).error || "Failed to delete chat",
         );
       }
-      // No need to manually update chat list - Convex subscription will auto-update
+      // Convex subscription will auto-update, but also notify other components (mobile nav, etc.)
+      invalidateChatsCache();
+      toast.success("Chat deleted");
     } catch (error) {
       logError("Failed to delete chat", error);
       // Show actual error message as toast title for better visibility
@@ -301,6 +317,24 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
     },
     [router],
   );
+
+  // Request deletion - opens confirmation dialog
+  const handleRequestDelete = useCallback((chat: ChatListItem) => {
+    setChatPendingDelete(chat);
+  }, []);
+
+  // Confirm deletion - actually deletes after user confirms
+  const handleConfirmDelete = useCallback(() => {
+    if (chatPendingDelete) {
+      void handleDelete(chatPendingDelete.id);
+      setChatPendingDelete(null);
+    }
+  }, [chatPendingDelete, handleDelete]);
+
+  // Cancel deletion - closes dialog without deleting
+  const handleCancelDelete = useCallback(() => {
+    setChatPendingDelete(null);
+  }, []);
 
   const userDisplayLabel = useMemo(() => {
     if (!user) return "";
@@ -373,13 +407,15 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
             <ChatList
               chats={chats}
               activePath={pathname}
-              onDelete={handleDelete}
+              onRequestDelete={handleRequestDelete}
               deletingId={deletingChatId}
               onHoverChat={handleHoverChat}
               isLoading={isLoadingChats}
               onNavigate={onNavigate}
               realtimeStatusMap={realtimeStatusMap}
               isUnread={isUnread}
+              onCreateChat={handleCreateChat}
+              isCreating={isCreating}
             />
           </ErrorBoundary>
         </SidebarGroup>
@@ -431,6 +467,30 @@ function AppSidebar({ initialChats = [], onNavigate, hideHeader = false, ...side
         open={accountOpen && Boolean(user)}
         onClose={() => setAccountOpen(false)}
       />
+      {/* Delete Chat Confirmation Dialog */}
+      <AlertDialog open={chatPendingDelete !== null} onOpenChange={(open) => !open && handleCancelDelete()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {chatPendingDelete?.title ? (
+                <>This will permanently delete &quot;{chatPendingDelete.title}&quot;. This action cannot be undone.</>
+              ) : (
+                <>This will permanently delete this conversation. This action cannot be undone.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelDelete}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }
@@ -489,17 +549,19 @@ function ThemeToggleButton() {
 function ChatList({
   chats,
   activePath,
-  onDelete,
+  onRequestDelete,
   deletingId,
   onHoverChat,
   isLoading,
   onNavigate,
   realtimeStatusMap,
   isUnread,
+  onCreateChat,
+  isCreating,
 }: {
   chats: ChatListItem[];
   activePath?: string | null;
-  onDelete: (chatId: string) => void | Promise<void>;
+  onRequestDelete: (chat: ChatListItem) => void;
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
   isLoading?: boolean;
@@ -508,6 +570,10 @@ function ChatList({
   realtimeStatusMap?: Map<string, string | undefined>;
   /** Function to check if a chat has unread messages */
   isUnread?: (chatId: string, lastMessageAt: number | null | undefined, isActive: boolean) => boolean;
+  /** Function to create a new chat */
+  onCreateChat?: () => void | Promise<void>;
+  /** Whether a chat is currently being created */
+  isCreating?: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   // Removed proactive prefetching - only prefetch on hover to avoid API spam
@@ -540,12 +606,35 @@ function ChatList({
 
   if (chats.length === 0)
     return (
-      <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-        <div className="rounded-full bg-primary/10 p-3 mb-3">
-          <MessageSquare className="h-6 w-6 text-primary" />
+      <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+        <div className="rounded-full bg-muted/50 p-4 mb-4">
+          <MessageSquare className="size-6 text-muted-foreground" />
         </div>
         <p className="text-sm font-medium text-foreground mb-1">No conversations yet</p>
-        <p className="text-xs text-muted-foreground mb-4">Start a new chat to begin</p>
+        <p className="text-xs text-muted-foreground mb-4 max-w-[180px]">
+          Start a new chat to begin exploring
+        </p>
+        {onCreateChat && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => {
+              void onCreateChat();
+            }}
+            disabled={isCreating}
+          >
+            {isCreating ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "New Chat"
+            )}
+          </Button>
+        )}
       </div>
     );
 
@@ -562,7 +651,7 @@ function ChatList({
               key={c.id}
               chat={c}
               activePath={activePath}
-              onDelete={onDelete}
+              onRequestDelete={onRequestDelete}
               deletingId={deletingId}
               onHoverChat={onHoverChat}
               onNavigate={onNavigate}
@@ -608,7 +697,7 @@ function ChatList({
               <ChatListItem
                 chat={chat}
                 activePath={activePath}
-                onDelete={onDelete}
+                onRequestDelete={onRequestDelete}
                 deletingId={deletingId}
                 onHoverChat={onHoverChat}
                 onNavigate={onNavigate}
@@ -623,10 +712,13 @@ function ChatList({
   );
 }
 
-// Streaming indicator - uses loading spinner for generating state
+// Streaming indicator - animated pulsing dot for generating state
 const StreamingIndicator = () => (
-  <span className="flex shrink-0 items-center justify-center">
-    <Loader2 className="size-3.5 animate-spin text-primary" />
+  <span className="relative flex size-2.5 shrink-0">
+    {/* Outer pulsing ring */}
+    <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/60" />
+    {/* Inner solid dot */}
+    <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
   </span>
 );
 
@@ -640,7 +732,7 @@ const UnreadDot = () => (
 function ChatListItem({
   chat,
   activePath,
-  onDelete,
+  onRequestDelete,
   deletingId,
   onHoverChat,
   onNavigate,
@@ -649,7 +741,7 @@ function ChatListItem({
 }: {
   chat: ChatListItem;
   activePath?: string | null;
-  onDelete: (chatId: string) => void | Promise<void>;
+  onRequestDelete: (chat: ChatListItem) => void;
   deletingId: string | null;
   onHoverChat?: (chatId: string) => void;
   onNavigate?: () => void;
@@ -712,7 +804,7 @@ function ChatListItem({
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                void onDelete(chat.id);
+                onRequestDelete(chat);
               }}
               className={cn(
                 // Linear-style: no scale effects, just subtle color transition

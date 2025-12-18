@@ -7,11 +7,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { BrainIcon, ChevronDownIcon } from "@/lib/icons";
+import { ChevronRight } from "@/lib/icons";
 import type { ComponentProps } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
-import { Shimmer } from "./shimmer";
 
 type ReasoningContextValue = {
   isStreaming: boolean;
@@ -44,7 +43,8 @@ export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   redacted?: boolean;
 };
 
-const AUTO_CLOSE_DELAY = 1000;
+// Disabled auto-close - let users manually control the reasoning panel
+const AUTO_CLOSE_DELAY = 0;
 const MS_IN_S = 1000;
 
 export const Reasoning = memo(
@@ -87,10 +87,13 @@ export const Reasoning = memo(
       }
     }, [isStreaming, startTime, setDuration, durationProp]);
 
-    // Auto-open when streaming starts, auto-close when streaming ends (once only)
+    // Auto-close disabled - let users manually control the reasoning panel
+    // The reasoning panel now stays open until the user clicks to close it
     useEffect(() => {
+      // Skip auto-close when disabled (AUTO_CLOSE_DELAY <= 0)
+      if (AUTO_CLOSE_DELAY <= 0) return;
+
       if (defaultOpen && !isStreaming && isOpen && !hasAutoClosed) {
-        // Add a small delay before closing to allow user to see the content
         const timer = setTimeout(() => {
           setIsOpen(false);
           setHasAutoClosed(true);
@@ -123,29 +126,21 @@ export const Reasoning = memo(
 
 export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
 
-const getThinkingMessage = (isStreaming: boolean, duration?: number, redacted?: boolean) => {
-  // Show shimmer animation only while actively streaming
-  // Note: duration === 0 means thinking completed very fast, not still streaming
-  if (isStreaming) {
-    return <Shimmer duration={1}>Thinking...</Shimmer>;
-  }
-  // If redacted, show message that model reasoned but data was not returned
-  if (redacted) {
-    return <p>Model reasoned</p>;
-  }
-  // If duration is undefined (no server data), show generic fallback
-  if (duration === undefined) {
-    return <p>Thought for a few seconds</p>;
-  }
-  // Handle duration 0 (very fast thinking) - show "less than a second"
-  if (duration === 0) {
-    return <p>Thought for less than a second</p>;
-  }
-  // Handle singular vs plural
-  if (duration === 1) {
-    return <p>Thought for 1 second</p>;
-  }
-  return <p>Thought for {duration} seconds</p>;
+const ThinkingDots = () => (
+  <span className="inline-flex gap-0.5 ml-0.5">
+    <span className="size-1 rounded-full bg-current animate-pulse" />
+    <span className="size-1 rounded-full bg-current animate-pulse [animation-delay:150ms]" />
+    <span className="size-1 rounded-full bg-current animate-pulse [animation-delay:300ms]" />
+  </span>
+);
+
+const getThinkingText = (isStreaming: boolean, duration?: number, redacted?: boolean) => {
+  if (isStreaming) return "Thinking";
+  if (redacted) return "Reasoned";
+  if (duration === undefined) return "Thought for a few seconds";
+  if (duration === 0) return "Thought for <1s";
+  if (duration === 1) return "Thought for 1s";
+  return `Thought for ${duration}s`;
 };
 
 export const ReasoningTrigger = memo(
@@ -155,21 +150,21 @@ export const ReasoningTrigger = memo(
     return (
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground",
+          "group inline-flex items-center gap-1 text-muted-foreground text-sm transition-colors hover:text-foreground",
           className
         )}
         {...props}
       >
         {children ?? (
           <>
-            <BrainIcon className="size-4" />
-            {getThinkingMessage(isStreaming, duration, redacted)}
-            <ChevronDownIcon
+            <ChevronRight
               className={cn(
-                "size-4 transition-transform",
-                isOpen ? "rotate-180" : "rotate-0"
+                "size-3.5 transition-transform duration-200",
+                isOpen && "rotate-90"
               )}
             />
+            <span>{getThinkingText(isStreaming, duration, redacted)}</span>
+            {isStreaming && <ThinkingDots />}
           </>
         )}
       </CollapsibleTrigger>
@@ -183,7 +178,7 @@ export type ReasoningContentProps = ComponentProps<
   children: string;
 };
 
-const REDACTED_MESSAGE = "Model provider does not give back reasoning data, but model still reasoned.";
+const REDACTED_MESSAGE = "Reasoning data not available from provider.";
 
 export const ReasoningContent = memo(
   ({ className, children, ...props }: ReasoningContentProps) => {
@@ -192,14 +187,14 @@ export const ReasoningContent = memo(
     return (
       <CollapsibleContent
         className={cn(
-          "mt-4 text-sm",
-          "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
+          "mt-2 pl-4 border-l-2 border-muted text-sm text-muted-foreground",
+          "data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
           className
         )}
         {...props}
       >
         {redacted ? (
-          <p className="italic text-muted-foreground/70">{REDACTED_MESSAGE}</p>
+          <p className="italic text-muted-foreground/60">{REDACTED_MESSAGE}</p>
         ) : (
           <Streamdown {...props}>{children}</Streamdown>
         )}

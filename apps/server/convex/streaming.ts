@@ -559,7 +559,7 @@ export const streamLLM = httpAction(async (ctx, request) => {
 		let isCancelled = false;
 		let lastCancellationCheck = Date.now();
 		const CHUNKS_PER_UPDATE = 10; // More frequent saves for responsive UI
-		const REASONING_CHUNKS_PER_UPDATE = 5; // Even more frequent saves for reasoning (it comes first)
+		const REASONING_CHUNKS_PER_UPDATE = 1; // Real-time streaming: save on every reasoning chunk
 		const CANCELLATION_CHECK_INTERVAL_MS = 200; // Check for cancellation every 200ms for faster response
 
 		// Redis streaming state

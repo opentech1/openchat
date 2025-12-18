@@ -19,6 +19,7 @@ import { Logo } from "@/components/logo";
 import ThemeToggle from "@/components/theme-toggle";
 import type { ChatListItem } from "@/components/app-sidebar";
 import { iconSize } from "@/styles/design-tokens";
+import { invalidateChatsCache, useChatsInvalidation } from "@/lib/cache-utils";
 
 type MobileDashboardNavProps = {
 	initialChats?: ChatListItem[];
@@ -106,6 +107,23 @@ function MobileDrawer({
 		setMounted(true);
 	}, []);
 
+	// Refetch chats from API
+	const refetchChats = useCallback(async () => {
+		if (!user?.id) return;
+		try {
+			const res = await fetch("/api/chats?limit=200", { credentials: "include" });
+			if (res.ok) {
+				const data = await res.json();
+				setChats(data.chats || []);
+			}
+		} catch (err) {
+			logError("Failed to refetch chats", err);
+		}
+	}, [user?.id]);
+
+	// Listen for cache invalidation events to refetch chat list
+	useChatsInvalidation(refetchChats);
+
 	// Fetch chats if not provided
 	useEffect(() => {
 		if (hasFetched || !user?.id) return;
@@ -148,6 +166,8 @@ function MobileDrawer({
 			const data = await res.json();
 			if (!res.ok || !data.chat) throw new Error(data.error || "Failed");
 			setChats((prev) => [data.chat, ...prev]);
+			// Notify other components (sidebar, etc.) to refresh their chat list
+			invalidateChatsCache();
 			captureClientEvent("chat.created", { chat_id: data.chat.id, source: "mobile" });
 			onClose();
 			router.push(`/chat/${data.chat.id}`);
@@ -168,6 +188,8 @@ function MobileDrawer({
 			});
 			if (!res.ok) throw new Error("Failed to delete");
 			setChats((prev) => prev.filter((c) => c.id !== chatId));
+			// Notify other components (sidebar, etc.) to refresh their chat list
+			invalidateChatsCache();
 		} catch (err) {
 			logError("Delete chat failed", err);
 			toast.error("Failed to delete chat");

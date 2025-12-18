@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 
 /**
  * Pre-compute CSP headers at module load to eliminate per-request overhead
@@ -29,14 +28,13 @@ const CSP_HEADER_VALUE =
  * Paths that do not require authentication
  * - Landing page
  * - Auth sign-in page
- * - Auth callback routes
+ * - Auth API routes (handled by Better Auth)
  * - Public stats API
  */
 const UNAUTHENTICATED_PATHS = [
 	"/",
 	"/auth/sign-in",
-	"/auth/callback",
-	"/api/auth/callback",
+	"/api/auth",
 	"/api/stats",
 ];
 
@@ -92,45 +90,53 @@ function applySecurityHeaders(
 }
 
 /**
- * Create the WorkOS AuthKit middleware with proper configuration
- *
- * This handles:
- * - Session management and cookie handling
- * - Automatic redirects to AuthKit for protected routes
- * - Token refresh
+ * Check if a path requires authentication
  */
-const workosMiddleware = authkitMiddleware({
-	redirectUri: process.env.WORKOS_REDIRECT_URI,
-	middlewareAuth: {
-		enabled: true,
-		unauthenticatedPaths: UNAUTHENTICATED_PATHS,
-	},
-});
+function isUnauthenticatedPath(pathname: string): boolean {
+	return UNAUTHENTICATED_PATHS.some((path) => {
+		if (path.endsWith("/")) {
+			return pathname.startsWith(path) || pathname === path.slice(0, -1);
+		}
+		return pathname === path || pathname.startsWith(`${path}/`);
+	});
+}
 
 /**
- * Combined proxy for WorkOS AuthKit authentication and security headers
+ * Combined proxy for security headers and basic auth routing
  *
  * Next.js 16 uses proxy.ts instead of middleware.ts
  *
- * Wraps authkitMiddleware to add:
+ * Authentication is handled by Better Auth via:
+ * - /api/auth/* routes (catch-all handler)
+ * - Client-side session management via authClient
+ * - ConvexBetterAuthProvider for Convex integration
+ *
+ * This proxy only handles:
  * - Request correlation IDs for distributed tracing
  * - Security headers for all responses (CSP, XSS protection, etc.)
+ * - Basic redirect for unauthenticated users on protected routes
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
 	// Extract or generate correlation ID
 	const existingCorrelationId = request.headers.get("x-request-id");
 	const correlationId = existingCorrelationId || generateCorrelationId();
 
-	// Call WorkOS AuthKit middleware first - it handles authentication,
-	// session management, and redirects for unauthenticated users
-	const authkitResult = await workosMiddleware(request, {} as never);
+	const { pathname } = request.nextUrl;
 
-	// AuthKit middleware returns NextResponse for both redirects and normal requests
-	// If no response (void/undefined), create a default NextResponse.next()
-	const response =
-		authkitResult instanceof NextResponse
-			? authkitResult
-			: NextResponse.next();
+	// Check if user has a Better Auth session cookie
+	const hasSession = request.cookies.has("better-auth.session_token");
+
+	// Redirect unauthenticated users to sign-in for protected routes
+	if (!hasSession && !isUnauthenticatedPath(pathname)) {
+		const signInUrl = new URL("/auth/sign-in", request.url);
+		signInUrl.searchParams.set("callbackUrl", pathname);
+		const redirectResponse = NextResponse.redirect(signInUrl);
+		applySecurityHeaders(redirectResponse, correlationId);
+		return redirectResponse;
+	}
+
+	// Continue with the request
+	const response = NextResponse.next();
 
 	// Apply security headers to the response
 	applySecurityHeaders(response, correlationId);

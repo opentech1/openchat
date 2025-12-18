@@ -218,7 +218,7 @@ export function AccountSettingsModal({
       try {
         onClose();
         toast.success("Signed out");
-        // WorkOS signOut redirects to "/" automatically
+        // signOutAction clears session and redirects to sign-in
         await signOutAction();
       } catch (error) {
         logError("Failed to sign out", error);
