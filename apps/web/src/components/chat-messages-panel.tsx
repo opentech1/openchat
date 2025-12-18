@@ -23,18 +23,14 @@ import { cn } from "@/lib/utils";
 import { SafeStreamdown } from "@/components/safe-streamdown";
 import { throttleRAF } from "@/lib/throttle";
 import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
-import {
-  ToolInvocation,
-  ToolInvocationContent,
-  ToolInvocationTrigger,
-} from "@/components/ai-elements/tool-invocation";
+	ThinkingProcess,
+	type ToolInvocationData,
+	type SearchResult,
+} from "@/components/ai-elements/thinking-process";
 import { FilePreview } from "@/components/file-preview";
 import { ProgressiveThinkingIndicator } from "@/components/progressive-thinking-indicator";
 import type { WaitState } from "@/hooks/use-progressive-wait-detection";
+import { useOptimizedScroll } from "@/hooks/use-optimized-scroll";
 
 type ToolInvocationPart = {
   type: "tool-invocation";
@@ -85,19 +81,6 @@ type ChatMessagesPanelProps = {
 // Threshold for considering user "at bottom" - increased for better UX
 const SCROLL_LOCK_THRESHOLD_PX = 100;
 
-// Thinking indicator shown when model is processing but no content yet
-const ThinkingIndicator = memo(() => (
-  <div className="flex items-center gap-2 py-2 animate-in fade-in duration-200">
-    <div className="flex gap-1">
-      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0ms]" />
-      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:150ms]" />
-      <span className="size-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:300ms]" />
-    </div>
-    <span className="text-muted-foreground text-xs">Generating response...</span>
-  </div>
-));
-ThinkingIndicator.displayName = "ThinkingIndicator";
-
 function ChatMessagesPanelComponent({
   messages,
   paddingBottom,
@@ -114,6 +97,8 @@ function ChatMessagesPanelComponent({
 }: ChatMessagesPanelProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Bottom anchor element ref for useOptimizedScroll
+  const bottomRef = useRef<HTMLDivElement>(null);
   // Start with isAtBottom = true to prevent scroll button flash on initial render
   // This will be corrected after initial scroll verification
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -129,6 +114,14 @@ function ChatMessagesPanelComponent({
   const viewportReadySetRef = useRef(false);
   // Track if we've done initial scroll for this chat
   const hasScrolledForChatRef = useRef(false);
+
+  // Use optimized scroll hook for smart auto-scroll behavior
+  // The hook provides scrollToBottom that respects manual scroll state internally
+  const {
+    scrollToBottom: optimizedScrollToBottom,
+    markManualScroll,
+    resetManualScroll,
+  } = useOptimizedScroll(bottomRef);
 
   // Callback ref to detect when viewport is attached to DOM
   // IMPORTANT: Use a guard ref to prevent calling setViewportReady multiple times.
@@ -153,10 +146,12 @@ function ChatMessagesPanelComponent({
       lastSignatureRef.current = null;
       hasScrolledForChatRef.current = false;
       isProgrammaticScrollRef.current = false;
+      // Reset useOptimizedScroll manual scroll state for new chat
+      resetManualScroll();
       // Keep isAtBottom true to prevent scroll button flash while loading
       setIsAtBottom(true);
     }
-  }, [chatId]);
+  }, [chatId, resetManualScroll]);
 
   const hasMessages = messages.length > 0;
   const tailSignature = useMemo(() => {
@@ -207,9 +202,9 @@ function ChatMessagesPanelComponent({
 
     // Track cleanup state
     let cancelled = false;
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
     let raf1: number | undefined;
     let raf2: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     // Mark that we're doing programmatic scroll to prevent user scroll detection
     isProgrammaticScrollRef.current = true;
@@ -218,6 +213,26 @@ function ChatMessagesPanelComponent({
     const doScroll = () => {
       if (cancelled || !viewportRef.current) return;
       viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+    };
+
+    // Verify scroll and update state
+    const verifyAndFinalize = () => {
+      if (cancelled) return;
+      const viewport = viewportRef.current;
+      if (viewport) {
+        const atBottom = computeIsAtBottom(viewport);
+
+        // Only mark as scrolled if we successfully reached the bottom
+        // This allows retry on next render if scroll failed (e.g., DOM not ready)
+        if (atBottom) {
+          hasScrolledForChatRef.current = true;
+          shouldStickRef.current = true;
+        }
+
+        setIsAtBottom(atBottom);
+        lastSignatureRef.current = tailSignature;
+      }
+      isProgrammaticScrollRef.current = false;
     };
 
     // Immediate scroll
@@ -233,47 +248,30 @@ function ChatMessagesPanelComponent({
         if (cancelled) return;
         doScroll();
 
-        // Final retry after short delay for any async content
-        timeoutId = setTimeout(() => {
-          if (cancelled) return;
-          doScroll();
-
-          // Verify scroll succeeded and update state accordingly
-          //
-          // Edge cases handled by computeIsAtBottom:
-          // 1. Zero dimensions (DOM not ready) → returns false → allows retry on next render
-          // 2. Content fits without scrollbar (scrollHeight === clientHeight) → returns true
-          //    (we're at bottom by definition since there's nothing to scroll)
-          // 3. Scrollbar present and at bottom → returns true
-          // 4. Scrollbar present but NOT at bottom → returns false → allows retry
-          const viewport = viewportRef.current;
-          if (viewport) {
-            const atBottom = computeIsAtBottom(viewport);
-
-            // Only mark as scrolled if we successfully reached the bottom
-            // This allows retry on next render if scroll failed (e.g., DOM not ready)
-            if (atBottom) {
-              hasScrolledForChatRef.current = true;
-              shouldStickRef.current = true;
+        // Schedule multiple retries at increasing intervals for page reload scenarios
+        // This handles async content loading (server data, images, markdown rendering, etc.)
+        const delays = [50, 150, 300, 500];
+        delays.forEach((delay, index) => {
+          const id = setTimeout(() => {
+            if (cancelled) return;
+            doScroll();
+            // On last retry, verify and finalize
+            if (index === delays.length - 1) {
+              verifyAndFinalize();
             }
-
-            setIsAtBottom(atBottom);
-            lastSignatureRef.current = tailSignature;
-          }
-
-          // Clear programmatic scroll flag after verification
-          isProgrammaticScrollRef.current = false;
-        }, 50);
+          }, delay);
+          timeoutIds.push(id);
+        });
       });
     });
 
-    // Cleanup: cancel pending RAF/timeout on unmount
+    // Cleanup: cancel pending RAF/timeouts on unmount
     return () => {
       cancelled = true;
       isProgrammaticScrollRef.current = false;
       if (raf1 !== undefined) cancelAnimationFrame(raf1);
       if (raf2 !== undefined) cancelAnimationFrame(raf2);
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      timeoutIds.forEach(id => clearTimeout(id));
     };
   }, [viewportReady, hasMessages, computeIsAtBottom, tailSignature]);
 
@@ -289,6 +287,8 @@ function ChatMessagesPanelComponent({
       // Don't disable it here - let wheel/pointer handlers do that
       if (atBottom) {
         shouldStickRef.current = true;
+        // Reset useOptimizedScroll manual scroll state when at bottom
+        resetManualScroll();
       }
     };
 
@@ -306,7 +306,18 @@ function ChatMessagesPanelComponent({
       // Scrolling down should maintain the stick behavior
       if (e.deltaY < 0) {
         shouldStickRef.current = false;
+        // Mark manual scroll in useOptimizedScroll hook
+        markManualScroll();
       }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      // Ignore if this is part of programmatic scroll
+      if (isProgrammaticScrollRef.current) return;
+      // For touch, we can't easily determine scroll direction on touchmove
+      // So we mark as manual scroll and let the scroll handler reset it if at bottom
+      markManualScroll();
+      shouldStickRef.current = false;
     };
 
     // Throttle scroll handler to sync with browser paint cycles (~60fps)
@@ -315,12 +326,14 @@ function ChatMessagesPanelComponent({
     node.addEventListener("scroll", throttledScroll, { passive: true });
     node.addEventListener("pointerdown", handlePointerDown, { passive: true });
     node.addEventListener("wheel", handleWheel, { passive: true });
+    node.addEventListener("touchmove", handleTouchMove, { passive: true });
     return () => {
       node.removeEventListener("scroll", throttledScroll);
       node.removeEventListener("pointerdown", handlePointerDown);
       node.removeEventListener("wheel", handleWheel);
+      node.removeEventListener("touchmove", handleTouchMove);
     };
-  }, [computeIsAtBottom, viewportReady]);
+  }, [computeIsAtBottom, viewportReady, markManualScroll, resetManualScroll]);
 
   useEffect(() => {
     if (!viewportReady) return;
@@ -364,6 +377,17 @@ function ChatMessagesPanelComponent({
     if (tailSignature) return;
     lastSignatureRef.current = null;
   }, [tailSignature]);
+
+  // Use optimized scroll hook to scroll to bottom when messages change or streaming starts
+  // This provides a secondary scroll mechanism that respects user manual scroll intent
+  useEffect(() => {
+    if (!viewportReady) return;
+    if (!hasMessages) return;
+    // Only trigger optimized scroll if we should be sticking to bottom
+    if (!shouldStickRef.current) return;
+    // Use the optimized scroll (respects hasManuallyScrolledRef internally)
+    optimizedScrollToBottom();
+  }, [viewportReady, hasMessages, tailSignature, isStreaming, optimizedScrollToBottom]);
 
   useLayoutEffect(() => {
     if (!autoStick) return;
@@ -470,8 +494,12 @@ function ChatMessagesPanelComponent({
                       </div>
                     );
                   }
-                  // Show if streaming started but assistant message has no content yet
-                  if (isStreaming && lastMsg?.role === "assistant" && !lastMsg.content?.trim()) {
+                  // Show if streaming started but assistant message has no content yet AND no thinking parts
+                  // (Don't show duplicate indicator when ThinkingProcess is already rendering reasoning/tools)
+                  const hasThinkingParts = lastMsg?.parts?.some(
+                    p => p.type === "reasoning" || p.type === "tool-invocation"
+                  );
+                  if (isStreaming && lastMsg?.role === "assistant" && !lastMsg.content?.trim() && !hasThinkingParts) {
                     return (
                       <div className="mt-4">
                         <ProgressiveThinkingIndicator
@@ -504,6 +532,8 @@ function ChatMessagesPanelComponent({
                 </div>
               </div>
             ) : null}
+            {/* Bottom anchor element for useOptimizedScroll */}
+            <div ref={bottomRef} aria-hidden="true" />
           </div>
         </ScrollAreaPrimitive.Viewport>
         <ScrollBar orientation="vertical" />
@@ -524,6 +554,8 @@ function ChatMessagesPanelComponent({
             size="sm"
             onClick={() => {
               shouldStickRef.current = true;
+              // Reset useOptimizedScroll manual scroll state when user clicks scroll to bottom
+              resetManualScroll();
               const node = viewportRef.current;
               if (node) {
                 node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
@@ -660,76 +692,47 @@ const ChatMessageBubble = memo(
           <div className="flex flex-col gap-2 max-w-full">
             {hasParts ? (
               <>
-                {/* Render reasoning FIRST (before text) - either actual or redacted */}
+                {/* Unified ThinkingProcess: reasoning + tool invocations in one component */}
                 {(() => {
                   const reasoningPart = message.parts!.find(p => p.type === "reasoning");
-                  const hasReasoningPart = !!reasoningPart;
+                  const toolParts = message.parts!.filter(
+                    (p): p is ToolInvocationPart => p.type === "tool-invocation"
+                  );
+                  const textPart = message.parts!.find(p => p.type === "text");
+                  const hasTextContent = textPart && textPart.text.length > 0;
+                  const isReasoningStreaming = isLastMessage && isStreaming && !hasTextContent;
 
-                  if (hasReasoningPart) {
-                    // Render actual reasoning
-                    const textPart = message.parts!.find(p => p.type === "text");
-                    const hasTextContent = textPart && textPart.text.length > 0;
-                    const isReasoningStreaming = isLastMessage && isStreaming && !hasTextContent;
-                    const duration = message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined;
-                    return (
-                      <Reasoning
-                        key={`${message.id}-reasoning`}
-                        className="w-full"
-                        isStreaming={isReasoningStreaming}
-                        defaultOpen={isReasoningStreaming}
-                        duration={duration}
-                      >
-                        <ReasoningTrigger />
-                        <ReasoningContent>{reasoningPart.text}</ReasoningContent>
-                      </Reasoning>
+                  // Only render ThinkingProcess if we have reasoning, redacted reasoning, or tool invocations
+                  if (reasoningPart || message.reasoningRequested || toolParts.length > 0) {
+                    const toolInvocations: ToolInvocationData[] = toolParts.map(part => ({
+                      toolCallId: part.toolCallId,
+                      toolName: part.toolName,
+                      state: part.state,
+                      input: part.input,
+                      output: part.output,
+                      errorText: part.errorText,
+                    }));
+
+                    const hasActiveTools = toolParts.some(
+                      t => t.state === "input-streaming" || t.state === "input-available"
                     );
-                  } else if (message.reasoningRequested) {
-                    // Render redacted reasoning (requested but not provided)
+
                     return (
-                      <Reasoning
-                        key={`${message.id}-reasoning-redacted`}
+                      <ThinkingProcess
+                        key={`${message.id}-thinking`}
+                        reasoningText={reasoningPart?.text}
+                        isReasoningStreaming={isReasoningStreaming}
+                        thinkingDuration={message.thinkingTimeMs ? Math.ceil(message.thinkingTimeMs / 1000) : undefined}
+                        reasoningRedacted={!reasoningPart && message.reasoningRequested}
+                        toolInvocations={toolInvocations}
+                        defaultOpen={isReasoningStreaming || hasActiveTools}
                         className="w-full"
-                        redacted
-                        defaultOpen={false}
-                      >
-                        <ReasoningTrigger />
-                        <ReasoningContent>{""}</ReasoningContent>
-                      </Reasoning>
+                      />
                     );
                   }
                   return null;
                 })()}
-                {/* Render tool invocations */}
-                {message.parts!
-                  .filter((part): part is ToolInvocationPart => part.type === "tool-invocation")
-                  .map((part) => {
-                    // Extract query from search tool input
-                    const query = part.toolName === "search" && part.input && typeof part.input === "object"
-                      ? (part.input as { query?: string }).query
-                      : undefined;
-                    // Extract result count from output
-                    const resultCount = part.output && typeof part.output === "object" && "results" in part.output
-                      ? (part.output as { results?: unknown[] }).results?.length
-                      : undefined;
-                    // Determine if tool is still running
-                    const isToolRunning = part.state === "input-streaming" || part.state === "input-available";
-
-                    return (
-                      <ToolInvocation
-                        key={`${message.id}-tool-${part.toolCallId}`}
-                        toolName={part.toolName}
-                        state={part.state}
-                        query={query}
-                        resultCount={resultCount}
-                        errorText={part.errorText}
-                        defaultOpen={isToolRunning}
-                      >
-                        <ToolInvocationTrigger />
-                        <ToolInvocationContent />
-                      </ToolInvocation>
-                    );
-                  })}
-                {/* Render text parts AFTER reasoning and tool invocations */}
+                {/* Render text parts AFTER thinking process */}
                 {message.parts!
                   .filter((part): part is { type: "text"; text: string } => part.type === "text")
                   .map((part, index) => (
@@ -744,17 +747,14 @@ const ChatMessageBubble = memo(
               </>
             ) : (
               <>
-                {/* Show redacted reasoning FIRST if reasoning was requested but no parts exist */}
+                {/* Show redacted reasoning if requested but no parts exist */}
                 {message.reasoningRequested && (
-                  <Reasoning
-                    key={`${message.id}-reasoning-redacted`}
-                    className="w-full"
-                    redacted
+                  <ThinkingProcess
+                    key={`${message.id}-thinking-redacted`}
+                    reasoningRedacted
                     defaultOpen={false}
-                  >
-                    <ReasoningTrigger />
-                    <ReasoningContent>{""}</ReasoningContent>
-                  </Reasoning>
+                    className="w-full"
+                  />
                 )}
                 <SafeStreamdown
                   className="text-foreground text-sm leading-6 whitespace-pre-wrap max-w-full"

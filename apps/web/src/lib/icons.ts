@@ -125,6 +125,14 @@ export {
   InternetIcon as WebSearchIcon,
 } from 'hugeicons-react';
 
+// Error/Status Icons (for error displays)
+export {
+  WifiDisconnected01Icon as WifiOff,
+  SquareLock01Icon as Lock,
+  CreditCardIcon as CreditCard,
+  ArrowUpDoubleIcon as ArrowUpCircle,
+} from 'hugeicons-react';
+
 // Type exports - HugeiconsProps is the equivalent of LucideProps
 export type { HugeiconsProps } from 'hugeicons-react';
 

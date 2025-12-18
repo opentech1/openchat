@@ -900,13 +900,51 @@ h1, h2, h3, h4, h5, h6 {
   @keyframes pulse-flash {
     0% {
       opacity: 1;
+      transform: scale(1);
     }
-    50% {
-      opacity: 0.7;
+    40% {
+      opacity: 0.4;
+      transform: scale(0.99);
     }
     100% {
       opacity: 1;
+      transform: scale(1);
     }
+  }
+
+  @keyframes send-success {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes checkmark-pop {
+    0% {
+      transform: scale(0);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .animate-send-success {
+    animation: send-success 200ms ease-out;
+  }
+
+  .animate-checkmark-pop {
+    animation: checkmark-pop 250ms ease-out;
   }
 
   @keyframes swoosh-up {
@@ -922,6 +960,43 @@ h1, h2, h3, h4, h5, h6 {
 
   .animate-swoosh-up {
     animation: swoosh-up 100ms ease-out;
+  }
+
+  /* ========================================
+   * THINKING INDICATOR ANIMATION
+   * Smooth wave animation for AI thinking dots
+   * ======================================== */
+
+  @keyframes thinking-wave {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
+  .animate-thinking-wave {
+    animation: thinking-wave 1.4s ease-in-out infinite;
+  }
+
+  .animate-thinking-wave-1 {
+    animation: thinking-wave 1.4s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+
+  .animate-thinking-wave-2 {
+    animation: thinking-wave 1.4s ease-in-out infinite;
+    animation-delay: 0.16s;
+  }
+
+  .animate-thinking-wave-3 {
+    animation: thinking-wave 1.4s ease-in-out infinite;
+    animation-delay: 0.32s;
   }
 
   /* ========================================

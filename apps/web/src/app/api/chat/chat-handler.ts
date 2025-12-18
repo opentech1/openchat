@@ -1,4 +1,4 @@
-import { convertToCoreMessages, smoothStream, stepCountIs, streamText, type UIMessage } from "ai";
+import { convertToCoreMessages, smoothStream, streamText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createHash } from "crypto";
 import type { Id } from "@server/convex/_generated/dataModel";
@@ -1021,25 +1021,15 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 					delayInMs: STREAM_SMOOTH_DELAY_MS,
 					chunking: "word",
 				}),
-				// SEARCH TOOL: Enable multi-step tool calling when tools are available
-				// stopWhen with stepCountIs allows the model to call tools and then generate a text response
-				// stepCountIs(3) allows up to 3 steps: tool call(s) + final text response
-				// toolChoice 'auto' lets the model decide when to use tools
-				// prepareStep disables further tool calls after first successful execution to prevent loops
-				...(tools && {
-					tools,
-					stopWhen: stepCountIs(3),
-					prepareStep: async ({ steps }) => {
-						// After first step with tool results, disable further tool calls
-						// This prevents infinite tool loops and forces text response generation
-						const lastStep = steps[steps.length - 1];
-						if (lastStep && lastStep.toolCalls?.length > 0 && lastStep.toolResults?.length > 0) {
-							return { toolChoice: 'none' };
-						}
-						return {};
-					},
-					toolChoice: "auto" as const,
-				}),
+			// SEARCH TOOL: Enable multi-step tool calling when tools are available
+			// maxSteps allows the model to perform multiple reasoning + tool call cycles
+			// This enables chain-of-thought behavior: reason -> search -> reason -> search -> respond
+			// toolChoice 'auto' lets the model decide when to use tools vs generate text
+			...(tools && {
+				tools,
+				maxSteps: 10, // Allow up to 10 steps for comprehensive research
+				toolChoice: "auto" as const,
+			}),
 				onChunk: async ({ chunk }) => {
 					if (chunk.type === "text-delta" && chunk.text.length > 0) {
 						// Jon Mode: Post-processing failsafe - remove em-dashes from chunks
@@ -1115,35 +1105,59 @@ export function createChatHandler(options: ChatHandlerOptions = {}) {
 								output: resultChunk.result,
 							});
 						}
-						logger.debug("Tool result captured", {
-							toolName: resultChunk.toolName,
-							toolCallId: resultChunk.toolCallId,
-							hasOutput: !!resultChunk.result,
+				logger.debug("Tool result captured", {
+					toolName: resultChunk.toolName,
+					toolCallId: resultChunk.toolCallId,
+					hasOutput: !!resultChunk.result,
+				});
+				}
+				},
+			// MULTI-STEP: Callback when a step finishes (tool call completed)
+			// This allows us to persist tool invocations to the database during multi-step execution
+			onStepFinish: async (stepResult) => {
+				logger.debug("onStepFinish called", {
+					finishReason: stepResult.finishReason,
+					usage: stepResult.usage,
+					currentTextLength: assistantText.length,
+					toolInvocationsCount: toolInvocationsMap.size,
+				});
+				
+				// Flush tool invocations to database after each step so UI can show progress
+				// This is especially important for multi-step searches
+				if (toolInvocationsMap.size > 0) {
+					try {
+						await persistAssistant("streaming", true);
+						logger.debug("Flushed tool invocations after step", {
+							toolCount: toolInvocationsMap.size,
 						});
+					} catch (err) {
+						logger.error("Failed to flush tool invocations after step", err);
 					}
-				},
-				onFinish: async (_event) => {
-					if (timeoutId) clearTimeout(timeoutId);
-					streamStatus = "completed";
+				}
+			},
+			onFinish: async (_event) => {
+				if (timeoutId) clearTimeout(timeoutId);
+				streamStatus = "completed";
 
-					// CRITICAL FIX: If we have reasoning but no end time, set it now
-					if (assistantReasoning.length > 0 && !reasoningEndTime) {
-						reasoningEndTime = Date.now();
-					}
+				// CRITICAL FIX: If we have reasoning but no end time, set it now
+				if (assistantReasoning.length > 0 && !reasoningEndTime) {
+					reasoningEndTime = Date.now();
+				}
 
-					const duration = reasoningStartTime && reasoningEndTime
-						? reasoningEndTime - reasoningStartTime
-						: 0;
-					logger.debug("Stream finished", {
-						textLength: assistantText.length,
-						reasoningLength: assistantReasoning.length,
-						hasReasoning: assistantReasoning.length > 0,
-						thinkingTimeMs: duration,
-						redisStreaming: !!redisStreamId,
-						redisStreamId: redisStreamId ?? "none",
-					});
-					await finalize();
-				},
+				const duration = reasoningStartTime && reasoningEndTime
+					? reasoningEndTime - reasoningStartTime
+					: 0;
+				logger.debug("Stream finished", {
+					textLength: assistantText.length,
+					reasoningLength: assistantReasoning.length,
+					hasReasoning: assistantReasoning.length > 0,
+					thinkingTimeMs: duration,
+					redisStreaming: !!redisStreamId,
+					redisStreamId: redisStreamId ?? "none",
+					toolInvocationsCount: toolInvocationsMap.size,
+				});
+				await finalize();
+			},
 				onAbort: async () => {
 					if (timeoutId) clearTimeout(timeoutId);
 					streamStatus = "aborted";

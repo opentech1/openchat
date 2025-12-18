@@ -7,16 +7,22 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { WebSearchIcon, ChevronDownIcon, Check } from "@/lib/icons";
+import { ChevronDownIcon, Check } from "@/lib/icons";
 import type { ComponentProps } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
-import { Shimmer } from "./shimmer";
 
 type ToolInvocationState =
   | "input-streaming"
   | "input-available"
   | "output-available"
   | "output-error";
+
+export type SearchResult = {
+  title: string;
+  url: string;
+  content: string;
+  description?: string;
+};
 
 type ToolInvocationContextValue = {
   toolName: string;
@@ -26,6 +32,7 @@ type ToolInvocationContextValue = {
   query?: string;
   resultCount?: number;
   errorText?: string;
+  results?: SearchResult[];
 };
 
 const ToolInvocationContext = createContext<ToolInvocationContextValue | null>(null);
@@ -38,7 +45,7 @@ const useToolInvocation = () => {
   return context;
 };
 
-export type ToolInvocationProps = ComponentProps<typeof Collapsible> & {
+export type ToolInvocationProps = Omit<ComponentProps<typeof Collapsible>, "results"> & {
   toolName: string;
   state: ToolInvocationState;
   open?: boolean;
@@ -47,9 +54,11 @@ export type ToolInvocationProps = ComponentProps<typeof Collapsible> & {
   query?: string;
   resultCount?: number;
   errorText?: string;
+  results?: SearchResult[];
 };
 
-const AUTO_CLOSE_DELAY = 1500;
+// Disabled auto-close - let users manually control the panel
+const AUTO_CLOSE_DELAY = 0;
 
 export const ToolInvocation = memo(
   ({
@@ -62,6 +71,7 @@ export const ToolInvocation = memo(
     query,
     resultCount,
     errorText,
+    results,
     children,
     ...props
   }: ToolInvocationProps) => {
@@ -73,8 +83,11 @@ export const ToolInvocation = memo(
 
     const [hasAutoClosed, setHasAutoClosed] = useState(false);
 
-    // Auto-close when tool finishes (once only)
+    // Auto-close disabled - let users manually control the panel
     useEffect(() => {
+      // Skip auto-close when disabled (AUTO_CLOSE_DELAY <= 0)
+      if (AUTO_CLOSE_DELAY <= 0) return;
+
       if (
         defaultOpen &&
         (state === "output-available" || state === "output-error") &&
@@ -96,7 +109,7 @@ export const ToolInvocation = memo(
 
     return (
       <ToolInvocationContext.Provider
-        value={{ toolName, state, isOpen, setIsOpen, query, resultCount, errorText }}
+        value={{ toolName, state, isOpen, setIsOpen, query, resultCount, errorText, results }}
       >
         <Collapsible
           className={cn("not-prose mb-4", className)}
@@ -112,15 +125,6 @@ export const ToolInvocation = memo(
 );
 
 export type ToolInvocationTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
-
-const getToolIcon = (toolName: string) => {
-  switch (toolName) {
-    case "search":
-      return WebSearchIcon;
-    default:
-      return WebSearchIcon;
-  }
-};
 
 const getToolDisplayName = (toolName: string) => {
   switch (toolName) {
@@ -143,12 +147,12 @@ const getStatusMessage = (
   if (state === "input-streaming" || state === "input-available") {
     if (toolName === "search" && query) {
       return (
-        <Shimmer duration={1.5}>
-          {`Searching for "${query.length > 40 ? query.slice(0, 40) + "..." : query}"...`}
-        </Shimmer>
+        <span>
+          Searching for "{query.length > 40 ? query.slice(0, 40) + "..." : query}"...
+        </span>
       );
     }
-    return <Shimmer duration={1.5}>{`Using ${displayName}...`}</Shimmer>;
+    return <span>Using {displayName}...</span>;
   }
 
   if (state === "output-error") {
@@ -184,19 +188,17 @@ const getStatusMessage = (
 export const ToolInvocationTrigger = memo(
   ({ className, children, ...props }: ToolInvocationTriggerProps) => {
     const { toolName, state, isOpen, query, resultCount, errorText } = useToolInvocation();
-    const Icon = getToolIcon(toolName);
 
     return (
       <CollapsibleTrigger
         className={cn(
-          "flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground",
+          "flex w-full items-center gap-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground",
           className
         )}
         {...props}
       >
         {children ?? (
           <>
-            <Icon className="size-4" />
             {getStatusMessage(toolName, state, query, resultCount, errorText)}
             <ChevronDownIcon
               className={cn(
@@ -215,9 +217,27 @@ export type ToolInvocationContentProps = ComponentProps<typeof CollapsibleConten
   children?: React.ReactNode;
 };
 
+const MAX_DISPLAYED_RESULTS = 5;
+
+/**
+ * Extract domain from URL for display
+ */
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace("www.", "");
+  } catch {
+    return url;
+  }
+}
+
 export const ToolInvocationContent = memo(
   ({ className, children, ...props }: ToolInvocationContentProps) => {
-    const { toolName, query, resultCount } = useToolInvocation();
+    const { toolName, query, resultCount, results, state } = useToolInvocation();
+
+    const displayedResults = results?.slice(0, MAX_DISPLAYED_RESULTS) ?? [];
+    const remainingCount = (results?.length ?? 0) - MAX_DISPLAYED_RESULTS;
+    const hasResults = displayedResults.length > 0;
+    const isComplete = state === "output-available";
 
     return (
       <CollapsibleContent
@@ -229,12 +249,42 @@ export const ToolInvocationContent = memo(
         {...props}
       >
         {children ?? (
-          <div className="flex flex-col gap-1 text-xs text-muted-foreground/80">
-            {toolName === "search" && query && (
-              <p>Query: &ldquo;{query}&rdquo;</p>
-            )}
-            {resultCount !== undefined && (
-              <p>{resultCount} {resultCount === 1 ? "source" : "sources"} found</p>
+          <div className="flex flex-col gap-2 text-xs">
+            {/* Query and count header */}
+            <div className="flex flex-col gap-0.5 text-muted-foreground/80">
+              {toolName === "search" && query && (
+                <p>Query: &ldquo;{query}&rdquo;</p>
+              )}
+              {resultCount !== undefined && (
+                <p>{resultCount} {resultCount === 1 ? "source" : "sources"} found</p>
+              )}
+            </div>
+
+            {/* Search results list */}
+            {isComplete && hasResults && (
+              <div className="flex flex-col gap-2 mt-1">
+                {displayedResults.map((result, index) => (
+                  <a
+                    key={`${result.url}-${index}`}
+                    href={result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex flex-col gap-0.5 py-1.5 px-2 -mx-2 rounded-md hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="text-foreground font-medium group-hover:text-primary transition-colors line-clamp-1">
+                      {result.title || "Untitled"}
+                    </span>
+                    <span className="text-muted-foreground/70 text-[11px]">
+                      {extractDomain(result.url)}
+                    </span>
+                  </a>
+                ))}
+                {remainingCount > 0 && (
+                  <p className="text-muted-foreground/60 text-[11px] pl-2">
+                    + {remainingCount} more {remainingCount === 1 ? "source" : "sources"}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

@@ -26,9 +26,12 @@ import { useStreamSubscription } from "@/hooks/use-stream-subscription";
 import { useChatSession } from "@/hooks/use-chat-session";
 import { useReasoningPersistence } from "@/hooks/use-reasoning-persistence";
 import { useSearchPersistence } from "@/hooks/use-search-persistence";
+import { useAutoResume } from "@/hooks/use-auto-resume";
 import { OpenRouterLinkModalLazy as OpenRouterLinkModal } from "@/components/lazy/openrouter-link-modal-lazy";
 import { normalizeMessage, toUiMessage } from "@/lib/chat-message-utils";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { EnhancedErrorDisplay } from "@/components/chat/enhanced-error-display";
+import { ChatSDKError } from "@/lib/errors/chat-sdk-error";
 import {
   captureClientEvent,
   identifyClient,
@@ -84,15 +87,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     userId: convexUserId,
   });
 
-  // DEBUG: Log useChatSession state
-  console.log("[MESSAGES] useChatSession state", {
-    chatId,
-    convexUserId,
-    messagesLoading,
-    messagesSkipped,
-    convexMessagesCount: convexMessages?.length ?? "null",
-    hasMessages: Boolean(convexMessages && convexMessages.length > 0),
-  });
+
 
   const router = useRouter();
   const pathname = usePathname();
@@ -161,12 +156,31 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Unlike the ref, this triggers a re-render so the UI updates immediately
   const [manuallyStopped, setManuallyStopped] = useState(false);
 
+  // Chat error state for displaying EnhancedErrorDisplay instead of toast
+  // This provides actionable error UI with retry, sign in, dismiss options
+  const [chatError, setChatError] = useState<Error | null>(null);
+
+  // State to restore message to composer on error (for retry)
+  const [messageToRestore, setMessageToRestore] = useState<string | null>(null);
+
   // AbortController for cancelling the fetch request to /stream-llm
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  console.log("[STREAM] State snapshot", { chatId, convexUserId, activeStreamId, isConvexStreaming });
   const prepareChat = useMutation(api.streaming.prepareChat);
   const cancelStream = useMutation(api.streaming.cancelStream);
+  const updateTitle = useMutation(api.chats.updateTitle);
+
+  /**
+   * Generate a chat title from the first user message.
+   * Truncates to 50 characters with ellipsis if longer.
+   */
+  const generateTitleFromMessage = useCallback((content: string): string => {
+    const trimmed = content.trim();
+    if (trimmed.length <= 50) {
+      return trimmed;
+    }
+    return trimmed.slice(0, 50) + "...";
+  }, []);
 
   // STREAM RECONNECTION: Query to detect active streams on reload
   const activeStreamFromDb = useQuery(
@@ -277,6 +291,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           masked_tail: key.slice(-4),
           scope: "workspace",
         });
+        toast.success("API key saved successfully");
         // useModelSelection will automatically fetch models when apiKey changes
         await refreshModels();
       } catch (error: unknown) {
@@ -362,6 +377,19 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           return;
         }
 
+        // Try to parse as ChatSDKError JSON first (from API responses)
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.code && typeof parsed.code === 'string' && parsed.code.includes(':')) {
+            // It's a structured ChatSDKError from the API
+            setChatError(new ChatSDKError(parsed.code, parsed.cause));
+            logError("Chat SDK error", error);
+            return;
+          }
+        } catch {
+          // Not JSON, continue with message-based detection
+        }
+
         // Handle provider overload/rate limit errors
         const errorMessage = error.message.toLowerCase();
         if (
@@ -372,60 +400,65 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           errorMessage.includes("overloaded") ||
           errorMessage.includes("high load")
         ) {
-          toast.error("AI Provider Overloaded", {
-            description: "The model provider is experiencing high load. Try again in a moment.",
-            action: {
+          // Get last user message to restore to composer for easy retry
+          const lastUserMessage = messagesRef.current.filter(m => m.role === "user").pop();
+          const lastUserText = lastUserMessage?.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map(p => p.text)
+            .join("") ?? "";
+
+          if (lastUserText) {
+            setMessageToRestore(lastUserText);
+          }
+
+          // Show toast with retry action instead of banner
+          toast.error("Rate limit exceeded. The model provider is busy.", {
+            duration: 8000,
+            action: lastUserText ? {
               label: "Retry",
               onClick: () => {
-                // Get the last user message and resend it
-                const lastUserMessage = messages.filter(m => m.role === "user").pop();
-                if (lastUserMessage) {
-                  const textContent = lastUserMessage.parts
-                    .filter((p): p is { type: "text"; text: string } => p.type === "text")
-                    .map(p => p.text)
-                    .join("");
-                  if (textContent && selectedModel) {
-                    void sendMessage(
-                      {
-                        id: crypto.randomUUID(),
-                        role: "user",
-                        parts: [{ type: "text", text: textContent }],
-                        metadata: { createdAt: new Date().toISOString() },
-                      },
-                      {
-                        body: {
-                          chatId,
-                          modelId: selectedModel,
-                        },
-                      }
-                    );
-                  }
+                const currentModel = selectedModelRef.current;
+                const currentApiKey = apiKeyRef.current;
+                if (currentModel && currentApiKey) {
+                  void handleSendRef.current({
+                    text: lastUserText,
+                    modelId: currentModel,
+                    apiKey: currentApiKey,
+                  });
                 }
               },
-            },
-            duration: 10000, // Show for 10 seconds
+            } : undefined,
           });
+          logError("Rate limit error", error);
           return;
         }
 
-        // Handle generic errors with more helpful message
+        // Handle network/connection errors
         if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
-          toast.error("Connection Error", {
-            description: "Unable to reach the AI service. Check your connection and try again.",
-            duration: 5000,
-          });
+          setChatError(new ChatSDKError("offline:api", "Unable to reach the AI service."));
+          logError("Network error", error);
           return;
         }
       }
 
-      // Fallback for unknown errors
-      toast.error("Something went wrong", {
-        description: "Failed to get a response from the AI. Please try again.",
-        duration: 5000,
-      });
+      // Fallback for unknown errors - set as generic error
+      const genericError = new Error("Failed to get a response from the AI. Please try again.");
+      setChatError(genericError);
       logError("Chat stream error", error);
     },
   });
+
+  // Refs to avoid stale closures in callbacks (e.g., toast retry handlers)
+  // These refs always point to the latest values, avoiding closure capture issues
+  const messagesRef = useRef(messages);
+  const selectedModelRef = useRef(selectedModel);
+  const apiKeyRef = useRef(apiKey);
+
+  // Keep refs in sync with state - this pattern ensures callbacks always have fresh values
+  // without needing to be recreated (avoiding infinite loops in useEffect dependencies)
+  messagesRef.current = messages;
+  selectedModelRef.current = selectedModel;
+  apiKeyRef.current = apiKey;
 
   // Redis SSE streaming for faster token delivery (T3Chat-style)
   // This subscribes to a Redis stream and updates messages in real-time
@@ -479,11 +512,10 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       });
     }, []),  // setMessages from useChat is stable
     onComplete: useCallback(() => {
-      console.log("[SSE] Stream complete");
       setRedisStreamId(null);
     }, []),
     onError: useCallback((error: Error) => {
-      console.error("[SSE] Error", error);
+      logError("SSE streaming error", error);
       setRedisStreamId(null);
     }, []),
     autoReconnect: true,
@@ -491,7 +523,6 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
   // Convex query for stream body - provides reliable token display
   // This is now the PRIMARY method for displaying tokens (simpler than Redis SSE)
-  console.log("[STREAM] Convex query check", { activeStreamId, isConvexStreaming });
   const streamBody = useQuery(
     api.streaming.getStreamBody,
     activeStreamId ? { streamId: activeStreamId as any } : "skip"
@@ -529,35 +560,16 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // ============================================================================
   const hasInitializedMessagesRef = useRef(false);
   useEffect(() => {
-    // DEBUG: Log sync effect execution
-    console.log("[MESSAGES] Sync effect running", {
-      hasInitialized: hasInitializedMessagesRef.current,
-      messagesLoading,
-      messagesSkipped,
-      convexMessagesCount: convexMessages?.length ?? "null",
-      currentUiMessagesCount: messages.length,
-    });
-
     // Skip if already initialized or still loading
-    if (hasInitializedMessagesRef.current) {
-      console.log("[MESSAGES] Sync skipped: already initialized");
-      return;
-    }
-    if (messagesLoading) {
-      console.log("[MESSAGES] Sync skipped: still loading");
-      return;
-    }
-    if (!convexMessages || convexMessages.length === 0) {
-      console.log("[MESSAGES] Sync skipped: no messages", { convexMessages, messagesSkipped });
-      return;
-    }
+    if (hasInitializedMessagesRef.current) return;
+    if (messagesLoading) return;
+    if (!convexMessages || convexMessages.length === 0) return;
 
     // Only sync once on initial load
     hasInitializedMessagesRef.current = true;
 
     // Convert Convex messages to UI format
     const uiMessages = convexMessages.map(toUiMessage);
-    console.log("[MESSAGES] ✅ Syncing from Convex", { count: uiMessages.length, firstMessage: uiMessages[0] });
     setMessages(uiMessages);
   }, [convexMessages, messagesLoading, messagesSkipped, messages.length, setMessages]);
 
@@ -602,18 +614,12 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       jonMode?: boolean;
       localDate?: string;
     }) => {
-      // DEBUG: Entry point logging
-      console.log("[STREAM] ===== handleSend ENTRY =====");
-      console.log("[STREAM] Input:", { textLength: text.length, textPreview: text.slice(0, 50), modelId, hasApiKey: Boolean(requestApiKey) });
-      console.log("[STREAM] Auth state:", { workspaceId, convexUserId, convexUserLoading });
-      console.log("[STREAM] Env:", {
-        hasConvexSiteUrl: Boolean(process.env.NEXT_PUBLIC_CONVEX_SITE_URL),
-        convexSiteUrl: process.env.NEXT_PUBLIC_CONVEX_SITE_URL
-      });
-
       // INSTANT STOP: Reset stopped state when starting new message
       isStoppedRef.current = false;
       setManuallyStopped(false);
+
+      // Clear any existing error when sending a new message
+      setChatError(null);
 
       const content = text.trim();
       if (!content) return;
@@ -625,8 +631,6 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         handleMissingRequirement("apiKey");
         return;
       }
-
-      console.log("[STREAM] handleSend started", { chatId, convexUserId, modelId, contentLength: content.length });
 
       // Use Convex persistent streaming for true stream persistence
       // This ensures the stream continues even if the user closes the tab
@@ -641,7 +645,6 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           const createdAt = new Date().toISOString();
 
           // 1. Create user message, stream, and assistant placeholder in Convex
-          console.log("[STREAM] Calling prepareChat...", { chatId, userId: convexUserId });
           const result = await prepareChat({
             chatId: toConvexChatId(chatId),
             userId: convexUserId,
@@ -649,7 +652,46 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             userMessageId,
             assistantMessageId,
           });
-          console.log("[STREAM] prepareChat result", { result, streamId: result?.streamId, assistantMessageId: result?.assistantMessageId });
+
+          // 1.5. Update chat title if this is the first message
+          // Check messages.length === 0 because we haven't added the user message yet
+          if (messages.length === 0) {
+            // First, set a temporary title from the message (instant feedback)
+            const tempTitle = generateTitleFromMessage(content);
+            void updateTitle({
+              chatId: toConvexChatId(chatId),
+              userId: convexUserId,
+              title: tempTitle,
+            }).catch((err) => {
+              logError("Failed to set temporary title", err);
+            });
+
+            // Then, generate an AI title in the background (better quality)
+            // Only if we have an API key
+            if (apiKey) {
+              void fetch("/api/chat/generate-title", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: content, apiKey }),
+              })
+                .then(res => res.json())
+                .then((data: { title?: string }) => {
+                  if (data.title && data.title !== "New Chat" && data.title !== tempTitle) {
+                    void updateTitle({
+                      chatId: toConvexChatId(chatId),
+                      userId: convexUserId,
+                      title: data.title,
+                    }).catch((err) => {
+                      logError("Failed to update AI-generated title", err);
+                    });
+                  }
+                })
+                .catch((err) => {
+                  // Non-critical: log but don't block the chat
+                  logError("Failed to generate AI title", err);
+                });
+            }
+          }
 
           // 2. Add messages to local UI immediately for instant feedback
           setMessages((prev) => [
@@ -686,10 +728,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
 
           // 5. Start the stream on Convex (fire and forget - continues even if we disconnect)
           const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
-          console.log("[STREAM] convexSiteUrl", { convexSiteUrl, hasUrl: Boolean(convexSiteUrl) });
           if (convexSiteUrl) {
             const streamUrl = `${convexSiteUrl}/stream-llm`;
-            console.log("[STREAM] Starting fetch to /stream-llm", { streamUrl, streamId: result.streamId, messageId: result.assistantMessageId });
             // Fire and forget - the server will stream to Convex, and our query will pick it up
             // Don't await or drain the response - let the Convex query handle displaying tokens
             // Clear any previous Redis stream before starting new one
@@ -715,16 +755,9 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               signal: controller.signal,
             })
               .then((response) => {
-                console.log("[STREAM] Received response", {
-                  status: response.status,
-                  statusText: response.statusText,
-                  ok: response.ok
-                });
-
                 // Capture X-Stream-Id header for Redis SSE streaming
                 const headerStreamId = response.headers.get("X-Stream-Id");
                 if (headerStreamId) {
-                  console.log("[STREAM] Got Redis stream ID", { headerStreamId });
                   setRedisStreamId(headerStreamId);
                 }
 
@@ -744,8 +777,7 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                           return;
                         }
                       }
-                      // Log but don't re-throw - this is a cleanup operation
-                      console.log("[STREAM] Body drain error:", err);
+                      // Don't re-throw - this is a cleanup operation
                     }
                   })().catch(() => {
                     // Catch any unhandled rejection to prevent error overlay
@@ -757,13 +789,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 const isAbortError = err?.name === "AbortError" ||
                   (err instanceof Error && err.message?.includes("aborted"));
                 if (isAbortError) {
-                  console.log("[STREAM] Fetch aborted by user");
                   // Don't show error toast for intentional abort
                   // State is already cleared by onStop handler
                   return;
                 }
 
-                console.log("[STREAM] Fetch error", { error: err?.message || err, stack: err?.stack });
                 logError("Failed to start stream", err);
                 // Clear streaming state and driven stream tracking on error
                 setActiveStreamId(null);
@@ -772,10 +802,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
                 drivenStreamIdsRef.current.delete(result.streamId as string);
                 // Remove the placeholder assistant message
                 setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
-                toast.error("Failed to connect to AI service", {
-                  description: "Check your connection and try again.",
-                  duration: 5000,
-                });
+                // Use EnhancedErrorDisplay for connection errors
+                setChatError(new ChatSDKError("offline:stream", "Check your connection and try again."));
               });
           } else {
             // No Convex site URL configured - this is a configuration error
@@ -785,10 +813,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
             setRedisStreamId(null);
             drivenStreamIdsRef.current.delete(result.streamId as string);
             setMessages((prev) => prev.filter((m) => m.id !== assistantMessageId));
-            toast.error("AI service not configured", {
-              description: "Please check your environment configuration.",
-              duration: 5000,
-            });
+            // Use EnhancedErrorDisplay for configuration errors
+            setChatError(new ChatSDKError("bad_request:api", "AI service not configured. Please check environment configuration."));
           }
 
           captureClientEvent("chat_message_submitted", {
@@ -806,7 +832,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           setActiveStreamId(null);
           setIsConvexStreaming(false);
           setRedisStreamId(null);
-          toast.error("Failed to send message");
+          // Use EnhancedErrorDisplay for message send errors
+          setChatError(new ChatSDKError("bad_request:chat", "Failed to send message. Please try again."));
           throw error;
         }
       } else {
@@ -837,6 +864,48 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               },
             },
           );
+
+          // Update chat title if this is the first message (fallback path)
+          // convexUserId might be available even in fallback (when search is enabled)
+          if (messages.length === 0 && convexUserId) {
+            // First, set a temporary title from the message (instant feedback)
+            const tempTitle = generateTitleFromMessage(content);
+            void updateTitle({
+              chatId: toConvexChatId(chatId),
+              userId: convexUserId,
+              title: tempTitle,
+            }).catch((err) => {
+              logError("Failed to set temporary title", err);
+            });
+
+            // Then, generate an AI title in the background (better quality)
+            // Only if we have an API key
+            const titleApiKey = requestApiKey || apiKey;
+            if (titleApiKey) {
+              void fetch("/api/chat/generate-title", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: content, apiKey: titleApiKey }),
+              })
+                .then(res => res.json())
+                .then((data: { title?: string }) => {
+                  if (data.title && data.title !== "New Chat" && data.title !== tempTitle) {
+                    void updateTitle({
+                      chatId: toConvexChatId(chatId),
+                      userId: convexUserId,
+                      title: data.title,
+                    }).catch((err) => {
+                      logError("Failed to update AI-generated title", err);
+                    });
+                  }
+                })
+                .catch((err) => {
+                  // Non-critical: log but don't block the chat
+                  logError("Failed to generate AI title", err);
+                });
+            }
+          }
+
           captureClientEvent("chat_message_submitted", {
             chat_id: chatId,
             model_id: modelId,
@@ -869,10 +938,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
           } else if (status === 401) {
             // removeKey triggers useModelSelection to clear models via onInvalidApiKey callback
             await removeKey();
-            toast.error("OpenRouter API key invalid", {
-              description:
-                "We cleared the saved key. Add a valid key to keep chatting.",
-            });
+            // Use EnhancedErrorDisplay for auth errors - prompts user to sign in / add key
+            setChatError(new ChatSDKError("unauthorized:api", "OpenRouter API key is invalid. We cleared the saved key. Add a valid key to keep chatting."));
             return;
           }
           logError("Failed to send message", error);
@@ -880,8 +947,50 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         }
       }
     },
-    [chatId, convexUserId, prepareChat, messages, setMessages, sendMessage, handleMissingRequirement, removeKey],
+    [chatId, convexUserId, prepareChat, messages, setMessages, sendMessage, handleMissingRequirement, removeKey, generateTitleFromMessage, updateTitle],
   );
+
+  // Ref for handleSend to use in error retry callbacks without stale closure issues
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+
+  // Error handling callbacks for EnhancedErrorDisplay
+  const handleErrorRetry = useCallback(() => {
+    setChatError(null);
+    // Get the last user message and resend it
+    const currentMessages = messagesRef.current;
+    const currentModel = selectedModelRef.current;
+    const currentApiKey = apiKeyRef.current;
+    const lastUserMessage = currentMessages.filter(m => m.role === "user").pop();
+    if (lastUserMessage && currentModel && currentApiKey) {
+      const textContent = lastUserMessage.parts
+        .filter((p): p is { type: "text"; text: string } => p.type === "text")
+        .map(p => p.text)
+        .join("");
+      if (textContent) {
+        void handleSendRef.current({
+          text: textContent,
+          modelId: currentModel,
+          apiKey: currentApiKey,
+        });
+      }
+    }
+  }, []);
+
+  const handleErrorSignIn = useCallback(() => {
+    setChatError(null);
+    router.push("/auth/sign-in");
+  }, [router]);
+
+  const handleErrorUpgrade = useCallback(() => {
+    setChatError(null);
+    // Navigate to pricing/upgrade page - adjust path as needed
+    router.push("/settings");
+  }, [router]);
+
+  const handleErrorDismiss = useCallback(() => {
+    setChatError(null);
+  }, []);
 
   // Update assistant message content using Convex stream body query
   // This is the PRIMARY method for displaying streaming tokens (simpler than Redis SSE)
@@ -946,10 +1055,11 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
       setRedisStreamId(null);
 
       if (streamHookStatus === "error" || streamHookStatus === "timeout") {
-        toast.error(streamHookStatus === "timeout" ? "Response timed out" : "Failed to get response", {
-          description: "Please try sending your message again.",
-          duration: 5000,
-        });
+        // Use EnhancedErrorDisplay for stream errors
+        const errorMessage = streamHookStatus === "timeout"
+          ? "Response timed out. The model took too long to respond."
+          : "Failed to get response from the AI service.";
+        setChatError(new ChatSDKError("offline:stream", errorMessage));
       }
     }
   }, [activeStreamId, streamText, streamReasoning, streamThinkingTimeMs, streamHookStatus, setMessages]);
@@ -961,6 +1071,67 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
     },
     [setSelectedModelId],
   );
+
+  // ============================================================================
+  // AUTO-RESUME: Automatically resume incomplete conversations on page reload
+  // Detects when last message was from user (AI response was interrupted)
+  // ============================================================================
+  const resumeStream = useCallback(() => {
+    // Get the last user message to resend
+    // Use convexMessages (source of truth) if available, fall back to initialMessages
+    const messagesToCheck = convexMessages && convexMessages.length > 0
+      ? convexMessages
+      : initialMessages;
+
+    if (!messagesToCheck || messagesToCheck.length === 0) return;
+
+    const lastMessage = messagesToCheck.at(-1);
+    if (!lastMessage || lastMessage.role !== "user") return;
+
+    // Need API key and model to resend
+    if (!apiKey || !selectedModel) return;
+
+    // Resend the last user message to resume the conversation
+    void handleSend({
+      text: lastMessage.content,
+      modelId: selectedModel,
+      apiKey: apiKey,
+      jonMode: jonMode,
+      reasoningConfig: reasoningConfig,
+      searchConfig: searchConfig,
+    });
+  }, [convexMessages, initialMessages, apiKey, selectedModel, jonMode, reasoningConfig, searchConfig, handleSend]);
+
+  // Convert Convex messages to the format expected by useAutoResume
+  const autoResumeMessages = useMemo(() => {
+    const messagesToUse = convexMessages && convexMessages.length > 0
+      ? convexMessages
+      : initialMessages;
+
+    return messagesToUse.map((m) => ({
+      id: m.id,
+      role: m.role as "user" | "assistant" | "system",
+      content: m.content,
+    }));
+  }, [convexMessages, initialMessages]);
+
+  // Auto-resume hook - detects incomplete conversations and triggers resume
+  useAutoResume({
+    autoResume: true,
+    initialMessages: autoResumeMessages,
+    resumeStream,
+    setMessages: (msgs) => {
+      // Convert simple messages to UI message format
+      const uiMessages = msgs.map((m) => ({
+        id: m.id ?? crypto.randomUUID(),
+        role: m.role as "user" | "assistant",
+        parts: [{ type: "text" as const, text: m.content }],
+        metadata: { createdAt: new Date().toISOString() },
+      }));
+      setMessages(uiMessages);
+    },
+    // dataStream is optional - we don't use DataStreamProvider in the main tree yet
+  });
 
   // Auto-send pending message from dashboard
   useEffect(() => {
@@ -1007,17 +1178,6 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
   // Single derived state replaces 7+ individual loading booleans
   // ============================================================================
   const chatState = useMemo(() => {
-    // DEBUG: Log loading state calculation
-    console.log("[LOADING] chatState check", {
-      workspaceId,
-      keyLoading,
-      modelsLoading,
-      convexUserLoading,
-      convexUserId,
-      messagesLoading,
-      messagesSkipped,
-    });
-
     // No workspace = still authenticating
     if (!workspaceId) return "loading" as const;
     // API key still loading from hook = loading
@@ -1062,6 +1222,20 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
         }}
         hasApiKey={Boolean(apiKey)}
       />
+
+      {/* Error display - shows actionable error UI with retry/sign in options */}
+      {chatError && (
+        <div className="mx-auto w-full max-w-3xl px-2 py-3">
+          <EnhancedErrorDisplay
+            error={chatError}
+            onRetry={handleErrorRetry}
+            onSignIn={handleErrorSignIn}
+            onUpgrade={handleErrorUpgrade}
+            onDismiss={handleErrorDismiss}
+          />
+        </div>
+      )}
+
       <ChatMessagesFeed
         initialMessages={normalizedInitial}
         optimisticMessages={messages}
@@ -1090,6 +1264,8 @@ function ChatRoom({ chatId, initialMessages, initialStreamId }: ChatRoomProps) {
               modelsLoading={modelsLoading}
               apiKey={apiKey}
               isStreaming={isStreaming}
+              messageToRestore={messageToRestore}
+              onMessageRestored={() => setMessageToRestore(null)}
               onStop={() => {
                 // INSTANT STOP: Set ref FIRST to block all pending updates synchronously
                 isStoppedRef.current = true;

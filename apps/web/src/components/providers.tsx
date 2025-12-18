@@ -16,6 +16,7 @@ import { initPosthog } from "@/lib/posthog";
 import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 import { ConvexUserProvider } from "@/contexts/convex-user-context";
 import { ChatListProvider } from "@/contexts/chat-list-context";
+import { DataStreamProvider } from "@/contexts/data-stream-context";
 
 // Client-only Toaster to prevent hydration mismatch
 function ClientToaster() {
@@ -111,7 +112,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 				>
 					<BrandThemeProvider>
 						<QueryClientProvider client={queryClient}>
-							{children}
+							<DataStreamProvider>
+								{children}
+							</DataStreamProvider>
 						</QueryClientProvider>
 					</BrandThemeProvider>
 				</ThemeProvider>
@@ -136,7 +139,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 									<ClientOnly>
 										<PosthogPageViewTracker />
 									</ClientOnly>
-									{children}
+									<DataStreamProvider>
+										{children}
+									</DataStreamProvider>
 									<ClientToaster />
 								</QueryClientProvider>
 							</BrandThemeProvider>

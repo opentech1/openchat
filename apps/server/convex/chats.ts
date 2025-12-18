@@ -131,6 +131,7 @@ export const create = mutation({
 			updatedAt: now,
 			lastMessageAt: now,
 			messageCount: 0,
+			status: "idle",
 		});
 
 		await incrementStat(ctx, STAT_KEYS.CHATS_TOTAL);
@@ -290,6 +291,41 @@ export const getChatReadStatuses = query({
 			chatId: s.chatId,
 			lastReadAt: s.lastReadAt,
 		}));
+	},
+});
+
+// ============================================================================
+// Chat Title Update Function
+// ============================================================================
+
+/**
+ * Update a chat's title if it's still the default "New Chat" or empty.
+ * Used to automatically generate titles from the first user message.
+ */
+export const updateTitle = mutation({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		title: v.string(),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		// Verify user owns the chat
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
+			return null;
+		}
+
+		// Only update if title is still "New Chat" or empty
+		if (chat.title === "New Chat" || !chat.title) {
+			const sanitizedTitle = sanitizeTitle(args.title.trim().slice(0, 100));
+			await ctx.db.patch(args.chatId, {
+				title: sanitizedTitle,
+				updatedAt: Date.now(),
+			});
+		}
+
+		return null;
 	},
 });
 

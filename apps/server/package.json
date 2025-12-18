@@ -14,5 +14,8 @@
     "@convex-dev/persistent-text-streaming": "^0.3.0",
     "@convex-dev/rate-limiter": "^0.3.0",
     "convex": "^1.29.3"
+  },
+  "devDependencies": {
+    "convex-test": "^0.0.41"
   }
 }

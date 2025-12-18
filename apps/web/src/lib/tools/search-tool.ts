@@ -106,11 +106,11 @@ export function createSearchTool(
 						};
 					}
 
-					// Perform the search using Valyu's context method
-					const response = await valyu.context(query, {
+					// Perform the search using Valyu's search method (v2 API)
+					const response = await valyu.search(query, {
 						searchType: "all",
 						maxNumResults: 5,
-						similarityThreshold: 0.60,
+						relevanceThreshold: 0.60,
 					});
 
 					if (!response.success) {
@@ -153,10 +153,10 @@ export function createSearchTool(
 
 			// Perform search without usage tracking
 			try {
-				const response = await valyu.context(query, {
+				const response = await valyu.search(query, {
 					searchType: "all",
 					maxNumResults: 5,
-					similarityThreshold: 0.60,
+					relevanceThreshold: 0.60,
 				});
 
 				if (!response.success) {
