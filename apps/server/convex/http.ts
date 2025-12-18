@@ -3,15 +3,24 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { streamLLM } from "./streaming";
 import { api } from "./_generated/api";
+import { authComponent, createAuth } from "./auth";
 
 const http = httpRouter();
+
+// Register Better Auth routes with CORS enabled for client-side requests
+authComponent.registerRoutes(http, createAuth, { cors: true });
 
 http.route({
   path: "/health",
   method: "GET",
   handler: httpAction(async () => {
     return new Response(
-      JSON.stringify({ ok: true, ts: new Date().toISOString() }),
+      JSON.stringify({ 
+        ok: true, 
+        ts: new Date().toISOString(),
+        convexSiteUrl: process.env.CONVEX_SITE_URL,
+        siteUrl: process.env.SITE_URL,
+      }),
       {
         status: 200,
         headers: {

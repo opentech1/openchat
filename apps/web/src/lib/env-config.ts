@@ -149,7 +149,7 @@ export function getEnvVarAsBoolean(
  * validateRequiredEnvVars({
  *   OPENROUTER_API_KEY: "OpenRouter API key",
  *   DATABASE_URL: "Database connection string",
- *   WORKOS_CLIENT_ID: "WorkOS AuthKit client ID",
+ *   GITHUB_CLIENT_ID: "GitHub OAuth client ID",
  * });
  * ```
  */
@@ -278,28 +278,28 @@ export const env = {
 			description: "Chat creation rate limit window (milliseconds)",
 		}),
 
-	// WorkOS AuthKit
-	workosClientId: () =>
-		getEnvVar("WORKOS_CLIENT_ID", {
+	// Better Auth (GitHub OAuth)
+	githubClientId: () =>
+		getEnvVar("GITHUB_CLIENT_ID", {
 			required: false,
-			description: "WorkOS Client ID for AuthKit",
+			description: "GitHub OAuth App Client ID",
 		}),
 
-	workosApiKey: () =>
-		getEnvVar("WORKOS_API_KEY", {
+	githubClientSecret: () =>
+		getEnvVar("GITHUB_CLIENT_SECRET", {
 			required: false,
-			description: "WorkOS API Key for AuthKit",
+			description: "GitHub OAuth App Client Secret",
 		}),
 
-	workosRedirectUri: () =>
-		getEnvVar("WORKOS_REDIRECT_URI", {
-			fallback: "http://localhost:3000/api/auth/callback",
-			description: "WorkOS OAuth redirect URI",
+	siteUrl: () =>
+		getEnvVar("SITE_URL", {
+			fallback: "http://localhost:3000",
+			description: "Site URL for Better Auth",
 		}),
 
-	workosCookiePassword: () =>
-		getEnvVar("WORKOS_COOKIE_PASSWORD", {
+	betterAuthSecret: () =>
+		getEnvVar("BETTER_AUTH_SECRET", {
 			required: false,
-			description: "WorkOS cookie encryption password (min 32 chars)",
+			description: "Better Auth session encryption secret (min 32 chars)",
 		}),
 } as const;

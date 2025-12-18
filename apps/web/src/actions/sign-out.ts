@@ -1,11 +1,19 @@
 "use server";
 
-import { signOut } from "@workos-inc/authkit-nextjs";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 /**
- * Server action to sign out the user using WorkOS AuthKit.
- * WorkOS handles session invalidation and cookie cleanup.
+ * Server action to sign out the user.
+ * Clears the Better Auth session cookie and redirects to sign-in.
  */
 export async function signOutAction() {
-	await signOut();
+	const cookieStore = await cookies();
+
+	// Clear Better Auth session cookies
+	cookieStore.delete("better-auth.session_token");
+	cookieStore.delete("__Secure-better-auth.session_token");
+
+	// Redirect to sign-in page
+	redirect("/auth/sign-in");
 }

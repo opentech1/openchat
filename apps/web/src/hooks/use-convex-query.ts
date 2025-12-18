@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import type { FunctionReference, FunctionArgs, FunctionReturnType } from "convex/server";
 
 /**
@@ -197,4 +197,16 @@ export function hasNonNullData<T>(
 	result: ConvexQueryResult<T>
 ): result is ConvexQueryResult<T> & { data: NonNullable<T> } {
 	return !result.isLoading && !result.isSkipped && result.data != null;
+}
+
+/**
+ * A wrapper around Convex's useMutation for consistency with useConvexQuery.
+ *
+ * @param mutation - The Convex mutation function reference
+ * @returns A mutation function that can be called with arguments
+ */
+export function useConvexMutation<Mutation extends FunctionReference<"mutation">>(
+	mutation: Mutation
+): (args: FunctionArgs<Mutation>) => Promise<FunctionReturnType<Mutation>> {
+	return useMutation(mutation);
 }

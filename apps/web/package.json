@@ -14,6 +14,7 @@
   "dependencies": {
     "@ai-sdk-tools/store": "^0.9.0",
     "@ai-sdk/react": "^2.0.44",
+    "@convex-dev/better-auth": "^0.10.4",
     "@convex-dev/persistent-text-streaming": "^0.3.0",
     "@electric-sql/client": "^1.0.10",
     "@electric-sql/react": "^1.0.10",
@@ -38,9 +39,8 @@
     "@tanstack/react-query": "^5.85.5",
     "@tanstack/react-virtual": "^3.13.12",
     "@vercel/speed-insights": "^1.2.0",
-    "@workos-inc/authkit-nextjs": "^2.12.0",
-    "@workos-inc/node": "^7.77.0",
     "ai": "^5.0.44",
+    "better-auth": "1.4.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

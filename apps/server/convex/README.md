@@ -4,7 +4,7 @@ OpenChat's `apps/server/convex` workspace replaces the former Elysia server. It 
 
 ## Directory tour
 - `schema.ts` – defines `users`, `chats`, and `messages` tables plus the supporting indexes that power lookups by owner and client message ids.
-- `users.ts` – ensures there is a Convex document for every WorkOS session and keeps profile fields in sync.
+- `users.ts` – ensures there is a Convex document for every Better Auth session and keeps profile fields in sync.
 - `chats.ts` – CRUD helpers for chat rows, including safeguards that keep delete operations scoped to the current user.
 - `messages.ts` – batched writes for user/assistant pairs and the streaming upsert mutation that the chat transport uses to persist incremental responses.
 - `http.ts` – a lightweight health check that Docker and uptime checks can hit.

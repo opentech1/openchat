@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
-import { getUserContext } from "@/lib/auth-server";
+import { getUserContextFromRequest } from "@/lib/auth-server";
 import { ensureConvexUser, createChatForUser } from "@/lib/convex-server";
 
+// Force dynamic rendering to avoid prerendering auth errors
+export const dynamic = "force-dynamic";
+
 export default async function NewChatPage() {
-	const session = await getUserContext();
+	const session = await getUserContextFromRequest(null as unknown as Request);
+	if (!session) {
+		redirect("/auth/sign-in");
+	}
 	const convexUserId = await ensureConvexUser({
 		id: session.userId,
 		email: session.email,

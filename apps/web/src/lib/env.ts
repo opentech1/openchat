@@ -49,11 +49,11 @@ const serverEnvSchema = z.object({
 	SENTRY_DSN: z.string().url().optional(),
 	NEXT_PUBLIC_SENTRY_DSN: z.string().url().optional(),
 
-	// Optional - WorkOS AuthKit
-	WORKOS_CLIENT_ID: z.string().startsWith("client_").optional(),
-	WORKOS_API_KEY: z.string().startsWith("sk_").optional(),
-	WORKOS_REDIRECT_URI: z.string().url().optional(),
-	WORKOS_COOKIE_PASSWORD: z.string().min(32).optional(),
+	// Optional - Better Auth (GitHub OAuth)
+	GITHUB_CLIENT_ID: z.string().optional(),
+	GITHUB_CLIENT_SECRET: z.string().optional(),
+	SITE_URL: z.string().url().optional(),
+	BETTER_AUTH_SECRET: z.string().min(32).optional(),
 
 	// Optional - Vercel
 	VERCEL_ENV: z.string().optional(),

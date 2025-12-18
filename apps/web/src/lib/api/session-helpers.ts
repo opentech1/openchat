@@ -10,25 +10,24 @@
  * - Maintains consistent session validation behavior
  *
  * Better Auth Session Storage:
- * - Production (HTTPS): "__Secure-openchat.session_token" (with __Secure- prefix)
- * - Development (HTTP): "openchat.session_token" (no prefix)
- * - The prefix is based on the cookiePrefix setting in convex/auth.ts
+ * - Production (HTTPS): "__Secure-better-auth.session_token" (with __Secure- prefix)
+ * - Development (HTTP): "better-auth.session_token" (no prefix)
  */
 
 import { cookies } from "next/headers";
 
 /**
  * Session token cookie names
- * These match the cookiePrefix setting in convex/auth.ts
+ * These match the Better Auth default cookie names
  */
-export const SECURE_SESSION_COOKIE_NAME = "__Secure-openchat.session_token";
-export const NORMAL_SESSION_COOKIE_NAME = "openchat.session_token";
+export const SECURE_SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
+export const NORMAL_SESSION_COOKIE_NAME = "better-auth.session_token";
 
 /**
  * Get the session token from cookies.
  *
  * IMPORTANT: This only retrieves the token - it does NOT validate it.
- * Validation happens in getUserContext() or getConvexUserFromSession().
+ * Validation happens in getUserContext() or via Better Auth.
  *
  * Cookie Priority:
  * 1. Check for secure cookie first (production HTTPS)

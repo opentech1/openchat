@@ -1,7 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-// Note: Authentication is handled by WorkOS AuthKit (not stored in Convex)
+// Note: Authentication is handled by Better Auth (stored in Convex via betterAuth component)
 export default defineSchema({
 	users: defineTable({
 		externalId: v.string(),

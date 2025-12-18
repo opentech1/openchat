@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { ClientOnly } from "@/components/client-only";
 import { useMounted } from "@/hooks/use-mounted";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ConvexReactClient } from "convex/react";
-import { ConvexProvider } from "convex/react";
-import { AuthKitProvider } from "@workos-inc/authkit-nextjs/components";
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
 import { ThemeProvider } from "./theme-provider";
 import { BrandThemeProvider } from "./brand-theme-provider";
 import { Toaster } from "sonner";
@@ -17,6 +16,7 @@ import { PosthogBootstrap } from "@/components/posthog-bootstrap";
 import { ConvexUserProvider } from "@/contexts/convex-user-context";
 import { ChatListProvider } from "@/contexts/chat-list-context";
 import { DataStreamProvider } from "@/contexts/data-stream-context";
+import { authClient } from "@/lib/auth-client";
 
 // Client-only Toaster to prevent hydration mismatch
 function ClientToaster() {
@@ -55,7 +55,7 @@ const posthogClient = initPosthog();
 // 3. Convex client requires browser APIs that don't exist on server
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const convexClient = typeof window !== "undefined" && convexUrl
-	? new ConvexReactClient(convexUrl)
+	? new ConvexReactClient(convexUrl, { expectAuth: true })
 	: null;
 
 function PosthogPageViewTracker() {
@@ -103,53 +103,49 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 	// This prevents "Could not find Convex client" errors during static generation
 	if (!convexClient) {
 		return (
-			<AuthKitProvider>
-				<ThemeProvider
-					attribute="class"
-					defaultTheme="system"
-					enableSystem
-					disableTransitionOnChange
-				>
-					<BrandThemeProvider>
-						<QueryClientProvider client={queryClient}>
-							<DataStreamProvider>
-								{children}
-							</DataStreamProvider>
-						</QueryClientProvider>
-					</BrandThemeProvider>
-				</ThemeProvider>
-			</AuthKitProvider>
+			<ThemeProvider
+				attribute="class"
+				defaultTheme="system"
+				enableSystem
+				disableTransitionOnChange
+			>
+				<BrandThemeProvider>
+					<QueryClientProvider client={queryClient}>
+						<DataStreamProvider>
+							{children}
+						</DataStreamProvider>
+					</QueryClientProvider>
+				</BrandThemeProvider>
+			</ThemeProvider>
 		);
 	}
 
 	const appTree = (
-		<AuthKitProvider>
-			<ConvexProvider client={convexClient}>
-				<ConvexUserProvider>
-					<ChatListProvider>
-						<ThemeProvider
-							attribute="class"
-							defaultTheme="system"
-							enableSystem
-							disableTransitionOnChange
-						>
-							<BrandThemeProvider>
-								<QueryClientProvider client={queryClient}>
-									<PosthogBootstrap />
-									<ClientOnly>
-										<PosthogPageViewTracker />
-									</ClientOnly>
-									<DataStreamProvider>
-										{children}
-									</DataStreamProvider>
-									<ClientToaster />
-								</QueryClientProvider>
-							</BrandThemeProvider>
-						</ThemeProvider>
-					</ChatListProvider>
-				</ConvexUserProvider>
-			</ConvexProvider>
-		</AuthKitProvider>
+		<ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+			<ConvexUserProvider>
+				<ChatListProvider>
+					<ThemeProvider
+						attribute="class"
+						defaultTheme="system"
+						enableSystem
+						disableTransitionOnChange
+					>
+						<BrandThemeProvider>
+							<QueryClientProvider client={queryClient}>
+								<PosthogBootstrap />
+								<ClientOnly>
+									<PosthogPageViewTracker />
+								</ClientOnly>
+								<DataStreamProvider>
+									{children}
+								</DataStreamProvider>
+								<ClientToaster />
+							</QueryClientProvider>
+						</BrandThemeProvider>
+					</ThemeProvider>
+				</ChatListProvider>
+			</ConvexUserProvider>
+		</ConvexBetterAuthProvider>
 	);
 
 	if (posthogClient) {

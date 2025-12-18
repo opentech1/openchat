@@ -4,6 +4,7 @@ import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
+import { authComponent } from "./auth";
 
 // User document validator with all fields including fileUploadCount
 const userDoc = v.object({
@@ -57,11 +58,11 @@ export const ensure = mutation({
 	returns: v.object({ userId: v.id("users") }),
 	handler: async (ctx, args) => {
 		// Rate limit user authentication/creation per external ID
-		// NOTE: Using externalId (from Clerk) is safe because:
-		// 1. Clerk already handles brute-force protection at the auth layer
+		// NOTE: Using externalId (from Better Auth) is safe because:
+		// 1. Better Auth already handles brute-force protection at the auth layer
 		// 2. Using a global key causes write conflicts under load (all users
 		//    compete for the same rate limit row, causing OCC failures)
-		// 3. The externalId is verified by Clerk before reaching this function
+		// 3. The externalId is verified by Better Auth before reaching this function
 		const { ok, retryAfter } = await rateLimiter.limit(ctx, "userEnsure", {
 			key: args.externalId,
 		});
@@ -70,10 +71,31 @@ export const ensure = mutation({
 			throwRateLimitError("authentication attempts", retryAfter);
 		}
 
-		const existing = await ctx.db
+		// First, check if user exists by externalId (Better Auth user ID)
+		let existing = await ctx.db
 			.query("users")
 			.withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
 			.unique();
+
+		// MIGRATION: If not found by externalId but email exists, try to link by email
+		// This handles users who previously logged in with WorkOS
+		if (!existing && args.email) {
+			const existingByEmail = await ctx.db
+				.query("users")
+				.withIndex("by_email", (q) => q.eq("email", args.email))
+				.unique();
+
+			if (existingByEmail) {
+				// Update externalId to Better Auth user ID (migration from WorkOS)
+				await ctx.db.patch(existingByEmail._id, {
+					externalId: args.externalId,
+					updatedAt: Date.now(),
+				});
+				existing = existingByEmail;
+				console.log(`[Auth Migration] Linked user ${args.email} from WorkOS to Better Auth`);
+			}
+		}
+
 		const now = Date.now();
 		if (existing) {
 			// Update user email (auth data stays in users table)
@@ -150,6 +172,17 @@ export const ensure = mutation({
 		await incrementStat(ctx, STAT_KEYS.USERS_TOTAL);
 
 		return { userId };
+	},
+});
+
+/**
+ * Get the current authenticated user from Better Auth.
+ * This is the primary way to get the current user in the app.
+ */
+export const getCurrentAuthUser = query({
+	args: {},
+	handler: async (ctx) => {
+		return authComponent.getAuthUser(ctx);
 	},
 });
 

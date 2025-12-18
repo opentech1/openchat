@@ -10,7 +10,7 @@ import { useSession } from "@/lib/auth-client";
  * HYDRATION FIX: Always render children on first render to prevent hydration mismatch.
  * The useSession hook can return different values on server vs client:
  * - Server: { isPending: false, data: null } (no session available)
- * - Client: { isPending: true, data: null } (loading from localStorage)
+ * - Client: { isPending: true, data: null } (loading from Better Auth)
  *
  * This caused hydration errors because server rendered null while client rendered children.
  * Now we always render children and only redirect via useEffect after confirming no session.
