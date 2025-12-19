@@ -1,0 +1,111 @@
+# OpenChat Frontend Rebuild - Context for Next Agent
+
+## What Was Done
+
+Rebuilt the frontend from Next.js to TanStack Start for better DX and performance.
+
+### Structure
+- `apps/web` - NEW TanStack Start frontend
+- `apps/web-old` - OLD Next.js frontend (kept for reference)
+- `apps/server` - Convex backend (unchanged)
+
+### New Stack
+- TanStack Start (Vite-based, file-based routing)
+- TanStack Router
+- React 19
+- Tailwind CSS v4
+- shadcn/ui (maia style, emerald theme, stone base)
+- Zustand for state management
+- Better Auth with Convex integration
+
+### Files Created
+```
+apps/web/
+├── src/
+│   ├── routes/
+│   │   ├── __root.tsx       # Root layout with providers
+│   │   ├── index.tsx        # Home page
+│   │   └── auth/
+│   │       ├── sign-in.tsx  # GitHub OAuth sign-in
+│   │       └── callback.tsx # OAuth callback handler
+│   ├── lib/
+│   │   ├── env.ts           # Type-safe env vars (VITE_ prefix)
+│   │   ├── convex.ts        # Convex client singleton
+│   │   └── auth-client.ts   # Better Auth client
+│   ├── stores/
+│   │   ├── stream.ts        # Streaming state machine (clean replacement for old fragmented state)
+│   │   └── ui.ts            # UI state (sidebar, command palette)
+│   ├── providers/
+│   │   ├── index.tsx        # Provider composition
+│   │   └── theme-provider.tsx # System theme support
+│   └── components/ui/       # shadcn components
+├── .env.local               # Env vars (VITE_CONVEX_URL, VITE_CONVEX_SITE_URL)
+└── vite.config.ts           # Vite config (devtools removed to fix tab-switch issues)
+```
+
+### Key Patterns
+
+1. **No TanStack DevTools** - Removed to prevent port conflicts and tab-switch re-renders
+
+2. **Tab-switch flash prevention**:
+   - React Query: `refetchOnWindowFocus: false, refetchOnReconnect: false`
+   - Better Auth: `refetchOnWindowFocus: false, staleTime: Infinity`
+   - Components: Only show loading on first load, not refetches
+
+3. **Theme**: System theme with inline script in __root.tsx to prevent flash
+
+4. **Auth Flow**:
+   - signInWithGitHub() → Convex site URL → GitHub OAuth → callback → home
+   - crossDomainClient plugin handles token exchange
+
+5. **Streaming State Machine** (stores/stream.ts):
+   - Replaces old fragmented state (activeStreamId, isConvexStreaming, redisStreamId, etc.)
+   - Single source of truth with clear state transitions
+
+## What Needs To Be Done
+
+### High Priority
+1. **Build chat UI** - Port chat interface from web-old with clean streaming
+2. **Test auth flow** - Verify GitHub OAuth works end-to-end
+3. **Add remaining routes**:
+   - `/chat` - Chat list/new chat
+   - `/chat/[id]` - Chat room
+   - `/settings` - User settings
+   - `/templates` - Prompt templates
+
+### Medium Priority
+4. **Port components from web-old**:
+   - Chat message components
+   - Model selector
+   - Sidebar/navigation
+   - Command palette
+5. **Set up Cloudflare Pages deployment**
+6. **Add OpenRouter callback route** (`/openrouter/callback`)
+
+### Low Priority
+7. Copy over any remaining utilities from web-old/src/lib
+8. Add PostHog analytics (optional)
+9. Add error boundaries
+
+## Environment Variables
+
+Frontend needs (VITE_ prefix for client-side):
+- VITE_CONVEX_URL - Convex cloud URL
+- VITE_CONVEX_SITE_URL - Convex site URL (for auth)
+- VITE_APP_URL - Frontend URL (optional)
+
+Backend env vars are in apps/server (unchanged).
+
+## Running
+
+```bash
+# From monorepo root
+bun run dev:web    # Just frontend
+bun run dev        # Frontend + Convex server
+```
+
+## Notes
+
+- The old web-old folder can be deleted once the new frontend is feature-complete
+- Convex backend is unchanged - all mutations/queries work the same
+- Auth is handled by Convex's Better Auth integration (GitHub OAuth configured there)

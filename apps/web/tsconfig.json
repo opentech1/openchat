@@ -1,52 +1,29 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "include": ["**/*.ts", "**/*.tsx", "eslint.config.js", "prettier.config.js", "vite.config.js"],
+  
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false,
+    "noEmit": true,
+
+    /* Linting */
     "skipLibCheck": true,
     "strict": true,
-    "noEmit": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "jsx": "preserve",
-    "incremental": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@server/*": [
-        "../server/*"
-      ]
+      "@/*": ["./src/*"]
     }
-  },
-	"include": [
-		"./**/*.ts",
-		"./**/*.tsx",
-		"./**/*.d.ts",
-		"./.next/types/**/*.ts",
-		"./next-env.d.ts",
-		".next/types/**/*.ts"
-	],
-	"exclude": [
-		"./node_modules",
-		"./test",
-		"./**/*.spec.ts",
-		"./**/*.spec.tsx",
-		"./**/*.test.ts",
-		"./**/*.test.tsx"
-	]
+  }
 }

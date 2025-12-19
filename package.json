@@ -38,6 +38,7 @@
   "dependencies": {
     "@ai-sdk/provider-utils": "^3.0.17",
     "@emotion/react": "^11.14.0",
+    "@opentech1/cc-sync": "^2.0.12",
     "@vercel/analytics": "^1.5.0",
     "better-sqlite3": "^12.4.6",
     "motion": "^12.23.24",
