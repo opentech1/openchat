@@ -5,6 +5,10 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import { Providers } from "../providers";
+import {
+  CommandPalette,
+  useCommandPaletteShortcut,
+} from "../components/command-palette";
 
 import appCss from "../styles.css?url";
 
@@ -42,9 +46,21 @@ function RootComponent() {
   return (
     <RootDocument>
       <Providers>
-        <Outlet />
+        <AppShell />
       </Providers>
     </RootDocument>
+  );
+}
+
+function AppShell() {
+  // Register global keyboard shortcut for command palette
+  useCommandPaletteShortcut();
+
+  return (
+    <>
+      <Outlet />
+      <CommandPalette />
+    </>
   );
 }
 
