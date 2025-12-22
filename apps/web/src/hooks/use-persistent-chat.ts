@@ -18,6 +18,7 @@ import type { Id } from "@server/convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth-client";
 import { useModelStore } from "@/stores/model";
 import { useOpenRouterKey } from "@/stores/openrouter";
+import { usePendingMessageStore } from "@/stores/pending-message";
 
 export interface UsePersistentChatOptions {
   chatId?: string;
@@ -100,6 +101,20 @@ export function usePersistentChat({
   // Track pending user message for onFinish callback (avoids stale closure)
   const pendingUserMessageRef = useRef<{ text: string; id: string } | null>(null);
 
+  // Track mount state to prevent stale operations after unmount
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Store onChatCreated in a ref to avoid stale closure
+  const onChatCreatedRef = useRef(onChatCreated);
+  useEffect(() => {
+    onChatCreatedRef.current = onChatCreated;
+  }, [onChatCreated]);
+
   // Update ref when chatId prop changes
   useEffect(() => {
     if (chatId) {
@@ -116,6 +131,13 @@ export function usePersistentChat({
 
   // Get the Convex user ID
   const convexUserId = convexUser?._id;
+
+  // Store convexUserId in a ref to avoid stale closure in onFinish
+  // This is critical because onFinish callback may capture an old value
+  const convexUserIdRef = useRef(convexUserId);
+  useEffect(() => {
+    convexUserIdRef.current = convexUserId;
+  }, [convexUserId]);
 
   // Convex queries and mutations
   const messagesResult = useQuery(
@@ -155,8 +177,11 @@ export function usePersistentChat({
     }),
     onFinish: async ({ message }) => {
       // Save completed message to Convex
+      // This callback runs even if the component has navigated away
       const pendingUserMessage = pendingUserMessageRef.current;
-      if (chatIdRef.current && convexUserId && pendingUserMessage) {
+      const currentConvexUserId = convexUserIdRef.current;
+
+      if (chatIdRef.current && currentConvexUserId && pendingUserMessage) {
         try {
           // Get assistant response text
           const assistantText =
@@ -168,7 +193,7 @@ export function usePersistentChat({
           // Save to Convex
           await sendMessages({
             chatId: chatIdRef.current as Id<"chats">,
-            userId: convexUserId,
+            userId: currentConvexUserId,
             userMessage: {
               content: pendingUserMessage.text,
               clientMessageId: pendingUserMessage.id,
@@ -188,12 +213,12 @@ export function usePersistentChat({
               (pendingUserMessage.text.length > 100 ? "..." : "");
             await updateTitle({
               chatId: chatIdRef.current as Id<"chats">,
-              userId: convexUserId,
+              userId: currentConvexUserId,
               title,
             });
           }
 
-          // Clear pending message
+          // Clear pending message after successful save
           pendingUserMessageRef.current = null;
         } catch (e) {
           console.error("Failed to save messages to Convex:", e);
@@ -210,6 +235,31 @@ export function usePersistentChat({
     }
   }, [chatId, messagesResult, setMessages]);
 
+  // Check for pending message and auto-send it (for seamless navigation)
+  // This runs when navigating from home page to chat page with a pending message
+  const pendingMessageConsumed = useRef(false);
+  useEffect(() => {
+    if (!chatId || !convexUserId || pendingMessageConsumed.current) return;
+
+    const pending = usePendingMessageStore.getState().consume(chatId);
+    if (pending) {
+      pendingMessageConsumed.current = true;
+
+      // Store pending message for onFinish callback
+      const messageId = crypto.randomUUID();
+      pendingUserMessageRef.current = { text: pending.text, id: messageId };
+
+      // Send the message (streaming will happen with correct useChat id)
+      aiSendMessage({
+        text: pending.text,
+        files: pending.files,
+      }).catch((e) => {
+        console.error("Failed to send pending message:", e);
+        pendingUserMessageRef.current = null;
+      });
+    }
+  }, [chatId, convexUserId, aiSendMessage]);
+
   // Handle sending messages with new chat creation
   const handleSendMessage = useCallback(
     async (message: { text: string; files?: any[] }) => {
@@ -219,11 +269,8 @@ export function usePersistentChat({
         return;
       }
 
-      // Store pending message for onFinish callback
-      const messageId = crypto.randomUUID();
-      pendingUserMessageRef.current = { text: message.text, id: messageId };
-
-      // If no chatId, create a new chat first
+      // If no chatId, create a new chat and navigate immediately
+      // The message will be auto-sent on the new page (via pending message store)
       if (!chatIdRef.current) {
         try {
           const result = await createChat({
@@ -232,30 +279,34 @@ export function usePersistentChat({
           });
 
           const newChatId = result.chatId;
-          chatIdRef.current = newChatId;
-          setCurrentChatId(newChatId);
 
-          // Notify parent about new chat
-          onChatCreated?.(newChatId);
-
-          // Now send the message
-          await aiSendMessage({
+          // Store the pending message - it will be sent on the new page
+          usePendingMessageStore.getState().set({
+            chatId: newChatId,
             text: message.text,
             files: message.files,
           });
+
+          // Navigate immediately - streaming will happen on the new page
+          if (onChatCreatedRef.current) {
+            onChatCreatedRef.current(newChatId);
+          }
         } catch (e) {
           console.error("Failed to create chat:", e);
-          pendingUserMessageRef.current = null;
         }
       } else {
-        // Existing chat - just send
+        // Existing chat - send directly
+        // Store pending message for onFinish callback
+        const messageId = crypto.randomUUID();
+        pendingUserMessageRef.current = { text: message.text, id: messageId };
+
         await aiSendMessage({
           text: message.text,
           files: message.files,
         });
       }
     },
-    [convexUserId, createChat, aiSendMessage, onChatCreated]
+    [convexUserId, createChat, aiSendMessage]
   );
 
   return {

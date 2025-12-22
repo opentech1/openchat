@@ -47,107 +47,12 @@ import { useModelStore, models, type Model } from "@/stores/model";
 import { usePersistentChat } from "@/hooks/use-persistent-chat";
 import {
   SparklesIcon,
-  UserIcon,
   FileIcon,
   ChevronDownIcon,
   CheckIcon,
 } from "lucide-react";
+import { Streamdown } from "streamdown";
 import { useState } from "react";
-
-// Simple markdown renderer for basic formatting
-function renderMarkdown(text: string): React.ReactNode {
-  // Split into paragraphs
-  const paragraphs = text.split(/\n\n+/);
-
-  return paragraphs.map((paragraph, pIndex) => {
-    // Check for code blocks
-    if (paragraph.startsWith("```")) {
-      const lines = paragraph.split("\n");
-      const language = lines[0].slice(3).trim();
-      const code = lines.slice(1, -1).join("\n");
-      return (
-        <pre
-          key={pIndex}
-          className="my-3 overflow-x-auto rounded-xl bg-muted p-4 text-sm"
-        >
-          {language && (
-            <div className="mb-2 text-xs text-muted-foreground">{language}</div>
-          )}
-          <code className="font-mono">{code}</code>
-        </pre>
-      );
-    }
-
-    // Check for inline code and bold
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    const regex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
-    let match;
-
-    while ((match = regex.exec(paragraph)) !== null) {
-      // Add text before the match
-      if (match.index > lastIndex) {
-        parts.push(paragraph.slice(lastIndex, match.index));
-      }
-
-      const matched = match[0];
-      if (matched.startsWith("`")) {
-        // Inline code
-        parts.push(
-          <code
-            key={`${pIndex}-${match.index}`}
-            className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm"
-          >
-            {matched.slice(1, -1)}
-          </code>
-        );
-      } else if (matched.startsWith("**")) {
-        // Bold
-        parts.push(
-          <strong key={`${pIndex}-${match.index}`}>
-            {matched.slice(2, -2)}
-          </strong>
-        );
-      } else if (matched.startsWith("*")) {
-        // Italic
-        parts.push(
-          <em key={`${pIndex}-${match.index}`}>{matched.slice(1, -1)}</em>
-        );
-      }
-
-      lastIndex = match.index + matched.length;
-    }
-
-    // Add remaining text
-    if (lastIndex < paragraph.length) {
-      parts.push(paragraph.slice(lastIndex));
-    }
-
-    // Handle line breaks within paragraph
-    const withLineBreaks: React.ReactNode[] = [];
-    parts.forEach((part, index) => {
-      if (typeof part === "string") {
-        const lines = part.split("\n");
-        lines.forEach((line, lineIndex) => {
-          if (lineIndex > 0) {
-            withLineBreaks.push(<br key={`br-${index}-${lineIndex}`} />);
-          }
-          if (line) {
-            withLineBreaks.push(line);
-          }
-        });
-      } else {
-        withLineBreaks.push(part);
-      }
-    });
-
-    return (
-      <p key={pIndex} className="mb-3 last:mb-0">
-        {withLineBreaks}
-      </p>
-    );
-  });
-}
 
 // Message component
 interface MessageProps {
@@ -158,39 +63,92 @@ interface MessageProps {
 function Message({ role, parts }: MessageProps) {
   const isUser = role === "user";
 
-  return (
-    <div
-      className={cn("flex gap-3", isUser ? "flex-row-reverse" : "flex-row")}
-    >
-      {/* Avatar */}
-      <div
-        className={cn(
-          "flex size-8 shrink-0 items-center justify-center rounded-full",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
-        )}
-      >
-        {isUser ? <UserIcon className="size-4" /> : <SparklesIcon className="size-4" />}
-      </div>
+  // User messages: right-aligned with bubble, no avatar needed
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] space-y-2">
+          {parts.map((part, index) => {
+            if (part.type === "text") {
+              return (
+                <div
+                  key={index}
+                  className="rounded-2xl bg-primary text-primary-foreground px-4 py-3"
+                >
+                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{part.text}</p>
+                </div>
+              );
+            }
 
-      {/* Message content */}
-      <div className={cn("max-w-[80%] space-y-2")}>
+            if (part.type === "file") {
+              // Render images inline
+              if (part.mediaType?.startsWith("image/")) {
+                return (
+                  <img
+                    key={index}
+                    src={part.url}
+                    alt={part.filename || "Attached image"}
+                    className="max-w-full rounded-lg"
+                  />
+                );
+              }
+
+              // Render PDF and other files with icon
+              return (
+                <div
+                  key={index}
+                  className="flex items-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2"
+                >
+                  <FileIcon className="size-4" />
+                  <span className="truncate text-sm">
+                    {part.filename || "Attached file"}
+                  </span>
+                </div>
+              );
+            }
+
+            return null;
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // AI messages: left-aligned, no avatar, just clean prose
+  return (
+    <div className="max-w-none">
+      <div className="space-y-3">
         {parts.map((part, index) => {
           if (part.type === "text") {
+            // AI: Clean prose with streaming markdown via Streamdown
             return (
               <div
                 key={index}
                 className={cn(
-                  "rounded-2xl px-4 py-3",
-                  isUser
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-foreground"
+                  "prose dark:prose-invert max-w-none",
+                  // Typography improvements
+                  "prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-foreground/90",
+                  "prose-headings:text-foreground prose-headings:font-semibold",
+                  "prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-3",
+                  "prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2",
+                  "prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2",
+                  // Lists
+                  "prose-li:text-[15px] prose-li:leading-relaxed prose-li:text-foreground/90",
+                  "prose-ul:my-3 prose-ol:my-3",
+                  // Code blocks
+                  "prose-code:text-sm prose-code:font-medium prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
+                  "prose-pre:bg-muted prose-pre:border prose-pre:border-border/50 prose-pre:rounded-lg prose-pre:my-4",
+                  // Links
+                  "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
+                  // Blockquotes
+                  "prose-blockquote:border-l-primary prose-blockquote:text-foreground/80 prose-blockquote:not-italic",
+                  // Horizontal rules
+                  "prose-hr:border-border/50 prose-hr:my-6",
+                  // Strong/bold
+                  "prose-strong:text-foreground prose-strong:font-semibold"
                 )}
               >
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  {renderMarkdown(part.text || "")}
-                </div>
+                <Streamdown>{part.text || ""}</Streamdown>
               </div>
             );
           }
@@ -233,16 +191,11 @@ function Message({ role, parts }: MessageProps) {
               );
             }
 
-            // Render PDF and other files with icon
+            // Render PDF and other files with icon (AI message style)
             return (
               <div
                 key={index}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border px-3 py-2",
-                  isUser
-                    ? "border-primary-foreground/20 bg-primary-foreground/10"
-                    : "border-border bg-background/50"
-                )}
+                className="flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-2"
               >
                 <FileIcon className="size-4" />
                 <span className="truncate text-sm">
@@ -259,17 +212,30 @@ function Message({ role, parts }: MessageProps) {
   );
 }
 
-// Loading indicator for streaming
+// Loading indicator for streaming (no avatar)
 function LoadingIndicator() {
   return (
-    <div className="flex gap-3">
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <SparklesIcon className="size-4" />
+    <div className="flex items-center gap-1.5 py-2">
+      <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:0ms]" />
+      <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" />
+      <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" />
+    </div>
+  );
+}
+
+// Skeleton loading for messages (no avatars)
+function MessagesSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* User message skeleton - right aligned */}
+      <div className="flex justify-end">
+        <div className="h-12 w-48 rounded-2xl bg-muted animate-pulse" />
       </div>
-      <div className="flex items-center gap-1 rounded-2xl bg-muted px-4 py-3">
-        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:0ms]" />
-        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:150ms]" />
-        <span className="size-2 animate-bounce rounded-full bg-foreground/40 [animation-delay:300ms]" />
+      {/* Assistant message skeleton - left aligned, no avatar */}
+      <div className="space-y-2">
+        <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+        <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
+        <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
       </div>
     </div>
   );
@@ -279,11 +245,11 @@ function LoadingIndicator() {
 function EmptyState() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-muted">
-        <SparklesIcon className="size-6" />
+      <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg">
+        <SparklesIcon className="size-7" />
       </div>
       <div>
-        <h2 className="text-lg font-medium">Start a conversation</h2>
+        <h2 className="text-lg font-semibold">Start a conversation</h2>
         <p className="text-sm text-muted-foreground">
           Ask me anything - I'm here to help.
         </p>
@@ -345,6 +311,7 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
     Google: "google",
     DeepSeek: "deepseek",
     Meta: "llama",
+    xAI: "xai",
   };
 
   return (
@@ -457,9 +424,11 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   // Show loading state while fetching messages for existing chat
   if (isLoadingMessages) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">
-          Loading conversation...
+      <div className="flex h-full flex-col">
+        <div className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="mx-auto max-w-3xl">
+            <MessagesSkeleton />
+          </div>
         </div>
       </div>
     );
@@ -474,7 +443,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
             <EmptyState />
           ) : (
             <>
-              {messages.map((message) => (
+              {messages.map((message, idx) => (
                 <Message
                   key={message.id}
                   role={message.role as "user" | "assistant"}

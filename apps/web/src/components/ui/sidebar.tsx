@@ -315,14 +315,16 @@ function SidebarMenuItem({
 // ============================================================================
 
 const sidebarMenuButtonVariants = cva(
-  "group/menu-button flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors outline-none",
+  "group/menu-button relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 outline-none",
   {
     variants: {
       variant: {
-        default:
-          "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        active:
-          "bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90",
+        default: "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+        active: [
+          "bg-sidebar-accent/80 text-sidebar-foreground",
+          "before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2",
+          "before:h-5 before:w-1 before:rounded-full before:bg-sidebar-primary",
+        ].join(" "),
       },
     },
     defaultVariants: {
