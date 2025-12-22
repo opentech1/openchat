@@ -33,7 +33,7 @@ type CallbackStatus = "processing" | "success" | "error";
 
 function OpenRouterCallbackPage() {
   const navigate = useNavigate();
-  const { handleCallback, error: storeError, isLoading } = useOpenRouterKey();
+  const { handleCallback } = useOpenRouterKey();
 
   const [status, setStatus] = useState<CallbackStatus>("processing");
   const [error, setError] = useState<string | null>(null);
@@ -71,23 +71,28 @@ function OpenRouterCallbackPage() {
         return;
       }
 
-      // Exchange code for API key
-      const success = await handleCallback(code, state);
+      try {
+        // Exchange code for API key
+        const success = await handleCallback(code, state);
 
-      if (success) {
-        setStatus("success");
-        // Redirect to home after a brief delay to show success message
-        setTimeout(() => {
-          navigate({ to: "/" });
-        }, 2000);
-      } else {
+        if (success) {
+          setStatus("success");
+          // Redirect to home after a brief delay to show success message
+          setTimeout(() => {
+            navigate({ to: "/" });
+          }, 1500);
+        } else {
+          setStatus("error");
+          setError("Failed to complete authentication. Please try again.");
+        }
+      } catch (err) {
         setStatus("error");
-        setError(storeError || "Failed to complete authentication.");
+        setError(err instanceof Error ? err.message : "Authentication failed.");
       }
     }
 
     processCallback();
-  }, [mounted, handleCallback, navigate, storeError]);
+  }, [mounted, handleCallback, navigate]);
 
   // Show loading state during SSR and initial mount
   if (!mounted) {
@@ -107,7 +112,7 @@ function OpenRouterCallbackPage() {
   }
 
   // Processing state
-  if (status === "processing" || isLoading) {
+  if (status === "processing") {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-md">
@@ -147,7 +152,7 @@ function OpenRouterCallbackPage() {
   }
 
   // Error state
-  const displayError = error || storeError || "An unexpected error occurred.";
+  const displayError = error || "An unexpected error occurred.";
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">

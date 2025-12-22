@@ -16,7 +16,6 @@ import {
 } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../lib/auth-client";
-import { useOpenRouterKey } from "../stores/openrouter";
 
 import appCss from "../styles.css?url";
 
@@ -66,12 +65,10 @@ function AppShell() {
   useSidebarShortcut();
 
   const { isAuthenticated } = useAuth();
-  const { apiKey } = useOpenRouterKey();
 
-  // Show sidebar only when authenticated and has API key
-  const showSidebar = isAuthenticated && apiKey;
-
-  if (!showSidebar) {
+  // Show sidebar for authenticated users (regardless of OpenRouter status)
+  // Pages will show "Connect OpenRouter" CTA when needed
+  if (!isAuthenticated) {
     // No sidebar layout for unauthenticated users
     return (
       <>
