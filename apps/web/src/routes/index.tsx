@@ -66,14 +66,14 @@ function ConnectOpenRouterCTA() {
 }
 
 function HomePage() {
-  const { isAuthenticated, loading, user } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const { apiKey } = useOpenRouterKey();
   const hasLoadedOnce = useRef(false);
 
   // Only show loading on first load, not on refetches
   if (loading && !hasLoadedOnce.current) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
     );
@@ -102,26 +102,6 @@ function HomePage() {
     return <ConnectOpenRouterCTA />;
   }
 
-  // Authenticated with OpenRouter key - show chat interface
-  return (
-    <div className="flex h-screen flex-col">
-      {/* Header */}
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <h1 className="text-lg font-semibold">OpenChat</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            {user?.name || user?.email}
-          </span>
-          <Link to="/settings">
-            <Button variant="outline" size="sm">Settings</Button>
-          </Link>
-        </div>
-      </header>
-
-      {/* Chat Interface */}
-      <div className="flex-1 overflow-hidden">
-        <ChatInterface />
-      </div>
-    </div>
-  );
+  // Authenticated with OpenRouter key - show chat interface (new chat mode)
+  return <ChatInterface />;
 }

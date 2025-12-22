@@ -5,13 +5,13 @@
  * - PromptInput for message composition with file attachments
  * - ModelSelector for choosing AI models
  * - Streaming response support via AI SDK 5
+ * - Convex persistence for chat history
  */
 
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { useNavigate } from "@tanstack/react-router";
 import type { UIMessagePart, UIDataTypes, UITools } from "ai";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -44,7 +44,7 @@ import {
   ModelSelectorName,
 } from "./ai-elements/model-selector";
 import { useModelStore, models, type Model } from "@/stores/model";
-import { useOpenRouterKey } from "@/stores/openrouter";
+import { usePersistentChat } from "@/hooks/use-persistent-chat";
 import {
   SparklesIcon,
   UserIcon,
@@ -404,25 +404,34 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
   );
 }
 
-// Main Chat Interface
-export function ChatInterface() {
-  const selectedModelId = useModelStore((state) => state.selectedModelId);
-  const { apiKey } = useOpenRouterKey();
+// Chat Interface Props
+interface ChatInterfaceProps {
+  chatId?: string;
+}
 
+// Main Chat Interface
+export function ChatInterface({ chatId }: ChatInterfaceProps) {
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Use AI SDK 5 with DefaultChatTransport
-  const { messages, sendMessage, status, error, stop } = useChat({
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      prepareSendMessagesRequest: ({ messages }) => ({
-        body: {
-          messages,
-          model: selectedModelId,
-          apiKey: apiKey,
-        },
-      }),
-    }),
+  // Use persistent chat hook with Convex integration
+  const {
+    messages,
+    sendMessage,
+    status,
+    error,
+    stop,
+    isLoadingMessages,
+  } = usePersistentChat({
+    chatId,
+    onChatCreated: (newChatId) => {
+      // Navigate to the new chat page
+      navigate({
+        to: "/c/$chatId",
+        params: { chatId: newChatId },
+        replace: true,
+      });
+    },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
@@ -437,7 +446,6 @@ export function ChatInterface() {
     async (message: PromptInputMessage) => {
       if (!message.text.trim() && message.files.length === 0) return;
 
-      // Convert FileUIPart to the format expected by AI SDK
       await sendMessage({
         text: message.text,
         files: message.files,
@@ -445,6 +453,17 @@ export function ChatInterface() {
     },
     [sendMessage]
   );
+
+  // Show loading state while fetching messages for existing chat
+  if (isLoadingMessages) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">
+          Loading conversation...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">

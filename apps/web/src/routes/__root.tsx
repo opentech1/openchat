@@ -9,6 +9,14 @@ import {
   CommandPalette,
   useCommandPaletteShortcut,
 } from "../components/command-palette";
+import {
+  SidebarProvider,
+  SidebarInset,
+  useSidebarShortcut,
+} from "../components/ui/sidebar";
+import { AppSidebar } from "../components/app-sidebar";
+import { useAuth } from "../lib/auth-client";
+import { useOpenRouterKey } from "../stores/openrouter";
 
 import appCss from "../styles.css?url";
 
@@ -53,14 +61,37 @@ function RootComponent() {
 }
 
 function AppShell() {
-  // Register global keyboard shortcut for command palette
+  // Register global keyboard shortcuts
   useCommandPaletteShortcut();
+  useSidebarShortcut();
 
+  const { isAuthenticated } = useAuth();
+  const { apiKey } = useOpenRouterKey();
+
+  // Show sidebar only when authenticated and has API key
+  const showSidebar = isAuthenticated && apiKey;
+
+  if (!showSidebar) {
+    // No sidebar layout for unauthenticated users
+    return (
+      <>
+        <Outlet />
+        <CommandPalette />
+      </>
+    );
+  }
+
+  // Full sidebar layout for authenticated users
   return (
-    <>
-      <Outlet />
+    <SidebarProvider>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <SidebarInset>
+          <Outlet />
+        </SidebarInset>
+      </div>
       <CommandPalette />
-    </>
+    </SidebarProvider>
   );
 }
 
