@@ -145,21 +145,31 @@ function Sidebar({
     );
   }
 
-  // Desktop: fully hide/show sidebar (offcanvas style)
+  // Desktop: fully hide/show sidebar with premium animation
   return (
     <aside
       data-slot="sidebar"
       data-state={open ? "open" : "closed"}
       data-side={side}
       className={cn(
-        "flex shrink-0 flex-col bg-sidebar text-sidebar-foreground border-sidebar-border transition-all duration-150 ease-out overflow-hidden",
+        "group/sidebar flex shrink-0 flex-col bg-sidebar text-sidebar-foreground border-sidebar-border overflow-hidden",
+        // Premium Apple-style animation: 220ms with custom cubic-bezier
+        "transition-[width,border-width] duration-[220ms] ease-[cubic-bezier(0.25,0.1,0.25,1)]",
         side === "left" ? "border-r" : "border-l",
         open ? "w-64" : "w-0 border-0",
         className
       )}
       {...props}
     >
-      {children}
+      {/* Inner container for content fade animation */}
+      <div
+        className={cn(
+          "flex min-w-64 flex-1 flex-col transition-opacity duration-[180ms]",
+          open ? "opacity-100 delay-[40ms]" : "opacity-0"
+        )}
+      >
+        {children}
+      </div>
     </aside>
   );
 }

@@ -179,12 +179,14 @@ export function AppSidebar() {
       {/* Collapsed floating bar - pixel-perfect alignment with sidebar toggle */}
       <div
         className={cn(
-          "fixed left-2 top-2 z-50 flex items-center rounded-xl bg-sidebar/95 p-1 shadow-lg ring-1 ring-sidebar-border/50 backdrop-blur-sm transition-opacity duration-150",
+          "fixed left-2 top-2 z-50 flex items-center rounded-xl bg-sidebar/95 p-1 shadow-lg ring-1 ring-sidebar-border/50 backdrop-blur-sm",
+          // Smooth fade with slight delay when opening to sync with sidebar
+          "transition-[opacity,transform] duration-[220ms] ease-[cubic-bezier(0.25,0.1,0.25,1)]",
           open && !isMobile
-            ? "pointer-events-none opacity-0"
+            ? "pointer-events-none opacity-0 scale-95"
             : !isMobile
-              ? "opacity-100"
-              : "pointer-events-none opacity-0"
+              ? "opacity-100 scale-100"
+              : "pointer-events-none opacity-0 scale-95"
         )}
       >
         <button
