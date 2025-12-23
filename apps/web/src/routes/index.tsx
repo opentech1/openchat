@@ -36,7 +36,7 @@ function ConnectOpenRouterCTA() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
+    <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
       <div className="flex size-20 items-center justify-center rounded-full bg-muted">
         <KeyIcon />
       </div>
@@ -87,7 +87,7 @@ function HomePage() {
   // Not authenticated - show sign in
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
+      <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
         <h1 className="text-4xl font-bold tracking-tight">OpenChat</h1>
         <p className="text-muted-foreground">AI Chat powered by OpenRouter</p>
         <Link to="/auth/sign-in">

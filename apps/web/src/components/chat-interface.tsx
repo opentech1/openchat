@@ -2,6 +2,8 @@
  * Chat Interface - Main conversational UI component
  *
  * Uses AI Elements components for a polished, modern UI:
+ * - Conversation for auto-scrolling message container
+ * - Message for user/assistant message rendering
  * - PromptInput for message composition with file attachments
  * - ModelSelector for choosing AI models
  * - Streaming response support via AI SDK 5
@@ -10,24 +12,32 @@
 
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import type { UIMessagePart, UIDataTypes, UITools } from "ai";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+  useConversationScroll,
+} from "./ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+  MessageFile,
+} from "./ai-elements/message";
+import {
   PromptInput,
   PromptInputTextarea,
   PromptInputFooter,
   PromptInputTools,
-  PromptInputButton,
-  PromptInputSubmit,
   PromptInputAttachments,
   PromptInputAttachment,
-  PromptInputActionMenu,
-  PromptInputActionMenuTrigger,
-  PromptInputActionMenuContent,
-  PromptInputActionAddAttachments,
+  PromptInputProvider,
+  usePromptInputController,
   type PromptInputMessage,
 } from "./ai-elements/prompt-input";
 import {
@@ -40,176 +50,69 @@ import {
   ModelSelectorGroup,
   ModelSelectorItem,
   ModelSelectorLogo,
-  ModelSelectorLogoGroup,
   ModelSelectorName,
 } from "./ai-elements/model-selector";
 import { useModelStore, models, type Model } from "@/stores/model";
+import { StartScreen } from "./start-screen";
 import { usePersistentChat } from "@/hooks/use-persistent-chat";
 import {
-  SparklesIcon,
-  FileIcon,
   ChevronDownIcon,
   CheckIcon,
+  PaperclipIcon,
+  ArrowUpIcon,
+  SquareIcon,
+  GlobeIcon,
 } from "lucide-react";
-import { Streamdown } from "streamdown";
-import { useState } from "react";
 
-// Message component
-interface MessageProps {
-  role: "user" | "assistant" | "system";
-  parts: Array<UIMessagePart<UIDataTypes, UITools>>;
+// Reasoning part component for AI messages
+interface ReasoningPartProps {
+  text: string;
 }
 
-function Message({ role, parts }: MessageProps) {
-  const isUser = role === "user";
-
-  // User messages: right-aligned with bubble, no avatar needed
-  if (isUser) {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] space-y-2">
-          {parts.map((part, index) => {
-            if (part.type === "text") {
-              return (
-                <div
-                  key={index}
-                  className="rounded-2xl bg-primary text-primary-foreground px-4 py-3"
-                >
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed">{part.text}</p>
-                </div>
-              );
-            }
-
-            if (part.type === "file") {
-              // Render images inline
-              if (part.mediaType?.startsWith("image/")) {
-                return (
-                  <img
-                    key={index}
-                    src={part.url}
-                    alt={part.filename || "Attached image"}
-                    className="max-w-full rounded-lg"
-                  />
-                );
-              }
-
-              // Render PDF and other files with icon
-              return (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 rounded-lg border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-2"
-                >
-                  <FileIcon className="size-4" />
-                  <span className="truncate text-sm">
-                    {part.filename || "Attached file"}
-                  </span>
-                </div>
-              );
-            }
-
-            return null;
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // AI messages: left-aligned, no avatar, just clean prose
+function ReasoningPart({ text }: ReasoningPartProps) {
   return (
-    <div className="max-w-none">
-      <div className="space-y-3">
-        {parts.map((part, index) => {
-          if (part.type === "text") {
-            // AI: Clean prose with streaming markdown via Streamdown
-            return (
-              <div
-                key={index}
-                className={cn(
-                  "prose dark:prose-invert max-w-none",
-                  // Typography improvements
-                  "prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-foreground/90",
-                  "prose-headings:text-foreground prose-headings:font-semibold",
-                  "prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-3",
-                  "prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2",
-                  "prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2",
-                  // Lists
-                  "prose-li:text-[15px] prose-li:leading-relaxed prose-li:text-foreground/90",
-                  "prose-ul:my-3 prose-ol:my-3",
-                  // Code blocks
-                  "prose-code:text-sm prose-code:font-medium prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
-                  "prose-pre:bg-muted prose-pre:border prose-pre:border-border/50 prose-pre:rounded-lg prose-pre:my-4",
-                  // Links
-                  "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
-                  // Blockquotes
-                  "prose-blockquote:border-l-primary prose-blockquote:text-foreground/80 prose-blockquote:not-italic",
-                  // Horizontal rules
-                  "prose-hr:border-border/50 prose-hr:my-6",
-                  // Strong/bold
-                  "prose-strong:text-foreground prose-strong:font-semibold"
-                )}
-              >
-                <Streamdown>{part.text || ""}</Streamdown>
-              </div>
-            );
-          }
-
-          if (part.type === "reasoning") {
-            return (
-              <details
-                key={index}
-                className="group overflow-hidden rounded-xl border border-border/50 bg-muted/30"
-              >
-                <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50">
-                  <span className="text-base">💭</span>
-                  <span className="font-medium">Thinking...</span>
-                  <span className="ml-auto hidden text-xs opacity-70 group-open:inline">
-                    Click to collapse
-                  </span>
-                  <span className="ml-auto text-xs opacity-70 group-open:hidden">
-                    Click to expand
-                  </span>
-                </summary>
-                <div className="border-t border-border/30 px-4 py-3">
-                  <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
-                    {part.text}
-                  </pre>
-                </div>
-              </details>
-            );
-          }
-
-          if (part.type === "file") {
-            // Render images inline
-            if (part.mediaType?.startsWith("image/")) {
-              return (
-                <img
-                  key={index}
-                  src={part.url}
-                  alt={part.filename || "Attached image"}
-                  className="max-w-full rounded-lg"
-                />
-              );
-            }
-
-            // Render PDF and other files with icon (AI message style)
-            return (
-              <div
-                key={index}
-                className="flex items-center gap-2 rounded-lg border border-border bg-background/50 px-3 py-2"
-              >
-                <FileIcon className="size-4" />
-                <span className="truncate text-sm">
-                  {part.filename || "Attached file"}
-                </span>
-              </div>
-            );
-          }
-
-          return null;
-        })}
+    <details className="group overflow-hidden rounded-xl border border-border/50 bg-muted/30">
+      <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50">
+        <span className="text-base">Thinking...</span>
+        <span className="ml-auto hidden text-xs opacity-70 group-open:inline">
+          Click to collapse
+        </span>
+        <span className="ml-auto text-xs opacity-70 group-open:hidden">
+          Click to expand
+        </span>
+      </summary>
+      <div className="border-t border-border/30 px-4 py-3">
+        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-muted-foreground">
+          {text}
+        </pre>
       </div>
-    </div>
+    </details>
   );
+}
+
+// Auto-scroll component - scrolls to bottom when messages change
+function AutoScroll({ messageCount }: { messageCount: number }) {
+  const { scrollToBottom, isAtBottom } = useConversationScroll();
+  const prevCountRef = useRef(messageCount);
+  const initialScrollDone = useRef(false);
+
+  useEffect(() => {
+    // Scroll to bottom on initial load (when we have messages)
+    if (messageCount > 0 && !initialScrollDone.current) {
+      // Use setTimeout to ensure DOM is rendered
+      setTimeout(() => {
+        scrollToBottom();
+        initialScrollDone.current = true;
+      }, 0);
+    }
+    // Also scroll when new messages are added and user was at bottom
+    else if (messageCount > prevCountRef.current && isAtBottom) {
+      scrollToBottom();
+    }
+    prevCountRef.current = messageCount;
+  }, [messageCount, scrollToBottom, isAtBottom]);
+
+  return null;
 }
 
 // Loading indicator for streaming (no avatar)
@@ -241,23 +144,6 @@ function MessagesSkeleton() {
   );
 }
 
-// Empty state
-function EmptyState() {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg">
-        <SparklesIcon className="size-7" />
-      </div>
-      <div>
-        <h2 className="text-lg font-semibold">Start a conversation</h2>
-        <p className="text-sm text-muted-foreground">
-          Ask me anything - I'm here to help.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 // Error display
 function ErrorDisplay({
   error,
@@ -280,7 +166,17 @@ function ErrorDisplay({
   );
 }
 
-// Connected Model Selector using AI Elements
+// Map provider names to logo IDs for models.dev SVG logos
+const PROVIDER_LOGO_MAP: Record<string, string> = {
+  OpenAI: "openai",
+  Anthropic: "anthropic",
+  Google: "google",
+  DeepSeek: "deepseek",
+  Meta: "llama",
+  xAI: "xai",
+};
+
+// Connected Model Selector - Uses AI Elements pattern with SVG logos
 interface ConnectedModelSelectorProps {
   disabled?: boolean;
 }
@@ -292,82 +188,250 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
   const selectedModel = models.find((m: Model) => m.id === selectedModelId);
 
   // Group models by provider
-  const groupedModels = models.reduce(
-    (acc: Record<string, Model[]>, model: Model) => {
-      const provider = model.provider;
-      if (!acc[provider]) {
-        acc[provider] = [];
-      }
-      acc[provider].push(model);
-      return acc;
-    },
-    {} as Record<string, Model[]>
-  );
-
-  // Map provider names to logo IDs
-  const providerLogoMap: Record<string, string> = {
-    OpenAI: "openai",
-    Anthropic: "anthropic",
-    Google: "google",
-    DeepSeek: "deepseek",
-    Meta: "llama",
-    xAI: "xai",
-  };
+  const providers = Array.from(new Set(models.map((m: Model) => m.provider)));
 
   return (
     <ModelSelector open={open} onOpenChange={setOpen}>
       <ModelSelectorTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            className="gap-2 text-muted-foreground"
-          />
-        }
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-2",
+          "h-8 px-3 rounded-full",
+          "text-sm text-muted-foreground",
+          "bg-muted/50 hover:bg-muted hover:text-foreground",
+          "border border-border/50",
+          "transition-all duration-150",
+          "disabled:opacity-50 disabled:cursor-not-allowed"
+        )}
       >
         {selectedModel && (
-          <ModelSelectorLogoGroup>
-            <ModelSelectorLogo
-              provider={providerLogoMap[selectedModel.provider] || "openrouter"}
-            />
-          </ModelSelectorLogoGroup>
+          <ModelSelectorLogo
+            provider={PROVIDER_LOGO_MAP[selectedModel.provider] || "openrouter"}
+          />
         )}
-        <span className="truncate">{selectedModel?.name || "Select model"}</span>
-        <ChevronDownIcon className="size-4 opacity-50" />
+        <span className="truncate max-w-[140px]">
+          {selectedModel?.name || "Select model"}
+        </span>
+        <ChevronDownIcon className="size-3.5 opacity-50" />
       </ModelSelectorTrigger>
-      <ModelSelectorContent>
+      <ModelSelectorContent className="w-[420px]">
         <ModelSelectorInput placeholder="Search models..." />
         <ModelSelectorList>
           <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-          {Object.entries(groupedModels).map(([provider, providerModels]) => (
+          {providers.map((provider) => (
             <ModelSelectorGroup key={provider} heading={provider}>
-              {providerModels.map((model) => (
-                <ModelSelectorItem
-                  key={model.id}
-                  value={model.id}
-                  onSelect={() => {
-                    setSelectedModel(model.id);
-                    setOpen(false);
-                  }}
-                  className="gap-2"
-                >
-                  <ModelSelectorLogoGroup>
+              {models
+                .filter((m: Model) => m.provider === provider)
+                .map((model) => (
+                  <ModelSelectorItem
+                    key={model.id}
+                    value={model.id}
+                    onSelect={() => {
+                      setSelectedModel(model.id);
+                      setOpen(false);
+                    }}
+                  >
                     <ModelSelectorLogo
-                      provider={providerLogoMap[model.provider] || "openrouter"}
+                      provider={PROVIDER_LOGO_MAP[model.provider] || "openrouter"}
                     />
-                  </ModelSelectorLogoGroup>
-                  <ModelSelectorName>{model.name}</ModelSelectorName>
-                  {model.id === selectedModelId && (
-                    <CheckIcon className="ml-auto size-4" />
-                  )}
-                </ModelSelectorItem>
-              ))}
+                    <ModelSelectorName>{model.name}</ModelSelectorName>
+                    {model.id === selectedModelId ? (
+                      <CheckIcon className="ml-auto size-4" />
+                    ) : (
+                      <div className="ml-auto size-4" />
+                    )}
+                  </ModelSelectorItem>
+                ))}
             </ModelSelectorGroup>
           ))}
         </ModelSelectorList>
       </ModelSelectorContent>
     </ModelSelector>
+  );
+}
+
+// Pill Button Component for Search/Attach
+interface PillButtonProps {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  className?: string;
+}
+
+function PillButton({ icon, label, onClick, className }: PillButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-1.5",
+        "h-8 px-3 rounded-full",
+        "text-sm text-muted-foreground",
+        "bg-muted/50 hover:bg-muted hover:text-foreground",
+        "border border-border/50",
+        "transition-all duration-150",
+        className
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+// Premium Send Button Component
+interface SendButtonProps {
+  isLoading: boolean;
+  hasContent: boolean;
+  onStop: () => void;
+}
+
+function SendButton({ isLoading, hasContent, onStop }: SendButtonProps) {
+  if (isLoading) {
+    return (
+      <button
+        type="button"
+        onClick={onStop}
+        className={cn(
+          "flex items-center justify-center",
+          "size-9 rounded-full",
+          "bg-foreground text-background",
+          "transition-all duration-150",
+          "hover:scale-105 active:scale-95"
+        )}
+        aria-label="Stop generating"
+      >
+        <SquareIcon className="size-4" />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="submit"
+      disabled={!hasContent}
+      className={cn(
+        "flex items-center justify-center",
+        "size-9 rounded-full",
+        "transition-all duration-150",
+        hasContent
+          ? "bg-primary text-primary-foreground hover:scale-105 active:scale-95"
+          : "bg-muted text-muted-foreground cursor-not-allowed"
+      )}
+      aria-label="Send message"
+    >
+      <ArrowUpIcon className="size-4" />
+    </button>
+  );
+}
+
+// Premium Prompt Input Component (wrapped)
+interface PremiumPromptInputProps {
+  onSubmit: (message: PromptInputMessage) => Promise<void>;
+  isLoading: boolean;
+  onStop: () => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+}
+
+function PremiumPromptInputInner({
+  onSubmit,
+  isLoading,
+  onStop,
+  textareaRef,
+}: PremiumPromptInputProps) {
+  const controller = usePromptInputController();
+  const hasContent = controller.textInput.value.trim().length > 0;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      controller.attachments.add(Array.from(files));
+    }
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  };
+
+  return (
+    <div
+      className={cn(
+        // Glass morphism container
+        "relative rounded-2xl",
+        "bg-background/90 backdrop-blur-xl",
+        "border border-border/40",
+        "shadow-lg shadow-black/5"
+      )}
+    >
+      <PromptInput
+        onSubmit={onSubmit}
+        accept="image/*,application/pdf"
+        multiple
+        className="gap-0 border-0 bg-transparent shadow-none"
+      >
+        {/* Attachments preview */}
+        <PromptInputAttachments>
+          {(attachment) => <PromptInputAttachment data={attachment} />}
+        </PromptInputAttachments>
+
+        {/* Textarea - taller for better UX */}
+        <PromptInputTextarea
+          ref={textareaRef}
+          placeholder="Type your message here..."
+          disabled={isLoading}
+          className={cn(
+            "min-h-[100px] py-4 px-4",
+            "text-[15px] leading-relaxed",
+            "placeholder:text-muted-foreground/50",
+            "resize-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0"
+          )}
+        />
+
+        {/* Hidden file input for Attach button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.json"
+          multiple
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* Footer - T3.chat inspired layout */}
+        <PromptInputFooter className="px-3 pb-3 pt-1">
+          {/* Left side: Model selector + Search + Attach pills */}
+          <PromptInputTools className="gap-2">
+            {/* Model selector dropdown */}
+            <ConnectedModelSelector disabled={isLoading} />
+
+            {/* Search pill */}
+            <PillButton
+              icon={<GlobeIcon className="size-4" />}
+              label="Search"
+            />
+
+            {/* Attach pill */}
+            <PillButton
+              icon={<PaperclipIcon className="size-4" />}
+              label="Attach"
+              onClick={handleAttachClick}
+            />
+          </PromptInputTools>
+
+          {/* Right side: Send button */}
+          <PromptInputTools>
+            <SendButton
+              isLoading={isLoading}
+              hasContent={hasContent}
+              onStop={onStop}
+            />
+          </PromptInputTools>
+        </PromptInputFooter>
+      </PromptInput>
+    </div>
   );
 }
 
@@ -379,34 +443,25 @@ interface ChatInterfaceProps {
 // Main Chat Interface
 export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const navigate = useNavigate();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const {
-    messages,
-    sendMessage,
-    status,
-    error,
-    stop,
-    isLoadingMessages,
-  } = usePersistentChat({
-    chatId,
-    onChatCreated: (newChatId) => {
-      // Navigate to the new chat page
-      navigate({
-        to: "/c/$chatId",
-        params: { chatId: newChatId },
-        replace: true,
-      });
-    },
-  });
+  const { messages, sendMessage, status, error, stop, isLoadingMessages } =
+    usePersistentChat({
+      chatId,
+      onChatCreated: (newChatId) => {
+        // Navigate to the new chat page
+        navigate({
+          to: "/c/$chatId",
+          params: { chatId: newChatId },
+          replace: true,
+        });
+      },
+    });
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  // Note: use-stick-to-bottom handles auto-scroll, no manual scroll needed
 
   // Handle submit from PromptInput
   const handleSubmit = useCallback(
@@ -420,6 +475,9 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
     },
     [sendMessage]
   );
+
+  // Note: handlePromptSelect is handled in ChatInterfaceContent
+  // because it needs access to the PromptInputProvider context
 
   // Show loading state while fetching messages for existing chat
   if (isLoadingMessages) {
@@ -435,20 +493,129 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   }
 
   return (
+    <PromptInputProvider>
+      <ChatInterfaceContent
+        messages={messages}
+        isLoading={isLoading}
+        error={error ?? null}
+        stop={stop}
+        handleSubmit={handleSubmit}
+        textareaRef={textareaRef}
+      />
+    </PromptInputProvider>
+  );
+}
+
+// Inner content component that has access to PromptInputProvider context
+interface ChatInterfaceContentProps {
+  messages: Array<{
+    id: string;
+    role: string;
+    parts?: Array<UIMessagePart<UIDataTypes, UITools>>;
+  }>;
+  isLoading: boolean;
+  error: Error | null;
+  stop: () => void;
+  handleSubmit: (message: PromptInputMessage) => Promise<void>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+}
+
+function ChatInterfaceContent({
+  messages,
+  isLoading,
+  error,
+  stop,
+  handleSubmit,
+  textareaRef,
+}: ChatInterfaceContentProps) {
+  const controller = usePromptInputController();
+
+  // Cmd+L / Ctrl+L keybind to toggle focus on prompt input
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+L (Mac) or Ctrl+L (Windows/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "l") {
+        e.preventDefault();
+
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        // Toggle: if textarea is focused (or contains focus), blur; otherwise focus
+        const isTextareaFocused = document.activeElement === textarea ||
+          textarea.contains(document.activeElement as Node);
+
+        if (isTextareaFocused) {
+          textarea.blur();
+          // Also blur the document to ensure we're not stuck in the input
+          (document.activeElement as HTMLElement)?.blur?.();
+        } else {
+          textarea.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [textareaRef]);
+
+  // Handler for StartScreen prompt selection - populates input and focuses
+  const onPromptSelect = useCallback(
+    (prompt: string) => {
+      controller.textInput.setInput(prompt);
+      // Focus the textarea after setting the value
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 0);
+    },
+    [controller.textInput, textareaRef]
+  );
+
+  return (
     <div className="flex h-full flex-col">
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+      {/* Messages area - using AI Elements Conversation */}
+      <Conversation className="flex-1 px-4">
+        <AutoScroll messageCount={messages.length} />
+        <ConversationContent className="mx-auto max-w-3xl py-6">
           {messages.length === 0 ? (
-            <EmptyState />
+            <StartScreen onPromptSelect={onPromptSelect} />
           ) : (
             <>
-              {messages.map((message, idx) => (
+              {messages.map((message) => (
                 <Message
                   key={message.id}
-                  role={message.role as "user" | "assistant"}
-                  parts={message.parts || []}
-                />
+                  from={message.role as "user" | "assistant"}
+                >
+                  <MessageContent>
+                    {(message.parts || []).map((part, index) => {
+                      if (part.type === "text") {
+                        return (
+                          <MessageResponse key={index}>
+                            {part.text || ""}
+                          </MessageResponse>
+                        );
+                      }
+
+                      if (part.type === "reasoning") {
+                        return (
+                          <ReasoningPart key={index} text={part.text || ""} />
+                        );
+                      }
+
+                      if (part.type === "file") {
+                        return (
+                          <MessageFile
+                            key={index}
+                            filename={part.filename}
+                            url={part.url}
+                            mediaType={part.mediaType}
+                          />
+                        );
+                      }
+
+                      return null;
+                    })}
+                  </MessageContent>
+                </Message>
               ))}
               {isLoading && messages[messages.length - 1]?.role === "user" && (
                 <LoadingIndicator />
@@ -456,69 +623,19 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
               {error && <ErrorDisplay error={error} />}
             </>
           )}
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
 
-      {/* Input area */}
-      <div className="border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-3xl px-4 py-4">
-          <PromptInput
+      {/* Premium Input area - fixed to bottom */}
+      <div className="px-4 pb-4 pt-2">
+        <div className="mx-auto max-w-3xl">
+          <PremiumPromptInputInner
             onSubmit={handleSubmit}
-            accept="image/*,application/pdf"
-            multiple
-            className="gap-0"
-          >
-            {/* Attachments preview */}
-            <PromptInputAttachments>
-              {(attachment) => <PromptInputAttachment data={attachment} />}
-            </PromptInputAttachments>
-
-            {/* Textarea */}
-            <PromptInputTextarea
-              placeholder="Type your message..."
-              disabled={isLoading}
-            />
-
-            {/* Footer with tools */}
-            <PromptInputFooter>
-              <PromptInputTools>
-                {/* Model selector */}
-                <ConnectedModelSelector disabled={isLoading} />
-
-                {/* Attachments menu */}
-                <PromptInputActionMenu>
-                  <PromptInputActionMenuTrigger />
-                  <PromptInputActionMenuContent>
-                    <PromptInputActionAddAttachments />
-                  </PromptInputActionMenuContent>
-                </PromptInputActionMenu>
-              </PromptInputTools>
-
-              <PromptInputTools>
-                {/* Stop button when loading */}
-                {isLoading && (
-                  <PromptInputButton onClick={stop}>Stop</PromptInputButton>
-                )}
-
-                {/* Submit button */}
-                <PromptInputSubmit status={status} disabled={isLoading} />
-              </PromptInputTools>
-            </PromptInputFooter>
-          </PromptInput>
-
-          {/* Keyboard hint */}
-          <div className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <kbd className="inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px]">
-              Enter
-            </kbd>
-            <span>to send</span>
-            <span className="text-border">|</span>
-            <kbd className="inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px]">
-              Shift + Enter
-            </kbd>
-            <span>for new line</span>
-          </div>
+            isLoading={isLoading}
+            onStop={stop}
+            textareaRef={textareaRef}
+          />
         </div>
       </div>
     </div>

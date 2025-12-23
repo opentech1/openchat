@@ -97,7 +97,7 @@ function OpenRouterCallbackPage() {
   // Show loading state during SSR and initial mount
   if (!mounted) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>OpenRouter</CardTitle>
@@ -114,7 +114,7 @@ function OpenRouterCallbackPage() {
   // Processing state
   if (status === "processing") {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle>Connecting to OpenRouter</CardTitle>
@@ -133,7 +133,7 @@ function OpenRouterCallbackPage() {
   // Success state
   if (status === "success") {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex h-full items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-green-600 dark:text-green-400">
@@ -155,7 +155,7 @@ function OpenRouterCallbackPage() {
   const displayError = error || "An unexpected error occurred.";
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex h-full items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-destructive">Connection Failed</CardTitle>

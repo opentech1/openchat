@@ -16,8 +16,17 @@ import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { decrementStat, getStats, STAT_KEYS } from "./lib/dbStats";
+import { internal } from "./_generated/api";
 
 const crons = cronJobs();
+
+// Daily sync of AI models from OpenRouter API
+// Runs at 3 AM UTC to refresh the model catalog
+crons.daily(
+	"sync-openrouter-models",
+	{ hourUTC: 3, minuteUTC: 0 },
+	internal.models.syncModelsFromOpenRouter
+);
 
 export default crons;
 

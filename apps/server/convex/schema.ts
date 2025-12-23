@@ -196,4 +196,57 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId"])
 		.index("by_user_chat", ["userId", "chatId"]),
+
+	// AI Models - cached from OpenRouter API
+	// Synced daily via cron job to keep models fresh
+	aiModels: defineTable({
+		// Model identifier from OpenRouter (e.g., "anthropic/claude-sonnet-4")
+		openRouterId: v.string(),
+		// Display name (e.g., "Claude Sonnet 4")
+		name: v.string(),
+		// Provider extracted from openRouterId (e.g., "anthropic")
+		provider: v.string(),
+		// Context window size
+		contextLength: v.number(),
+		// Max output tokens (optional, not all models specify)
+		maxOutputLength: v.optional(v.number()),
+		// Input capabilities: ["text"], ["text", "image"], ["text", "image", "file"]
+		inputModalities: v.array(v.string()),
+		// Output capabilities: ["text"], ["text", "image"]
+		outputModalities: v.array(v.string()),
+		// Supported features: ["reasoning", "tools", "web_search", "json_mode"]
+		supportedFeatures: v.array(v.string()),
+		// Pricing per token (stored as strings to avoid float precision issues)
+		pricingPrompt: v.optional(v.string()),
+		pricingCompletion: v.optional(v.string()),
+		// Curation flags
+		isFeatured: v.boolean(), // Show in default list (~15-20 curated models)
+		isLegacy: v.boolean(), // Hide unless explicitly searched
+		featuredOrder: v.optional(v.number()), // Sort order for featured models
+		// Optional metadata
+		description: v.optional(v.string()),
+		// Timestamps
+		lastSyncedAt: v.number(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+	})
+		.index("by_openrouter_id", ["openRouterId"])
+		.index("by_featured", ["isFeatured", "featuredOrder"])
+		.index("by_provider", ["provider", "isFeatured"])
+		.index("by_legacy", ["isLegacy"])
+		.searchIndex("search_models", {
+			searchField: "name",
+			filterFields: ["provider", "isFeatured", "isLegacy"],
+		}),
+
+	// User model favorites - tracks which models users have favorited
+	// Unlimited favorites per user, synced across devices
+	userModelFavorites: defineTable({
+		userId: v.id("users"),
+		// OpenRouter model ID (not Convex ID for flexibility)
+		modelId: v.string(),
+		addedAt: v.number(),
+	})
+		.index("by_user", ["userId", "addedAt"])
+		.index("by_user_model", ["userId", "modelId"]),
 });

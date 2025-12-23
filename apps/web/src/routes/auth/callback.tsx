@@ -45,7 +45,7 @@ function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-destructive">{error}</p>
           <button
@@ -60,7 +60,7 @@ function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex h-full items-center justify-center">
       <div className="text-center">
         <div className="animate-pulse text-muted-foreground">
           Completing sign in...

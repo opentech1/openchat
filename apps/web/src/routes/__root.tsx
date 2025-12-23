@@ -94,11 +94,11 @@ function AppShell() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="h-full">
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background antialiased">
+      <body className="h-full overflow-hidden bg-background antialiased">
         {children}
         <Scripts />
       </body>

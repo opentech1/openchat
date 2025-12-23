@@ -25,6 +25,7 @@ import type * as lib_redisRest from "../lib/redisRest.js";
 import type * as lib_sanitize from "../lib/sanitize.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
+import type * as models from "../models.js";
 import type * as previewSeed from "../previewSeed.js";
 import type * as promptTemplates from "../promptTemplates.js";
 import type * as search from "../search.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "lib/sanitize": typeof lib_sanitize;
   messages: typeof messages;
   migrations: typeof migrations;
+  models: typeof models;
   previewSeed: typeof previewSeed;
   promptTemplates: typeof promptTemplates;
   search: typeof search;

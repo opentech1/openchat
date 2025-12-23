@@ -417,6 +417,82 @@ export const PromptInputActionAddAttachments = ({
   );
 };
 
+/**
+ * Direct attachment button - triggers file input without dropdown menu
+ * Use this for always-visible attachment buttons in the prompt input footer
+ */
+export type PromptInputAttachmentButtonProps = ComponentProps<
+  typeof InputGroupButton
+> & {
+  /** File types to accept (e.g., "image/*", "application/pdf") */
+  accept?: string;
+  /** Allow multiple file selection */
+  multiple?: boolean;
+  /** Icon to display (defaults to ImageIcon for images, PaperclipIcon otherwise) */
+  icon?: ReactNode;
+  /** Accessible label */
+  label?: string;
+};
+
+export const PromptInputAttachmentButton = ({
+  accept = "image/*",
+  multiple = true,
+  icon,
+  label,
+  className,
+  ...props
+}: PromptInputAttachmentButtonProps) => {
+  const attachments = usePromptInputAttachments();
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const isImageOnly = accept.includes("image/") && !accept.includes("application/");
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      attachments.add(e.target.files);
+    }
+    // Reset input value to allow selecting the same file again
+    e.target.value = "";
+  };
+
+  const defaultIcon = isImageOnly ? (
+    <ImageIcon className="size-4" />
+  ) : (
+    <PaperclipIcon className="size-4" />
+  );
+
+  const accessibleLabel = label ?? (isImageOnly ? "Add image" : "Add file");
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        onChange={handleChange}
+        className="hidden"
+        aria-label={accessibleLabel}
+      />
+      <InputGroupButton
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={handleClick}
+        className={cn("text-muted-foreground hover:text-foreground", className)}
+        aria-label={accessibleLabel}
+        {...props}
+      >
+        {icon ?? defaultIcon}
+      </InputGroupButton>
+    </>
+  );
+};
+
 export type PromptInputMessage = {
   text: string;
   files: FileUIPart[];
