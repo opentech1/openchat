@@ -575,7 +575,7 @@ function ChatInterfaceContent({
       {/* Messages area - using AI Elements Conversation */}
       <Conversation className="flex-1 px-4">
         <AutoScroll messageCount={messages.length} />
-        <ConversationContent className="mx-auto max-w-3xl py-6">
+        <ConversationContent className="mx-auto max-w-3xl pt-6 pb-16">
           {messages.length === 0 ? (
             <StartScreen onPromptSelect={onPromptSelect} />
           ) : (
@@ -628,7 +628,7 @@ function ChatInterfaceContent({
       </Conversation>
 
       {/* Premium Input area - fixed to bottom */}
-      <div className="px-4 pb-4 pt-2">
+      <div className="px-4 pb-4 pt-4">
         <div className="mx-auto max-w-3xl">
           <PremiumPromptInputInner
             onSubmit={handleSubmit}
