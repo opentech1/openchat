@@ -575,7 +575,7 @@ function ChatInterfaceContent({
       {/* Messages area - using AI Elements Conversation */}
       <Conversation className="flex-1 px-4">
         <AutoScroll messageCount={messages.length} />
-        <ConversationContent className="mx-auto max-w-3xl pt-6 pb-16">
+        <ConversationContent className="mx-auto max-w-3xl pt-6 pb-16 px-4">
           {messages.length === 0 ? (
             <StartScreen onPromptSelect={onPromptSelect} />
           ) : (
