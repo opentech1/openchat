@@ -61,8 +61,9 @@ export const Message = ({
       >
         <div
           className={cn(
-            "max-w-[85%]",
-            isUser && "flex flex-col items-end"
+            // User messages: constrained width, right-aligned
+            // Assistant messages: full width for proper text alignment
+            isUser ? "max-w-[85%] flex flex-col items-end" : "w-full"
           )}
         >
           {children}
