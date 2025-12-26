@@ -61,8 +61,12 @@ export const Conversation = ({
   const [isAtBottom, setIsAtBottom] = useState(true);
 
   const scrollToBottom = useCallback(() => {
-    // Use anchor element for smoother scroll
-    anchorRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+    // Try anchor element first, fallback to direct scroll
+    if (anchorRef.current) {
+      anchorRef.current.scrollIntoView({ behavior: "instant", block: "end" });
+    } else if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, []);
 
   // Track scroll position

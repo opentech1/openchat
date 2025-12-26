@@ -99,15 +99,22 @@ function AutoScroll({ messageCount }: { messageCount: number }) {
   useEffect(() => {
     // Scroll to bottom on initial load (when we have messages)
     if (messageCount > 0 && !initialScrollDone.current) {
-      // Use setTimeout to ensure DOM is rendered
-      setTimeout(() => {
+      initialScrollDone.current = true;
+      // Multiple scroll attempts to handle layout shifts
+      // First: immediate scroll after paint
+      requestAnimationFrame(() => {
         scrollToBottom();
-        initialScrollDone.current = true;
-      }, 0);
+        // Second: delayed scroll for async content (images, markdown)
+        setTimeout(() => {
+          scrollToBottom();
+        }, 100);
+      });
     }
     // Also scroll when new messages are added and user was at bottom
     else if (messageCount > prevCountRef.current && isAtBottom) {
-      scrollToBottom();
+      requestAnimationFrame(() => {
+        scrollToBottom();
+      });
     }
     prevCountRef.current = messageCount;
   }, [messageCount, scrollToBottom, isAtBottom]);
