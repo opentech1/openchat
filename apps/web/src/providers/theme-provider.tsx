@@ -5,7 +5,7 @@
  * This provider just manages the React state for theme switching.
  */
 
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "dark" | "light" | "system";
 

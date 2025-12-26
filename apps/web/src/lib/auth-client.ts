@@ -69,19 +69,11 @@ export const authClient = createAuthClient({
   ],
 });
 
-// Session fetch options - disable ALL refetch behaviors to prevent tab-switch queries
-const sessionOptions = {
-  refetchOnWindowFocus: false,
-  refetchOnMount: false,
-  refetchOnReconnect: false,
-  staleTime: Infinity,
-};
-
 /**
  * Hook to get current session
  */
 export function useSession() {
-  const { data: session, isPending } = authClient.useSession(sessionOptions);
+  const { data: session, isPending } = authClient.useSession();
 
   return {
     data: session?.user
@@ -103,7 +95,7 @@ export function useSession() {
  * Hook for auth state
  */
 export function useAuth() {
-  const { data: session, isPending } = authClient.useSession(sessionOptions);
+  const { data: session, isPending } = authClient.useSession();
 
   return {
     user: session?.user ?? null,

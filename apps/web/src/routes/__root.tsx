@@ -5,6 +5,17 @@ import {
   createRootRoute,
 } from "@tanstack/react-router";
 import { Providers } from "../providers";
+import {
+  CommandPalette,
+  useCommandPaletteShortcut,
+} from "../components/command-palette";
+import {
+  SidebarProvider,
+  SidebarInset,
+  useSidebarShortcut,
+} from "../components/ui/sidebar";
+import { AppSidebar } from "../components/app-sidebar";
+import { useAuth } from "../lib/auth-client";
 
 import appCss from "../styles.css?url";
 
@@ -42,19 +53,52 @@ function RootComponent() {
   return (
     <RootDocument>
       <Providers>
-        <Outlet />
+        <AppShell />
       </Providers>
     </RootDocument>
   );
 }
 
+function AppShell() {
+  // Register global keyboard shortcuts
+  useCommandPaletteShortcut();
+  useSidebarShortcut();
+
+  const { isAuthenticated } = useAuth();
+
+  // Show sidebar for authenticated users (regardless of OpenRouter status)
+  // Pages will show "Connect OpenRouter" CTA when needed
+  if (!isAuthenticated) {
+    // No sidebar layout for unauthenticated users
+    return (
+      <>
+        <Outlet />
+        <CommandPalette />
+      </>
+    );
+  }
+
+  // Full sidebar layout for authenticated users
+  return (
+    <SidebarProvider>
+      <div className="flex h-screen w-full">
+        <AppSidebar />
+        <SidebarInset>
+          <Outlet />
+        </SidebarInset>
+      </div>
+      <CommandPalette />
+    </SidebarProvider>
+  );
+}
+
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="h-full">
       <head>
         <HeadContent />
       </head>
-      <body className="min-h-screen bg-background antialiased">
+      <body className="h-full overflow-hidden bg-background antialiased">
         {children}
         <Scripts />
       </body>

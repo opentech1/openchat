@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth-client";
 
@@ -45,7 +45,7 @@ function AuthCallbackPage() {
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-destructive">{error}</p>
           <button
@@ -60,7 +60,7 @@ function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
+    <div className="flex h-full items-center justify-center">
       <div className="text-center">
         <div className="animate-pulse text-muted-foreground">
           Completing sign in...
