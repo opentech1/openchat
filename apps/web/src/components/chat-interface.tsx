@@ -133,6 +133,24 @@ function LoadingIndicator() {
   );
 }
 
+// Minimal skeleton for loading messages (shown inside conversation area)
+function MessagesLoadingSkeleton() {
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* User message skeleton - right aligned */}
+      <div className="flex justify-end">
+        <div className="h-12 w-48 rounded-2xl bg-muted/50 animate-pulse" />
+      </div>
+      {/* Assistant message skeleton - left aligned */}
+      <div className="space-y-2">
+        <div className="h-4 w-3/4 rounded bg-muted/50 animate-pulse" />
+        <div className="h-4 w-1/2 rounded bg-muted/50 animate-pulse" />
+        <div className="h-4 w-2/3 rounded bg-muted/50 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 // Error display
 function ErrorDisplay({
   error,
@@ -435,7 +453,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const { messages, sendMessage, status, error, stop } =
+  const { messages, sendMessage, status, error, stop, isLoadingMessages } =
     usePersistentChat({
       chatId,
       onChatCreated: (newChatId) => {
@@ -475,6 +493,8 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
       <ChatInterfaceContent
         messages={messages}
         isLoading={isLoading}
+        isLoadingMessages={isLoadingMessages}
+        chatId={chatId}
         error={error ?? null}
         stop={stop}
         handleSubmit={handleSubmit}
@@ -492,6 +512,8 @@ interface ChatInterfaceContentProps {
     parts?: Array<UIMessagePart<UIDataTypes, UITools>>;
   }>;
   isLoading: boolean;
+  isLoadingMessages: boolean;
+  chatId?: string;
   error: Error | null;
   stop: () => void;
   handleSubmit: (message: PromptInputMessage) => Promise<void>;
@@ -501,6 +523,8 @@ interface ChatInterfaceContentProps {
 function ChatInterfaceContent({
   messages,
   isLoading,
+  isLoadingMessages,
+  chatId,
   error,
   stop,
   handleSubmit,
@@ -554,8 +578,13 @@ function ChatInterfaceContent({
       <Conversation className="flex-1 px-4">
         <AutoScroll messageCount={messages.length} />
         <ConversationContent className="mx-auto max-w-3xl pt-6 pb-16 px-4">
+          {/* Smart loading: skeleton for existing chats, StartScreen for new */}
           {messages.length === 0 ? (
-            <StartScreen onPromptSelect={onPromptSelect} />
+            chatId && isLoadingMessages ? (
+              <MessagesLoadingSkeleton />
+            ) : (
+              <StartScreen onPromptSelect={onPromptSelect} />
+            )
           ) : (
             <>
               {messages.map((message) => (
