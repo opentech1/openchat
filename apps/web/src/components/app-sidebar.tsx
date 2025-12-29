@@ -153,7 +153,8 @@ export function AppSidebar() {
   );
 
   const chats = chatsResult?.chats ?? [];
-  const isLoadingChats = convexUser !== undefined && chatsResult === undefined;
+  // Show loading while user OR chats are loading (prevents flash of "No chats yet")
+  const isLoadingChats = user?.id ? (convexUser === undefined || chatsResult === undefined) : false;
   const grouped = groupChatsByTime(chats as unknown as ChatItem[]);
 
   const handleNewChat = () => {
