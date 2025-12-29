@@ -133,24 +133,6 @@ function LoadingIndicator() {
   );
 }
 
-// Skeleton loading for messages (no avatars)
-function MessagesSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* User message skeleton - right aligned */}
-      <div className="flex justify-end">
-        <div className="h-12 w-48 rounded-2xl bg-muted animate-pulse" />
-      </div>
-      {/* Assistant message skeleton - left aligned, no avatar */}
-      <div className="space-y-2">
-        <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
-        <div className="h-4 w-1/2 rounded bg-muted animate-pulse" />
-        <div className="h-4 w-2/3 rounded bg-muted animate-pulse" />
-      </div>
-    </div>
-  );
-}
-
 // Error display
 function ErrorDisplay({
   error,
@@ -453,7 +435,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const { messages, sendMessage, status, error, stop, isLoadingMessages } =
+  const { messages, sendMessage, status, error, stop } =
     usePersistentChat({
       chatId,
       onChatCreated: (newChatId) => {
@@ -486,19 +468,8 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   // Note: handlePromptSelect is handled in ChatInterfaceContent
   // because it needs access to the PromptInputProvider context
 
-  // Show loading state while fetching messages for existing chat
-  if (isLoadingMessages) {
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto max-w-3xl">
-            <MessagesSkeleton />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // Render immediately - messages will appear as they load from Convex
+  // This provides instant navigation feel instead of showing a loading skeleton
   return (
     <PromptInputProvider>
       <ChatInterfaceContent
