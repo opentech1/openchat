@@ -133,19 +133,28 @@ function LoadingIndicator() {
   );
 }
 
-// Minimal skeleton for loading messages (shown inside conversation area)
+// Realistic skeleton for loading messages (matches actual message styling exactly)
 function MessagesLoadingSkeleton() {
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
-      {/* User message skeleton - right aligned */}
-      <div className="flex justify-end">
-        <div className="h-12 w-48 rounded-2xl bg-muted/50 animate-pulse" />
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* User message skeleton - matches MessageResponse user: rounded-2xl bg-primary px-4 py-3 */}
+      <div className="flex w-full justify-end">
+        <div className="max-w-[85%] flex flex-col items-end">
+          <div className="space-y-2">
+            <div className="rounded-2xl bg-primary px-4 py-3 animate-pulse">
+              <div className="h-[21px] w-40 rounded bg-primary-foreground/20" />
+            </div>
+          </div>
+        </div>
       </div>
-      {/* Assistant message skeleton - left aligned */}
-      <div className="space-y-2">
-        <div className="h-4 w-3/4 rounded bg-muted/50 animate-pulse" />
-        <div className="h-4 w-1/2 rounded bg-muted/50 animate-pulse" />
-        <div className="h-4 w-2/3 rounded bg-muted/50 animate-pulse" />
+
+      {/* Assistant message skeleton - matches prose text: text-[15px] leading-relaxed text-foreground/90 */}
+      <div className="w-full">
+        <div className="space-y-2">
+          <div className="h-[21px] w-[92%] rounded bg-foreground/10 animate-pulse" />
+          <div className="h-[21px] w-[78%] rounded bg-foreground/10 animate-pulse [animation-delay:100ms]" />
+          <div className="h-[21px] w-[85%] rounded bg-foreground/10 animate-pulse [animation-delay:200ms]" />
+        </div>
       </div>
     </div>
   );
