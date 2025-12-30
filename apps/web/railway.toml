@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "bun install && bun run build"
+
+[deploy]
+startCommand = "node dist/server/server.js"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "always"
