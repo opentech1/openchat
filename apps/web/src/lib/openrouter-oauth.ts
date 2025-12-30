@@ -11,24 +11,24 @@
 // Constants
 // ============================================================================
 
-export const OPENROUTER_AUTH_URL = "https://openrouter.ai/auth";
-export const OPENROUTER_TOKEN_URL = "https://openrouter.ai/api/v1/auth/keys";
+export const OPENROUTER_AUTH_URL = 'https://openrouter.ai/auth'
+export const OPENROUTER_TOKEN_URL = 'https://openrouter.ai/api/v1/auth/keys'
 
 // Storage keys
-const STORAGE_KEY_VERIFIER = "openrouter_code_verifier";
-const STORAGE_KEY_STATE = "openrouter_oauth_state";
+const STORAGE_KEY_VERIFIER = 'openrouter_code_verifier'
+const STORAGE_KEY_STATE = 'openrouter_oauth_state'
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface OpenRouterTokenResponse {
-  key: string;
+  key: string
 }
 
 export interface OpenRouterErrorResponse {
-  error: string;
-  message?: string;
+  error: string
+  message?: string
 }
 
 // ============================================================================
@@ -42,9 +42,9 @@ export interface OpenRouterErrorResponse {
  * @returns A random code verifier string (64 characters)
  */
 export function generateCodeVerifier(): string {
-  const array = new Uint8Array(48);
-  crypto.getRandomValues(array);
-  return base64UrlEncode(array);
+  const array = new Uint8Array(48)
+  crypto.getRandomValues(array)
+  return base64UrlEncode(array)
 }
 
 /**
@@ -55,10 +55,10 @@ export function generateCodeVerifier(): string {
  * @returns The base64url-encoded SHA-256 hash of the verifier
  */
 export async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return base64UrlEncode(new Uint8Array(digest));
+  const encoder = new TextEncoder()
+  const data = encoder.encode(verifier)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return base64UrlEncode(new Uint8Array(digest))
 }
 
 /**
@@ -67,9 +67,9 @@ export async function generateCodeChallenge(verifier: string): Promise<string> {
  * @returns A random state string
  */
 export function generateState(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return base64UrlEncode(array);
+  const array = new Uint8Array(32)
+  crypto.getRandomValues(array)
+  return base64UrlEncode(array)
 }
 
 // ============================================================================
@@ -88,26 +88,26 @@ export function generateState(): string {
  */
 export async function initiateOAuthFlow(callbackUrl: string): Promise<void> {
   // Generate PKCE parameters
-  const codeVerifier = generateCodeVerifier();
-  const codeChallenge = await generateCodeChallenge(codeVerifier);
-  const state = generateState();
+  const codeVerifier = generateCodeVerifier()
+  const codeChallenge = await generateCodeChallenge(codeVerifier)
+  const state = generateState()
 
   // Store verifier and state for later verification
-  sessionStorage.setItem(STORAGE_KEY_VERIFIER, codeVerifier);
-  sessionStorage.setItem(STORAGE_KEY_STATE, state);
+  sessionStorage.setItem(STORAGE_KEY_VERIFIER, codeVerifier)
+  sessionStorage.setItem(STORAGE_KEY_STATE, state)
 
   // Build authorization URL
   const params = new URLSearchParams({
     callback_url: callbackUrl,
     code_challenge: codeChallenge,
-    code_challenge_method: "S256",
+    code_challenge_method: 'S256',
     state,
-  });
+  })
 
-  const authUrl = `${OPENROUTER_AUTH_URL}?${params.toString()}`;
+  const authUrl = `${OPENROUTER_AUTH_URL}?${params.toString()}`
 
   // Redirect to OpenRouter
-  window.location.href = authUrl;
+  window.location.href = authUrl
 }
 
 /**
@@ -116,7 +116,7 @@ export async function initiateOAuthFlow(callbackUrl: string): Promise<void> {
  * @returns The stored code verifier, or null if not found
  */
 export function getStoredCodeVerifier(): string | null {
-  return sessionStorage.getItem(STORAGE_KEY_VERIFIER);
+  return sessionStorage.getItem(STORAGE_KEY_VERIFIER)
 }
 
 /**
@@ -125,7 +125,7 @@ export function getStoredCodeVerifier(): string | null {
  * @returns The stored state, or null if not found
  */
 export function getStoredState(): string | null {
-  return sessionStorage.getItem(STORAGE_KEY_STATE);
+  return sessionStorage.getItem(STORAGE_KEY_STATE)
 }
 
 /**
@@ -133,8 +133,8 @@ export function getStoredState(): string | null {
  * Call this after successful token exchange.
  */
 export function clearOAuthStorage(): void {
-  sessionStorage.removeItem(STORAGE_KEY_VERIFIER);
-  sessionStorage.removeItem(STORAGE_KEY_STATE);
+  sessionStorage.removeItem(STORAGE_KEY_VERIFIER)
+  sessionStorage.removeItem(STORAGE_KEY_STATE)
 }
 
 /**
@@ -144,11 +144,11 @@ export function clearOAuthStorage(): void {
  * @returns True if the state matches, false otherwise
  */
 export function validateState(returnedState: string | null): boolean {
-  const storedState = getStoredState();
+  const storedState = getStoredState()
   if (!storedState || !returnedState) {
-    return false;
+    return false
   }
-  return storedState === returnedState;
+  return storedState === returnedState
 }
 
 /**
@@ -160,36 +160,36 @@ export function validateState(returnedState: string | null): boolean {
  */
 export async function exchangeCodeForKey(
   code: string,
-  codeVerifier: string
+  codeVerifier: string,
 ): Promise<string> {
   const response = await fetch(OPENROUTER_TOKEN_URL, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       code,
       code_verifier: codeVerifier,
-      code_challenge_method: "S256",
+      code_challenge_method: 'S256',
     }),
-  });
+  })
 
   if (!response.ok) {
     const errorData = (await response.json().catch(() => ({
-      error: "Unknown error",
-    }))) as OpenRouterErrorResponse;
+      error: 'Unknown error',
+    }))) as OpenRouterErrorResponse
     throw new Error(
-      errorData.message || errorData.error || `HTTP ${response.status}`
-    );
+      errorData.message || errorData.error || `HTTP ${response.status}`,
+    )
   }
 
-  const data = (await response.json()) as OpenRouterTokenResponse;
+  const data = (await response.json()) as OpenRouterTokenResponse
 
   if (!data.key) {
-    throw new Error("No API key returned from OpenRouter");
+    throw new Error('No API key returned from OpenRouter')
   }
 
-  return data.key;
+  return data.key
 }
 
 // ============================================================================
@@ -204,8 +204,8 @@ export async function exchangeCodeForKey(
  */
 function base64UrlEncode(buffer: Uint8Array): string {
   // Convert to base64
-  const base64 = btoa(String.fromCharCode(...buffer));
+  const base64 = btoa(String.fromCharCode(...buffer))
 
   // Convert to base64url (URL-safe)
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

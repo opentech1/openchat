@@ -10,35 +10,37 @@
  * the useChat hook on the new page uses id={chatId} from the start.
  */
 
-import { create } from "zustand";
+import { create } from 'zustand'
 
 interface PendingMessage {
-  chatId: string;
-  text: string;
-  files?: any[];
+  chatId: string
+  text: string
+  files?: any[]
 }
 
 interface PendingMessageStore {
-  pending: PendingMessage | null;
-  set: (message: PendingMessage) => void;
-  clear: () => void;
-  consume: (chatId: string) => PendingMessage | null;
+  pending: PendingMessage | null
+  set: (message: PendingMessage) => void
+  clear: () => void
+  consume: (chatId: string) => PendingMessage | null
 }
 
-export const usePendingMessageStore = create<PendingMessageStore>((set, get) => ({
-  pending: null,
+export const usePendingMessageStore = create<PendingMessageStore>(
+  (set, get) => ({
+    pending: null,
 
-  set: (message) => set({ pending: message }),
+    set: (message) => set({ pending: message }),
 
-  clear: () => set({ pending: null }),
+    clear: () => set({ pending: null }),
 
-  // Get and clear the pending message if it matches the chatId
-  consume: (chatId) => {
-    const { pending } = get();
-    if (pending && pending.chatId === chatId) {
-      set({ pending: null });
-      return pending;
-    }
-    return null;
-  },
-}));
+    // Get and clear the pending message if it matches the chatId
+    consume: (chatId) => {
+      const { pending } = get()
+      if (pending && pending.chatId === chatId) {
+        set({ pending: null })
+        return pending
+      }
+      return null
+    },
+  }),
+)

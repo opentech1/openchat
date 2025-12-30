@@ -2,12 +2,12 @@
  * App Providers - Clean provider composition
  */
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { Toaster } from "sonner";
-import { convexClient } from "../lib/convex";
-import { authClient } from "../lib/auth-client";
-import { ThemeProvider } from "./theme-provider";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
+import { Toaster } from 'sonner'
+import { convexClient } from '../lib/convex'
+import { authClient } from '../lib/auth-client'
+import { ThemeProvider } from './theme-provider'
 
 // Singleton query client - disable refetch on window focus to prevent tab-switch flashing
 const queryClient = new QueryClient({
@@ -19,10 +19,10 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
     },
   },
-});
+})
 
 interface ProvidersProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
 export function Providers({ children }: ProvidersProps) {
@@ -37,7 +37,7 @@ export function Providers({ children }: ProvidersProps) {
           <Toaster richColors position="bottom-right" theme="system" />
         </QueryClientProvider>
       </ThemeProvider>
-    );
+    )
   }
 
   return (
@@ -49,5 +49,5 @@ export function Providers({ children }: ProvidersProps) {
         </QueryClientProvider>
       </ThemeProvider>
     </ConvexBetterAuthProvider>
-  );
+  )
 }

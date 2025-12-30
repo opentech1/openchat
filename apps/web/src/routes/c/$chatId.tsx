@@ -5,21 +5,21 @@
  * Loads chat history and allows continuing the conversation.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
-import { useAuth } from "@/lib/auth-client";
-import { useOpenRouterKey } from "@/stores/openrouter";
-import { ChatInterface } from "@/components/chat-interface";
-import { Button } from "@/components/ui/button";
-import { Link } from "@tanstack/react-router";
+import { createFileRoute } from '@tanstack/react-router'
+import { useAuth } from '@/lib/auth-client'
+import { useOpenRouterKey } from '@/stores/openrouter'
+import { ChatInterface } from '@/components/chat-interface'
+import { Button } from '@/components/ui/button'
+import { Link } from '@tanstack/react-router'
 
-export const Route = createFileRoute("/c/$chatId")({
+export const Route = createFileRoute('/c/$chatId')({
   component: ChatPage,
-});
+})
 
 function ChatPage() {
-  const { chatId } = Route.useParams();
-  const { isAuthenticated, loading } = useAuth();
-  const { apiKey } = useOpenRouterKey();
+  const { chatId } = Route.useParams()
+  const { isAuthenticated, loading } = useAuth()
+  const { apiKey } = useOpenRouterKey()
 
   // Loading state
   if (loading) {
@@ -27,7 +27,7 @@ function ChatPage() {
       <div className="flex h-full items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
-    );
+    )
   }
 
   // Not authenticated
@@ -42,7 +42,7 @@ function ChatPage() {
           <Button>Sign In</Button>
         </Link>
       </div>
-    );
+    )
   }
 
   // No OpenRouter key
@@ -57,8 +57,8 @@ function ChatPage() {
           <Button>Go to Home</Button>
         </Link>
       </div>
-    );
+    )
   }
 
-  return <ChatInterface chatId={chatId} />;
+  return <ChatInterface chatId={chatId} />
 }

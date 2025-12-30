@@ -3,33 +3,33 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
-} from "@tanstack/react-router";
-import { Providers } from "../providers";
+} from '@tanstack/react-router'
+import { Providers } from '../providers'
 import {
   CommandPalette,
   useCommandPaletteShortcut,
-} from "../components/command-palette";
+} from '../components/command-palette'
 import {
   SidebarProvider,
   SidebarInset,
   useSidebarShortcut,
-} from "../components/ui/sidebar";
-import { AppSidebar } from "../components/app-sidebar";
-import { useAuth } from "../lib/auth-client";
+} from '../components/ui/sidebar'
+import { AppSidebar } from '../components/app-sidebar'
+import { useAuth } from '../lib/auth-client'
 
-import appCss from "../styles.css?url";
+import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OpenChat" },
-      { name: "description", content: "AI Chat powered by OpenRouter" },
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'OpenChat' },
+      { name: 'description', content: 'AI Chat powered by OpenRouter' },
     ],
     links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico" },
+      { rel: 'stylesheet', href: appCss },
+      { rel: 'icon', href: '/favicon.ico' },
     ],
     scripts: [
       // Inline script to prevent flash of wrong theme
@@ -47,7 +47,7 @@ export const Route = createRootRoute({
   }),
 
   component: RootComponent,
-});
+})
 
 function RootComponent() {
   return (
@@ -56,15 +56,15 @@ function RootComponent() {
         <AppShell />
       </Providers>
     </RootDocument>
-  );
+  )
 }
 
 function AppShell() {
   // Register global keyboard shortcuts
-  useCommandPaletteShortcut();
-  useSidebarShortcut();
+  useCommandPaletteShortcut()
+  useSidebarShortcut()
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth()
 
   // Show sidebar for authenticated users (regardless of OpenRouter status)
   // Pages will show "Connect OpenRouter" CTA when needed
@@ -75,7 +75,7 @@ function AppShell() {
         <Outlet />
         <CommandPalette />
       </>
-    );
+    )
   }
 
   // Full sidebar layout for authenticated users
@@ -89,7 +89,7 @@ function AppShell() {
       </div>
       <CommandPalette />
     </SidebarProvider>
-  );
+  )
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
@@ -103,5 +103,5 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
-  );
+  )
 }
