@@ -3,6 +3,9 @@ builder = "nixpacks"
 buildCommand = "cd apps/web && bun install && bun run build"
 watchPatterns = ["apps/web/**"]
 
+[build.nixpacks]
+NODE_VERSION = "20"
+
 [deploy]
 startCommand = "bun apps/web/.output/server/index.mjs"
 healthcheckPath = "/"
