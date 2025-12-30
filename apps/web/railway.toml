@@ -1,6 +1,6 @@
 [build]
 builder = "RAILPACK"
-buildCommand = "bun install && bun run build"
+buildCommand = "cd apps/web && bun run build"
 watchPatterns = ["apps/web/**"]
 
 [deploy]
