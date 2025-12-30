@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd apps/web && bun install && bun run build"
+watchPatterns = ["apps/web/**"]
+
+[deploy]
+startCommand = "bun apps/web/.output/server/index.mjs"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "always"
