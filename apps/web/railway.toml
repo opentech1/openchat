@@ -1,10 +1,7 @@
 [build]
-builder = "nixpacks"
+builder = "RAILPACK"
 buildCommand = "bun install && bun run build"
 watchPatterns = ["apps/web/**"]
-
-[build.nixpacks]
-nixPkgs = ["nodejs_20", "bun"]
 
 [deploy]
 startCommand = "bun .output/server/index.mjs"
