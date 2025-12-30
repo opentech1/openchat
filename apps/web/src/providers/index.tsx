@@ -8,6 +8,7 @@ import { Toaster } from 'sonner'
 import { convexClient } from '../lib/convex'
 import { authClient } from '../lib/auth-client'
 import { ThemeProvider } from './theme-provider'
+import { PostHogProvider } from './posthog'
 
 // Singleton query client - disable refetch on window focus to prevent tab-switch flashing
 const queryClient = new QueryClient({
@@ -31,23 +32,27 @@ export function Providers({ children }: ProvidersProps) {
   if (!convexClient) {
     // Server-side or missing env - render without Convex
     return (
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toaster richColors position="bottom-right" theme="system" />
-        </QueryClientProvider>
-      </ThemeProvider>
+      <PostHogProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toaster richColors position="bottom-right" theme="system" />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </PostHogProvider>
     )
   }
 
   return (
-    <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toaster richColors position="bottom-right" theme="system" />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </ConvexBetterAuthProvider>
+    <PostHogProvider>
+      <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toaster richColors position="bottom-right" theme="system" />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </ConvexBetterAuthProvider>
+    </PostHogProvider>
   )
 }

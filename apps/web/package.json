@@ -37,6 +37,7 @@
     "lucide-react": "^0.562.0",
     "nanoid": "^5.1.6",
     "nitro": "^3.0.1-alpha.1",
+    "posthog-js": "^1.311.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server": "workspace:*",

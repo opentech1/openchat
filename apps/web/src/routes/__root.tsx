@@ -3,6 +3,7 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  useRouterState,
 } from '@tanstack/react-router'
 import { Providers } from '../providers'
 import {
@@ -16,6 +17,7 @@ import {
 } from '../components/ui/sidebar'
 import { AppSidebar } from '../components/app-sidebar'
 import { useAuth } from '../lib/auth-client'
+import { usePostHogPageView } from '../providers/posthog'
 
 import appCss from '../styles.css?url'
 
@@ -63,6 +65,10 @@ function AppShell() {
   // Register global keyboard shortcuts
   useCommandPaletteShortcut()
   useSidebarShortcut()
+
+  // Track page views
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  usePostHogPageView(pathname)
 
   const { isAuthenticated } = useAuth()
 
