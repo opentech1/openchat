@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "bun install && bun run build"
+watchPatterns = ["apps/web/**"]
+
+[build.nixpacks]
+nixPkgs = ["nodejs_20", "bun"]
+
+[deploy]
+startCommand = "bun .output/server/index.mjs"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+restartPolicyType = "always"
