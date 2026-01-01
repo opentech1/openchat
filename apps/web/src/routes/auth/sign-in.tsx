@@ -2,11 +2,21 @@
  * Sign In Page - GitHub OAuth authentication
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { signInWithGitHub } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { env } from '@/lib/env'
+
+// Stats type from our backend
+type PublicStats = {
+  messages: number
+  users: number
+  chats: number
+  stars: number
+  models: number
+}
 
 export const Route = createFileRoute('/auth/sign-in')({
   component: SignInPage,
@@ -80,15 +90,44 @@ function formatNumber(n: number): string {
   return n.toString()
 }
 
+// Cache stats in memory to avoid repeated fetches
+let cachedStats: PublicStats | null = null
+let cacheTimestamp = 0
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
 function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [stats, setStats] = useState<PublicStats | null>(cachedStats)
 
-  // Static stats for now (can be made dynamic later)
-  const stats = {
-    messages: 125000,
-    users: 2400,
+  // Fetch real stats from backend (cached)
+  useEffect(() => {
+    // Use cache if fresh
+    if (cachedStats && Date.now() - cacheTimestamp < CACHE_TTL) {
+      setStats(cachedStats)
+      return
+    }
+
+    const siteUrl = env.CONVEX_SITE_URL
+    if (!siteUrl) return
+
+    fetch(`${siteUrl}/stats`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) {
+          cachedStats = data
+          cacheTimestamp = Date.now()
+          setStats(data)
+        }
+      })
+      .catch(() => null)
+  }, [])
+
+  // Fallback stats while loading
+  const displayStats = stats || {
+    messages: 0,
+    users: 0,
     models: 200,
-    stars: 1200,
+    stars: 0,
   }
 
   const handleGitHubSignIn = async () => {
@@ -169,7 +208,7 @@ function SignInPage() {
                   <MessageSquareIcon className="size-5" />
                 </div>
                 <div className="text-3xl font-bold tabular-nums">
-                  {formatNumber(stats.messages)}
+                  {displayStats.messages ? formatNumber(displayStats.messages) : '—'}
                 </div>
                 <div className="text-xs text-muted-foreground">messages sent</div>
               </div>
@@ -180,7 +219,7 @@ function SignInPage() {
                   <SparklesIcon className="size-5" />
                 </div>
                 <div className="text-3xl font-bold tabular-nums">
-                  {stats.models}+
+                  {displayStats.models}+
                 </div>
                 <div className="text-xs text-muted-foreground">AI models</div>
               </div>
@@ -191,7 +230,7 @@ function SignInPage() {
                   <UsersIcon className="size-5" />
                 </div>
                 <div className="text-3xl font-bold tabular-nums">
-                  {formatNumber(stats.users)}
+                  {displayStats.users ? formatNumber(displayStats.users) : '—'}
                 </div>
                 <div className="text-xs text-muted-foreground">users</div>
               </div>
@@ -202,7 +241,7 @@ function SignInPage() {
                   <StarIcon className="size-5" />
                 </div>
                 <div className="text-3xl font-bold tabular-nums">
-                  {formatNumber(stats.stars)}
+                  {displayStats.stars ? formatNumber(displayStats.stars) : '—'}
                 </div>
                 <div className="text-xs text-muted-foreground">GitHub stars</div>
               </div>
