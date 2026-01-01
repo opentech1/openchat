@@ -417,20 +417,65 @@ function SidebarTrigger({ className, ...props }: SidebarTriggerProps) {
 }
 
 // ============================================================================
-// Sidebar Inset (Main content area)
+// Sidebar Inset (Main content area with rounded corner notch effect)
 // ============================================================================
+
+// SVG component for the curved notch (T3.chat style)
+function CornerNotch({ position }: { position: 'top' | 'bottom' }) {
+  const isTop = position === 'top'
+  return (
+    <svg
+      className={cn(
+        'pointer-events-none absolute -left-[1px] h-4 w-4',
+        isTop ? 'top-2' : 'bottom-2',
+      )}
+      viewBox="0 0 16 16"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      {isTop ? (
+        // Top corner: curve goes from top-left down to bottom-right
+        <path
+          d="M16 0 H0 V16 C0 7.163 7.163 0 16 0 Z"
+          className="fill-background"
+        />
+      ) : (
+        // Bottom corner: curve goes from bottom-left up to top-right  
+        <path
+          d="M16 16 H0 V0 C0 8.837 7.163 16 16 16 Z"
+          className="fill-background"
+        />
+      )}
+    </svg>
+  )
+}
 
 function SidebarInset({
   className,
   children,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
+  const { open, isMobile } = useSidebar()
+
   return (
     <main
       data-slot="sidebar-inset"
-      className={cn('flex flex-1 flex-col overflow-hidden', className)}
+      className={cn(
+        'relative flex flex-1 flex-col overflow-hidden',
+        // Add rounded corner and background for the "card" effect on desktop
+        !isMobile && 'my-2 mr-2 rounded-2xl bg-background',
+        className,
+      )}
       {...props}
     >
+      {/* Corner notches - creates the smooth visual connection to sidebar */}
+      {!isMobile && open && (
+        <>
+          <CornerNotch position="top" />
+          <CornerNotch position="bottom" />
+        </>
+      )}
       {children}
     </main>
   )

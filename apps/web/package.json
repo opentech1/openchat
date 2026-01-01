@@ -27,6 +27,7 @@
     "@tanstack/react-router-ssr-query": "^1.131.7",
     "@tanstack/react-start": "^1.132.0",
     "@tanstack/router-plugin": "^1.132.0",
+    "@valyu/ai-sdk": "^1.0.3",
     "ai": "^5.0.115",
     "better-auth": "^1.4.7",
     "class-variance-authority": "^0.7.1",

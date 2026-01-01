@@ -9,6 +9,12 @@ import { convexClient } from '../lib/convex'
 import { authClient } from '../lib/auth-client'
 import { ThemeProvider } from './theme-provider'
 import { PostHogProvider } from './posthog'
+import { prefetchModels } from '../stores/model'
+
+// Prefetch models.dev data early (cached, won't block render)
+if (typeof window !== 'undefined') {
+  prefetchModels()
+}
 
 // Singleton query client - disable refetch on window focus to prevent tab-switch flashing
 const queryClient = new QueryClient({

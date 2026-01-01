@@ -3,14 +3,13 @@
  *
  * Route: /c/$chatId
  * Loads chat history and allows continuing the conversation.
+ * Uses OSSChat Cloud (free tier) by default, no API key required.
  */
 
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useAuth } from '@/lib/auth-client'
-import { useOpenRouterKey } from '@/stores/openrouter'
 import { ChatInterface } from '@/components/chat-interface'
 import { Button } from '@/components/ui/button'
-import { Link } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/c/$chatId')({
   component: ChatPage,
@@ -19,7 +18,6 @@ export const Route = createFileRoute('/c/$chatId')({
 function ChatPage() {
   const { chatId } = Route.useParams()
   const { isAuthenticated, loading } = useAuth()
-  const { apiKey } = useOpenRouterKey()
 
   // Loading state
   if (loading) {
@@ -45,20 +43,7 @@ function ChatPage() {
     )
   }
 
-  // No OpenRouter key
-  if (!apiKey) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
-        <h1 className="text-2xl font-bold">Connect OpenRouter</h1>
-        <p className="text-muted-foreground">
-          Connect your OpenRouter account to continue.
-        </p>
-        <Link to="/">
-          <Button>Go to Home</Button>
-        </Link>
-      </div>
-    )
-  }
-
+  // Authenticated - show chat interface
+  // OSSChat Cloud provides free access with daily limits, no API key needed
   return <ChatInterface chatId={chatId} />
 }

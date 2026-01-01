@@ -18,7 +18,9 @@ import type { Id } from '@server/convex/_generated/dataModel'
 import { useAuth } from '@/lib/auth-client'
 import { useModelStore } from '@/stores/model'
 import { useOpenRouterKey } from '@/stores/openrouter'
+import { useProviderStore, calculateCost } from '@/stores/provider'
 import { usePendingMessageStore } from '@/stores/pending-message'
+import { toast } from 'sonner'
 
 export interface UsePersistentChatOptions {
   chatId?: string
@@ -91,6 +93,8 @@ export function usePersistentChat({
   const { user } = useAuth()
   const { selectedModelId } = useModelStore()
   const { apiKey } = useOpenRouterKey()
+  const activeProvider = useProviderStore((s) => s.activeProvider)
+  const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled)
 
   // Track current chat ID (may change when new chat is created)
   const [currentChatId, setCurrentChatId] = useState<string | null>(
@@ -172,8 +176,10 @@ export function usePersistentChat({
         body: {
           messages,
           model: selectedModelId,
-          apiKey: apiKey,
+          provider: activeProvider,
+          apiKey: activeProvider === 'openrouter' ? apiKey : undefined,
           chatId: chatIdRef.current,
+          enableWebSearch: webSearchEnabled,
         },
       }),
     }),
@@ -182,6 +188,58 @@ export function usePersistentChat({
       // This callback runs even if the component has navigated away
       const pendingUserMessage = pendingUserMessageRef.current
       const currentConvexUserId = convexUserIdRef.current
+
+      // Track usage for OSSChat Cloud provider
+      // Message metadata contains token usage info sent from the server
+      const metadata = message.metadata as {
+        model?: string
+        provider?: string
+        inputTokens?: number
+        outputTokens?: number
+        totalTokens?: number
+      } | undefined
+
+      if (metadata?.inputTokens && metadata?.outputTokens && metadata?.model) {
+        const providerState = useProviderStore.getState()
+        // Only track usage for OSSChat Cloud (free tier with limits)
+        if (providerState.activeProvider === 'osschat') {
+          const costCents = calculateCost(
+            metadata.model,
+            metadata.inputTokens,
+            metadata.outputTokens,
+          )
+          providerState.addUsage(costCents)
+
+          // Warn when approaching limit (below 2¢ remaining)
+          const remaining = providerState.remainingBudgetCents()
+          if (remaining > 0 && remaining <= 2) {
+            toast.warning('Approaching daily limit', {
+              description: `Only ${remaining.toFixed(1)}¢ remaining of your free daily quota.`,
+            })
+          } else if (remaining <= 0) {
+            toast.error('Daily limit reached', {
+              description: 'Add your OpenRouter API key in settings to continue.',
+            })
+          }
+        }
+      }
+
+      // Track web search usage if tool was called
+      const hasWebSearch = message.parts?.some(
+        (p) => p.type === 'tool-call' && (p as { toolName?: string }).toolName === 'webSearch'
+      )
+      if (hasWebSearch) {
+        const providerState = useProviderStore.getState()
+        providerState.addSearchUsage()
+        
+        // Disable web search if limit reached
+        if (providerState.isSearchLimitReached()) {
+          providerState.setWebSearchEnabled(false)
+          toast.info('Web search disabled', {
+            description: 'You\'ve reached your daily limit of 20 searches.',
+          })
+        }
+      }
 
       if (chatIdRef.current && currentConvexUserId && pendingUserMessage) {
         try {
@@ -274,6 +332,21 @@ export function usePersistentChat({
         (!message.files || message.files.length === 0)
       ) {
         return
+      }
+
+      // Check usage limits for OSSChat Cloud provider
+      const providerState = useProviderStore.getState()
+      if (providerState.activeProvider === 'osschat') {
+        if (providerState.isOverLimit()) {
+          toast.error('Daily usage limit reached', {
+            description: 'You\'ve used your free 10¢ daily limit. Add your OpenRouter API key in settings to continue.',
+            action: {
+              label: 'Settings',
+              onClick: () => window.location.href = '/settings',
+            },
+          })
+          return
+        }
       }
 
       // If no chatId, create a new chat and navigate immediately

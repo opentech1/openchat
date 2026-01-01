@@ -52,9 +52,11 @@ import {
   ModelSelectorLogo,
   ModelSelectorName,
 } from './ai-elements/model-selector'
-import { useModelStore, models, type Model } from '@/stores/model'
+import { useModelStore, useModels, type Model } from '@/stores/model'
+import { useWebSearch } from '@/stores/provider'
 import { StartScreen } from './start-screen'
 import { usePersistentChat } from '@/hooks/use-persistent-chat'
+import { toast } from 'sonner'
 import {
   ChevronDownIcon,
   CheckIcon,
@@ -182,16 +184,6 @@ function ErrorDisplay({
   )
 }
 
-// Map provider names to logo IDs for models.dev SVG logos
-const PROVIDER_LOGO_MAP: Record<string, string> = {
-  OpenAI: 'openai',
-  Anthropic: 'anthropic',
-  Google: 'google',
-  DeepSeek: 'deepseek',
-  Meta: 'llama',
-  xAI: 'xai',
-}
-
 // Connected Model Selector - Uses AI Elements pattern with SVG logos
 interface ConnectedModelSelectorProps {
   disabled?: boolean
@@ -199,17 +191,15 @@ interface ConnectedModelSelectorProps {
 
 function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
   const { selectedModelId, setSelectedModel } = useModelStore()
+  const { models, modelsByFamily, families, isLoading } = useModels()
   const [open, setOpen] = useState(false)
 
   const selectedModel = models.find((m: Model) => m.id === selectedModelId)
 
-  // Group models by provider
-  const providers = Array.from(new Set(models.map((m: Model) => m.provider)))
-
   return (
     <ModelSelector open={open} onOpenChange={setOpen}>
       <ModelSelectorTrigger
-        disabled={disabled}
+        disabled={disabled || isLoading}
         className={cn(
           'flex items-center gap-2',
           'h-8 px-3 rounded-full',
@@ -222,11 +212,11 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
       >
         {selectedModel && (
           <ModelSelectorLogo
-            provider={PROVIDER_LOGO_MAP[selectedModel.provider] || 'openrouter'}
+            provider={selectedModel.providerId || 'openrouter'}
           />
         )}
         <span className="truncate max-w-[140px]">
-          {selectedModel?.name || 'Select model'}
+          {isLoading ? 'Loading...' : (selectedModel?.name || 'Select model')}
         </span>
         <ChevronDownIcon className="size-3.5 opacity-50" />
       </ModelSelectorTrigger>
@@ -234,11 +224,9 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
         <ModelSelectorInput placeholder="Search models..." />
         <ModelSelectorList>
           <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-          {providers.map((provider) => (
-            <ModelSelectorGroup key={provider} heading={provider}>
-              {models
-                .filter((m: Model) => m.provider === provider)
-                .map((model) => (
+          {families.map((family: string) => (
+            <ModelSelectorGroup key={family} heading={family}>
+              {(modelsByFamily[family] || []).map((model: Model) => (
                   <ModelSelectorItem
                     key={model.id}
                     value={model.id}
@@ -248,9 +236,7 @@ function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
                     }}
                   >
                     <ModelSelectorLogo
-                      provider={
-                        PROVIDER_LOGO_MAP[model.provider] || 'openrouter'
-                      }
+                      provider={model.providerId || 'openrouter'}
                     />
                     <ModelSelectorName>{model.name}</ModelSelectorName>
                     {model.id === selectedModelId ? (
@@ -273,10 +259,11 @@ interface PillButtonProps {
   icon: React.ReactNode
   label: string
   onClick?: () => void
+  active?: boolean
   className?: string
 }
 
-function PillButton({ icon, label, onClick, className }: PillButtonProps) {
+function PillButton({ icon, label, onClick, active, className }: PillButtonProps) {
   return (
     <button
       type="button"
@@ -284,10 +271,11 @@ function PillButton({ icon, label, onClick, className }: PillButtonProps) {
       className={cn(
         'flex items-center gap-1.5',
         'h-8 px-3 rounded-full',
-        'text-sm text-muted-foreground',
-        'bg-muted/50 hover:bg-muted hover:text-foreground',
-        'border border-border/50',
-        'transition-all duration-150',
+        'text-sm',
+        'border transition-all duration-150',
+        active
+          ? 'bg-primary/10 text-primary border-primary/50 hover:bg-primary/20'
+          : 'text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground border-border/50',
         className,
       )}
     >
@@ -360,6 +348,7 @@ function PremiumPromptInputInner({
   const controller = usePromptInputController()
   const hasContent = controller.textInput.value.trim().length > 0
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { enabled: webSearchEnabled, toggle: toggleWebSearch, remainingSearches, isLimitReached } = useWebSearch()
 
   const handleAttachClick = () => {
     fileInputRef.current?.click()
@@ -372,6 +361,16 @@ function PremiumPromptInputInner({
     }
     // Reset input so same file can be selected again
     e.target.value = ''
+  }
+
+  const handleSearchToggle = () => {
+    if (isLimitReached && !webSearchEnabled) {
+      toast.error('Search limit reached', {
+        description: 'You\'ve used your 20 daily web searches. Limit resets tomorrow.',
+      })
+      return
+    }
+    toggleWebSearch()
   }
 
   return (
@@ -428,7 +427,9 @@ function PremiumPromptInputInner({
             {/* Search pill */}
             <PillButton
               icon={<GlobeIcon className="size-4" />}
-              label="Search"
+              label={webSearchEnabled ? `Search (${remainingSearches})` : 'Search'}
+              onClick={handleSearchToggle}
+              active={webSearchEnabled}
             />
 
             {/* Attach pill */}

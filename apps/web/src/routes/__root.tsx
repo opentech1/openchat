@@ -72,8 +72,8 @@ function AppShell() {
 
   const { isAuthenticated } = useAuth()
 
-  // Show sidebar for authenticated users (regardless of OpenRouter status)
-  // Pages will show "Connect OpenRouter" CTA when needed
+  // Show sidebar for authenticated users
+  // OSSChat Cloud provides free access - no API key required
   if (!isAuthenticated) {
     // No sidebar layout for unauthenticated users
     return (
@@ -85,9 +85,10 @@ function AppShell() {
   }
 
   // Full sidebar layout for authenticated users
+  // Uses a darker sidebar background with rounded content area (T3.chat style)
   return (
     <SidebarProvider>
-      <div className="flex h-screen w-full">
+      <div className="flex h-screen w-full bg-sidebar">
         <AppSidebar />
         <SidebarInset>
           <Outlet />

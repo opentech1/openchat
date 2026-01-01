@@ -1,16 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { json } from '@tanstack/react-start'
-import { streamText, convertToModelMessages } from 'ai'
+import { streamText, convertToModelMessages, stepCountIs } from 'ai'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
+import { webSearch } from '@valyu/ai-sdk'
+
+// API keys (server-side only)
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
+const VALYU_API_KEY = process.env.VALYU_API_KEY
 
 /**
- * Chat API route for streaming AI responses via OpenRouter
+ * Chat API route for streaming AI responses
+ *
+ * All requests go through OpenRouter:
+ * 1. OSSChat Cloud (provider: 'osschat') - Uses server's OpenRouter key, free with daily limits
+ * 2. Personal OpenRouter (provider: 'openrouter') - Uses user's own OpenRouter API key
  *
  * POST /api/chat
- * Body: { messages: UIMessage[], model: string, apiKey: string }
- *
- * AI SDK 5 sends messages in UIMessage format with 'parts' array.
- * We convert to ModelMessages before sending to the model.
+ * Body: { messages, model, provider, apiKey?, userId? }
  *
  * Returns a streaming response compatible with AI SDK 5's useChat hook
  */
@@ -21,7 +27,14 @@ export const Route = createFileRoute('/api/chat')({
         try {
           // Parse and validate request body
           const body = await request.json()
-          const { messages, model, apiKey } = body
+          const {
+            messages,
+            model,
+            provider = 'osschat',
+            apiKey,
+            enableWebSearch = false,
+            // userId will be used for usage tracking in future
+          } = body
 
           // Validate required fields
           if (!messages || !Array.isArray(messages)) {
@@ -38,15 +51,22 @@ export const Route = createFileRoute('/api/chat')({
             )
           }
 
-          if (!apiKey || typeof apiKey !== 'string') {
+          // Validate provider-specific requirements
+          if (provider === 'openrouter' && !apiKey) {
             return json(
-              { error: 'apiKey is required and must be a string' },
+              { error: 'apiKey is required for Personal OpenRouter' },
               { status: 400 },
             )
           }
 
+          if (provider === 'osschat' && !OPENROUTER_API_KEY) {
+            return json(
+              { error: 'OSSChat Cloud is not configured on this server' },
+              { status: 500 },
+            )
+          }
+
           // AI SDK 5 messages have 'parts' array instead of 'content'
-          // We need to validate that messages have the expected structure
           for (const message of messages) {
             if (!message.role) {
               return json(
@@ -62,7 +82,6 @@ export const Route = createFileRoute('/api/chat')({
                 { status: 400 },
               )
             }
-            // AI SDK 5 uses 'parts' instead of 'content'
             if (!message.parts && !message.content) {
               return json(
                 { error: 'Each message must have parts or content' },
@@ -71,31 +90,64 @@ export const Route = createFileRoute('/api/chat')({
             }
           }
 
-          // Create OpenRouter provider with user's API key
-          const openrouter = createOpenRouter({ apiKey })
+          // All requests go through OpenRouter - just different API keys
+          const openrouterKey = provider === 'osschat' 
+            ? OPENROUTER_API_KEY! 
+            : apiKey!
+          
+          const openrouter = createOpenRouter({ apiKey: openrouterKey })
+          const aiModel = openrouter(model)
 
           // Convert UI messages to model messages (AI SDK 5 format)
           const modelMessages = await convertToModelMessages(messages)
 
           // Stream the response using AI SDK
-          // Enable reasoning/thinking for Claude models
-          const result = streamText({
-            model: openrouter(model),
+          // Configure options based on features
+          const streamOptions: Parameters<typeof streamText>[0] = {
+            model: aiModel,
             messages: modelMessages,
-            // Enable thinking for Claude models (supports claude-3-7-sonnet, claude-sonnet-4, claude-opus-4)
-            ...(model.includes('claude')
-              ? {
-                  providerOptions: {
-                    anthropic: {
-                      thinking: { type: 'enabled', budgetTokens: 10000 },
-                    },
-                  },
-                }
-              : {}),
-          })
+          }
+
+          // Add web search tool if enabled and API key available
+          if (enableWebSearch && VALYU_API_KEY) {
+            streamOptions.tools = {
+              webSearch: webSearch({ apiKey: VALYU_API_KEY }),
+            }
+            streamOptions.stopWhen = stepCountIs(5) // Limit tool call iterations
+          }
+
+          // Enable thinking for Claude models
+          if (model.includes('claude')) {
+            streamOptions.providerOptions = {
+              anthropic: {
+                thinking: { type: 'enabled', budgetTokens: 10000 },
+              },
+            }
+          }
+
+          const result = streamText(streamOptions)
 
           // Return streaming response compatible with useChat (AI SDK 5 format)
-          return result.toUIMessageStreamResponse()
+          // Include metadata with model and usage info for client-side cost tracking
+          return result.toUIMessageStreamResponse({
+            messageMetadata: ({ part }) => {
+              if (part.type === 'start') {
+                return {
+                  createdAt: Date.now(),
+                  model,
+                  provider,
+                }
+              }
+
+              if (part.type === 'finish') {
+                return {
+                  inputTokens: part.totalUsage?.inputTokens,
+                  outputTokens: part.totalUsage?.outputTokens,
+                  totalTokens: part.totalUsage?.totalTokens,
+                }
+              }
+            },
+          })
         } catch (error) {
           console.error('[Chat API Error]', error)
 

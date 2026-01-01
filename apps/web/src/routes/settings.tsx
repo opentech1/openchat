@@ -9,17 +9,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { useAuth, signOut } from '@/lib/auth-client'
 import { useOpenRouterKey } from '@/stores/openrouter'
+import { useProviderStore, DAILY_LIMIT_CENTS } from '@/stores/provider'
+import { useModels, getCacheStatus } from '@/stores/model'
+import { OpenRouterConnectModal } from '@/components/openrouter-connect-modal'
 import { cn } from '@/lib/utils'
+import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon } from 'lucide-react'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
-type Section = 'account' | 'providers'
+type Section = 'account' | 'providers' | 'models'
 
 const sections: { id: Section; label: string }[] = [
   { id: 'account', label: 'Account' },
   { id: 'providers', label: 'Providers' },
+  { id: 'models', label: 'Models' },
 ]
 
 function SettingsPage() {
@@ -106,6 +111,7 @@ function SettingsPage() {
         <div className="mx-auto max-w-3xl p-6">
           {activeSection === 'account' && <AccountSection user={user} />}
           {activeSection === 'providers' && <ProvidersSection />}
+          {activeSection === 'models' && <ModelsSection />}
         </div>
       </main>
     </div>
@@ -203,106 +209,358 @@ function AccountSection({ user }: { user: { name?: string | null; email?: string
 }
 
 function ProvidersSection() {
-  const { apiKey, clearApiKey, initiateLogin } = useOpenRouterKey()
+  const { apiKey, clearApiKey } = useOpenRouterKey()
+  const activeProvider = useProviderStore((s) => s.activeProvider)
+  const setActiveProvider = useProviderStore((s) => s.setActiveProvider)
+  const dailyUsageCents = useProviderStore((s) => s.dailyUsageCents)
+  const remainingBudget = useProviderStore((s) => s.remainingBudgetCents())
+  const [connectModalOpen, setConnectModalOpen] = useState(false)
 
-  const handleConnect = () => {
-    const callbackUrl = `${window.location.origin}/openrouter/callback`
-    initiateLogin(callbackUrl)
+  const handleDisconnect = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    clearApiKey()
+    // Switch back to OSSChat if disconnecting while on OpenRouter
+    if (activeProvider === 'openrouter') {
+      setActiveProvider('osschat')
+    }
   }
 
   return (
     <div className="space-y-8">
-      {/* OpenRouter */}
+      {/* Provider Selection */}
       <section className="space-y-4">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          API Providers
+          AI Provider
         </h2>
-        <div className="rounded-xl border bg-card">
-          <div className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-purple-600">
-                  <svg className="size-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium">OpenRouter</p>
-                  <p className="text-sm text-muted-foreground">Access 200+ AI models with one API</p>
-                </div>
-              </div>
-              {apiKey ? (
-                <span className="flex items-center gap-1.5 text-xs font-medium text-primary">
-                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  Connected
-                </span>
-              ) : null}
+        <div className="grid gap-3">
+          {/* OSSChat Cloud - Free Tier */}
+          <button
+            onClick={() => setActiveProvider('osschat')}
+            className={cn(
+              'flex items-start gap-4 rounded-xl border p-4 text-left transition-all',
+              activeProvider === 'osschat'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                : 'border-border bg-card hover:border-primary/50'
+            )}
+          >
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
+              <img 
+                src="https://models.dev/logos/openrouter.svg" 
+                alt="OpenRouter" 
+                className="size-6 invert"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
             </div>
-
-            {apiKey ? (
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-                  <div>
-                    <p className="text-xs text-muted-foreground">API Key</p>
-                    <p className="font-mono text-sm">
-                      {apiKey.slice(0, 8)}...{apiKey.slice(-4)}
-                    </p>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold">OSSChat Cloud</p>
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+                  FREE
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                350+ AI models with {DAILY_LIMIT_CENTS}¢ daily limit
+              </p>
+              {activeProvider === 'osschat' && (
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Daily Usage</span>
+                    <span className="font-medium">
+                      {dailyUsageCents.toFixed(2)}¢ / {DAILY_LIMIT_CENTS}¢
+                    </span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={clearApiKey}>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        remainingBudget <= 0
+                          ? 'bg-destructive'
+                          : remainingBudget < DAILY_LIMIT_CENTS * 0.3
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                      )}
+                      style={{
+                        width: `${Math.min(100, (dailyUsageCents / DAILY_LIMIT_CENTS) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  {remainingBudget <= 0 && (
+                    <p className="text-xs text-destructive">
+                      Daily limit reached. Connect your own OpenRouter account for unlimited usage.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            {activeProvider === 'osschat' && (
+              <svg className="size-5 shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </button>
+
+          {/* Personal OpenRouter - BYOK */}
+          <div
+            className={cn(
+              'rounded-xl border p-4 transition-all',
+              activeProvider === 'openrouter'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                : apiKey
+                  ? 'border-border bg-card'
+                  : 'border-dashed border-border bg-card'
+            )}
+          >
+            <button
+              onClick={() => apiKey && setActiveProvider('openrouter')}
+              disabled={!apiKey}
+              className={cn(
+                'flex w-full items-start gap-4 text-left',
+                !apiKey && 'cursor-default'
+              )}
+            >
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
+                <img 
+                  src="https://models.dev/logos/openrouter.svg" 
+                  alt="OpenRouter" 
+                  className="size-6 invert"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">Personal OpenRouter</p>
+                  {apiKey && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                      CONNECTED
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {apiKey ? 'Unlimited access with your own API key' : 'Use your own OpenRouter account for unlimited access'}
+                </p>
+                {apiKey && activeProvider === 'openrouter' && (
+                  <p className="mt-2 font-mono text-xs text-muted-foreground">
+                    {apiKey.slice(0, 8)}...{apiKey.slice(-4)}
+                  </p>
+                )}
+              </div>
+              {activeProvider === 'openrouter' && (
+                <svg className="size-5 shrink-0 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </button>
+            
+            {/* Connect/Disconnect button integrated into card */}
+            <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+              {apiKey ? (
+                <>
+                  <a
+                    href="https://openrouter.ai/settings/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Manage keys
+                    <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                  <Button variant="ghost" size="sm" onClick={handleDisconnect} className="h-7 text-xs">
                     Disconnect
                   </Button>
-                </div>
-                <a
-                  href="https://openrouter.ai/settings/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Manage on OpenRouter
-                  <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              </div>
-            ) : (
-              <div className="mt-4">
-                <Button onClick={handleConnect} className="w-full">
-                  Connect OpenRouter
+                </>
+              ) : (
+                <Button onClick={() => setConnectModalOpen(true)} size="sm" className="w-full h-8">
+                  Connect OpenRouter Account
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Coming Soon */}
+      {/* OpenRouter Connect Modal */}
+      <OpenRouterConnectModal
+        open={connectModalOpen}
+        onOpenChange={setConnectModalOpen}
+      />
+    </div>
+  )
+}
+
+function ModelsSection() {
+  const { models, isLoading, reload, totalCount, error } = useModels()
+  const cacheStatus = getCacheStatus()
+  const [isReloading, setIsReloading] = useState(false)
+
+  const handleReload = async () => {
+    setIsReloading(true)
+    try {
+      await reload()
+    } finally {
+      setIsReloading(false)
+    }
+  }
+
+  // Format age for display
+  const formatAge = (ms: number | null) => {
+    if (!ms) return 'Never'
+    const minutes = Math.floor(ms / 60000)
+    if (minutes < 1) return 'Just now'
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    return `${Math.floor(hours / 24)}d ago`
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Model Source Info */}
       <section className="space-y-4">
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Coming Soon
+          Model Source
         </h2>
-        <div className="grid gap-3">
-          {[
-            { name: 'Anthropic', description: 'Claude models directly' },
-            { name: 'OpenAI', description: 'GPT-4 and other OpenAI models' },
-            { name: 'Google AI', description: 'Gemini models' },
-          ].map((provider) => (
-            <div
-              key={provider.name}
-              className="flex items-center gap-3 rounded-xl border border-dashed bg-muted/20 p-4 opacity-60"
-            >
+        <div className="rounded-xl border bg-card p-4">
+          <div className="flex items-start gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
+              <ZapIcon className="size-6 text-white" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold">OpenRouter</p>
+                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">
+                  FULL CATALOG
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Full access to 350+ models via OpenRouter API
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Model Statistics */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+          Model Cache
+        </h2>
+        <div className="rounded-xl border bg-card">
+          {/* Stats row */}
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
               <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
-                <svg className="size-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
+                <DatabaseIcon className="size-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-medium">{provider.name}</p>
-                <p className="text-xs text-muted-foreground">{provider.description}</p>
+                <p className="text-sm font-medium">Models Loaded</p>
+                <p className="text-sm text-muted-foreground">
+                  {isLoading ? 'Loading...' : `${totalCount} models available`}
+                </p>
               </div>
             </div>
-          ))}
+            <div className="flex items-center gap-2">
+              {cacheStatus.hasData && !cacheStatus.isStale && (
+                <span className="flex items-center gap-1 text-xs text-emerald-500">
+                  <CheckCircleIcon className="size-3.5" />
+                  Fresh
+                </span>
+              )}
+              {cacheStatus.isStale && (
+                <span className="text-xs text-amber-500">Stale</span>
+              )}
+            </div>
+          </div>
+          
+          <Separator />
+          
+          {/* Cache info */}
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+                <RefreshCwIcon className="size-5 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Last Updated</p>
+                <p className="text-sm text-muted-foreground">
+                  {formatAge(cacheStatus.age)}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReload}
+              disabled={isReloading || isLoading}
+              className="gap-2"
+            >
+              <RefreshCwIcon className={cn('size-4', (isReloading || isLoading) && 'animate-spin')} />
+              {isReloading ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+          
+          {error && (
+            <>
+              <Separator />
+              <div className="p-4">
+                <p className="text-sm text-destructive">
+                  Error loading models: {error.message}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Model Preview (show first few models) */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+          Available Models
+        </h2>
+        <div className="rounded-xl border bg-card">
+          {isLoading ? (
+            <div className="p-4 text-center text-sm text-muted-foreground">
+              Loading models...
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {models.slice(0, 8).map((model) => (
+                <div key={model.id} className="flex items-center gap-3 p-3">
+                  <img
+                    src={`https://models.dev/logos/${model.providerId}.svg`}
+                    alt={model.provider}
+                    className="size-5 dark:invert"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{model.name}</p>
+                    <p className="text-xs text-muted-foreground">{model.provider}</p>
+                  </div>
+                  {model.isPopular && (
+                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+                      POPULAR
+                    </span>
+                  )}
+                  {model.isFree && (
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+                      FREE
+                    </span>
+                  )}
+                </div>
+              ))}
+              {totalCount > 8 && (
+                <div className="p-3 text-center text-xs text-muted-foreground">
+                  +{totalCount - 8} more models available
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
     </div>

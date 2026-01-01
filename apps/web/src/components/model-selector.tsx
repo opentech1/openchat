@@ -1,37 +1,15 @@
 /**
  * Model Selector - Searchable model picker with provider grouping
  *
- * A command-style searchable dropdown for selecting AI models.
+ * Dynamically loads ALL models from OpenRouter API.
  * Features fuzzy search, keyboard navigation, and provider grouping.
+ * Uses models.dev for provider logos.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Model } from '@/stores/model'
 import { cn } from '@/lib/utils'
-import {
-  models,
-  providerOrder,
-  getModelById,
-  useModelStore,
-  type Model,
-} from '@/stores/model'
-
-// Provider color mapping for visual distinction
-const providerColors: Record<string, string> = {
-  OpenAI: 'bg-emerald-500',
-  Anthropic: 'bg-orange-500',
-  Google: 'bg-blue-500',
-  DeepSeek: 'bg-violet-500',
-  Meta: 'bg-sky-500',
-}
-
-// Provider initials for compact display
-const providerInitials: Record<string, string> = {
-  OpenAI: 'O',
-  Anthropic: 'A',
-  Google: 'G',
-  DeepSeek: 'D',
-  Meta: 'M',
-}
+import { useModels, useModelStore, getModelById } from '@/stores/model'
 
 // Icons
 const ChevronDownIcon = () => (
@@ -99,17 +77,20 @@ function fuzzyMatch(text: string, query: string): boolean {
   return searchIndex === searchLower.length
 }
 
-// Provider badge component
-function ProviderBadge({ provider }: { provider: string }) {
+// Provider logo from models.dev
+function ProviderLogo({ providerId, className }: { providerId: string; className?: string }) {
   return (
-    <span
-      className={cn(
-        'flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold text-white',
-        providerColors[provider] || 'bg-gray-500',
-      )}
-    >
-      {providerInitials[provider] || provider[0]}
-    </span>
+    <img
+      alt={`${providerId} logo`}
+      className={cn('size-4 dark:invert', className)}
+      height={16}
+      width={16}
+      src={`https://models.dev/logos/${providerId}.svg`}
+      onError={(e) => {
+        // Fallback to first letter if logo not found
+        e.currentTarget.style.display = 'none'
+      }}
+    />
   )
 }
 
@@ -141,8 +122,11 @@ function ModelItem({
           : 'bg-transparent text-foreground',
       )}
     >
-      <ProviderBadge provider={model.provider} />
+      <ProviderLogo providerId={model.providerId} />
       <span className="flex-1 truncate">{model.name}</span>
+      {model.isFree && (
+        <span className="text-[10px] font-medium text-green-500 uppercase">Free</span>
+      )}
       {isSelected && (
         <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center text-primary">
           <CheckIcon />
@@ -176,7 +160,10 @@ export function ModelSelector({
   const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const selectedModel = getModelById(value)
+  // Load ALL models from OpenRouter
+  const { models, isLoading } = useModels()
+
+  const selectedModel = useMemo(() => getModelById(models, value), [models, value])
 
   // Filter models based on query
   const filteredModels = useMemo(() => {
@@ -186,36 +173,61 @@ export function ModelSelector({
       (model) =>
         fuzzyMatch(model.name, query) ||
         fuzzyMatch(model.provider, query) ||
-        fuzzyMatch(model.id, query),
+        fuzzyMatch(model.id, query) ||
+        (model.family && fuzzyMatch(model.family, query)),
     )
-  }, [query])
+  }, [models, query])
 
-  // Group filtered models by provider
-  const groupedFilteredModels = useMemo(() => {
-    const groups: Record<string, Model[]> = {}
+  // Separate popular and other models from filtered results
+  const { filteredPopular, filteredOthers } = useMemo(() => {
+    const popular: Array<Model> = []
+    const others: Array<Model> = []
     for (const model of filteredModels) {
-      if (!groups[model.provider]) {
-        groups[model.provider] = []
+      if (model.isPopular) {
+        popular.push(model)
+      } else {
+        others.push(model)
       }
-      groups[model.provider].push(model)
     }
-    return groups
+    return { filteredPopular: popular, filteredOthers: others }
   }, [filteredModels])
 
-  // Ordered providers that have models
-  const visibleProviders = useMemo(
-    () => providerOrder.filter((p) => groupedFilteredModels[p]?.length > 0),
-    [groupedFilteredModels],
-  )
+  // Group other models by family/prefix
+  const groupedOtherModels = useMemo(() => {
+    const grouped: Record<string, Array<Model>> = {}
+    for (const model of filteredOthers) {
+      // Group by family if available, otherwise by ID prefix
+      const group = model.family || model.id.split('/')[0] || 'Other'
+      const groupName = group.charAt(0).toUpperCase() + group.slice(1).replace(/-/g, ' ')
+      
+      if (!grouped[groupName]) {
+        grouped[groupName] = []
+      }
+      grouped[groupName].push(model)
+    }
+    return grouped
+  }, [filteredOthers])
+
+  // Get visible groups sorted
+  const visibleGroups = useMemo(() => {
+    return Object.keys(groupedOtherModels).sort((a, b) => {
+      // Put larger groups first
+      const aLen = groupedOtherModels[a]?.length || 0
+      const bLen = groupedOtherModels[b]?.length || 0
+      if (aLen !== bLen) return bLen - aLen
+      return a.localeCompare(b)
+    })
+  }, [groupedOtherModels])
 
   // Flat list for keyboard navigation
   const flatList = useMemo(() => {
-    const result: Model[] = []
-    for (const provider of visibleProviders) {
-      result.push(...groupedFilteredModels[provider])
+    const result: Array<Model> = []
+    result.push(...filteredPopular)
+    for (const group of visibleGroups) {
+      result.push(...groupedOtherModels[group])
     }
     return result
-  }, [visibleProviders, groupedFilteredModels])
+  }, [filteredPopular, visibleGroups, groupedOtherModels])
 
   // Reset highlighted index when filtered list changes
   useEffect(() => {
@@ -229,7 +241,6 @@ export function ModelSelector({
     setQuery('')
     setHighlightedIndex(0)
     setIsClosing(false)
-    // Focus input after a short delay to ensure DOM is ready
     requestAnimationFrame(() => {
       inputRef.current?.focus()
     })
@@ -349,11 +360,13 @@ export function ModelSelector({
       >
         {selectedModel ? (
           <span className="flex items-center gap-2">
-            <ProviderBadge provider={selectedModel.provider} />
+            <ProviderLogo providerId={selectedModel.providerId} />
             <span className="truncate">{selectedModel.name}</span>
           </span>
         ) : (
-          <span className="text-muted-foreground">Select model...</span>
+          <span className="text-muted-foreground">
+            {isLoading ? 'Loading...' : 'Select model...'}
+          </span>
         )}
         <ChevronDownIcon />
       </button>
@@ -363,7 +376,7 @@ export function ModelSelector({
         <div
           ref={contentRef}
           className={cn(
-            'absolute left-0 top-full z-50 mt-1.5 w-[280px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl',
+            'absolute left-0 top-full z-50 mt-1.5 w-[320px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl',
             isClosing
               ? 'animate-out fade-out-0 zoom-out-95 slide-out-to-top-2 duration-150'
               : 'animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200',
@@ -390,34 +403,75 @@ export function ModelSelector({
           {/* Model list */}
           <div
             ref={listRef}
-            className="max-h-[300px] overflow-y-auto overscroll-contain p-1"
+            className="max-h-[400px] overflow-y-auto overscroll-contain p-1"
           >
-            {flatList.length === 0 ? (
+            {isLoading ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                Loading models...
+              </div>
+            ) : flatList.length === 0 ? (
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                 No models found
               </div>
             ) : (
-              visibleProviders.map((provider) => (
-                <div key={provider} className="py-1">
-                  <div className="px-3 py-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {provider}
-                  </div>
-                  {groupedFilteredModels[provider].map((model) => {
-                    const flatIndex = getFlatIndex(model.id)
-                    return (
-                      <ModelItem
-                        key={model.id}
-                        model={model}
-                        isSelected={model.id === value}
-                        isHighlighted={flatIndex === highlightedIndex}
-                        onSelect={() => handleSelect(model.id)}
-                        onHover={() => setHighlightedIndex(flatIndex)}
-                        dataIndex={flatIndex}
-                      />
-                    )
-                  })}
-                </div>
-              ))
+              <>
+                {/* Popular Models Section */}
+                {filteredPopular.length > 0 && (
+                  <>
+                    <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-amber-500">
+                      Popular
+                    </div>
+                    {filteredPopular.map((model) => {
+                      const flatIndex = getFlatIndex(model.id)
+                      return (
+                        <ModelItem
+                          key={model.id}
+                          model={model}
+                          isSelected={model.id === value}
+                          isHighlighted={flatIndex === highlightedIndex}
+                          onSelect={() => handleSelect(model.id)}
+                          onHover={() => setHighlightedIndex(flatIndex)}
+                          dataIndex={flatIndex}
+                        />
+                      )
+                    })}
+                  </>
+                )}
+
+                {/* All Models by Group */}
+                {visibleGroups.length > 0 && (
+                  <>
+                    <div className={cn(
+                      "px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70",
+                      filteredPopular.length > 0 && "mt-2 border-t border-border pt-2"
+                    )}>
+                      All Models
+                    </div>
+                    {visibleGroups.map((group: string) => (
+                      <div key={group} className="py-0.5">
+                        <div className="px-3 py-1 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                          <ProviderLogo providerId={groupedOtherModels[group]?.[0]?.providerId || group.toLowerCase()} className="size-3" />
+                          {group}
+                        </div>
+                        {groupedOtherModels[group].map((model: Model) => {
+                          const flatIndex = getFlatIndex(model.id)
+                          return (
+                            <ModelItem
+                              key={model.id}
+                              model={model}
+                              isSelected={model.id === value}
+                              isHighlighted={flatIndex === highlightedIndex}
+                              onSelect={() => handleSelect(model.id)}
+                              onHover={() => setHighlightedIndex(flatIndex)}
+                              dataIndex={flatIndex}
+                            />
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
             )}
           </div>
 
@@ -449,7 +503,6 @@ export function ModelSelector({
 
 /**
  * ModelSelector with built-in Zustand store connection
- * Use this for a simpler API when using the global model store
  */
 export function ConnectedModelSelector({
   className,

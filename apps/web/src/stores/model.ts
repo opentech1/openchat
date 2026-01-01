@@ -1,335 +1,433 @@
 /**
- * Model Selection Store - Local model management with OpenRouter API
+ * Model Selection Store - Dynamic model loading from OpenRouter API
  *
- * Features:
- * - Fetches models directly from OpenRouter API
- * - Caches in browser localStorage for 4 hours
- * - Falls back to curated list if API unavailable
- * - Local favorites (persisted in localStorage)
- * - Selected model persistence
+ * Fetches ALL 350+ models from OpenRouter API directly.
+ * Uses models.dev for provider logos.
+ * Groups models by provider/family automatically.
  */
 
 import { create } from 'zustand'
-import { persist, devtools } from 'zustand/middleware'
+import { devtools, persist } from 'zustand/middleware'
+import { useEffect, useState, useMemo, useCallback } from 'react'
+import { initPricingLookup } from './provider'
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface ModelPricing {
-  prompt: number // Cost per 1M input tokens
-  completion: number // Cost per 1M output tokens
-}
-
 export interface Model {
   id: string
   name: string
-  provider: string
+  provider: string // Provider display name (e.g., "Anthropic")
+  providerId: string // Provider slug for logos (e.g., "anthropic")
+  family?: string // Model family (e.g., "claude-3.5")
   description?: string
   contextLength?: number
-  maxCompletionTokens?: number
-  pricing?: ModelPricing
-  supportedFeatures?: string[]
-  // Computed fields for sorting/filtering
-  isTopTier?: boolean // Major provider flagship models
+  maxOutputTokens?: number
+  pricing?: { input: number; output: number }
+  modality?: string
+  reasoning?: boolean
+  toolCall?: boolean
+  isPopular?: boolean
   isFree?: boolean
 }
 
 // ============================================================================
-// Featured Models - Curated list shown by default
+// Provider mapping for display names and logo IDs
 // ============================================================================
 
-const FEATURED_MODEL_IDS = [
-  // Anthropic (top-tier)
+const PROVIDER_INFO: Record<string, { name: string; logoId: string }> = {
+  openai: { name: 'OpenAI', logoId: 'openai' },
+  anthropic: { name: 'Anthropic', logoId: 'anthropic' },
+  google: { name: 'Google', logoId: 'google' },
+  'meta-llama': { name: 'Meta Llama', logoId: 'llama' },
+  mistralai: { name: 'Mistral', logoId: 'mistral' },
+  deepseek: { name: 'DeepSeek', logoId: 'deepseek' },
+  'x-ai': { name: 'xAI', logoId: 'xai' },
+  cohere: { name: 'Cohere', logoId: 'cohere' },
+  perplexity: { name: 'Perplexity', logoId: 'perplexity' },
+  qwen: { name: 'Qwen', logoId: 'alibaba' },
+  nvidia: { name: 'NVIDIA', logoId: 'nvidia' },
+  microsoft: { name: 'Microsoft', logoId: 'azure' },
+  amazon: { name: 'Amazon', logoId: 'amazon-bedrock' },
+  ai21: { name: 'AI21', logoId: 'ai21' },
+  together: { name: 'Together', logoId: 'togetherai' },
+  'fireworks-ai': { name: 'Fireworks', logoId: 'fireworks-ai' },
+  groq: { name: 'Groq', logoId: 'groq' },
+  databricks: { name: 'Databricks', logoId: 'databricks' },
+  inflection: { name: 'Inflection', logoId: 'inflection' },
+  nous: { name: 'Nous', logoId: 'nous' },
+  nousresearch: { name: 'NousResearch', logoId: 'nous' },
+  openchat: { name: 'OpenChat', logoId: 'openchat' },
+  teknium: { name: 'Teknium', logoId: 'teknium' },
+  cognitivecomputations: { name: 'Cognitive', logoId: 'cognitive' },
+  neversleep: { name: 'NeverSleep', logoId: 'neversleep' },
+  sao10k: { name: 'Sao10k', logoId: 'sao10k' },
+  thedrummer: { name: 'TheDrummer', logoId: 'thedrummer' },
+  'eva-unit-01': { name: 'Eva', logoId: 'eva' },
+  liquid: { name: 'Liquid', logoId: 'liquid' },
+  'bytedance-seed': { name: 'ByteDance', logoId: 'bytedance' },
+  minimax: { name: 'MiniMax', logoId: 'minimax' },
+  moonshotai: { name: 'Moonshot', logoId: 'moonshotai' },
+  zhipuai: { name: 'Zhipu', logoId: 'zhipuai' },
+  thudm: { name: 'THUDM', logoId: 'thudm' },
+  featherless: { name: 'Featherless', logoId: 'featherless' },
+  infermatic: { name: 'Infermatic', logoId: 'infermatic' },
+  aetherwiing: { name: 'AetherWiing', logoId: 'aetherwiing' },
+  'all-hands': { name: 'All Hands', logoId: 'all-hands' },
+  rekaai: { name: 'Reka', logoId: 'rekaai' },
+  sophosympatheia: { name: 'Sophos', logoId: 'sophos' },
+  undi95: { name: 'Undi95', logoId: 'undi95' },
+  mancer: { name: 'Mancer', logoId: 'mancer' },
+  lynn: { name: 'Lynn', logoId: 'lynn' },
+  pygmalionai: { name: 'Pygmalion', logoId: 'pygmalionai' },
+  jondurbin: { name: 'Jon Durbin', logoId: 'jondurbin' },
+  gryphe: { name: 'Gryphe', logoId: 'gryphe' },
+  arliai: { name: 'ArliAI', logoId: 'arliai' },
+  openrouter: { name: 'OpenRouter', logoId: 'openrouter' },
+  allenai: { name: 'Allen AI', logoId: 'allenai' },
+}
+
+// Popular models - shown at top
+const POPULAR_MODEL_IDS = new Set([
   'anthropic/claude-sonnet-4',
   'anthropic/claude-3.5-sonnet',
+  'anthropic/claude-3.7-sonnet',
   'anthropic/claude-3.5-haiku',
-  'anthropic/claude-3-opus',
-  // OpenAI
   'openai/gpt-4o',
   'openai/gpt-4o-mini',
-  'openai/o1',
+  'openai/gpt-4.1',
+  'openai/gpt-4.1-mini',
   'openai/o3-mini',
-  // Google
-  'google/gemini-2.0-flash-exp',
-  'google/gemini-1.5-pro',
-  // DeepSeek
-  'deepseek/deepseek-r1',
+  'google/gemini-2.5-flash',
+  'google/gemini-2.5-pro',
+  'google/gemini-2.0-flash-001',
   'deepseek/deepseek-chat',
-  // Meta
+  'deepseek/deepseek-chat-v3.1',
+  'deepseek/deepseek-r1',
   'meta-llama/llama-3.3-70b-instruct',
-  // xAI
-  'x-ai/grok-2-1212',
-  // Mistral
+  'x-ai/grok-3',
   'mistralai/mistral-large-2411',
+  'qwen/qwen-2.5-72b-instruct',
+])
+
+// Provider priority for sorting
+const PROVIDER_PRIORITY = [
+  'anthropic',
+  'openai',
+  'google',
+  'deepseek',
+  'meta-llama',
+  'x-ai',
+  'mistralai',
+  'qwen',
+  'cohere',
+  'perplexity',
 ]
-
-// Fallback models used when API is unavailable
-export const fallbackModels: Model[] = [
-  // OpenAI
-  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
-  { id: 'openai/o1', name: 'o1', provider: 'OpenAI' },
-  { id: 'openai/o3-mini', name: 'o3 Mini', provider: 'OpenAI' },
-  // Anthropic
-  {
-    id: 'anthropic/claude-sonnet-4',
-    name: 'Claude Sonnet 4',
-    provider: 'Anthropic',
-  },
-  {
-    id: 'anthropic/claude-3.5-sonnet',
-    name: 'Claude 3.5 Sonnet',
-    provider: 'Anthropic',
-  },
-  {
-    id: 'anthropic/claude-3.5-haiku',
-    name: 'Claude 3.5 Haiku',
-    provider: 'Anthropic',
-  },
-  {
-    id: 'anthropic/claude-3-opus',
-    name: 'Claude 3 Opus',
-    provider: 'Anthropic',
-  },
-  // Google
-  {
-    id: 'google/gemini-2.0-flash-exp',
-    name: 'Gemini 2.0 Flash',
-    provider: 'Google',
-  },
-  { id: 'google/gemini-1.5-pro', name: 'Gemini 1.5 Pro', provider: 'Google' },
-  // DeepSeek
-  { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', provider: 'DeepSeek' },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek V3', provider: 'DeepSeek' },
-  // Meta
-  {
-    id: 'meta-llama/llama-3.3-70b-instruct',
-    name: 'Llama 3.3 70B',
-    provider: 'Meta',
-  },
-  // xAI
-  { id: 'x-ai/grok-2-1212', name: 'Grok 2', provider: 'xAI' },
-  // Mistral
-  {
-    id: 'mistralai/mistral-large-2411',
-    name: 'Mistral Large',
-    provider: 'Mistral',
-  },
-]
-
-// Legacy export for backwards compatibility
-export const models = fallbackModels
-
-// Group models by provider for easy rendering
-export const modelsByProvider = fallbackModels.reduce<Record<string, Model[]>>(
-  (acc, model) => {
-    if (!acc[model.provider]) {
-      acc[model.provider] = []
-    }
-    acc[model.provider].push(model)
-    return acc
-  },
-  {},
-)
-
-// Provider display order
-export const providerOrder = [
-  'Anthropic',
-  'OpenAI',
-  'Google',
-  'DeepSeek',
-  'Meta',
-  'xAI',
-  'Mistral',
-]
-
-// Get model by ID (from fallback list)
-export function getModelById(id: string): Model | undefined {
-  return fallbackModels.find((m) => m.id === id)
-}
 
 // ============================================================================
-// OpenRouter API Cache
+// Cache
 // ============================================================================
 
-const CACHE_KEY = 'openrouter-models-cache'
-const CACHE_TTL = 4 * 60 * 60 * 1000 // 4 hours in milliseconds
-
-interface CachedModels {
-  models: Model[]
+interface ModelCache {
+  models: Model[] | null
   timestamp: number
+  loading: boolean
+  error: Error | null
+  promise: Promise<Model[]> | null
 }
 
-function getCachedModels(): Model[] | null {
-  if (typeof window === 'undefined') return null
+const CACHE_TTL = 4 * 60 * 60 * 1000 // 4 hours
 
-  try {
-    const cached = localStorage.getItem(CACHE_KEY)
-    if (!cached) return null
+let cache: ModelCache = {
+  models: null,
+  timestamp: 0,
+  loading: false,
+  error: null,
+  promise: null,
+}
 
-    const data: CachedModels = JSON.parse(cached)
-    const age = Date.now() - data.timestamp
+// Cache change listeners
+type Listener = () => void
+const listeners = new Set<Listener>()
 
-    // Return cached if still valid
-    if (age < CACHE_TTL) {
-      return data.models
-    }
+function notifyListeners() {
+  listeners.forEach((fn) => fn())
+}
 
-    // Cache expired
-    return null
-  } catch {
-    return null
+function subscribe(listener: Listener): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
+// ============================================================================
+// Transform OpenRouter model to our format
+// ============================================================================
+
+function extractFamily(id: string, name: string): string | undefined {
+  const lower = name.toLowerCase()
+
+  // Common families
+  if (lower.includes('claude-3.5')) return 'Claude 3.5'
+  if (lower.includes('claude-3.7')) return 'Claude 3.7'
+  if (lower.includes('claude-sonnet-4') || lower.includes('claude sonnet 4'))
+    return 'Claude 4'
+  if (lower.includes('claude-opus-4') || lower.includes('claude opus 4'))
+    return 'Claude 4'
+  if (lower.includes('claude-haiku-4') || lower.includes('claude haiku 4'))
+    return 'Claude 4'
+  if (lower.includes('claude')) return 'Claude'
+
+  if (lower.includes('gpt-4o')) return 'GPT-4o'
+  if (lower.includes('gpt-4.1')) return 'GPT-4.1'
+  if (lower.includes('gpt-4')) return 'GPT-4'
+  if (lower.includes('gpt-5')) return 'GPT-5'
+  if (lower.includes('o1-') || lower.includes('o1 ')) return 'o1'
+  if (lower.includes('o3-') || lower.includes('o3 ') || id.includes('/o3'))
+    return 'o3'
+  if (lower.includes('o4-') || lower.includes('o4 ')) return 'o4'
+
+  if (lower.includes('gemini-2.5')) return 'Gemini 2.5'
+  if (lower.includes('gemini-2.0')) return 'Gemini 2.0'
+  if (lower.includes('gemini-3')) return 'Gemini 3'
+  if (lower.includes('gemini')) return 'Gemini'
+
+  if (lower.includes('llama-3.3')) return 'Llama 3.3'
+  if (lower.includes('llama-3.2')) return 'Llama 3.2'
+  if (lower.includes('llama-3.1')) return 'Llama 3.1'
+  if (lower.includes('llama-4')) return 'Llama 4'
+  if (lower.includes('llama')) return 'Llama'
+
+  if (lower.includes('mistral-large')) return 'Mistral Large'
+  if (lower.includes('mistral-small')) return 'Mistral Small'
+  if (lower.includes('mistral-medium')) return 'Mistral Medium'
+  if (lower.includes('codestral')) return 'Codestral'
+  if (lower.includes('mixtral')) return 'Mixtral'
+  if (lower.includes('mistral')) return 'Mistral'
+
+  if (lower.includes('deepseek-r1')) return 'DeepSeek R1'
+  if (lower.includes('deepseek-v3')) return 'DeepSeek V3'
+  if (lower.includes('deepseek')) return 'DeepSeek'
+
+  if (lower.includes('grok-4')) return 'Grok 4'
+  if (lower.includes('grok-3')) return 'Grok 3'
+  if (lower.includes('grok')) return 'Grok'
+
+  if (lower.includes('qwen-2.5')) return 'Qwen 2.5'
+  if (lower.includes('qwen-2')) return 'Qwen 2'
+  if (lower.includes('qwen3')) return 'Qwen 3'
+  if (lower.includes('qwen')) return 'Qwen'
+
+  return undefined
+}
+
+function transformModel(raw: any): Model {
+  const id = raw.id as string
+  const providerSlug = id.split('/')[0] || 'unknown'
+  const info = PROVIDER_INFO[providerSlug] || {
+    name:
+      providerSlug.charAt(0).toUpperCase() +
+      providerSlug.slice(1).replace(/-/g, ' '),
+    logoId: providerSlug,
+  }
+
+  const inputPrice = parseFloat(raw.pricing?.prompt || '0') * 1_000_000
+  const outputPrice = parseFloat(raw.pricing?.completion || '0') * 1_000_000
+  const isFree =
+    id.endsWith(':free') || (inputPrice === 0 && outputPrice === 0)
+
+  const supportsTools =
+    raw.supported_parameters?.includes('tools') ||
+    raw.supported_parameters?.includes('tool_choice')
+  const supportsReasoning =
+    raw.supported_parameters?.includes('reasoning') ||
+    raw.supported_parameters?.includes('include_reasoning') ||
+    id.includes('-r1') ||
+    id.includes('/o1') ||
+    id.includes('/o3')
+
+  return {
+    id,
+    name: raw.name || id,
+    provider: info.name,
+    providerId: info.logoId,
+    family: extractFamily(id, raw.name || ''),
+    description: raw.description,
+    contextLength: raw.context_length,
+    maxOutputTokens: raw.top_provider?.max_completion_tokens,
+    pricing: { input: inputPrice, output: outputPrice },
+    modality: raw.architecture?.modality,
+    reasoning: supportsReasoning,
+    toolCall: supportsTools,
+    isPopular: POPULAR_MODEL_IDS.has(id),
+    isFree,
   }
 }
 
-function setCachedModels(models: Model[]): void {
-  if (typeof window === 'undefined') return
+// ============================================================================
+// Fetch ALL models from OpenRouter
+// ============================================================================
 
-  try {
-    const data: CachedModels = {
-      models,
-      timestamp: Date.now(),
-    }
-    localStorage.setItem(CACHE_KEY, JSON.stringify(data))
-  } catch {
-    // Storage full or disabled, ignore
-  }
-}
-
-// Provider display names (from API provider slug)
-const PROVIDER_NAMES: Record<string, string> = {
-  anthropic: 'Anthropic',
-  openai: 'OpenAI',
-  google: 'Google',
-  deepseek: 'DeepSeek',
-  'meta-llama': 'Meta',
-  'x-ai': 'xAI',
-  mistralai: 'Mistral',
-  cohere: 'Cohere',
-  perplexity: 'Perplexity',
-}
-
-// Extract features from OpenRouter model data
-function extractFeatures(model: any): string[] {
-  const features: string[] = []
-
-  // Vision support
-  if (
-    model.architecture?.modality?.includes('image') ||
-    model.architecture?.input_modalities?.includes('image')
-  ) {
-    features.push('vision')
+async function fetchAllModels(): Promise<Model[]> {
+  // Return cached if fresh
+  if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
+    return cache.models
   }
 
-  // Tool calling
-  if (model.supported_parameters?.includes('tools')) {
-    features.push('tools')
-  }
+  // Dedupe concurrent requests
+  if (cache.promise) return cache.promise
 
-  // Reasoning (Claude, o1, o3, DeepSeek R1)
-  if (
-    model.id.includes('claude') ||
-    model.id.includes('o1') ||
-    model.id.includes('o3') ||
-    model.id.includes('deepseek-r1')
-  ) {
-    features.push('reasoning')
-  }
+  cache.loading = true
+  cache.error = null
+  notifyListeners()
 
-  return features
-}
-
-/**
- * Fetch models from OpenRouter API
- * Returns cached models if available and fresh, otherwise fetches from API
- */
-export async function fetchOpenRouterModels(): Promise<Model[]> {
-  // Check cache first
-  const cached = getCachedModels()
-  if (cached) {
-    return cached
-  }
-
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-      headers: { 'Content-Type': 'application/json' },
-    })
-
-    if (!response.ok) {
-      throw new Error(`OpenRouter API error: ${response.status}`)
-    }
-
-    const data = await response.json()
-    const rawModels = data.data || []
-
-    // Transform to our Model format
-    const models: Model[] = rawModels
-      .filter((m: any) => m.id && !isLegacyModel(m.id))
-      .map((m: any) => {
-        const provider = m.id.split('/')[0] || 'unknown'
-        return {
-          id: m.id,
-          name: m.name || m.id,
-          provider: PROVIDER_NAMES[provider] || provider,
-          contextLength: m.context_length,
-          supportedFeatures: extractFeatures(m),
-        }
+  cache.promise = (async () => {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { 'Content-Type': 'application/json' },
       })
 
-    // Cache the results
-    setCachedModels(models)
+      if (!response.ok) {
+        throw new Error(`OpenRouter API error: ${response.status}`)
+      }
 
-    return models
-  } catch (error) {
-    console.error('Failed to fetch models from OpenRouter:', error)
-    // Return fallback on error
-    return fallbackModels
-  }
-}
+      const data = await response.json()
+      const rawModels = data.data || []
 
-// Legacy model patterns to filter out
-function isLegacyModel(id: string): boolean {
-  const patterns = [
-    /-preview$/i,
-    /-0[0-9]{3}$/i, // Date suffixes like -0301
-    /deprecated/i,
-    /beta$/i,
-  ]
-  return patterns.some((p) => p.test(id))
-}
+      // Transform all models
+      const models: Model[] = rawModels
+        .filter((m: any) => m.id && typeof m.id === 'string')
+        .map(transformModel)
+        // Sort: Popular first, then by provider priority, then alphabetically
+        .sort((a: Model, b: Model) => {
+          // Popular first
+          if (a.isPopular && !b.isPopular) return -1
+          if (!a.isPopular && b.isPopular) return 1
 
-/**
- * Get featured models from the full list
- */
-export function getFeaturedModels(allModels: Model[]): Model[] {
-  // Filter to featured only, maintaining the curated order
-  const featured: Model[] = []
+          // Provider priority
+          const aSlug = a.id.split('/')[0]
+          const bSlug = b.id.split('/')[0]
+          const aPriority = PROVIDER_PRIORITY.indexOf(aSlug)
+          const bPriority = PROVIDER_PRIORITY.indexOf(bSlug)
+          const aP = aPriority === -1 ? 999 : aPriority
+          const bP = bPriority === -1 ? 999 : bPriority
+          if (aP !== bP) return aP - bP
 
-  for (const id of FEATURED_MODEL_IDS) {
-    const model = allModels.find((m) => m.id === id)
-    if (model) {
-      featured.push(model)
+          // Alphabetically by name
+          return a.name.localeCompare(b.name)
+        })
+
+      cache.models = models
+      cache.timestamp = Date.now()
+      cache.error = null
+
+      // Initialize pricing lookup for cost calculation
+      initPricingLookup((modelId: string) => {
+        const model = models.find((m) => m.id === modelId)
+        return model?.pricing
+      })
+
+      return models
+    } catch (e) {
+      cache.error = e instanceof Error ? e : new Error('Failed to fetch models')
+      throw cache.error
+    } finally {
+      cache.loading = false
+      cache.promise = null
+      notifyListeners()
     }
-  }
+  })()
 
-  return featured
+  return cache.promise
 }
+
+// Clear cache and refetch
+export function clearModelCache() {
+  cache = {
+    models: null,
+    timestamp: 0,
+    loading: false,
+    error: null,
+    promise: null,
+  }
+  notifyListeners()
+}
+
+// Reload models (clear cache + fetch)
+export async function reloadModels(): Promise<Model[]> {
+  clearModelCache()
+  return fetchAllModels()
+}
+
+// ============================================================================
+// Fallback models
+// ============================================================================
+
+function getFallbackModels(): Model[] {
+  return [
+    {
+      id: 'anthropic/claude-3.5-sonnet',
+      name: 'Claude 3.5 Sonnet',
+      provider: 'Anthropic',
+      providerId: 'anthropic',
+      family: 'Claude 3.5',
+      isPopular: true,
+    },
+    {
+      id: 'openai/gpt-4o',
+      name: 'GPT-4o',
+      provider: 'OpenAI',
+      providerId: 'openai',
+      family: 'GPT-4o',
+      isPopular: true,
+    },
+    {
+      id: 'openai/gpt-4o-mini',
+      name: 'GPT-4o Mini',
+      provider: 'OpenAI',
+      providerId: 'openai',
+      family: 'GPT-4o',
+      isPopular: true,
+    },
+    {
+      id: 'google/gemini-2.5-flash',
+      name: 'Gemini 2.5 Flash',
+      provider: 'Google',
+      providerId: 'google',
+      family: 'Gemini 2.5',
+      isPopular: true,
+    },
+    {
+      id: 'deepseek/deepseek-chat',
+      name: 'DeepSeek Chat',
+      provider: 'DeepSeek',
+      providerId: 'deepseek',
+      family: 'DeepSeek',
+      isPopular: true,
+    },
+    {
+      id: 'meta-llama/llama-3.3-70b-instruct',
+      name: 'Llama 3.3 70B',
+      provider: 'Meta Llama',
+      providerId: 'llama',
+      family: 'Llama 3.3',
+      isPopular: true,
+    },
+  ]
+}
+
+export const models = getFallbackModels()
+export const fallbackModels = getFallbackModels()
 
 // ============================================================================
 // Zustand Store
 // ============================================================================
 
 interface ModelState {
-  // Selection
   selectedModelId: string
   setSelectedModel: (modelId: string) => void
-
-  // Local favorites (persisted)
   favorites: Set<string>
-  addFavorite: (modelId: string) => void
-  removeFavorite: (modelId: string) => void
-  toggleFavorite: (modelId: string) => boolean // Returns new state
+  toggleFavorite: (modelId: string) => boolean
   isFavorite: (modelId: string) => boolean
 }
 
@@ -337,42 +435,25 @@ export const useModelStore = create<ModelState>()(
   devtools(
     persist(
       (set, get) => ({
-        // Default to Claude 3.5 Sonnet
         selectedModelId: 'anthropic/claude-3.5-sonnet',
 
         setSelectedModel: (modelId) =>
-          set({ selectedModelId: modelId }, false, 'model/setSelectedModel'),
+          set({ selectedModelId: modelId }, false, 'model/select'),
 
-        // Local favorites
         favorites: new Set<string>(),
-
-        addFavorite: (modelId) =>
-          set(
-            (state) => ({
-              favorites: new Set([...state.favorites, modelId]),
-            }),
-            false,
-            'model/addFavorite',
-          ),
-
-        removeFavorite: (modelId) =>
-          set(
-            (state) => {
-              const newFavorites = new Set(state.favorites)
-              newFavorites.delete(modelId)
-              return { favorites: newFavorites }
-            },
-            false,
-            'model/removeFavorite',
-          ),
 
         toggleFavorite: (modelId) => {
           const isFav = get().favorites.has(modelId)
-          if (isFav) {
-            get().removeFavorite(modelId)
-          } else {
-            get().addFavorite(modelId)
-          }
+          set(
+            (state) => {
+              const newFavs = new Set(state.favorites)
+              if (isFav) newFavs.delete(modelId)
+              else newFavs.add(modelId)
+              return { favorites: newFavs }
+            },
+            false,
+            'model/toggleFavorite',
+          )
           return !isFav
         },
 
@@ -380,22 +461,19 @@ export const useModelStore = create<ModelState>()(
       }),
       {
         name: 'model-store',
-        // Custom serialization for Set
         partialize: (state) => ({
           selectedModelId: state.selectedModelId,
           favorites: Array.from(state.favorites),
         }),
-        // Custom deserialization for Set
         merge: (persisted, current) => {
-          const persistedData = persisted as {
+          const data = persisted as {
             selectedModelId?: string
             favorites?: string[]
           }
           return {
             ...current,
-            selectedModelId:
-              persistedData?.selectedModelId ?? current.selectedModelId,
-            favorites: new Set(persistedData?.favorites ?? []),
+            selectedModelId: data?.selectedModelId ?? current.selectedModelId,
+            favorites: new Set(data?.favorites ?? []),
           }
         },
       },
@@ -405,64 +483,158 @@ export const useModelStore = create<ModelState>()(
 )
 
 // ============================================================================
-// React Hooks
+// React Hook - Load ALL models
 // ============================================================================
 
-import { useState, useEffect } from 'react'
+export function useModels() {
+  const [models, setModels] = useState<Model[]>(
+    () => cache.models || getFallbackModels(),
+  )
+  const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models)
+  const [error, setError] = useState<Error | null>(() => cache.error)
+  const [, forceUpdate] = useState(0)
 
-/**
- * Hook to fetch and use OpenRouter models with caching
- * Returns featured models by default, full list when searching
- */
-export function useOpenRouterModels() {
-  const [allModels, setAllModels] = useState<Model[]>(fallbackModels)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  // Subscribe to cache changes
+  useEffect(() => {
+    return subscribe(() => forceUpdate((n) => n + 1))
+  }, [])
 
+  // Fetch on mount
   useEffect(() => {
     let cancelled = false
 
     async function load() {
+      if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
+        setModels(cache.models)
+        setIsLoading(false)
+        setError(null)
+        return
+      }
+
+      setIsLoading(true)
+
       try {
-        const models = await fetchOpenRouterModels()
+        const fetched = await fetchAllModels()
         if (!cancelled) {
-          setAllModels(models)
+          setModels(fetched)
           setError(null)
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e : new Error('Failed to fetch models'))
+          setError(e instanceof Error ? e : new Error('Failed'))
+          setModels(getFallbackModels())
         }
       } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
+        if (!cancelled) setIsLoading(false)
       }
     }
 
     load()
-
     return () => {
       cancelled = true
     }
   }, [])
 
-  // Compute featured models
-  const featuredModels = getFeaturedModels(allModels)
+  // Reload function
+  const reload = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const fetched = await reloadModels()
+      setModels(fetched)
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error('Failed'))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  // Group by provider
+  const modelsByProvider = useMemo(() => {
+    const groups: Record<string, Model[]> = {}
+    for (const model of models) {
+      if (!groups[model.provider]) groups[model.provider] = []
+      groups[model.provider].push(model)
+    }
+    return groups
+  }, [models])
+
+  // Group by family
+  const modelsByFamily = useMemo(() => {
+    const groups: Record<string, Model[]> = {}
+    for (const model of models) {
+      const key = model.family || model.provider
+      if (!groups[key]) groups[key] = []
+      groups[key].push(model)
+    }
+    return groups
+  }, [models])
+
+  // Get providers sorted
+  const providers = useMemo(() => {
+    return Object.keys(modelsByProvider).sort((a, b) => {
+      const aModels = modelsByProvider[a]
+      const bModels = modelsByProvider[b]
+      const aHasPopular = aModels.some((m) => m.isPopular)
+      const bHasPopular = bModels.some((m) => m.isPopular)
+      if (aHasPopular && !bHasPopular) return -1
+      if (!aHasPopular && bHasPopular) return 1
+      return bModels.length - aModels.length
+    })
+  }, [modelsByProvider])
+
+  // Get families sorted
+  const families = useMemo(() => {
+    return Object.keys(modelsByFamily).sort((a, b) => {
+      const aModels = modelsByFamily[a]
+      const bModels = modelsByFamily[b]
+      const aHasPopular = aModels.some((m) => m.isPopular)
+      const bHasPopular = bModels.some((m) => m.isPopular)
+      if (aHasPopular && !bHasPopular) return -1
+      if (!aHasPopular && bHasPopular) return 1
+      return bModels.length - aModels.length
+    })
+  }, [modelsByFamily])
+
+  const popularModels = useMemo(
+    () => models.filter((m) => m.isPopular),
+    [models],
+  )
 
   return {
-    allModels,
-    featuredModels,
+    models,
+    modelsByProvider,
+    modelsByFamily,
+    providers,
+    families,
+    popularModels,
     isLoading,
     error,
+    reload,
+    totalCount: models.length,
   }
 }
 
-/**
- * Get the currently selected model from the fallback list
- * Used for display when full model data isn't needed
- */
-export function useSelectedModelFallback(): Model {
-  const selectedModelId = useModelStore((s) => s.selectedModelId)
-  return getModelById(selectedModelId) ?? fallbackModels[0]
+// ============================================================================
+// Helpers
+// ============================================================================
+
+export function getModelById(models: Model[], id: string): Model | undefined {
+  return models.find((m) => m.id === id)
+}
+
+export function prefetchModels() {
+  fetchAllModels().catch(() => {})
+}
+
+// Get cache status
+export function getCacheStatus() {
+  return {
+    hasData: !!cache.models,
+    modelCount: cache.models?.length || 0,
+    timestamp: cache.timestamp,
+    age: cache.timestamp ? Date.now() - cache.timestamp : null,
+    isStale: cache.timestamp ? Date.now() - cache.timestamp > CACHE_TTL : true,
+    isLoading: cache.loading,
+  }
 }
