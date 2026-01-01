@@ -9,14 +9,14 @@ export const env = {
   CONVEX_SITE_URL: import.meta.env.VITE_CONVEX_SITE_URL as string,
   POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY as string | undefined,
   POSTHOG_HOST: import.meta.env.VITE_POSTHOG_HOST as string | undefined,
-} as const;
+} as const
 
 // Validate required env vars
 export function validateEnv() {
   if (!env.CONVEX_URL) {
-    console.warn("Missing VITE_CONVEX_URL environment variable");
+    console.warn('Missing VITE_CONVEX_URL environment variable')
   }
   if (!env.CONVEX_SITE_URL) {
-    console.warn("Missing VITE_CONVEX_SITE_URL environment variable");
+    console.warn('Missing VITE_CONVEX_SITE_URL environment variable')
   }
 }

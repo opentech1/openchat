@@ -7,48 +7,48 @@
  * Now we have ONE source of truth with clear state transitions.
  */
 
-import { create } from "zustand";
-import { devtools } from "zustand/middleware";
+import { create } from 'zustand'
+import { devtools } from 'zustand/middleware'
 
 export type StreamStatus =
-  | "idle"
-  | "connecting"
-  | "streaming"
-  | "stopping"
-  | "error";
+  | 'idle'
+  | 'connecting'
+  | 'streaming'
+  | 'stopping'
+  | 'error'
 
 interface StreamState {
   // Current stream state
-  status: StreamStatus;
-  convexStreamId: string | null;
-  redisStreamId: string | null;
-  error: string | null;
+  status: StreamStatus
+  convexStreamId: string | null
+  redisStreamId: string | null
+  error: string | null
 
   // Current message being streamed
-  activeMessageId: string | null;
-  content: string;
-  reasoning: string;
+  activeMessageId: string | null
+  content: string
+  reasoning: string
 
   // Actions
-  startStream: (convexStreamId: string, messageId: string) => void;
-  setRedisStreamId: (id: string) => void;
-  appendContent: (chunk: string) => void;
-  appendReasoning: (chunk: string) => void;
-  completeStream: () => void;
-  stopStream: () => void;
-  errorStream: (error: string) => void;
-  reset: () => void;
+  startStream: (convexStreamId: string, messageId: string) => void
+  setRedisStreamId: (id: string) => void
+  appendContent: (chunk: string) => void
+  appendReasoning: (chunk: string) => void
+  completeStream: () => void
+  stopStream: () => void
+  errorStream: (error: string) => void
+  reset: () => void
 }
 
 const initialState = {
-  status: "idle" as StreamStatus,
+  status: 'idle' as StreamStatus,
   convexStreamId: null,
   redisStreamId: null,
   error: null,
   activeMessageId: null,
-  content: "",
-  reasoning: "",
-};
+  content: '',
+  reasoning: '',
+}
 
 export const useStreamStore = create<StreamState>()(
   devtools(
@@ -58,72 +58,71 @@ export const useStreamStore = create<StreamState>()(
       startStream: (convexStreamId, messageId) =>
         set(
           {
-            status: "connecting",
+            status: 'connecting',
             convexStreamId,
             activeMessageId: messageId,
-            content: "",
-            reasoning: "",
+            content: '',
+            reasoning: '',
             error: null,
           },
           false,
-          "stream/start"
+          'stream/start',
         ),
 
       setRedisStreamId: (id) =>
-        set({ redisStreamId: id, status: "streaming" }, false, "stream/redis"),
+        set({ redisStreamId: id, status: 'streaming' }, false, 'stream/redis'),
 
       appendContent: (chunk) =>
         set(
           (state) => ({ content: state.content + chunk }),
           false,
-          "stream/content"
+          'stream/content',
         ),
 
       appendReasoning: (chunk) =>
         set(
           (state) => ({ reasoning: state.reasoning + chunk }),
           false,
-          "stream/reasoning"
+          'stream/reasoning',
         ),
 
       completeStream: () =>
         set(
           {
-            status: "idle",
+            status: 'idle',
             convexStreamId: null,
             redisStreamId: null,
             activeMessageId: null,
           },
           false,
-          "stream/complete"
+          'stream/complete',
         ),
 
-      stopStream: () =>
-        set({ status: "stopping" }, false, "stream/stop"),
+      stopStream: () => set({ status: 'stopping' }, false, 'stream/stop'),
 
       errorStream: (error) =>
         set(
           {
-            status: "error",
+            status: 'error',
             error,
             convexStreamId: null,
             redisStreamId: null,
           },
           false,
-          "stream/error"
+          'stream/error',
         ),
 
-      reset: () => set(initialState, false, "stream/reset"),
+      reset: () => set(initialState, false, 'stream/reset'),
     }),
-    { name: "stream-store" }
-  )
-);
+    { name: 'stream-store' },
+  ),
+)
 
 // Selector hooks for optimized re-renders
 export const useIsStreaming = () =>
-  useStreamStore((s) => s.status === "streaming" || s.status === "connecting");
+  useStreamStore((s) => s.status === 'streaming' || s.status === 'connecting')
 
 export const useStreamContent = () =>
-  useStreamStore((s) => ({ content: s.content, reasoning: s.reasoning }));
+  useStreamStore((s) => ({ content: s.content, reasoning: s.reasoning }))
 
-export const useStreamError = () => useStreamStore((s) => s.error);
+export const useStreamError = () => useStreamStore((s) => s.error)

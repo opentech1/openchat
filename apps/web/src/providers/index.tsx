@@ -2,12 +2,19 @@
  * App Providers - Clean provider composition
  */
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
-import { Toaster } from "sonner";
-import { convexClient } from "../lib/convex";
-import { authClient } from "../lib/auth-client";
-import { ThemeProvider } from "./theme-provider";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
+import { Toaster } from 'sonner'
+import { convexClient } from '../lib/convex'
+import { authClient } from '../lib/auth-client'
+import { ThemeProvider } from './theme-provider'
+import { PostHogProvider } from './posthog'
+import { prefetchModels } from '../stores/model'
+
+// Prefetch models.dev data early (cached, won't block render)
+if (typeof window !== 'undefined') {
+  prefetchModels()
+}
 
 // Singleton query client - disable refetch on window focus to prevent tab-switch flashing
 const queryClient = new QueryClient({
@@ -19,10 +26,10 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
     },
   },
-});
+})
 
 interface ProvidersProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
 export function Providers({ children }: ProvidersProps) {
@@ -31,23 +38,27 @@ export function Providers({ children }: ProvidersProps) {
   if (!convexClient) {
     // Server-side or missing env - render without Convex
     return (
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toaster richColors position="bottom-right" theme="system" />
-        </QueryClientProvider>
-      </ThemeProvider>
-    );
+      <PostHogProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toaster richColors position="bottom-right" theme="system" />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </PostHogProvider>
+    )
   }
 
   return (
-    <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-          <Toaster richColors position="bottom-right" theme="system" />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </ConvexBetterAuthProvider>
-  );
+    <PostHogProvider>
+      <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            <Toaster richColors position="bottom-right" theme="system" />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </ConvexBetterAuthProvider>
+    </PostHogProvider>
+  )
 }
