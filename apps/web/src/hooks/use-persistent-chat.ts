@@ -226,7 +226,7 @@ export function usePersistentChat({
 
       // Track web search usage if tool was called
       const hasWebSearch = message.parts?.some(
-        (p) => p.type === 'tool-call' && (p as { toolName?: string }).toolName === 'webSearch'
+        (p) => p.type === 'tool-call' && 'toolName' in p && p.toolName === 'webSearch'
       )
       if (hasWebSearch) {
         const providerState = useProviderStore.getState()
