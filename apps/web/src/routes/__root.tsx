@@ -70,7 +70,17 @@ function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   usePostHogPageView(pathname)
 
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, loading } = useAuth()
+
+  // During SSR and initial load, render a neutral layout that works for both states
+  // This prevents hydration mismatches since auth state is only known client-side
+  if (loading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   // Show sidebar for authenticated users
   // OSSChat Cloud provides free access - no API key required
@@ -105,7 +115,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
       </head>
-      <body className="h-full overflow-hidden bg-background antialiased">
+      <body className="h-full overflow-hidden bg-background antialiased" suppressHydrationWarning>
         {children}
         <Scripts />
       </body>

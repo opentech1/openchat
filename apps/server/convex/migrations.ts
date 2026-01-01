@@ -12,6 +12,50 @@ import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { setStat, STAT_KEYS } from "./lib/dbStats";
 import type { Id } from "./_generated/dataModel";
+import { components } from "./_generated/api";
+
+/**
+ * Clear Better Auth JWKS table
+ * 
+ * Use this when BETTER_AUTH_SECRET has changed and old keys are causing
+ * "Failed to decrypt private key" errors.
+ * 
+ * @example
+ * ```bash
+ * npx convex run --prod migrations:clearJwks
+ * ```
+ */
+export const clearJwks = internalMutation({
+	args: {},
+	handler: async (ctx) => {
+		console.log("[Migration] Clear JWKS - Started");
+		
+		try {
+			// First find all JWKS records
+			const jwksRecords = await ctx.runQuery(components.betterAuth.adapter.findMany, {
+				model: "jwks",
+				paginationOpts: { numItems: 100, cursor: null },
+			} as any);
+			
+			console.log(`[Migration] Found ${jwksRecords.page.length} JWKS records`);
+			
+			// Delete each one using deleteMany (needs input wrapper)
+			const result = await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+				input: {
+					model: "jwks",
+					where: [],
+				},
+				paginationOpts: { numItems: 100, cursor: null },
+			} as any);
+			
+			console.log("[Migration] Clear JWKS - Completed", result);
+			return { success: true, count: jwksRecords.page.length };
+		} catch (error) {
+			console.error("[Migration] Clear JWKS - Failed", error);
+			throw error;
+		}
+	},
+});
 
 /**
  * Initialize database statistics counters
