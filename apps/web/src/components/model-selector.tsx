@@ -1,506 +1,525 @@
-"use client"
+/**
+ * Model Selector - Searchable model picker with provider grouping
+ *
+ * Dynamically loads ALL models from OpenRouter API.
+ * Features fuzzy search, keyboard navigation, and provider grouping.
+ * Uses models.dev for provider logos.
+ */
 
-import * as React from "react"
-import { Check, Brain, Image, Mic, Video, LogIn, Loader2 } from "@/lib/icons"
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Model } from '@/stores/model'
+import { cn } from '@/lib/utils'
+import { useModels, useModelStore, getModelById } from '@/stores/model'
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import {
-	ModelSelector as AIModelSelector,
-	ModelSelectorTrigger,
-	ModelSelectorContent,
-	ModelSelectorInput,
-	ModelSelectorList,
-	ModelSelectorEmpty,
-	ModelSelectorGroup,
-	ModelSelectorItem,
-	ModelSelectorName,
-	ModelSelectorLogo,
-} from "@/components/ai-elements/model-selector"
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipProvider,
-	TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { registerClientProperties } from "@/lib/posthog"
-import { LiveRegion } from "@/components/ui/live-region"
-import { useOpenRouterKey } from "@/hooks/use-openrouter-key"
-import { useOpenRouterOAuth } from "@/hooks/use-openrouter-oauth"
+// Icons
+const ChevronDownIcon = () => (
+  <svg
+    className="size-4 text-muted-foreground"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 9l-7 7-7-7"
+    />
+  </svg>
+)
 
+const SearchIcon = () => (
+  <svg
+    className="size-4 text-muted-foreground"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+    />
+  </svg>
+)
 
-export type ModelSelectorOption = {
-	value: string
-	label: string
-	description?: string
-	context?: number | null
-	pricing?: {
-		prompt: number | null
-		completion: number | null
-	}
-	icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
-	popular?: boolean
-	free?: boolean
-	capabilities?: {
-		reasoning?: boolean
-		image?: boolean
-		audio?: boolean
-		video?: boolean
-		mandatoryReasoning?: boolean
-	}
+const CheckIcon = () => (
+  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M5 13l4 4L19 7"
+    />
+  </svg>
+)
+
+// Fuzzy search implementation
+function fuzzyMatch(text: string, query: string): boolean {
+  const searchLower = query.toLowerCase()
+  const textLower = text.toLowerCase()
+
+  // Direct substring match
+  if (textLower.includes(searchLower)) return true
+
+  // Fuzzy character matching
+  let searchIndex = 0
+  for (
+    let i = 0;
+    i < textLower.length && searchIndex < searchLower.length;
+    i++
+  ) {
+    if (textLower[i] === searchLower[searchIndex]) {
+      searchIndex++
+    }
+  }
+  return searchIndex === searchLower.length
 }
 
-// Format price per million tokens
-function formatPrice(price: number | null): string {
-	if (price === null || price === undefined || !Number.isFinite(price)) return "Free"
-	// Handle -1 or negative values (used for variable/dynamic pricing like Auto Router)
-	if (price < 0) return "Variable"
-	const perMillion = price * 1_000_000
-	if (perMillion === 0) return "Free"
-	if (perMillion < 0.01) return `$${perMillion.toFixed(4)}`
-	if (perMillion < 1) return `$${perMillion.toFixed(2)}`
-	return `$${perMillion.toFixed(0)}`
+// Provider logo from models.dev
+function ProviderLogo({ providerId, className }: { providerId: string; className?: string }) {
+  return (
+    <img
+      alt={`${providerId} logo`}
+      className={cn('size-4 dark:invert', className)}
+      height={16}
+      width={16}
+      src={`https://models.dev/logos/${providerId}.svg`}
+      onError={(e) => {
+        // Fallback to first letter if logo not found
+        e.currentTarget.style.display = 'none'
+      }}
+    />
+  )
 }
 
-// Get price tier based on combined input+output cost (0=green, 1=yellow, 2=red)
-function getPriceTier(pricing: NonNullable<ModelSelectorOption["pricing"]>): number {
-	const input = pricing.prompt ?? 0
-	const output = pricing.completion ?? 0
-	const avgCost = ((input + output) / 2) * 1_000_000
-
-	if (avgCost === 0) return 0 // Free - green
-	if (avgCost < 1) return 0 // Very cheap - green
-	if (avgCost < 5) return 1 // Medium - yellow
-	return 2 // Expensive - red
-}
-
-// Price indicator component with 3 bars
-function PriceIndicator({ tier }: { tier: number }) {
-	const colors = ["bg-green-500", "bg-yellow-500", "bg-red-500"]
-	const bgColors = ["bg-green-500/20", "bg-yellow-500/20", "bg-red-500/20"]
-
-	return (
-		<div className="flex items-center gap-0.5">
-			{[0, 1, 2].map((i) => (
-				<div
-					key={i}
-					className={cn(
-						"h-2 w-1 rounded-full",
-						i <= tier ? colors[tier] : bgColors[tier]
-					)}
-				/>
-			))}
-		</div>
-	)
-}
-
-type ModelSelectorProps = {
-	options: ModelSelectorOption[]
-	value?: string | null
-	onChange?: (value: string) => void
-	disabled?: boolean
-	loading?: boolean
-	open?: boolean
-	onOpenChange?: (open: boolean) => void
-}
-
-// Extract provider from model ID (e.g. "openai/gpt-4" -> "openai")
-// Also handle special cases and normalize provider names for models.dev logos
-function getProviderFromModelId(modelId: string): string | null {
-	const parts = modelId.split("/")
-	if (parts.length < 2) return null
-
-	const provider = parts[0]!
-
-	// Normalize provider names to match models.dev logo slugs
-	const providerMap: Record<string, string> = {
-		"xai": "xai",
-		"x-ai": "xai",
-		"openai": "openai",
-		"anthropic": "anthropic",
-		"google": "google",
-		"deepseek": "deepseek",
-		"meta-llama": "llama",
-		"mistralai": "mistral",
-		"openrouter": "openrouter",
-		"perplexity": "perplexity",
-		"cohere": "cohere",
-		"01-ai": "01-ai",
-		"qwen": "alibaba",
-		"z-ai": "zhipuai",
-		"nvidia": "nvidia",
-		"microsoft": "azure",
-		"amazon": "amazon-bedrock",
-	}
-
-	return providerMap[provider] || provider
-}
-
-// Major providers to show in the list
-const MAJOR_PROVIDERS = new Set([
-	"openai",
-	"anthropic",
-	"google",
-	"xai",
-	"x-ai",
-	"deepseek",
-	"mistral",
-	"mistralai",
-	"meta-llama",
-	"openrouter",
-	"qwen",
-	"z-ai",
-]);
-
-// Group models with Popular and Free sections first, only showing major providers
-function groupModels(options: ModelSelectorOption[]) {
-	const groups: Array<[string, ModelSelectorOption[]]> = []
-
-	// Popular models section
-	const popularModels = options.filter(opt => opt.popular)
-	if (popularModels.length > 0) {
-		groups.push(["Popular", popularModels])
-	}
-
-	// Free models section - include all free models, even if they're also popular
-	const freeModels = options.filter(opt => opt.free)
-	if (freeModels.length > 0) {
-		groups.push(["Free Models", freeModels])
-	}
-
-	// Regular provider groups - only major providers
-	const regularModels = options.filter(opt => !opt.popular && !opt.free)
-	const grouped = new Map<string, ModelSelectorOption[]>()
-
-	for (const option of regularModels) {
-		const parts = option.value.split("/")
-		const provider = parts.length > 1 ? parts[0]! : "Other"
-
-		// Only include major providers
-		if (!MAJOR_PROVIDERS.has(provider)) {
-			continue
-		}
-
-		if (!grouped.has(provider)) {
-			grouped.set(provider, [])
-		}
-		grouped.get(provider)!.push(option)
-	}
-
-	groups.push(...Array.from(grouped.entries()))
-	return groups
-}
-
-// Map provider slugs to display names
-const providerNames: Record<string, string> = {
-	"openai": "OpenAI",
-	"anthropic": "Anthropic",
-	"google": "Google",
-	"meta-llama": "Meta",
-	"mistralai": "Mistral AI",
-	"deepseek": "DeepSeek",
-	"perplexity": "Perplexity",
-	"xai": "xAI",
-	"x-ai": "xAI",
-	"cohere": "Cohere",
-	"01-ai": "01.AI",
-	"qwen": "Alibaba",
-	"z-ai": "Z.AI",
-	"nvidia": "NVIDIA",
-	"microsoft": "Microsoft",
-	"amazon": "Amazon",
-}
-
-// OpenRouter OAuth sign-in banner component (shown in dropdown when connected)
-function OpenRouterSignInBanner() {
-	const { initiateLogin, isLoading } = useOpenRouterOAuth();
-
-	return (
-		<div className="px-2 py-2 border-b">
-			<button
-				type="button"
-				onClick={initiateLogin}
-				disabled={isLoading}
-				className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-			>
-				{isLoading ? (
-					<Loader2 className="size-4 animate-spin" />
-				) : (
-					<LogIn className="size-4" />
-				)}
-				<span>{isLoading ? "Connecting..." : "Add OpenRouter Account"}</span>
-			</button>
-		</div>
-	);
-}
-
-// Memoized ModelSelectorItem component for better performance
-const MemoizedModelSelectorItem = React.memo(function MemoizedModelSelectorItem({
-	option,
-	selectedValue,
-	onSelect,
+// Model item component
+function ModelItem({
+  model,
+  isSelected,
+  isHighlighted,
+  onSelect,
+  onHover,
+  dataIndex,
 }: {
-	option: ModelSelectorOption;
-	selectedValue: string;
-	onSelect: (value: string) => void;
+  model: Model
+  isSelected: boolean
+  isHighlighted: boolean
+  onSelect: () => void
+  onHover: () => void
+  dataIndex: number
 }) {
-	const isSelected = option.value === selectedValue;
-	const provider = getProviderFromModelId(option.value);
-	const hasPricing = option.pricing && (option.pricing.prompt !== null || option.pricing.completion !== null);
-	const priceTier = hasPricing ? getPriceTier(option.pricing!) : 0;
-
-	// Check if model is free (both input and output are 0)
-	const isFreeModel = hasPricing &&
-		((option.pricing!.prompt ?? 0) === 0 && (option.pricing!.completion ?? 0) === 0);
-
-	return (
-		<ModelSelectorItem
-			key={option.value}
-			value={option.value}
-			keywords={[option.label, option.value, provider || ""]}
-			onSelect={onSelect}
-			className="flex items-center gap-2"
-		>
-			{provider && <ModelSelectorLogo provider={provider} className="size-4 shrink-0" />}
-			<ModelSelectorName className="flex-1 min-w-0">{option.label}</ModelSelectorName>
-
-			{/* Capabilities icons with tooltips */}
-			{option.capabilities && (
-				<div className="flex items-center gap-1 shrink-0">
-					<TooltipProvider delayDuration={100}>
-						{option.capabilities.reasoning && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Brain className="size-3.5 text-purple-500" />
-								</TooltipTrigger>
-								<TooltipContent side="left" className="max-w-xs">
-									<div className="text-xs">
-										This model supports advanced reasoning and thinking capabilities
-									</div>
-								</TooltipContent>
-							</Tooltip>
-						)}
-						{option.capabilities.image && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Image className="size-3.5 text-blue-500" />
-								</TooltipTrigger>
-								<TooltipContent side="left" className="max-w-xs">
-									<div className="text-xs">
-										This model can process and understand images
-									</div>
-								</TooltipContent>
-							</Tooltip>
-						)}
-						{option.capabilities.audio && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Mic className="size-3.5 text-green-500" />
-								</TooltipTrigger>
-								<TooltipContent side="left" className="max-w-xs">
-									<div className="text-xs">
-										This model can process and understand audio files
-									</div>
-								</TooltipContent>
-							</Tooltip>
-						)}
-						{option.capabilities.video && (
-							<Tooltip>
-								<TooltipTrigger asChild>
-									<Video className="size-3.5 text-red-500" />
-								</TooltipTrigger>
-								<TooltipContent side="left" className="max-w-xs">
-									<div className="text-xs">
-										This model can process and understand video files
-									</div>
-								</TooltipContent>
-							</Tooltip>
-						)}
-					</TooltipProvider>
-				</div>
-			)}
-			{hasPricing && (
-				<div className="flex items-center gap-1.5 shrink-0">
-					<TooltipProvider delayDuration={100}>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<div className="flex items-center gap-1 text-xs text-muted-foreground">
-									<PriceIndicator tier={priceTier} />
-									<span className="tabular-nums">
-										{isFreeModel
-											? "Free"
-											: `${formatPrice(option.pricing!.prompt)}/${formatPrice(option.pricing!.completion)}`
-										}
-									</span>
-								</div>
-							</TooltipTrigger>
-							<TooltipContent side="left" className="text-xs px-2 py-1">
-								<div className="flex items-center gap-1 whitespace-nowrap">
-									<span>In: {formatPrice(option.pricing!.prompt)}</span>
-									<span>·</span>
-									<span>Out: {formatPrice(option.pricing!.completion)}</span>
-								</div>
-							</TooltipContent>
-						</Tooltip>
-					</TooltipProvider>
-				</div>
-			)}
-			{isSelected && (
-				<Check className="size-4 shrink-0" />
-			)}
-		</ModelSelectorItem>
-	);
-});
-
-function ModelSelector({ options, value, onChange, disabled, loading, open: controlledOpen, onOpenChange }: ModelSelectorProps) {
-	const [internalOpen, setInternalOpen] = React.useState(false)
-	const [internalValue, setInternalValue] = React.useState(() => value ?? options[0]?.value ?? "")
-
-	// Support both controlled and uncontrolled mode for open state
-	const open = controlledOpen !== undefined ? controlledOpen : internalOpen
-	const setOpen = React.useCallback((nextOpen: boolean) => {
-		if (onOpenChange) {
-			onOpenChange(nextOpen)
-		} else {
-			setInternalOpen(nextOpen)
-		}
-	}, [onOpenChange])
-
-	// Check if user has OpenRouter key
-	const { hasKey, isLoading: isKeyLoading } = useOpenRouterKey()
-	const { initiateLogin, isLoading: isOAuthLoading } = useOpenRouterOAuth()
-
-	React.useEffect(() => {
-		if (value !== undefined) {
-			setInternalValue(value ?? "")
-		}
-	}, [value])
-
-	React.useEffect(() => {
-		if (value !== undefined) return
-		if (options.length === 0) {
-			if (internalValue) setInternalValue("")
-			return
-		}
-		const exists = internalValue && options.some((option) => option.value === internalValue)
-		if (!internalValue || !exists) {
-			setInternalValue(options[0]!.value)
-		}
-	}, [options, value, internalValue])
-
-	const selectedValue = value ?? internalValue
-	const selectedOption = React.useMemo(() => {
-		return options.find((option) => option.value === selectedValue) ?? null
-	}, [options, selectedValue])
-
-	React.useEffect(() => {
-		if (!selectedValue) return
-		registerClientProperties({ model_id: selectedValue })
-	}, [selectedValue])
-
-	const triggerLabel = React.useMemo(() => {
-		if (selectedOption) return selectedOption.label
-		if (loading) return "Loading models..."
-		return "Select model"
-	}, [loading, selectedOption])
-
-	// Get provider logo for selected option
-	const selectedProvider = selectedOption ? getProviderFromModelId(selectedOption.value) : null
-
-	// Group options with Popular and Free sections first
-	const groupedOptions = React.useMemo(() => groupModels(options), [options])
-
-	// Memoized selection handler for better performance
-	const handleSelect = React.useCallback(
-		(currentValue: string) => {
-			if (value === undefined) {
-				setInternalValue(currentValue);
-			}
-			onChange?.(currentValue);
-			setOpen(false);
-		},
-		[value, onChange]
-	);
-
-	// If no key is connected, show a button that triggers OAuth
-	if (!isKeyLoading && !hasKey) {
-		return (
-			<>
-				<LiveRegion
-					message={isOAuthLoading ? "Connecting to OpenRouter..." : ""}
-					politeness="polite"
-				/>
-				<Button
-					variant="outline"
-					onClick={initiateLogin}
-					disabled={isOAuthLoading}
-					className="w-auto min-w-0 max-w-[200px] justify-start gap-2"
-				>
-					{isOAuthLoading ? (
-						<Loader2 className="size-4 animate-spin" />
-					) : (
-						<LogIn className="size-4" />
-					)}
-					<span>{isOAuthLoading ? "Connecting..." : "Connect OpenRouter"}</span>
-				</Button>
-			</>
-		)
-	}
-
-	return (
-		<AIModelSelector open={open} onOpenChange={setOpen}>
-			{/* Screen reader announcements for loading states */}
-			<LiveRegion
-				message={loading ? "Loading models..." : ""}
-				politeness="polite"
-			/>
-			<ModelSelectorTrigger asChild>
-				<Button
-					variant="outline"
-					disabled={disabled || loading || options.length === 0}
-					className="w-auto min-w-0 max-w-[140px] sm:max-w-[200px] justify-between gap-2"
-				>
-					<div className="flex items-center gap-2 flex-1 min-w-0">
-						{selectedProvider && (
-							<ModelSelectorLogo provider={selectedProvider} className="size-4 shrink-0" />
-						)}
-						<ModelSelectorName className="truncate">{triggerLabel}</ModelSelectorName>
-					</div>
-				</Button>
-			</ModelSelectorTrigger>
-			<ModelSelectorContent>
-				<ModelSelectorInput placeholder="Search models..." />
-				<ModelSelectorList>
-					<ModelSelectorEmpty>
-						{loading ? "Loading models..." : "No models found."}
-					</ModelSelectorEmpty>
-					{groupedOptions.map(([groupName, groupModels]) => (
-						<ModelSelectorGroup
-							key={groupName}
-							heading={groupName === "Popular" || groupName === "Free Models" ? groupName : (providerNames[groupName] || groupName)}
-						>
-							{groupModels.map((option) => (
-								<MemoizedModelSelectorItem
-									key={option.value}
-									option={option}
-									selectedValue={selectedValue}
-									onSelect={handleSelect}
-								/>
-							))}
-						</ModelSelectorGroup>
-					))}
-					{!loading && groupedOptions.length > 0 && (
-						<div className="px-2 py-4 text-center text-xs text-muted-foreground">
-							Can't find your model? Search above...
-						</div>
-					)}
-				</ModelSelectorList>
-			</ModelSelectorContent>
-		</AIModelSelector>
-	)
+  return (
+    <button
+      data-index={dataIndex}
+      onClick={onSelect}
+      onMouseEnter={onHover}
+      className={cn(
+        'relative flex w-full cursor-default items-center gap-2.5 rounded-xl py-2 pl-3 pr-8 text-left text-sm outline-none transition-colors',
+        isHighlighted
+          ? 'bg-accent text-accent-foreground'
+          : 'bg-transparent text-foreground',
+      )}
+    >
+      <ProviderLogo providerId={model.providerId} />
+      <span className="flex-1 truncate">{model.name}</span>
+      {model.isFree && (
+        <span className="text-[10px] font-medium text-green-500 uppercase">Free</span>
+      )}
+      {isSelected && (
+        <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center text-primary">
+          <CheckIcon />
+        </span>
+      )}
+    </button>
+  )
 }
 
-ModelSelector.displayName = "ModelSelector";
+// Props for the ModelSelector component
+interface ModelSelectorProps {
+  value: string
+  onValueChange: (modelId: string) => void
+  className?: string
+  disabled?: boolean
+}
 
-export const MemoizedModelSelector = React.memo(ModelSelector);
-export { MemoizedModelSelector as ModelSelector };
+export function ModelSelector({
+  value,
+  onValueChange,
+  className,
+  disabled = false,
+}: ModelSelectorProps) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [isClosing, setIsClosing] = useState(false)
+
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  // Load ALL models from OpenRouter
+  const { models, isLoading } = useModels()
+
+  const selectedModel = useMemo(() => getModelById(models, value), [models, value])
+
+  // Filter models based on query
+  const filteredModels = useMemo(() => {
+    if (!query.trim()) return models
+
+    return models.filter(
+      (model) =>
+        fuzzyMatch(model.name, query) ||
+        fuzzyMatch(model.provider, query) ||
+        fuzzyMatch(model.id, query) ||
+        (model.family && fuzzyMatch(model.family, query)),
+    )
+  }, [models, query])
+
+  // Separate popular and other models from filtered results
+  const { filteredPopular, filteredOthers } = useMemo(() => {
+    const popular: Array<Model> = []
+    const others: Array<Model> = []
+    for (const model of filteredModels) {
+      if (model.isPopular) {
+        popular.push(model)
+      } else {
+        others.push(model)
+      }
+    }
+    return { filteredPopular: popular, filteredOthers: others }
+  }, [filteredModels])
+
+  // Group other models by family/prefix
+  const groupedOtherModels = useMemo(() => {
+    const grouped: Record<string, Array<Model>> = {}
+    for (const model of filteredOthers) {
+      // Group by family if available, otherwise by ID prefix
+      const group = model.family || model.id.split('/')[0] || 'Other'
+      const groupName = group.charAt(0).toUpperCase() + group.slice(1).replace(/-/g, ' ')
+      
+      if (!grouped[groupName]) {
+        grouped[groupName] = []
+      }
+      grouped[groupName].push(model)
+    }
+    return grouped
+  }, [filteredOthers])
+
+  // Get visible groups sorted
+  const visibleGroups = useMemo(() => {
+    return Object.keys(groupedOtherModels).sort((a, b) => {
+      // Put larger groups first
+      const aLen = groupedOtherModels[a]?.length || 0
+      const bLen = groupedOtherModels[b]?.length || 0
+      if (aLen !== bLen) return bLen - aLen
+      return a.localeCompare(b)
+    })
+  }, [groupedOtherModels])
+
+  // Flat list for keyboard navigation
+  const flatList = useMemo(() => {
+    const result: Array<Model> = []
+    result.push(...filteredPopular)
+    for (const group of visibleGroups) {
+      result.push(...groupedOtherModels[group])
+    }
+    return result
+  }, [filteredPopular, visibleGroups, groupedOtherModels])
+
+  // Reset highlighted index when filtered list changes
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [query])
+
+  // Open handler
+  const handleOpen = useCallback(() => {
+    if (disabled) return
+    setOpen(true)
+    setQuery('')
+    setHighlightedIndex(0)
+    setIsClosing(false)
+    requestAnimationFrame(() => {
+      inputRef.current?.focus()
+    })
+  }, [disabled])
+
+  // Close handler with animation
+  const handleClose = useCallback(() => {
+    setIsClosing(true)
+    setTimeout(() => {
+      setOpen(false)
+      setIsClosing(false)
+      triggerRef.current?.focus()
+    }, 150)
+  }, [])
+
+  // Select handler
+  const handleSelect = useCallback(
+    (modelId: string) => {
+      onValueChange(modelId)
+      handleClose()
+    },
+    [onValueChange, handleClose],
+  )
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!open) return
+
+    function handleKeyDown(e: KeyboardEvent) {
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault()
+          setHighlightedIndex((prev) =>
+            prev < flatList.length - 1 ? prev + 1 : prev,
+          )
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : prev))
+          break
+        case 'Enter':
+          e.preventDefault()
+          if (flatList[highlightedIndex]) {
+            handleSelect(flatList[highlightedIndex].id)
+          }
+          break
+        case 'Escape':
+          e.preventDefault()
+          handleClose()
+          break
+        case 'Tab':
+          e.preventDefault()
+          handleClose()
+          break
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [open, flatList, highlightedIndex, handleSelect, handleClose])
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (!listRef.current || !open) return
+    const selectedElement = listRef.current.querySelector(
+      `[data-index="${highlightedIndex}"]`,
+    )
+    if (selectedElement) {
+      selectedElement.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex, open])
+
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return
+
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        contentRef.current &&
+        !contentRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        handleClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open, handleClose])
+
+  // Get flat index for a model
+  const getFlatIndex = useCallback(
+    (modelId: string) => {
+      return flatList.findIndex((m) => m.id === modelId)
+    },
+    [flatList],
+  )
+
+  return (
+    <div className={cn('relative inline-block', className)}>
+      {/* Trigger button */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? handleClose() : handleOpen())}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Select model"
+        className={cn(
+          'border-input data-[placeholder]:text-muted-foreground bg-input/30 hover:bg-input/50 focus-visible:border-ring focus-visible:ring-ring/50 gap-2 rounded-4xl border px-3 py-2 text-sm transition-colors focus-visible:ring-[3px]',
+          'flex h-9 w-fit min-w-[180px] items-center justify-between whitespace-nowrap outline-none',
+          'disabled:cursor-not-allowed disabled:opacity-50',
+          open && 'border-ring ring-ring/50 ring-[3px]',
+        )}
+      >
+        {selectedModel ? (
+          <span className="flex items-center gap-2">
+            <ProviderLogo providerId={selectedModel.providerId} />
+            <span className="truncate">{selectedModel.name}</span>
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            {isLoading ? 'Loading...' : 'Select model...'}
+          </span>
+        )}
+        <ChevronDownIcon />
+      </button>
+
+      {/* Dropdown content */}
+      {open && (
+        <div
+          ref={contentRef}
+          className={cn(
+            'absolute left-0 top-full z-50 mt-1.5 w-[320px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl',
+            isClosing
+              ? 'animate-out fade-out-0 zoom-out-95 slide-out-to-top-2 duration-150'
+              : 'animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200',
+          )}
+          role="listbox"
+          aria-label="Models"
+        >
+          {/* Search input */}
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <SearchIcon />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search models..."
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </div>
+
+          {/* Model list */}
+          <div
+            ref={listRef}
+            className="max-h-[400px] overflow-y-auto overscroll-contain p-1"
+          >
+            {isLoading ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                Loading models...
+              </div>
+            ) : flatList.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                No models found
+              </div>
+            ) : (
+              <>
+                {/* Popular Models Section */}
+                {filteredPopular.length > 0 && (
+                  <>
+                    <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-amber-500">
+                      Popular
+                    </div>
+                    {filteredPopular.map((model) => {
+                      const flatIndex = getFlatIndex(model.id)
+                      return (
+                        <ModelItem
+                          key={model.id}
+                          model={model}
+                          isSelected={model.id === value}
+                          isHighlighted={flatIndex === highlightedIndex}
+                          onSelect={() => handleSelect(model.id)}
+                          onHover={() => setHighlightedIndex(flatIndex)}
+                          dataIndex={flatIndex}
+                        />
+                      )
+                    })}
+                  </>
+                )}
+
+                {/* All Models by Group */}
+                {visibleGroups.length > 0 && (
+                  <>
+                    <div className={cn(
+                      "px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70",
+                      filteredPopular.length > 0 && "mt-2 border-t border-border pt-2"
+                    )}>
+                      All Models
+                    </div>
+                    {visibleGroups.map((group: string) => (
+                      <div key={group} className="py-0.5">
+                        <div className="px-3 py-1 text-xs font-medium text-muted-foreground flex items-center gap-2">
+                          <ProviderLogo providerId={groupedOtherModels[group]?.[0]?.providerId || group.toLowerCase()} className="size-3" />
+                          {group}
+                        </div>
+                        {groupedOtherModels[group].map((model: Model) => {
+                          const flatIndex = getFlatIndex(model.id)
+                          return (
+                            <ModelItem
+                              key={model.id}
+                              model={model}
+                              isSelected={model.id === value}
+                              isHighlighted={flatIndex === highlightedIndex}
+                              onSelect={() => handleSelect(model.id)}
+                              onHover={() => setHighlightedIndex(flatIndex)}
+                              dataIndex={flatIndex}
+                            />
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Footer with keyboard hints */}
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-1.5">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+                  ↑↓
+                </kbd>
+                <span>Navigate</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+                  ↵
+                </kbd>
+                <span>Select</span>
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {flatList.length} model{flatList.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * ModelSelector with built-in Zustand store connection
+ */
+export function ConnectedModelSelector({
+  className,
+  disabled,
+}: {
+  className?: string
+  disabled?: boolean
+}) {
+  const selectedModelId = useModelStore((state) => state.selectedModelId)
+  const setSelectedModel = useModelStore((state) => state.setSelectedModel)
+
+  return (
+    <ModelSelector
+      value={selectedModelId}
+      onValueChange={setSelectedModel}
+      className={className}
+      disabled={disabled}
+    />
+  )
+}

@@ -1,19 +1,16 @@
-import * as React from "react"
-import * as LabelPrimitive from "@radix-ui/react-label"
+'use client'
 
-import { cn } from "@/lib/utils"
-import { spacing } from "@/styles/design-tokens"
+import * as React from 'react'
 
-function Label({
-  className,
-  ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+import { cn } from '@/lib/utils'
+
+function Label({ className, ...props }: React.ComponentProps<'label'>) {
   return (
-    <LabelPrimitive.Root
+    <label
       data-slot="label"
       className={cn(
-        `flex items-center ${spacing.gap.sm} text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50`,
-        className
+        'gap-2 text-sm leading-none font-medium group-data-[disabled=true]:opacity-50 peer-disabled:opacity-50 flex items-center select-none group-data-[disabled=true]:pointer-events-none peer-disabled:cursor-not-allowed',
+        className,
       )}
       {...props}
     />

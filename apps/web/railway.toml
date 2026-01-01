@@ -1,9 +1,10 @@
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "docker/web.Dockerfile"
+builder = "RAILPACK"
+buildCommand = "cd apps/web && bun run build"
+watchPatterns = ["apps/web/**"]
 
 [deploy]
-sleepApplication = false
-restartPolicyType = "ALWAYS"
+startCommand = "cd apps/web && bun .output/server/index.mjs"
 healthcheckPath = "/"
 healthcheckTimeout = 30
+restartPolicyType = "always"
