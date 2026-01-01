@@ -8,7 +8,17 @@ import { authComponent, createAuth } from "./auth";
 const http = httpRouter();
 
 // Register Better Auth routes with CORS enabled for client-side requests
-authComponent.registerRoutes(http, createAuth, { cors: true });
+authComponent.registerRoutes(http, createAuth, {
+  cors: {
+    allowedOrigins: [
+      "http://localhost:3000",
+      "https://osschat.dev",
+      "https://beta.osschat.dev",
+    ],
+    allowedHeaders: ["content-type", "authorization", "better-auth-cookie"],
+    exposedHeaders: ["set-better-auth-cookie"],
+  },
+});
 
 http.route({
   path: "/health",
