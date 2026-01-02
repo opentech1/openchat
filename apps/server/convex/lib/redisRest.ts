@@ -65,8 +65,9 @@ function getRedisCredentials(): { url: string; token: string } | null {
 
 /**
  * Execute a Redis command via REST API
+ * Note: Currently unused but kept for future single-command operations
  */
-async function executeCommand<T = unknown>(
+async function _executeCommand<T = unknown>(
 	command: (string | number)[]
 ): Promise<T> {
 	const creds = getRedisCredentials();

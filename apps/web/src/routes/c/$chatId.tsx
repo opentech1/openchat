@@ -10,6 +10,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useAuth } from '@/lib/auth-client'
 import { ChatInterface } from '@/components/chat-interface'
 import { Button } from '@/components/ui/button'
+import { convexClient } from '@/lib/convex'
 
 export const Route = createFileRoute('/c/$chatId')({
   component: ChatPage,
@@ -18,6 +19,16 @@ export const Route = createFileRoute('/c/$chatId')({
 function ChatPage() {
   const { chatId } = Route.useParams()
   const { isAuthenticated, loading } = useAuth()
+
+  // Wait for Convex client to be available (client-side only)
+  // This prevents SSR hydration issues with Convex hooks
+  if (!convexClient) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   // Loading state
   if (loading) {

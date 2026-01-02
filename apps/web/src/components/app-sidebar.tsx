@@ -6,6 +6,7 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import { useQuery } from 'convex/react'
 import { api } from '@server/convex/_generated/api'
 import { useAuth } from '@/lib/auth-client'
+import { convexClient } from '@/lib/convex'
 import { cn } from '@/lib/utils'
 import { Button } from './ui/button'
 import {
@@ -131,15 +132,16 @@ export function AppSidebar() {
   }
 
   // First, get the Convex user by Better Auth external ID
+  // Skip if Convex client is not available (prevents SSR errors)
   const convexUser = useQuery(
     api.users.getByExternalId,
-    user?.id ? { externalId: user.id } : 'skip',
+    convexClient && user?.id ? { externalId: user.id } : 'skip',
   )
 
   // Then fetch chat history using the Convex user ID
   const chatsResult = useQuery(
     api.chats.list,
-    convexUser?._id ? { userId: convexUser._id } : 'skip',
+    convexClient && convexUser?._id ? { userId: convexUser._id } : 'skip',
   )
 
   const chats = chatsResult?.chats ?? []

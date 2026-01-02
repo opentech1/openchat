@@ -33,6 +33,8 @@ export const Route = createFileRoute('/api/chat')({
             provider = 'osschat',
             apiKey,
             enableWebSearch = false,
+            reasoningEffort, // 'none' | 'low' | 'medium' | 'high' | undefined
+            maxSteps = 5, // Max iterations for tool calls (always multi-step enabled)
             // userId will be used for usage tracking in future
           } = body
 
@@ -113,23 +115,41 @@ export const Route = createFileRoute('/api/chat')({
             streamOptions.tools = {
               webSearch: webSearch({ apiKey: VALYU_API_KEY }),
             }
-            streamOptions.stopWhen = stepCountIs(5) // Limit tool call iterations
           }
+          
+          // Set step limit - always allow multi-step when tools are enabled
+          // maxSteps controls max iterations (default 5)
+          const hasTools = enableWebSearch && VALYU_API_KEY
+          const stepLimit = hasTools 
+            ? Math.max(1, Math.min(10, maxSteps)) 
+            : 1
+          streamOptions.stopWhen = stepCountIs(stepLimit)
 
-          // Enable thinking for Claude models
-          if (model.includes('claude')) {
-            streamOptions.providerOptions = {
-              anthropic: {
-                thinking: { type: 'enabled', budgetTokens: 10000 },
-              },
-            }
-          }
+           // Configure reasoning/thinking - only if user explicitly enables it
+           // When 'none', we don't send ANY reasoning config to actually disable it
+           if (reasoningEffort && reasoningEffort !== 'none') {
+             // Apply reasoning config to models that support it via OpenRouter unified API
+             const effortValue = reasoningEffort as 'low' | 'medium' | 'high'
+
+             streamOptions.providerOptions = {
+               ...streamOptions.providerOptions,
+               openrouter: {
+                 reasoning: {
+                   effort: effortValue,
+                 },
+               },
+             }
+           }
+           // When reasoningEffort is 'none' or undefined, we don't send any reasoning config
+           // This actually DISABLES reasoning instead of minimizing it
 
           const result = streamText(streamOptions)
 
           // Return streaming response compatible with useChat (AI SDK 5 format)
           // Include metadata with model and usage info for client-side cost tracking
+          // ALWAYS send reasoning to client - if the model reasons, show it honestly
           return result.toUIMessageStreamResponse({
+            sendReasoning: true, // Always show reasoning if model produces it
             messageMetadata: ({ part }) => {
               if (part.type === 'start') {
                 return {

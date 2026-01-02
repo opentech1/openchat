@@ -2,6 +2,7 @@
  * App Providers - Clean provider composition
  */
 
+import { useState, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConvexBetterAuthProvider } from '@convex-dev/better-auth/react'
 import { Toaster } from 'sonner'
@@ -33,31 +34,37 @@ interface ProvidersProps {
 }
 
 export function Providers({ children }: ProvidersProps) {
-  // Always render the same tree structure to avoid hydration mismatches
-  // convexClient is null on server, ConvexBetterAuthProvider handles this
-  if (!convexClient) {
-    // Server-side or missing env - render without Convex
+  // Track if we're on the client side with Convex available
+  const [isClient, setIsClient] = useState(false)
+  
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const content = (
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        {children}
+        <Toaster richColors position="bottom-right" theme="system" />
+      </QueryClientProvider>
+    </ThemeProvider>
+  )
+
+  // During SSR or before hydration, don't render Convex-dependent content
+  // This prevents the "Could not find Convex client" error
+  if (!isClient || !convexClient) {
     return (
       <PostHogProvider>
-        <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            {children}
-            <Toaster richColors position="bottom-right" theme="system" />
-          </QueryClientProvider>
-        </ThemeProvider>
+        {content}
       </PostHogProvider>
     )
   }
 
+  // Client-side with valid Convex client - use full auth provider
   return (
     <PostHogProvider>
       <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-        <ThemeProvider>
-          <QueryClientProvider client={queryClient}>
-            {children}
-            <Toaster richColors position="bottom-right" theme="system" />
-          </QueryClientProvider>
-        </ThemeProvider>
+        {content}
       </ConvexBetterAuthProvider>
     </PostHogProvider>
   )

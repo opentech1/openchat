@@ -13,6 +13,7 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
 import { useQuery, useMutation } from 'convex/react'
+import { convexClient } from '@/lib/convex'
 import { api } from '@server/convex/_generated/api'
 import type { Id } from '@server/convex/_generated/dataModel'
 import { useAuth } from '@/lib/auth-client'
@@ -38,12 +39,51 @@ export interface UsePersistentChatReturn {
   chatId: string | null
 }
 
+// Error metadata type (matches Convex schema)
+interface MessageError {
+  code: string
+  message: string
+  details?: string
+  provider?: string
+  retryable?: boolean
+}
+
+// DEPRECATED: Tool invocation type from Convex (legacy format)
+interface ToolInvocation {
+  toolName: string
+  toolCallId: string
+  state: string // "input-streaming" | "input-available" | "output-available" | "output-error"
+  input?: unknown
+  output?: unknown
+  errorText?: string
+}
+
+// NEW: Chain of thought part type - preserves exact stream order
+interface ChainOfThoughtPart {
+  type: 'reasoning' | 'tool'
+  index: number // Original position in the AI stream
+  // For reasoning parts
+  text?: string
+  // For tool parts
+  toolName?: string
+  toolCallId?: string
+  state?: string // "input-streaming" | "input-available" | "output-available" | "output-error"
+  input?: unknown
+  output?: unknown
+  errorText?: string
+}
+
 // Convert Convex message to AI SDK UIMessage format
+// Supports both new chainOfThoughtParts format and legacy reasoning/toolInvocations
 function convexMessageToUIMessage(msg: {
   _id: string
   role: string
   content: string
+  // DEPRECATED: Legacy fields
   reasoning?: string
+  toolInvocations?: ToolInvocation[]
+  // NEW: Unified chain of thought parts with preserved order
+  chainOfThoughtParts?: ChainOfThoughtPart[]
   createdAt: number
   attachments?: Array<{
     storageId: string
@@ -52,20 +92,60 @@ function convexMessageToUIMessage(msg: {
     size: number
     url?: string
   }>
-}): UIMessage {
+  // Error handling fields
+  error?: MessageError
+  messageType?: 'text' | 'error' | 'system'
+}): UIMessage & { error?: MessageError; messageType?: string } {
   const parts: UIMessage['parts'] = []
 
-  // Add text part
+  // NEW FORMAT: Use chainOfThoughtParts if available (preserves exact stream order)
+  if (msg.chainOfThoughtParts && msg.chainOfThoughtParts.length > 0) {
+    // Sort by index to ensure correct order
+    const sortedParts = [...msg.chainOfThoughtParts].sort((a, b) => a.index - b.index)
+    
+    for (const cotPart of sortedParts) {
+      if (cotPart.type === 'reasoning' && cotPart.text) {
+        parts.push({ type: 'reasoning', text: cotPart.text })
+      } else if (cotPart.type === 'tool' && cotPart.toolName) {
+        parts.push({
+          type: `tool-${cotPart.toolName}` as any,
+          toolCallId: cotPart.toolCallId,
+          state: cotPart.state || 'output-available',
+          input: cotPart.input,
+          output: cotPart.output,
+          errorText: cotPart.errorText,
+        } as any)
+      }
+    }
+  } else {
+    // LEGACY FORMAT: Fallback for old messages without chainOfThoughtParts
+    // Add reasoning first (legacy behavior)
+    if (msg.reasoning) {
+      parts.push({ type: 'reasoning', text: msg.reasoning })
+    }
+
+    // Add tool invocation parts (after reasoning, before text)
+    if (msg.toolInvocations) {
+      for (const tool of msg.toolInvocations) {
+        parts.push({
+          type: `tool-${tool.toolName}` as any,
+          toolCallId: tool.toolCallId,
+          state: tool.state,
+          input: tool.input,
+          output: tool.output,
+          errorText: tool.errorText,
+        } as any)
+      }
+    }
+  }
+
+  // Add text part (skip for error messages with no content)
+  // Text is always last in the message
   if (msg.content) {
     parts.push({ type: 'text', text: msg.content })
   }
 
-  // Add reasoning part if present
-  if (msg.reasoning) {
-    parts.push({ type: 'reasoning', text: msg.reasoning })
-  }
-
-  // Add file parts for attachments
+  // Add file parts for attachments (at the end)
   if (msg.attachments) {
     for (const attachment of msg.attachments) {
       if (attachment.url) {
@@ -83,6 +163,9 @@ function convexMessageToUIMessage(msg: {
     id: msg._id,
     role: msg.role as 'user' | 'assistant',
     parts,
+    // Pass through error metadata for rendering
+    error: msg.error,
+    messageType: msg.messageType,
   }
 }
 
@@ -91,10 +174,13 @@ export function usePersistentChat({
   onChatCreated,
 }: UsePersistentChatOptions): UsePersistentChatReturn {
   const { user } = useAuth()
-  const { selectedModelId } = useModelStore()
+  const { selectedModelId, reasoningEffort, maxSteps } = useModelStore()
   const { apiKey } = useOpenRouterKey()
   const activeProvider = useProviderStore((s) => s.activeProvider)
   const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled)
+  
+  // Check if Convex client is available (null during SSR or if env var missing)
+  const isConvexAvailable = !!convexClient
 
   // Track current chat ID (may change when new chat is created)
   const [currentChatId, setCurrentChatId] = useState<string | null>(
@@ -130,9 +216,10 @@ export function usePersistentChat({
   }, [chatId])
 
   // First, get the Convex user by Better Auth external ID
+  // Skip if Convex client is not available (SSR or missing env)
   const convexUser = useQuery(
     api.users.getByExternalId,
-    user?.id ? { externalId: user.id } : 'skip',
+    isConvexAvailable && user?.id ? { externalId: user.id } : 'skip',
   )
 
   // Get the Convex user ID
@@ -180,6 +267,10 @@ export function usePersistentChat({
           apiKey: activeProvider === 'openrouter' ? apiKey : undefined,
           chatId: chatIdRef.current,
           enableWebSearch: webSearchEnabled,
+          // Reasoning effort control - always send, server maps 'none' to 'minimal'
+          reasoningEffort: reasoningEffort,
+          // Max steps for multi-step tool calls (always enabled when tools are used)
+          maxSteps: maxSteps,
         },
       }),
     }),
@@ -225,8 +316,10 @@ export function usePersistentChat({
       }
 
       // Track web search usage if tool was called
+      // AI SDK 5 uses types like 'tool-webSearch' for the unified tool part type
       const hasWebSearch = message.parts?.some(
-        (p) => p.type === 'tool-call' && 'toolName' in p && p.toolName === 'webSearch'
+        (p) => p.type === 'tool-webSearch' || 
+               (typeof p.type === 'string' && p.type.startsWith('tool-') && p.type.includes('webSearch'))
       )
       if (hasWebSearch) {
         const providerState = useProviderStore.getState()
@@ -252,7 +345,48 @@ export function usePersistentChat({
               .map((p) => p.text)
               .join('\n') || ''
 
-          // Save to Convex
+          // NEW: Extract chain of thought parts WITH their original indices
+          // This preserves the exact order from the AI stream
+          const chainOfThoughtParts: ChainOfThoughtPart[] = []
+          const allParts = message.parts || []
+          
+          allParts.forEach((part, index) => {
+            if (part.type === 'reasoning') {
+              const reasoningPart = part as { type: 'reasoning'; text: string }
+              chainOfThoughtParts.push({
+                type: 'reasoning',
+                index,
+                text: reasoningPart.text,
+              })
+            } else if (
+              typeof part.type === 'string' &&
+              part.type.startsWith('tool-') &&
+              part.type !== 'tool-call' &&
+              part.type !== 'tool-result' &&
+              'toolCallId' in part
+            ) {
+              const toolPart = part as unknown as {
+                type: string
+                toolCallId: string
+                state: string
+                input?: unknown
+                output?: unknown
+                errorText?: string
+              }
+              chainOfThoughtParts.push({
+                type: 'tool',
+                index,
+                toolName: toolPart.type.replace('tool-', ''),
+                toolCallId: toolPart.toolCallId,
+                state: toolPart.state,
+                input: toolPart.input,
+                output: toolPart.output,
+                errorText: toolPart.errorText,
+              })
+            }
+          })
+
+          // Save to Convex with the NEW chainOfThoughtParts format
           await sendMessages({
             chatId: chatIdRef.current as Id<'chats'>,
             userId: currentConvexUserId,
@@ -265,6 +399,8 @@ export function usePersistentChat({
               content: assistantText,
               clientMessageId: message.id,
               createdAt: Date.now(),
+              // NEW: Use unified chainOfThoughtParts that preserves order
+              chainOfThoughtParts: chainOfThoughtParts.length > 0 ? chainOfThoughtParts : undefined,
             },
           })
 
@@ -284,6 +420,68 @@ export function usePersistentChat({
           pendingUserMessageRef.current = null
         } catch (e) {
           console.error('Failed to save messages to Convex:', e)
+        }
+      }
+    },
+    onError: async (error) => {
+      // Save error as a message in Convex (like T3.chat inline error display)
+      const pendingUserMessage = pendingUserMessageRef.current
+      const currentConvexUserId = convexUserIdRef.current
+
+      console.error('AI request error:', error)
+
+      // Only save error if we have a chat and user
+      if (chatIdRef.current && currentConvexUserId && pendingUserMessage) {
+        try {
+          // Classify the error
+          const errorMessage = error.message || 'An unexpected error occurred'
+          const isRateLimit =
+            errorMessage.toLowerCase().includes('rate limit') ||
+            errorMessage.toLowerCase().includes('too many requests')
+          const isAuth =
+            errorMessage.toLowerCase().includes('unauthorized') ||
+            errorMessage.toLowerCase().includes('authentication') ||
+            errorMessage.toLowerCase().includes('api key')
+          const isContextLength =
+            errorMessage.toLowerCase().includes('context length') ||
+            errorMessage.toLowerCase().includes('token limit')
+          const isContentFilter =
+            errorMessage.toLowerCase().includes('content filter') ||
+            errorMessage.toLowerCase().includes('safety')
+
+          let errorCode = 'unknown'
+          if (isRateLimit) errorCode = 'rate_limit'
+          else if (isAuth) errorCode = 'auth_error'
+          else if (isContextLength) errorCode = 'context_length'
+          else if (isContentFilter) errorCode = 'content_filter'
+
+          // Save error message to Convex
+          await sendMessages({
+            chatId: chatIdRef.current as Id<'chats'>,
+            userId: currentConvexUserId,
+            userMessage: {
+              content: pendingUserMessage.text,
+              clientMessageId: pendingUserMessage.id,
+              createdAt: Date.now(),
+            },
+            assistantMessage: {
+              content: '', // Empty content for error messages
+              clientMessageId: crypto.randomUUID(),
+              createdAt: Date.now(),
+              messageType: 'error',
+              error: {
+                code: errorCode,
+                message: errorMessage,
+                provider: useProviderStore.getState().activeProvider,
+                retryable: isRateLimit || errorCode === 'unknown',
+              },
+            },
+          })
+
+          // Clear pending message after saving error
+          pendingUserMessageRef.current = null
+        } catch (e) {
+          console.error('Failed to save error message to Convex:', e)
         }
       }
     },

@@ -18,6 +18,7 @@ import {
 import { AppSidebar } from '../components/app-sidebar'
 import { useAuth } from '../lib/auth-client'
 import { usePostHogPageView } from '../providers/posthog'
+import { convexClient } from '../lib/convex'
 
 import appCss from '../styles.css?url'
 
@@ -71,6 +72,16 @@ function AppShell() {
   usePostHogPageView(pathname)
 
   const { isAuthenticated, loading } = useAuth()
+
+  // Wait for Convex client to be available (client-side only)
+  // This prevents SSR errors with Convex hooks in AppSidebar
+  if (!convexClient) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
 
   // During SSR and initial load, render a neutral layout that works for both states
   // This prevents hydration mismatches since auth state is only known client-side

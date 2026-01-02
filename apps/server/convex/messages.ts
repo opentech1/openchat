@@ -7,7 +7,7 @@ import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 
-// Tool invocation validator - used in multiple places
+// Tool invocation validator - DEPRECATED: used for legacy format
 const toolInvocationValidator = v.object({
 	toolName: v.string(),
 	toolCallId: v.string(),
@@ -17,19 +17,54 @@ const toolInvocationValidator = v.object({
 	errorText: v.optional(v.string()),
 });
 
+// NEW: Unified chain of thought part validator - preserves stream order
+const chainOfThoughtPartValidator = v.object({
+	// Part type: "reasoning" for thinking, "tool" for tool calls
+	type: v.union(v.literal("reasoning"), v.literal("tool")),
+	// Original position in the AI stream (for ordering)
+	index: v.number(),
+	// For reasoning parts
+	text: v.optional(v.string()),
+	// For tool parts
+	toolName: v.optional(v.string()),
+	toolCallId: v.optional(v.string()),
+	state: v.optional(v.string()), // "input-streaming" | "input-available" | "output-available" | "output-error"
+	input: v.optional(v.any()),
+	output: v.optional(v.any()),
+	errorText: v.optional(v.string()),
+});
+
+// Error metadata validator - for storing AI errors inline in conversation (like T3.chat)
+const errorValidator = v.object({
+	code: v.string(), // "rate_limit", "auth_error", "model_error", "network_error", "content_filter", "context_length", "unknown"
+	message: v.string(),
+	details: v.optional(v.string()),
+	provider: v.optional(v.string()),
+	retryable: v.optional(v.boolean()),
+});
+
+// Message type validator
+const messageTypeValidator = v.optional(
+	v.union(v.literal("text"), v.literal("error"), v.literal("system"))
+);
+
 // Return type for list query - excludes redundant fields to reduce bandwidth
 const messageDoc = v.object({
 	_id: v.id("messages"),
 	clientMessageId: v.optional(v.string()),
 	role: v.string(),
 	content: v.string(),
+	// DEPRECATED: Use chainOfThoughtParts instead
 	reasoning: v.optional(v.string()),
 	thinkingTimeMs: v.optional(v.number()),
 	// REASONING REDACTED: Whether reasoning was requested for this message
 	// Used to show "redacted" state when provider doesn't return reasoning data
 	reasoningRequested: v.optional(v.boolean()),
+	// DEPRECATED: Use chainOfThoughtParts instead
 	// Tool invocations that occurred during message generation
 	toolInvocations: v.optional(v.array(toolInvocationValidator)),
+	// NEW: Unified chain of thought parts - preserves exact stream order
+	chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
 	// STREAM RECONNECTION: Include status and streamId to support reconnecting to active streams
 	status: v.optional(v.string()),
 	streamId: v.optional(v.string()),
@@ -45,6 +80,10 @@ const messageDoc = v.object({
 			})
 		)
 	),
+	// ERROR HANDLING: Error metadata for failed AI responses (displayed inline like T3.chat)
+	error: v.optional(errorValidator),
+	// Message type: "text" (default), "error", "system"
+	messageType: messageTypeValidator,
 	createdAt: v.number(),
 	deletedAt: v.optional(v.number()),
 });
@@ -128,16 +167,22 @@ export const list = query({
 			clientMessageId: msg.clientMessageId,
 			role: msg.role,
 			content: msg.content,
+			// DEPRECATED: Include for backward compatibility with old messages
 			reasoning: msg.reasoning,
 			thinkingTimeMs: msg.thinkingTimeMs,
 			// REASONING REDACTED: Include to detect when reasoning was requested but not returned
 			reasoningRequested: msg.reasoningRequested,
-			// TOOL INVOCATIONS: Include for persistence across page reloads
+			// DEPRECATED: Include for backward compatibility with old messages
 			toolInvocations: msg.toolInvocations,
+			// NEW: Unified chain of thought parts with preserved order
+			chainOfThoughtParts: msg.chainOfThoughtParts,
 			// STREAM RECONNECTION: Include status and streamId for reconnecting to active streams on reload
 			status: msg.status,
 			streamId: msg.streamId,
 			attachments: msg.attachments,
+			// ERROR HANDLING: Include error metadata for inline error display
+			error: msg.error,
+			messageType: msg.messageType,
 			createdAt: msg.createdAt,
 			deletedAt: msg.deletedAt,
 		}));
@@ -197,6 +242,18 @@ export const send = mutation({
 				content: v.string(),
 				createdAt: v.optional(v.number()),
 				clientMessageId: v.optional(v.string()),
+				// DEPRECATED: Use chainOfThoughtParts instead
+				// Reasoning content from AI SDK message parts (type: 'reasoning')
+				reasoning: v.optional(v.string()),
+				// DEPRECATED: Use chainOfThoughtParts instead
+				// Tool invocations that occurred during message generation
+				toolInvocations: v.optional(v.array(toolInvocationValidator)),
+				// NEW: Unified chain of thought parts - preserves exact stream order
+				chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
+				// Error metadata for failed responses (displayed inline like T3.chat)
+				error: v.optional(errorValidator),
+				// Message type: "text" (default), "error" for error messages
+				messageType: messageTypeValidator,
 			}),
 		),
 	},
@@ -243,10 +300,15 @@ export const send = mutation({
 				chatId: args.chatId,
 				role: "assistant",
 				content: args.assistantMessage.content,
+				reasoning: args.assistantMessage.reasoning,
+				toolInvocations: args.assistantMessage.toolInvocations,
+				chainOfThoughtParts: args.assistantMessage.chainOfThoughtParts,
 				createdAt: assistantCreatedAt,
 				clientMessageId: args.assistantMessage.clientMessageId,
 				status: "completed",
 				userId: args.userId,
+				error: args.assistantMessage.error,
+				messageType: args.assistantMessage.messageType,
 			});
 		}
 
@@ -353,7 +415,7 @@ function validateRole(role: string): MessageRole {
 	return role as MessageRole;
 }
 
-// Type for tool invocation data
+// Type for tool invocation data (DEPRECATED)
 type ToolInvocationData = {
 	toolName: string;
 	toolCallId: string;
@@ -362,6 +424,31 @@ type ToolInvocationData = {
 	output?: unknown;
 	errorText?: string;
 };
+
+// NEW: Type for chain of thought part
+type ChainOfThoughtPartData = {
+	type: "reasoning" | "tool";
+	index: number;
+	text?: string;
+	toolName?: string;
+	toolCallId?: string;
+	state?: string;
+	input?: unknown;
+	output?: unknown;
+	errorText?: string;
+};
+
+// Type for error metadata
+type ErrorData = {
+	code: string;
+	message: string;
+	details?: string;
+	provider?: string;
+	retryable?: boolean;
+};
+
+// Type for message type
+type MessageType = "text" | "error" | "system";
 
 async function insertOrUpdateMessage(
 	ctx: MutationCtx,
@@ -372,6 +459,8 @@ async function insertOrUpdateMessage(
 		reasoning?: string | null;
 		thinkingTimeMs?: number | null;
 		toolInvocations?: ToolInvocationData[] | null;
+		// NEW: Unified chain of thought parts
+		chainOfThoughtParts?: ChainOfThoughtPartData[] | null;
 		createdAt: number;
 		status: string;
 		clientMessageId?: string | null;
@@ -384,6 +473,10 @@ async function insertOrUpdateMessage(
 			size: number;
 			uploadedAt: number;
 		}>;
+		// Error metadata for failed AI responses
+		error?: ErrorData | null;
+		// Message type: "text", "error", "system"
+		messageType?: MessageType | null;
 	},
 ) {
 	// SECURITY: Validate role is exactly "user" or "assistant"
@@ -434,10 +527,13 @@ async function insertOrUpdateMessage(
 			reasoning: args.reasoning ?? undefined,
 			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
 			toolInvocations: args.toolInvocations ?? undefined,
+			chainOfThoughtParts: args.chainOfThoughtParts ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
 			attachments: args.attachments ?? undefined,
+			error: args.error ?? undefined,
+			messageType: args.messageType ?? undefined,
 		});
 
 		// PERFORMANCE OPTIMIZATION: Increment messageCount when creating new message
@@ -458,10 +554,13 @@ async function insertOrUpdateMessage(
 			reasoning: args.reasoning ?? undefined,
 			thinkingTimeMs: args.thinkingTimeMs ?? undefined,
 			toolInvocations: args.toolInvocations ?? undefined,
+			chainOfThoughtParts: args.chainOfThoughtParts ?? undefined,
 			createdAt: args.createdAt,
 			status: args.status,
 			userId: args.userId ?? undefined,
 			attachments: args.attachments ?? undefined,
+			error: args.error ?? undefined,
+			messageType: args.messageType ?? undefined,
 		});
 	}
 	return targetId;

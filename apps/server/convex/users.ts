@@ -7,7 +7,8 @@ import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
 import { authComponent } from "./auth";
 
 // User document validator with all fields including fileUploadCount
-const userDoc = v.object({
+// Note: Kept for potential future use (e.g., admin queries that need raw user data)
+const _userDoc = v.object({
 	_id: v.id("users"),
 	_creationTime: v.number(),
 	externalId: v.string(),

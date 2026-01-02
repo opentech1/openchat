@@ -420,6 +420,66 @@ export const models = getFallbackModels()
 export const fallbackModels = getFallbackModels()
 
 // ============================================================================
+// Reasoning Effort Types
+// ============================================================================
+
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high'
+
+// Models that support reasoning with effort control
+// Based on OpenRouter API supported_parameters and model capabilities
+// See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
+const REASONING_CAPABLE_MODELS = new Set([
+  // OpenAI o-series (reasoning models)
+  'openai/o1',
+  'openai/o1-mini',
+  'openai/o1-preview',
+  'openai/o3',
+  'openai/o3-mini',
+  'openai/o4-mini',
+  // GPT-5 series (all GPT-5 models are reasoning models)
+  'openai/gpt-5',
+  'openai/gpt-5-mini',
+  'openai/gpt-5-nano',
+  'openai/gpt-5-turbo',
+  // DeepSeek R1 (native reasoning)
+  'deepseek/deepseek-r1',
+  'deepseek/deepseek-r1-distill-llama-70b',
+  'deepseek/deepseek-r1-distill-qwen-32b',
+  'deepseek/deepseek-r1-distill-qwen-14b',
+  'deepseek/deepseek-r1-0528',
+  'deepseek/deepseek-r1:free',
+  // Anthropic Claude with extended thinking
+  'anthropic/claude-3.7-sonnet',
+  'anthropic/claude-3.7-sonnet:thinking',
+  'anthropic/claude-sonnet-4',
+  'anthropic/claude-sonnet-4:thinking',
+  // xAI Grok with reasoning
+  'x-ai/grok-3-mini-beta',
+  'x-ai/grok-3-mini',
+  // Google Gemini with thinking
+  'google/gemini-2.5-flash-preview-05-20',
+  'google/gemini-2.5-pro-preview-05-06',
+])
+
+// Check if a model supports reasoning effort control
+export function supportsReasoningEffort(modelId: string): boolean {
+  // Direct match
+  if (REASONING_CAPABLE_MODELS.has(modelId)) return true
+  
+  // Pattern matching for variants
+  const patterns = [
+    /^openai\/o[134]-/,
+    /^openai\/gpt-5/,
+    /deepseek.*r1/i,
+    /:thinking$/,
+    /-r1$/,
+    /-r1-/,
+  ]
+  
+  return patterns.some(pattern => pattern.test(modelId))
+}
+
+// ============================================================================
 // Zustand Store
 // ============================================================================
 
@@ -429,6 +489,12 @@ interface ModelState {
   favorites: Set<string>
   toggleFavorite: (modelId: string) => boolean
   isFavorite: (modelId: string) => boolean
+  // Reasoning effort control
+  reasoningEffort: ReasoningEffort
+  setReasoningEffort: (effort: ReasoningEffort) => void
+  // Max steps for multi-step tool calls (searches, etc.)
+  maxSteps: number // Max tool call iterations (1-10)
+  setMaxSteps: (steps: number) => void
 }
 
 export const useModelStore = create<ModelState>()(
@@ -458,22 +524,39 @@ export const useModelStore = create<ModelState>()(
         },
 
         isFavorite: (modelId) => get().favorites.has(modelId),
+
+        // Reasoning effort - default to 'none' (disabled)
+        reasoningEffort: 'none' as ReasoningEffort,
+
+        setReasoningEffort: (effort) =>
+          set({ reasoningEffort: effort }, false, 'model/reasoningEffort'),
+
+        // Max steps for multi-step tool calls (always enabled, controls iterations)
+        maxSteps: 5, // Default: 5 steps max for tools
+        setMaxSteps: (steps) =>
+          set({ maxSteps: Math.max(1, Math.min(10, steps)) }, false, 'model/maxSteps'),
       }),
       {
         name: 'model-store',
         partialize: (state) => ({
           selectedModelId: state.selectedModelId,
           favorites: Array.from(state.favorites),
+          reasoningEffort: state.reasoningEffort,
+          maxSteps: state.maxSteps,
         }),
         merge: (persisted, current) => {
           const data = persisted as {
             selectedModelId?: string
             favorites?: string[]
+            reasoningEffort?: ReasoningEffort
+            maxSteps?: number
           }
           return {
             ...current,
             selectedModelId: data?.selectedModelId ?? current.selectedModelId,
             favorites: new Set(data?.favorites ?? []),
+            reasoningEffort: data?.reasoningEffort ?? current.reasoningEffort,
+            maxSteps: data?.maxSteps ?? current.maxSteps,
           }
         },
       },
