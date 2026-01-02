@@ -18,6 +18,7 @@ import {
 import { AppSidebar } from '../components/app-sidebar'
 import { useAuth } from '../lib/auth-client'
 import { usePostHogPageView } from '../providers/posthog'
+import { ThemeSwitcher } from '../components/theme-switcher'
 
 import appCss from '../styles.css?url'
 
@@ -88,6 +89,9 @@ function AppShell() {
     // No sidebar layout for unauthenticated users
     return (
       <>
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeSwitcher />
+        </div>
         <Outlet />
         <CommandPalette />
       </>
@@ -101,6 +105,9 @@ function AppShell() {
       <div className="flex h-screen w-full bg-sidebar">
         <AppSidebar />
         <SidebarInset>
+          <div className="fixed right-4 top-4 z-50">
+            <ThemeSwitcher />
+          </div>
           <Outlet />
         </SidebarInset>
       </div>
