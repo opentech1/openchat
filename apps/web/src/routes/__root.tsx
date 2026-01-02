@@ -4,34 +4,28 @@ import {
   Scripts,
   createRootRoute,
   useRouterState,
-} from '@tanstack/react-router'
-import { Providers } from '../providers'
-import {
-  CommandPalette,
-  useCommandPaletteShortcut,
-} from '../components/command-palette'
-import {
-  SidebarProvider,
-  SidebarInset,
-  useSidebarShortcut,
-} from '../components/ui/sidebar'
-import { AppSidebar } from '../components/app-sidebar'
-import { useAuth } from '../lib/auth-client'
-import { usePostHogPageView } from '../providers/posthog'
+} from "@tanstack/react-router";
+import { Providers } from "../providers";
+import { CommandPalette, useCommandPaletteShortcut } from "../components/command-palette";
+import { SidebarProvider, SidebarInset, useSidebarShortcut } from "../components/ui/sidebar";
+import { AppSidebar } from "../components/app-sidebar";
+import { useAuth } from "../lib/auth-client";
+import { usePostHogPageView } from "../providers/posthog";
+import { convexClient } from "../lib/convex";
 
-import appCss from '../styles.css?url'
+import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'OpenChat' },
-      { name: 'description', content: 'AI Chat powered by OpenRouter' },
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "OpenChat" },
+      { name: "description", content: "AI Chat powered by OpenRouter" },
     ],
     links: [
-      { rel: 'stylesheet', href: appCss },
-      { rel: 'icon', href: '/favicon.ico' },
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", href: "/favicon.ico" },
     ],
     scripts: [
       // Inline script to prevent flash of wrong theme
@@ -49,7 +43,7 @@ export const Route = createRootRoute({
   }),
 
   component: RootComponent,
-})
+});
 
 function RootComponent() {
   return (
@@ -58,19 +52,29 @@ function RootComponent() {
         <AppShell />
       </Providers>
     </RootDocument>
-  )
+  );
 }
 
 function AppShell() {
   // Register global keyboard shortcuts
-  useCommandPaletteShortcut()
-  useSidebarShortcut()
+  useCommandPaletteShortcut();
+  useSidebarShortcut();
 
   // Track page views
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-  usePostHogPageView(pathname)
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  usePostHogPageView(pathname);
 
-  const { isAuthenticated, loading } = useAuth()
+  const { isAuthenticated, loading } = useAuth();
+
+  // Wait for Convex client to be available (client-side only)
+  // This prevents SSR errors with Convex hooks in AppSidebar
+  if (!convexClient) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   // During SSR and initial load, render a neutral layout that works for both states
   // This prevents hydration mismatches since auth state is only known client-side
@@ -79,7 +83,7 @@ function AppShell() {
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
-    )
+    );
   }
 
   // Show sidebar for authenticated users
@@ -91,7 +95,7 @@ function AppShell() {
         <Outlet />
         <CommandPalette />
       </>
-    )
+    );
   }
 
   // Full sidebar layout for authenticated users
@@ -106,7 +110,7 @@ function AppShell() {
       </div>
       <CommandPalette />
     </SidebarProvider>
-  )
+  );
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
@@ -120,5 +124,5 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <Scripts />
       </body>
     </html>
-  )
+  );
 }

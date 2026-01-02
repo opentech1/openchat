@@ -1,16 +1,27 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useRef } from 'react'
-import { useAuth } from '../lib/auth-client'
-import { Button } from '../components/ui/button'
-import { ChatInterface } from '../components/chat-interface'
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useRef } from "react";
+import { useAuth } from "../lib/auth-client";
+import { Button } from "../components/ui/button";
+import { ChatInterface } from "../components/chat-interface";
+import { convexClient } from "../lib/convex";
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: HomePage,
-})
+});
 
 function HomePage() {
-  const { isAuthenticated, loading } = useAuth()
-  const hasLoadedOnce = useRef(false)
+  const { isAuthenticated, loading } = useAuth();
+  const hasLoadedOnce = useRef(false);
+
+  // Wait for Convex client to be available (client-side only)
+  // This prevents SSR hydration issues with Convex hooks
+  if (!convexClient) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   // Only show loading on first load, not on refetches
   if (loading && !hasLoadedOnce.current) {
@@ -18,12 +29,12 @@ function HomePage() {
       <div className="flex h-full items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
       </div>
-    )
+    );
   }
 
   // Mark as loaded after first successful load
   if (!loading) {
-    hasLoadedOnce.current = true
+    hasLoadedOnce.current = true;
   }
 
   // Not authenticated - show sign in
@@ -36,10 +47,10 @@ function HomePage() {
           <Button>Sign In</Button>
         </Link>
       </div>
-    )
+    );
   }
 
   // Authenticated - show chat interface (new chat mode)
   // OSSChat Cloud provides free access with daily limits, no API key needed
-  return <ChatInterface />
+  return <ChatInterface />;
 }

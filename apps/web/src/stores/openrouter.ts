@@ -5,15 +5,15 @@
  * Uses Zustand for state management with devtools for debugging.
  */
 
-import { create } from 'zustand'
-import { persist, devtools } from 'zustand/middleware'
+import { create } from "zustand";
+import { persist, devtools } from "zustand/middleware";
 import {
   initiateOAuthFlow,
   getStoredCodeVerifier,
   validateState,
   exchangeCodeForKey,
   clearOAuthStorage,
-} from '../lib/openrouter-oauth'
+} from "../lib/openrouter-oauth";
 
 // ============================================================================
 // Types
@@ -21,16 +21,16 @@ import {
 
 interface OpenRouterState {
   // State
-  apiKey: string | null
-  isLoading: boolean
-  error: string | null
+  apiKey: string | null;
+  isLoading: boolean;
+  error: string | null;
 
   // Actions
-  setApiKey: (key: string) => void
-  clearApiKey: () => void
-  initiateLogin: (callbackUrl: string) => Promise<void>
-  handleCallback: (code: string, state: string | null) => Promise<boolean>
-  clearError: () => void
+  setApiKey: (key: string) => void;
+  clearApiKey: () => void;
+  initiateLogin: (callbackUrl: string) => Promise<void>;
+  handleCallback: (code: string, state: string | null) => Promise<boolean>;
+  clearError: () => void;
 }
 
 // ============================================================================
@@ -47,95 +47,71 @@ export const useOpenRouterStore = create<OpenRouterState>()(
         error: null,
 
         // Set API key directly
-        setApiKey: (key) =>
-          set({ apiKey: key, error: null }, false, 'openrouter/setApiKey'),
+        setApiKey: (key) => set({ apiKey: key, error: null }, false, "openrouter/setApiKey"),
 
         // Clear API key (logout)
-        clearApiKey: () =>
-          set({ apiKey: null, error: null }, false, 'openrouter/clearApiKey'),
+        clearApiKey: () => set({ apiKey: null, error: null }, false, "openrouter/clearApiKey"),
 
         // Initiate OAuth login flow
         initiateLogin: async (callbackUrl) => {
-          set(
-            { isLoading: true, error: null },
-            false,
-            'openrouter/initiateLogin',
-          )
+          set({ isLoading: true, error: null }, false, "openrouter/initiateLogin");
           try {
-            await initiateOAuthFlow(callbackUrl)
+            await initiateOAuthFlow(callbackUrl);
             // Note: This won't resolve as the page will redirect
           } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : 'Failed to initiate login'
-            set(
-              { isLoading: false, error: message },
-              false,
-              'openrouter/initiateLoginError',
-            )
+            const message = error instanceof Error ? error.message : "Failed to initiate login";
+            set({ isLoading: false, error: message }, false, "openrouter/initiateLoginError");
           }
         },
 
         // Handle OAuth callback
         handleCallback: async (code, state) => {
-          set(
-            { isLoading: true, error: null },
-            false,
-            'openrouter/handleCallback',
-          )
+          set({ isLoading: true, error: null }, false, "openrouter/handleCallback");
 
           try {
             // Validate state to prevent CSRF attacks
             if (!validateState(state)) {
-              throw new Error('Invalid state parameter. Please try again.')
+              throw new Error("Invalid state parameter. Please try again.");
             }
 
             // Get stored code verifier
-            const codeVerifier = getStoredCodeVerifier()
+            const codeVerifier = getStoredCodeVerifier();
             if (!codeVerifier) {
-              throw new Error(
-                'Missing code verifier. Please restart the login process.',
-              )
+              throw new Error("Missing code verifier. Please restart the login process.");
             }
 
             // Exchange code for API key
-            const apiKey = await exchangeCodeForKey(code, codeVerifier)
+            const apiKey = await exchangeCodeForKey(code, codeVerifier);
 
             // Clear OAuth storage after successful exchange
-            clearOAuthStorage()
+            clearOAuthStorage();
 
             set(
               { apiKey, isLoading: false, error: null },
               false,
-              'openrouter/handleCallbackSuccess',
-            )
+              "openrouter/handleCallbackSuccess",
+            );
 
-            return true
+            return true;
           } catch (error) {
-            const message =
-              error instanceof Error ? error.message : 'Authentication failed'
-            set(
-              { isLoading: false, error: message },
-              false,
-              'openrouter/handleCallbackError',
-            )
-            return false
+            const message = error instanceof Error ? error.message : "Authentication failed";
+            set({ isLoading: false, error: message }, false, "openrouter/handleCallbackError");
+            return false;
           }
         },
 
         // Clear error state
-        clearError: () => set({ error: null }, false, 'openrouter/clearError'),
+        clearError: () => set({ error: null }, false, "openrouter/clearError"),
       }),
       {
-        name: 'openrouter-store',
+        name: "openrouter-store",
         // Only persist the API key, not loading/error states
         partialize: (state) => ({ apiKey: state.apiKey }),
       },
     ),
-    { name: 'openrouter-store' },
+    { name: "openrouter-store" },
   ),
-)
+);
 
 // ============================================================================
 // Convenience Hook
@@ -158,5 +134,5 @@ export const useOpenRouterStore = create<OpenRouterState>()(
  * ```
  */
 export function useOpenRouterKey() {
-  return useOpenRouterStore()
+  return useOpenRouterStore();
 }

@@ -8,34 +8,28 @@
  * - Clicking a suggestion populates the input (doesn't auto-send)
  */
 
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { cn } from '@/lib/utils'
-import { useAuth } from '@/lib/auth-client'
-import {
-  PenLineIcon,
-  CompassIcon,
-  CodeIcon,
-  BookOpenIcon,
-  ChevronRightIcon,
-} from 'lucide-react'
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth-client";
+import { PenLineIcon, CompassIcon, CodeIcon, BookOpenIcon, ChevronRightIcon } from "lucide-react";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 interface StartScreenProps {
-  onPromptSelect?: (prompt: string) => void
-  className?: string
+  onPromptSelect?: (prompt: string) => void;
+  className?: string;
 }
 
-type Category = 'create' | 'explore' | 'code' | 'learn'
+type Category = "create" | "explore" | "code" | "learn";
 
 interface CategoryConfig {
-  id: Category
-  label: string
-  icon: React.ReactNode
+  id: Category;
+  label: string;
+  icon: React.ReactNode;
 }
 
 // ============================================================================
@@ -43,59 +37,59 @@ interface CategoryConfig {
 // ============================================================================
 
 const CATEGORIES: CategoryConfig[] = [
-  { id: 'create', label: 'Create', icon: <PenLineIcon className="size-4" /> },
-  { id: 'explore', label: 'Explore', icon: <CompassIcon className="size-4" /> },
-  { id: 'code', label: 'Code', icon: <CodeIcon className="size-4" /> },
-  { id: 'learn', label: 'Learn', icon: <BookOpenIcon className="size-4" /> },
-]
+  { id: "create", label: "Create", icon: <PenLineIcon className="size-4" /> },
+  { id: "explore", label: "Explore", icon: <CompassIcon className="size-4" /> },
+  { id: "code", label: "Code", icon: <CodeIcon className="size-4" /> },
+  { id: "learn", label: "Learn", icon: <BookOpenIcon className="size-4" /> },
+];
 
 // Category-specific suggestions (shown when that category is selected)
 const SUGGESTIONS_BY_CATEGORY: Record<Category, string[]> = {
   create: [
-    'Write a short story about a robot discovering emotions',
-    'Help me outline a sci-fi novel set in a post-apocalyptic world',
-    'Create a character profile for a complex villain with sympathetic motives',
-    'Give me 5 creative writing prompts for flash fiction',
+    "Write a short story about a robot discovering emotions",
+    "Help me outline a sci-fi novel set in a post-apocalyptic world",
+    "Create a character profile for a complex villain with sympathetic motives",
+    "Give me 5 creative writing prompts for flash fiction",
   ],
   explore: [
-    'Good books for fans of Rick Rubin',
-    'Countries ranked by number of UNESCO World Heritage sites',
-    'Most successful companies in the world by market cap',
-    'How much does Claude cost compared to GPT-4?',
+    "Good books for fans of Rick Rubin",
+    "Countries ranked by number of UNESCO World Heritage sites",
+    "Most successful companies in the world by market cap",
+    "How much does Claude cost compared to GPT-4?",
   ],
   code: [
-    'Help me debug this React component',
-    'Write a Python script to scrape data from a website',
-    'Explain the difference between REST and GraphQL',
-    'Review my TypeScript code for potential improvements',
+    "Help me debug this React component",
+    "Write a Python script to scrape data from a website",
+    "Explain the difference between REST and GraphQL",
+    "Review my TypeScript code for potential improvements",
   ],
   learn: [
-    'Teach me about machine learning fundamentals',
-    'Explain quantum computing in simple terms',
-    'What should I know about starting a business?',
-    'How does the stock market work?',
+    "Teach me about machine learning fundamentals",
+    "Explain quantum computing in simple terms",
+    "What should I know about starting a business?",
+    "How does the stock market work?",
   ],
-}
+};
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 function getTimeBasedGreeting(): string {
-  const hour = new Date().getHours()
+  const hour = new Date().getHours();
 
   if (hour >= 5 && hour < 12) {
-    return 'Good morning'
+    return "Good morning";
   } else if (hour >= 12 && hour < 17) {
-    return 'Good afternoon'
+    return "Good afternoon";
   } else {
-    return 'Good evening'
+    return "Good evening";
   }
 }
 
 function getFirstName(fullName: string | null | undefined): string {
-  if (!fullName) return ''
-  return fullName.split(' ')[0]
+  if (!fullName) return "";
+  return fullName.split(" ")[0];
 }
 
 // ============================================================================
@@ -107,60 +101,52 @@ function CategoryPill({
   isActive,
   onClick,
 }: {
-  category: CategoryConfig
-  isActive: boolean
-  onClick: () => void
+  category: CategoryConfig;
+  isActive: boolean;
+  onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-full',
-        'text-sm font-medium',
-        'transition-all duration-200',
+        "flex items-center gap-2 px-4 py-2 rounded-full",
+        "text-sm font-medium",
+        "transition-all duration-200",
         isActive
-          ? 'bg-primary text-primary-foreground shadow-sm'
-          : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {category.icon}
       <span>{category.label}</span>
     </button>
-  )
+  );
 }
 
-function SuggestionItem({
-  text,
-  onClick,
-}: {
-  text: string
-  onClick: () => void
-}) {
+function SuggestionItem({ text, onClick }: { text: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        'group flex w-full items-center justify-between',
-        'px-4 py-3 rounded-xl',
-        'text-left text-[15px] text-foreground/80',
-        'bg-transparent hover:bg-muted/50',
-        'border border-transparent hover:border-border/30',
-        'transition-all duration-200',
+        "group flex w-full items-center justify-between",
+        "px-4 py-3 rounded-xl",
+        "text-left text-[15px] text-foreground/80",
+        "bg-transparent hover:bg-muted/50",
+        "border border-transparent hover:border-border/30",
+        "transition-all duration-200",
       )}
     >
-      <span className="group-hover:text-foreground transition-colors">
-        {text}
-      </span>
+      <span className="group-hover:text-foreground transition-colors">{text}</span>
       <ChevronRightIcon
         className={cn(
-          'size-4 text-muted-foreground/40 shrink-0 ml-3',
-          'opacity-0 group-hover:opacity-100',
-          'translate-x-0 group-hover:translate-x-1',
-          'transition-all duration-200',
+          "size-4 text-muted-foreground/40 shrink-0 ml-3",
+          "opacity-0 group-hover:opacity-100",
+          "translate-x-0 group-hover:translate-x-1",
+          "transition-all duration-200",
         )}
       />
     </button>
-  )
+  );
 }
 
 // ============================================================================
@@ -168,14 +154,12 @@ function SuggestionItem({
 // ============================================================================
 
 export function StartScreen({ onPromptSelect, className }: StartScreenProps) {
-  const { user } = useAuth()
-  const firstName = getFirstName(user?.name)
-  const greeting = getTimeBasedGreeting()
+  const { user } = useAuth();
+  const firstName = getFirstName(user?.name);
+  const greeting = getTimeBasedGreeting();
 
   // Track which category is selected (null = none selected, show default)
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(
-    null,
-  )
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   // Get suggestions based on selected category
   const currentSuggestions = selectedCategory
@@ -186,19 +170,19 @@ export function StartScreen({ onPromptSelect, className }: StartScreenProps) {
         SUGGESTIONS_BY_CATEGORY.explore[0],
         SUGGESTIONS_BY_CATEGORY.code[0],
         SUGGESTIONS_BY_CATEGORY.learn[0],
-      ]
+      ];
 
   const handleCategoryClick = (categoryId: Category) => {
     // Toggle selection - if already selected, deselect it
-    setSelectedCategory((prev) => (prev === categoryId ? null : categoryId))
-  }
+    setSelectedCategory((prev) => (prev === categoryId ? null : categoryId));
+  };
 
   return (
     <div
       className={cn(
-        'flex flex-col items-center',
-        'w-full max-w-3xl mx-auto',
-        'pt-16 pb-8',
+        "flex flex-col items-center",
+        "w-full max-w-3xl mx-auto",
+        "pt-16 pb-8",
         className,
       )}
     >
@@ -206,11 +190,9 @@ export function StartScreen({ onPromptSelect, className }: StartScreenProps) {
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">
           {greeting}
-          {firstName ? `, ${firstName}` : ''}
+          {firstName ? `, ${firstName}` : ""}
         </h1>
-        <p className="mt-2 text-base text-muted-foreground">
-          How can I help you today?
-        </p>
+        <p className="mt-2 text-base text-muted-foreground">How can I help you today?</p>
       </div>
 
       {/* Category Pills - Selectable */}
@@ -236,5 +218,5 @@ export function StartScreen({ onPromptSelect, className }: StartScreenProps) {
         ))}
       </div>
     </div>
-  )
+  );
 }

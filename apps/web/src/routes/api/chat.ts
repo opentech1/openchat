@@ -1,12 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-import { streamText, convertToModelMessages, stepCountIs } from 'ai'
-import { createOpenRouter } from '@openrouter/ai-sdk-provider'
-import { webSearch } from '@valyu/ai-sdk'
+import { createFileRoute } from "@tanstack/react-router";
+import { json } from "@tanstack/react-start";
+import { streamText, convertToModelMessages, stepCountIs } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { webSearch } from "@valyu/ai-sdk";
 
 // API keys (server-side only)
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY
-const VALYU_API_KEY = process.env.VALYU_API_KEY
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const VALYU_API_KEY = process.env.VALYU_API_KEY;
 
 /**
  * Chat API route for streaming AI responses
@@ -20,197 +20,177 @@ const VALYU_API_KEY = process.env.VALYU_API_KEY
  *
  * Returns a streaming response compatible with AI SDK 5's useChat hook
  */
-export const Route = createFileRoute('/api/chat')({
+export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         try {
           // Parse and validate request body
-          const body = await request.json()
+          const body = await request.json();
           const {
             messages,
             model,
-            provider = 'osschat',
+            provider = "osschat",
             apiKey,
             enableWebSearch = false,
+            reasoningEffort, // 'none' | 'low' | 'medium' | 'high' | undefined
+            maxSteps = 5, // Max iterations for tool calls (always multi-step enabled)
             // userId will be used for usage tracking in future
-          } = body
+          } = body;
 
           // Validate required fields
           if (!messages || !Array.isArray(messages)) {
-            return json(
-              { error: 'messages is required and must be an array' },
-              { status: 400 },
-            )
+            return json({ error: "messages is required and must be an array" }, { status: 400 });
           }
 
-          if (!model || typeof model !== 'string') {
-            return json(
-              { error: 'model is required and must be a string' },
-              { status: 400 },
-            )
+          if (!model || typeof model !== "string") {
+            return json({ error: "model is required and must be a string" }, { status: 400 });
           }
 
           // Validate provider-specific requirements
-          if (provider === 'openrouter' && !apiKey) {
-            return json(
-              { error: 'apiKey is required for Personal OpenRouter' },
-              { status: 400 },
-            )
+          if (provider === "openrouter" && !apiKey) {
+            return json({ error: "apiKey is required for Personal OpenRouter" }, { status: 400 });
           }
 
-          if (provider === 'osschat' && !OPENROUTER_API_KEY) {
+          if (provider === "osschat" && !OPENROUTER_API_KEY) {
             return json(
-              { error: 'OSSChat Cloud is not configured on this server' },
+              { error: "OSSChat Cloud is not configured on this server" },
               { status: 500 },
-            )
+            );
           }
 
           // AI SDK 5 messages have 'parts' array instead of 'content'
           for (const message of messages) {
             if (!message.role) {
-              return json(
-                { error: 'Each message must have a role property' },
-                { status: 400 },
-              )
+              return json({ error: "Each message must have a role property" }, { status: 400 });
             }
-            if (!['user', 'assistant', 'system'].includes(message.role)) {
+            if (!["user", "assistant", "system"].includes(message.role)) {
               return json(
                 {
-                  error: 'Message role must be one of: user, assistant, system',
+                  error: "Message role must be one of: user, assistant, system",
                 },
                 { status: 400 },
-              )
+              );
             }
             if (!message.parts && !message.content) {
-              return json(
-                { error: 'Each message must have parts or content' },
-                { status: 400 },
-              )
+              return json({ error: "Each message must have parts or content" }, { status: 400 });
             }
           }
 
           // All requests go through OpenRouter - just different API keys
-          const openrouterKey = provider === 'osschat' 
-            ? OPENROUTER_API_KEY! 
-            : apiKey!
-          
-          const openrouter = createOpenRouter({ apiKey: openrouterKey })
-          const aiModel = openrouter(model)
+          const openrouterKey = provider === "osschat" ? OPENROUTER_API_KEY! : apiKey!;
+
+          const openrouter = createOpenRouter({ apiKey: openrouterKey });
+          const aiModel = openrouter(model);
 
           // Convert UI messages to model messages (AI SDK 5 format)
-          const modelMessages = await convertToModelMessages(messages)
+          const modelMessages = await convertToModelMessages(messages);
 
           // Stream the response using AI SDK
           // Configure options based on features
           const streamOptions: Parameters<typeof streamText>[0] = {
             model: aiModel,
             messages: modelMessages,
-          }
+          };
 
           // Add web search tool if enabled and API key available
           if (enableWebSearch && VALYU_API_KEY) {
             streamOptions.tools = {
               webSearch: webSearch({ apiKey: VALYU_API_KEY }),
-            }
-            streamOptions.stopWhen = stepCountIs(5) // Limit tool call iterations
+            };
           }
 
-          // Enable thinking for Claude models
-          if (model.includes('claude')) {
+          // Set step limit - always allow multi-step when tools are enabled
+          // maxSteps controls max iterations (default 5)
+          const hasTools = enableWebSearch && VALYU_API_KEY;
+          const stepLimit = hasTools ? Math.max(1, Math.min(10, maxSteps)) : 1;
+          streamOptions.stopWhen = stepCountIs(stepLimit);
+
+          // Configure reasoning/thinking - only if user explicitly enables it
+          // When 'none', we don't send ANY reasoning config to actually disable it
+          if (reasoningEffort && reasoningEffort !== "none") {
+            // Apply reasoning config to models that support it via OpenRouter unified API
+            const effortValue = reasoningEffort as "low" | "medium" | "high";
+
             streamOptions.providerOptions = {
-              anthropic: {
-                thinking: { type: 'enabled', budgetTokens: 10000 },
+              ...streamOptions.providerOptions,
+              openrouter: {
+                reasoning: {
+                  effort: effortValue,
+                },
               },
-            }
+            };
           }
+          // When reasoningEffort is 'none' or undefined, we don't send any reasoning config
+          // This actually DISABLES reasoning instead of minimizing it
 
-          const result = streamText(streamOptions)
+          const result = streamText(streamOptions);
 
           // Return streaming response compatible with useChat (AI SDK 5 format)
           // Include metadata with model and usage info for client-side cost tracking
+          // ALWAYS send reasoning to client - if the model reasons, show it honestly
           return result.toUIMessageStreamResponse({
+            sendReasoning: true, // Always show reasoning if model produces it
             messageMetadata: ({ part }) => {
-              if (part.type === 'start') {
+              if (part.type === "start") {
                 return {
                   createdAt: Date.now(),
                   model,
                   provider,
-                }
+                };
               }
 
-              if (part.type === 'finish') {
+              if (part.type === "finish") {
                 return {
                   inputTokens: part.totalUsage?.inputTokens,
                   outputTokens: part.totalUsage?.outputTokens,
                   totalTokens: part.totalUsage?.totalTokens,
-                }
+                };
               }
             },
-          })
+          });
         } catch (error) {
-          console.error('[Chat API Error]', error)
+          console.error("[Chat API Error]", error);
 
           // Handle JSON parse errors
           if (error instanceof SyntaxError) {
-            return json(
-              { error: 'Invalid JSON in request body' },
-              { status: 400 },
-            )
+            return json({ error: "Invalid JSON in request body" }, { status: 400 });
           }
 
           // Handle OpenRouter/AI SDK errors
           if (error instanceof Error) {
             // Check for common OpenRouter errors
-            if (
-              error.message.includes('401') ||
-              error.message.includes('Unauthorized')
-            ) {
+            if (error.message.includes("401") || error.message.includes("Unauthorized")) {
               return json(
                 {
-                  error:
-                    'Invalid API key. Please check your OpenRouter API key.',
+                  error: "Invalid API key. Please check your OpenRouter API key.",
                 },
                 { status: 401 },
-              )
+              );
             }
 
-            if (
-              error.message.includes('429') ||
-              error.message.includes('rate limit')
-            ) {
+            if (error.message.includes("429") || error.message.includes("rate limit")) {
               return json(
-                { error: 'Rate limit exceeded. Please try again later.' },
+                { error: "Rate limit exceeded. Please try again later." },
                 { status: 429 },
-              )
+              );
             }
 
-            if (
-              error.message.includes('model') ||
-              error.message.includes('Model')
-            ) {
-              return json(
-                { error: `Model error: ${error.message}` },
-                { status: 400 },
-              )
+            if (error.message.includes("model") || error.message.includes("Model")) {
+              return json({ error: `Model error: ${error.message}` }, { status: 400 });
             }
 
             return json(
               {
-                error:
-                  error.message ||
-                  'An error occurred while processing your request',
+                error: error.message || "An error occurred while processing your request",
               },
               { status: 500 },
-            )
+            );
           }
 
-          return json(
-            { error: 'An unexpected error occurred' },
-            { status: 500 },
-          )
+          return json({ error: "An unexpected error occurred" }, { status: 500 });
         }
       },
     },
   },
-})
+});

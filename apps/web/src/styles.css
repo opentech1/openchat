@@ -29,7 +29,7 @@
   --chart-3: oklch(0.7 0.15 162);
   --chart-4: oklch(0.6 0.13 163);
   --chart-5: oklch(0.51 0.1 166);
-  --radius: 0.45rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0.001 106.423);
   --sidebar-foreground: oklch(0.147 0.004 49.25);
   --sidebar-primary: oklch(0.6 0.13 163);
@@ -138,4 +138,18 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Shimmer animation for reasoning/thinking text */
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s linear infinite;
 }
