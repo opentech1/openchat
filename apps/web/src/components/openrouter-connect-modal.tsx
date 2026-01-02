@@ -5,60 +5,57 @@
  * Used from Settings page when user wants to connect their own API key.
  */
 
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Button } from './ui/button'
-import { useOpenRouterKey } from '@/stores/openrouter'
-import { cn } from '@/lib/utils'
-import { XIcon, ExternalLinkIcon, CheckIcon, KeyIcon } from 'lucide-react'
+import { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import { useOpenRouterKey } from "@/stores/openrouter";
+import { cn } from "@/lib/utils";
+import { XIcon, ExternalLinkIcon, CheckIcon, KeyIcon } from "lucide-react";
 
 interface OpenRouterConnectModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function OpenRouterConnectModal({
-  open,
-  onOpenChange,
-}: OpenRouterConnectModalProps) {
-  const { apiKey, initiateLogin, isLoading } = useOpenRouterKey()
-  const [isClosing, setIsClosing] = useState(false)
+export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnectModalProps) {
+  const { apiKey, initiateLogin, isLoading } = useOpenRouterKey();
+  const [isClosing, setIsClosing] = useState(false);
 
   // Close modal when API key is set (successful connection)
   useEffect(() => {
     if (apiKey && open) {
       // Small delay to show success state
       const timer = setTimeout(() => {
-        onOpenChange(false)
-      }, 1000)
-      return () => clearTimeout(timer)
+        onOpenChange(false);
+      }, 1000);
+      return () => clearTimeout(timer);
     }
-  }, [apiKey, open, onOpenChange])
+  }, [apiKey, open, onOpenChange]);
 
   const handleConnect = () => {
-    const callbackUrl = `${window.location.origin}/openrouter/callback`
-    initiateLogin(callbackUrl)
-  }
+    const callbackUrl = `${window.location.origin}/openrouter/callback`;
+    initiateLogin(callbackUrl);
+  };
 
   const handleClose = () => {
-    setIsClosing(true)
+    setIsClosing(true);
     setTimeout(() => {
-      onOpenChange(false)
-      setIsClosing(false)
-    }, 150)
-  }
+      onOpenChange(false);
+      setIsClosing(false);
+    }, 150);
+  };
 
-  if (!open) return null
+  if (!open) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
         className={cn(
-          'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-          'transition-opacity duration-150',
-          isClosing ? 'opacity-0' : 'opacity-100',
+          "fixed inset-0 z-50 bg-black/50 backdrop-blur-sm",
+          "transition-opacity duration-150",
+          isClosing ? "opacity-0" : "opacity-100",
         )}
         onClick={handleClose}
       />
@@ -66,12 +63,10 @@ export function OpenRouterConnectModal({
       {/* Modal */}
       <div
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2',
-          'w-full max-w-md',
-          'transition-all duration-150',
-          isClosing
-            ? 'scale-95 opacity-0'
-            : 'scale-100 opacity-100',
+          "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
+          "w-full max-w-md",
+          "transition-all duration-150",
+          isClosing ? "scale-95 opacity-0" : "scale-100 opacity-100",
         )}
       >
         <div className="rounded-2xl border bg-background shadow-2xl">
@@ -84,7 +79,7 @@ export function OpenRouterConnectModal({
                   alt="OpenRouter"
                   className="size-5 invert"
                   onError={(e) => {
-                    e.currentTarget.style.display = 'none'
+                    e.currentTarget.style.display = "none";
                   }}
                 />
               </div>
@@ -112,9 +107,7 @@ export function OpenRouterConnectModal({
                   <CheckIcon className="size-8 text-emerald-500" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium text-emerald-600">
-                    Successfully connected!
-                  </p>
+                  <p className="font-medium text-emerald-600">Successfully connected!</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Your OpenRouter account is now linked.
                   </p>
@@ -163,7 +156,7 @@ export function OpenRouterConnectModal({
                 </Button>
 
                 <p className="text-center text-xs text-muted-foreground">
-                  Don't have an account?{' '}
+                  Don't have an account?{" "}
                   <a
                     href="https://openrouter.ai"
                     target="_blank"
@@ -180,5 +173,5 @@ export function OpenRouterConnectModal({
         </div>
       </div>
     </>
-  )
+  );
 }

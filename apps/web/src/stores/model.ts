@@ -6,30 +6,30 @@
  * Groups models by provider/family automatically.
  */
 
-import { create } from 'zustand'
-import { devtools, persist } from 'zustand/middleware'
-import { useEffect, useState, useMemo, useCallback } from 'react'
-import { initPricingLookup } from './provider'
+import { create } from "zustand";
+import { devtools, persist } from "zustand/middleware";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { initPricingLookup } from "./provider";
 
 // ============================================================================
 // Types
 // ============================================================================
 
 export interface Model {
-  id: string
-  name: string
-  provider: string // Provider display name (e.g., "Anthropic")
-  providerId: string // Provider slug for logos (e.g., "anthropic")
-  family?: string // Model family (e.g., "claude-3.5")
-  description?: string
-  contextLength?: number
-  maxOutputTokens?: number
-  pricing?: { input: number; output: number }
-  modality?: string
-  reasoning?: boolean
-  toolCall?: boolean
-  isPopular?: boolean
-  isFree?: boolean
+  id: string;
+  name: string;
+  provider: string; // Provider display name (e.g., "Anthropic")
+  providerId: string; // Provider slug for logos (e.g., "anthropic")
+  family?: string; // Model family (e.g., "claude-3.5")
+  description?: string;
+  contextLength?: number;
+  maxOutputTokens?: number;
+  pricing?: { input: number; output: number };
+  modality?: string;
+  reasoning?: boolean;
+  toolCall?: boolean;
+  isPopular?: boolean;
+  isFree?: boolean;
 }
 
 // ============================================================================
@@ -37,107 +37,107 @@ export interface Model {
 // ============================================================================
 
 const PROVIDER_INFO: Record<string, { name: string; logoId: string }> = {
-  openai: { name: 'OpenAI', logoId: 'openai' },
-  anthropic: { name: 'Anthropic', logoId: 'anthropic' },
-  google: { name: 'Google', logoId: 'google' },
-  'meta-llama': { name: 'Meta Llama', logoId: 'llama' },
-  mistralai: { name: 'Mistral', logoId: 'mistral' },
-  deepseek: { name: 'DeepSeek', logoId: 'deepseek' },
-  'x-ai': { name: 'xAI', logoId: 'xai' },
-  cohere: { name: 'Cohere', logoId: 'cohere' },
-  perplexity: { name: 'Perplexity', logoId: 'perplexity' },
-  qwen: { name: 'Qwen', logoId: 'alibaba' },
-  nvidia: { name: 'NVIDIA', logoId: 'nvidia' },
-  microsoft: { name: 'Microsoft', logoId: 'azure' },
-  amazon: { name: 'Amazon', logoId: 'amazon-bedrock' },
-  ai21: { name: 'AI21', logoId: 'ai21' },
-  together: { name: 'Together', logoId: 'togetherai' },
-  'fireworks-ai': { name: 'Fireworks', logoId: 'fireworks-ai' },
-  groq: { name: 'Groq', logoId: 'groq' },
-  databricks: { name: 'Databricks', logoId: 'databricks' },
-  inflection: { name: 'Inflection', logoId: 'inflection' },
-  nous: { name: 'Nous', logoId: 'nous' },
-  nousresearch: { name: 'NousResearch', logoId: 'nous' },
-  openchat: { name: 'OpenChat', logoId: 'openchat' },
-  teknium: { name: 'Teknium', logoId: 'teknium' },
-  cognitivecomputations: { name: 'Cognitive', logoId: 'cognitive' },
-  neversleep: { name: 'NeverSleep', logoId: 'neversleep' },
-  sao10k: { name: 'Sao10k', logoId: 'sao10k' },
-  thedrummer: { name: 'TheDrummer', logoId: 'thedrummer' },
-  'eva-unit-01': { name: 'Eva', logoId: 'eva' },
-  liquid: { name: 'Liquid', logoId: 'liquid' },
-  'bytedance-seed': { name: 'ByteDance', logoId: 'bytedance' },
-  minimax: { name: 'MiniMax', logoId: 'minimax' },
-  moonshotai: { name: 'Moonshot', logoId: 'moonshotai' },
-  zhipuai: { name: 'Zhipu', logoId: 'zhipuai' },
-  thudm: { name: 'THUDM', logoId: 'thudm' },
-  featherless: { name: 'Featherless', logoId: 'featherless' },
-  infermatic: { name: 'Infermatic', logoId: 'infermatic' },
-  aetherwiing: { name: 'AetherWiing', logoId: 'aetherwiing' },
-  'all-hands': { name: 'All Hands', logoId: 'all-hands' },
-  rekaai: { name: 'Reka', logoId: 'rekaai' },
-  sophosympatheia: { name: 'Sophos', logoId: 'sophos' },
-  undi95: { name: 'Undi95', logoId: 'undi95' },
-  mancer: { name: 'Mancer', logoId: 'mancer' },
-  lynn: { name: 'Lynn', logoId: 'lynn' },
-  pygmalionai: { name: 'Pygmalion', logoId: 'pygmalionai' },
-  jondurbin: { name: 'Jon Durbin', logoId: 'jondurbin' },
-  gryphe: { name: 'Gryphe', logoId: 'gryphe' },
-  arliai: { name: 'ArliAI', logoId: 'arliai' },
-  openrouter: { name: 'OpenRouter', logoId: 'openrouter' },
-  allenai: { name: 'Allen AI', logoId: 'allenai' },
-}
+  openai: { name: "OpenAI", logoId: "openai" },
+  anthropic: { name: "Anthropic", logoId: "anthropic" },
+  google: { name: "Google", logoId: "google" },
+  "meta-llama": { name: "Meta Llama", logoId: "llama" },
+  mistralai: { name: "Mistral", logoId: "mistral" },
+  deepseek: { name: "DeepSeek", logoId: "deepseek" },
+  "x-ai": { name: "xAI", logoId: "xai" },
+  cohere: { name: "Cohere", logoId: "cohere" },
+  perplexity: { name: "Perplexity", logoId: "perplexity" },
+  qwen: { name: "Qwen", logoId: "alibaba" },
+  nvidia: { name: "NVIDIA", logoId: "nvidia" },
+  microsoft: { name: "Microsoft", logoId: "azure" },
+  amazon: { name: "Amazon", logoId: "amazon-bedrock" },
+  ai21: { name: "AI21", logoId: "ai21" },
+  together: { name: "Together", logoId: "togetherai" },
+  "fireworks-ai": { name: "Fireworks", logoId: "fireworks-ai" },
+  groq: { name: "Groq", logoId: "groq" },
+  databricks: { name: "Databricks", logoId: "databricks" },
+  inflection: { name: "Inflection", logoId: "inflection" },
+  nous: { name: "Nous", logoId: "nous" },
+  nousresearch: { name: "NousResearch", logoId: "nous" },
+  openchat: { name: "OpenChat", logoId: "openchat" },
+  teknium: { name: "Teknium", logoId: "teknium" },
+  cognitivecomputations: { name: "Cognitive", logoId: "cognitive" },
+  neversleep: { name: "NeverSleep", logoId: "neversleep" },
+  sao10k: { name: "Sao10k", logoId: "sao10k" },
+  thedrummer: { name: "TheDrummer", logoId: "thedrummer" },
+  "eva-unit-01": { name: "Eva", logoId: "eva" },
+  liquid: { name: "Liquid", logoId: "liquid" },
+  "bytedance-seed": { name: "ByteDance", logoId: "bytedance" },
+  minimax: { name: "MiniMax", logoId: "minimax" },
+  moonshotai: { name: "Moonshot", logoId: "moonshotai" },
+  zhipuai: { name: "Zhipu", logoId: "zhipuai" },
+  thudm: { name: "THUDM", logoId: "thudm" },
+  featherless: { name: "Featherless", logoId: "featherless" },
+  infermatic: { name: "Infermatic", logoId: "infermatic" },
+  aetherwiing: { name: "AetherWiing", logoId: "aetherwiing" },
+  "all-hands": { name: "All Hands", logoId: "all-hands" },
+  rekaai: { name: "Reka", logoId: "rekaai" },
+  sophosympatheia: { name: "Sophos", logoId: "sophos" },
+  undi95: { name: "Undi95", logoId: "undi95" },
+  mancer: { name: "Mancer", logoId: "mancer" },
+  lynn: { name: "Lynn", logoId: "lynn" },
+  pygmalionai: { name: "Pygmalion", logoId: "pygmalionai" },
+  jondurbin: { name: "Jon Durbin", logoId: "jondurbin" },
+  gryphe: { name: "Gryphe", logoId: "gryphe" },
+  arliai: { name: "ArliAI", logoId: "arliai" },
+  openrouter: { name: "OpenRouter", logoId: "openrouter" },
+  allenai: { name: "Allen AI", logoId: "allenai" },
+};
 
 // Popular models - shown at top
 const POPULAR_MODEL_IDS = new Set([
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-3.5-sonnet',
-  'anthropic/claude-3.7-sonnet',
-  'anthropic/claude-3.5-haiku',
-  'openai/gpt-4o',
-  'openai/gpt-4o-mini',
-  'openai/gpt-4.1',
-  'openai/gpt-4.1-mini',
-  'openai/o3-mini',
-  'google/gemini-2.5-flash',
-  'google/gemini-2.5-pro',
-  'google/gemini-2.0-flash-001',
-  'deepseek/deepseek-chat',
-  'deepseek/deepseek-chat-v3.1',
-  'deepseek/deepseek-r1',
-  'meta-llama/llama-3.3-70b-instruct',
-  'x-ai/grok-3',
-  'mistralai/mistral-large-2411',
-  'qwen/qwen-2.5-72b-instruct',
-])
+  "anthropic/claude-sonnet-4",
+  "anthropic/claude-3.5-sonnet",
+  "anthropic/claude-3.7-sonnet",
+  "anthropic/claude-3.5-haiku",
+  "openai/gpt-4o",
+  "openai/gpt-4o-mini",
+  "openai/gpt-4.1",
+  "openai/gpt-4.1-mini",
+  "openai/o3-mini",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "google/gemini-2.0-flash-001",
+  "deepseek/deepseek-chat",
+  "deepseek/deepseek-chat-v3.1",
+  "deepseek/deepseek-r1",
+  "meta-llama/llama-3.3-70b-instruct",
+  "x-ai/grok-3",
+  "mistralai/mistral-large-2411",
+  "qwen/qwen-2.5-72b-instruct",
+]);
 
 // Provider priority for sorting
 const PROVIDER_PRIORITY = [
-  'anthropic',
-  'openai',
-  'google',
-  'deepseek',
-  'meta-llama',
-  'x-ai',
-  'mistralai',
-  'qwen',
-  'cohere',
-  'perplexity',
-]
+  "anthropic",
+  "openai",
+  "google",
+  "deepseek",
+  "meta-llama",
+  "x-ai",
+  "mistralai",
+  "qwen",
+  "cohere",
+  "perplexity",
+];
 
 // ============================================================================
 // Cache
 // ============================================================================
 
 interface ModelCache {
-  models: Model[] | null
-  timestamp: number
-  loading: boolean
-  error: Error | null
-  promise: Promise<Model[]> | null
+  models: Model[] | null;
+  timestamp: number;
+  loading: boolean;
+  error: Error | null;
+  promise: Promise<Model[]> | null;
 }
 
-const CACHE_TTL = 4 * 60 * 60 * 1000 // 4 hours
+const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
 let cache: ModelCache = {
   models: null,
@@ -145,19 +145,19 @@ let cache: ModelCache = {
   loading: false,
   error: null,
   promise: null,
-}
+};
 
 // Cache change listeners
-type Listener = () => void
-const listeners = new Set<Listener>()
+type Listener = () => void;
+const listeners = new Set<Listener>();
 
 function notifyListeners() {
-  listeners.forEach((fn) => fn())
+  listeners.forEach((fn) => fn());
 }
 
 function subscribe(listener: Listener): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 // ============================================================================
@@ -165,93 +165,86 @@ function subscribe(listener: Listener): () => void {
 // ============================================================================
 
 function extractFamily(id: string, name: string): string | undefined {
-  const lower = name.toLowerCase()
+  const lower = name.toLowerCase();
 
   // Common families
-  if (lower.includes('claude-3.5')) return 'Claude 3.5'
-  if (lower.includes('claude-3.7')) return 'Claude 3.7'
-  if (lower.includes('claude-sonnet-4') || lower.includes('claude sonnet 4'))
-    return 'Claude 4'
-  if (lower.includes('claude-opus-4') || lower.includes('claude opus 4'))
-    return 'Claude 4'
-  if (lower.includes('claude-haiku-4') || lower.includes('claude haiku 4'))
-    return 'Claude 4'
-  if (lower.includes('claude')) return 'Claude'
+  if (lower.includes("claude-3.5")) return "Claude 3.5";
+  if (lower.includes("claude-3.7")) return "Claude 3.7";
+  if (lower.includes("claude-sonnet-4") || lower.includes("claude sonnet 4")) return "Claude 4";
+  if (lower.includes("claude-opus-4") || lower.includes("claude opus 4")) return "Claude 4";
+  if (lower.includes("claude-haiku-4") || lower.includes("claude haiku 4")) return "Claude 4";
+  if (lower.includes("claude")) return "Claude";
 
-  if (lower.includes('gpt-4o')) return 'GPT-4o'
-  if (lower.includes('gpt-4.1')) return 'GPT-4.1'
-  if (lower.includes('gpt-4')) return 'GPT-4'
-  if (lower.includes('gpt-5')) return 'GPT-5'
-  if (lower.includes('o1-') || lower.includes('o1 ')) return 'o1'
-  if (lower.includes('o3-') || lower.includes('o3 ') || id.includes('/o3'))
-    return 'o3'
-  if (lower.includes('o4-') || lower.includes('o4 ')) return 'o4'
+  if (lower.includes("gpt-4o")) return "GPT-4o";
+  if (lower.includes("gpt-4.1")) return "GPT-4.1";
+  if (lower.includes("gpt-4")) return "GPT-4";
+  if (lower.includes("gpt-5")) return "GPT-5";
+  if (lower.includes("o1-") || lower.includes("o1 ")) return "o1";
+  if (lower.includes("o3-") || lower.includes("o3 ") || id.includes("/o3")) return "o3";
+  if (lower.includes("o4-") || lower.includes("o4 ")) return "o4";
 
-  if (lower.includes('gemini-2.5')) return 'Gemini 2.5'
-  if (lower.includes('gemini-2.0')) return 'Gemini 2.0'
-  if (lower.includes('gemini-3')) return 'Gemini 3'
-  if (lower.includes('gemini')) return 'Gemini'
+  if (lower.includes("gemini-2.5")) return "Gemini 2.5";
+  if (lower.includes("gemini-2.0")) return "Gemini 2.0";
+  if (lower.includes("gemini-3")) return "Gemini 3";
+  if (lower.includes("gemini")) return "Gemini";
 
-  if (lower.includes('llama-3.3')) return 'Llama 3.3'
-  if (lower.includes('llama-3.2')) return 'Llama 3.2'
-  if (lower.includes('llama-3.1')) return 'Llama 3.1'
-  if (lower.includes('llama-4')) return 'Llama 4'
-  if (lower.includes('llama')) return 'Llama'
+  if (lower.includes("llama-3.3")) return "Llama 3.3";
+  if (lower.includes("llama-3.2")) return "Llama 3.2";
+  if (lower.includes("llama-3.1")) return "Llama 3.1";
+  if (lower.includes("llama-4")) return "Llama 4";
+  if (lower.includes("llama")) return "Llama";
 
-  if (lower.includes('mistral-large')) return 'Mistral Large'
-  if (lower.includes('mistral-small')) return 'Mistral Small'
-  if (lower.includes('mistral-medium')) return 'Mistral Medium'
-  if (lower.includes('codestral')) return 'Codestral'
-  if (lower.includes('mixtral')) return 'Mixtral'
-  if (lower.includes('mistral')) return 'Mistral'
+  if (lower.includes("mistral-large")) return "Mistral Large";
+  if (lower.includes("mistral-small")) return "Mistral Small";
+  if (lower.includes("mistral-medium")) return "Mistral Medium";
+  if (lower.includes("codestral")) return "Codestral";
+  if (lower.includes("mixtral")) return "Mixtral";
+  if (lower.includes("mistral")) return "Mistral";
 
-  if (lower.includes('deepseek-r1')) return 'DeepSeek R1'
-  if (lower.includes('deepseek-v3')) return 'DeepSeek V3'
-  if (lower.includes('deepseek')) return 'DeepSeek'
+  if (lower.includes("deepseek-r1")) return "DeepSeek R1";
+  if (lower.includes("deepseek-v3")) return "DeepSeek V3";
+  if (lower.includes("deepseek")) return "DeepSeek";
 
-  if (lower.includes('grok-4')) return 'Grok 4'
-  if (lower.includes('grok-3')) return 'Grok 3'
-  if (lower.includes('grok')) return 'Grok'
+  if (lower.includes("grok-4")) return "Grok 4";
+  if (lower.includes("grok-3")) return "Grok 3";
+  if (lower.includes("grok")) return "Grok";
 
-  if (lower.includes('qwen-2.5')) return 'Qwen 2.5'
-  if (lower.includes('qwen-2')) return 'Qwen 2'
-  if (lower.includes('qwen3')) return 'Qwen 3'
-  if (lower.includes('qwen')) return 'Qwen'
+  if (lower.includes("qwen-2.5")) return "Qwen 2.5";
+  if (lower.includes("qwen-2")) return "Qwen 2";
+  if (lower.includes("qwen3")) return "Qwen 3";
+  if (lower.includes("qwen")) return "Qwen";
 
-  return undefined
+  return undefined;
 }
 
 function transformModel(raw: any): Model {
-  const id = raw.id as string
-  const providerSlug = id.split('/')[0] || 'unknown'
+  const id = raw.id as string;
+  const providerSlug = id.split("/")[0] || "unknown";
   const info = PROVIDER_INFO[providerSlug] || {
-    name:
-      providerSlug.charAt(0).toUpperCase() +
-      providerSlug.slice(1).replace(/-/g, ' '),
+    name: providerSlug.charAt(0).toUpperCase() + providerSlug.slice(1).replace(/-/g, " "),
     logoId: providerSlug,
-  }
+  };
 
-  const inputPrice = parseFloat(raw.pricing?.prompt || '0') * 1_000_000
-  const outputPrice = parseFloat(raw.pricing?.completion || '0') * 1_000_000
-  const isFree =
-    id.endsWith(':free') || (inputPrice === 0 && outputPrice === 0)
+  const inputPrice = parseFloat(raw.pricing?.prompt || "0") * 1_000_000;
+  const outputPrice = parseFloat(raw.pricing?.completion || "0") * 1_000_000;
+  const isFree = id.endsWith(":free") || (inputPrice === 0 && outputPrice === 0);
 
   const supportsTools =
-    raw.supported_parameters?.includes('tools') ||
-    raw.supported_parameters?.includes('tool_choice')
+    raw.supported_parameters?.includes("tools") ||
+    raw.supported_parameters?.includes("tool_choice");
   const supportsReasoning =
-    raw.supported_parameters?.includes('reasoning') ||
-    raw.supported_parameters?.includes('include_reasoning') ||
-    id.includes('-r1') ||
-    id.includes('/o1') ||
-    id.includes('/o3')
+    raw.supported_parameters?.includes("reasoning") ||
+    raw.supported_parameters?.includes("include_reasoning") ||
+    id.includes("-r1") ||
+    id.includes("/o1") ||
+    id.includes("/o3");
 
   return {
     id,
     name: raw.name || id,
     provider: info.name,
     providerId: info.logoId,
-    family: extractFamily(id, raw.name || ''),
+    family: extractFamily(id, raw.name || ""),
     description: raw.description,
     contextLength: raw.context_length,
     maxOutputTokens: raw.top_provider?.max_completion_tokens,
@@ -261,7 +254,7 @@ function transformModel(raw: any): Model {
     toolCall: supportsTools,
     isPopular: POPULAR_MODEL_IDS.has(id),
     isFree,
-  }
+  };
 }
 
 // ============================================================================
@@ -271,74 +264,74 @@ function transformModel(raw: any): Model {
 async function fetchAllModels(): Promise<Model[]> {
   // Return cached if fresh
   if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
-    return cache.models
+    return cache.models;
   }
 
   // Dedupe concurrent requests
-  if (cache.promise) return cache.promise
+  if (cache.promise) return cache.promise;
 
-  cache.loading = true
-  cache.error = null
-  notifyListeners()
+  cache.loading = true;
+  cache.error = null;
+  notifyListeners();
 
   cache.promise = (async () => {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/models', {
-        headers: { 'Content-Type': 'application/json' },
-      })
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: { "Content-Type": "application/json" },
+      });
 
       if (!response.ok) {
-        throw new Error(`OpenRouter API error: ${response.status}`)
+        throw new Error(`OpenRouter API error: ${response.status}`);
       }
 
-      const data = await response.json()
-      const rawModels = data.data || []
+      const data = await response.json();
+      const rawModels = data.data || [];
 
       // Transform all models
       const models: Model[] = rawModels
-        .filter((m: any) => m.id && typeof m.id === 'string')
+        .filter((m: any) => m.id && typeof m.id === "string")
         .map(transformModel)
         // Sort: Popular first, then by provider priority, then alphabetically
         .sort((a: Model, b: Model) => {
           // Popular first
-          if (a.isPopular && !b.isPopular) return -1
-          if (!a.isPopular && b.isPopular) return 1
+          if (a.isPopular && !b.isPopular) return -1;
+          if (!a.isPopular && b.isPopular) return 1;
 
           // Provider priority
-          const aSlug = a.id.split('/')[0]
-          const bSlug = b.id.split('/')[0]
-          const aPriority = PROVIDER_PRIORITY.indexOf(aSlug)
-          const bPriority = PROVIDER_PRIORITY.indexOf(bSlug)
-          const aP = aPriority === -1 ? 999 : aPriority
-          const bP = bPriority === -1 ? 999 : bPriority
-          if (aP !== bP) return aP - bP
+          const aSlug = a.id.split("/")[0];
+          const bSlug = b.id.split("/")[0];
+          const aPriority = PROVIDER_PRIORITY.indexOf(aSlug);
+          const bPriority = PROVIDER_PRIORITY.indexOf(bSlug);
+          const aP = aPriority === -1 ? 999 : aPriority;
+          const bP = bPriority === -1 ? 999 : bPriority;
+          if (aP !== bP) return aP - bP;
 
           // Alphabetically by name
-          return a.name.localeCompare(b.name)
-        })
+          return a.name.localeCompare(b.name);
+        });
 
-      cache.models = models
-      cache.timestamp = Date.now()
-      cache.error = null
+      cache.models = models;
+      cache.timestamp = Date.now();
+      cache.error = null;
 
       // Initialize pricing lookup for cost calculation
       initPricingLookup((modelId: string) => {
-        const model = models.find((m) => m.id === modelId)
-        return model?.pricing
-      })
+        const model = models.find((m) => m.id === modelId);
+        return model?.pricing;
+      });
 
-      return models
+      return models;
     } catch (e) {
-      cache.error = e instanceof Error ? e : new Error('Failed to fetch models')
-      throw cache.error
+      cache.error = e instanceof Error ? e : new Error("Failed to fetch models");
+      throw cache.error;
     } finally {
-      cache.loading = false
-      cache.promise = null
-      notifyListeners()
+      cache.loading = false;
+      cache.promise = null;
+      notifyListeners();
     }
-  })()
+  })();
 
-  return cache.promise
+  return cache.promise;
 }
 
 // Clear cache and refetch
@@ -349,14 +342,14 @@ export function clearModelCache() {
     loading: false,
     error: null,
     promise: null,
-  }
-  notifyListeners()
+  };
+  notifyListeners();
 }
 
 // Reload models (clear cache + fetch)
 export async function reloadModels(): Promise<Model[]> {
-  clearModelCache()
-  return fetchAllModels()
+  clearModelCache();
+  return fetchAllModels();
 }
 
 // ============================================================================
@@ -366,106 +359,106 @@ export async function reloadModels(): Promise<Model[]> {
 function getFallbackModels(): Model[] {
   return [
     {
-      id: 'anthropic/claude-3.5-sonnet',
-      name: 'Claude 3.5 Sonnet',
-      provider: 'Anthropic',
-      providerId: 'anthropic',
-      family: 'Claude 3.5',
+      id: "anthropic/claude-3.5-sonnet",
+      name: "Claude 3.5 Sonnet",
+      provider: "Anthropic",
+      providerId: "anthropic",
+      family: "Claude 3.5",
       isPopular: true,
     },
     {
-      id: 'openai/gpt-4o',
-      name: 'GPT-4o',
-      provider: 'OpenAI',
-      providerId: 'openai',
-      family: 'GPT-4o',
+      id: "openai/gpt-4o",
+      name: "GPT-4o",
+      provider: "OpenAI",
+      providerId: "openai",
+      family: "GPT-4o",
       isPopular: true,
     },
     {
-      id: 'openai/gpt-4o-mini',
-      name: 'GPT-4o Mini',
-      provider: 'OpenAI',
-      providerId: 'openai',
-      family: 'GPT-4o',
+      id: "openai/gpt-4o-mini",
+      name: "GPT-4o Mini",
+      provider: "OpenAI",
+      providerId: "openai",
+      family: "GPT-4o",
       isPopular: true,
     },
     {
-      id: 'google/gemini-2.5-flash',
-      name: 'Gemini 2.5 Flash',
-      provider: 'Google',
-      providerId: 'google',
-      family: 'Gemini 2.5',
+      id: "google/gemini-2.5-flash",
+      name: "Gemini 2.5 Flash",
+      provider: "Google",
+      providerId: "google",
+      family: "Gemini 2.5",
       isPopular: true,
     },
     {
-      id: 'deepseek/deepseek-chat',
-      name: 'DeepSeek Chat',
-      provider: 'DeepSeek',
-      providerId: 'deepseek',
-      family: 'DeepSeek',
+      id: "deepseek/deepseek-chat",
+      name: "DeepSeek Chat",
+      provider: "DeepSeek",
+      providerId: "deepseek",
+      family: "DeepSeek",
       isPopular: true,
     },
     {
-      id: 'meta-llama/llama-3.3-70b-instruct',
-      name: 'Llama 3.3 70B',
-      provider: 'Meta Llama',
-      providerId: 'llama',
-      family: 'Llama 3.3',
+      id: "meta-llama/llama-3.3-70b-instruct",
+      name: "Llama 3.3 70B",
+      provider: "Meta Llama",
+      providerId: "llama",
+      family: "Llama 3.3",
       isPopular: true,
     },
-  ]
+  ];
 }
 
-export const models = getFallbackModels()
-export const fallbackModels = getFallbackModels()
+export const models = getFallbackModels();
+export const fallbackModels = getFallbackModels();
 
 // ============================================================================
 // Reasoning Effort Types
 // ============================================================================
 
-export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high'
+export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
 // Models that support reasoning with effort control
 // Based on OpenRouter API supported_parameters and model capabilities
 // See: https://openrouter.ai/docs/guides/best-practices/reasoning-tokens
 const REASONING_CAPABLE_MODELS = new Set([
   // OpenAI o-series (reasoning models)
-  'openai/o1',
-  'openai/o1-mini',
-  'openai/o1-preview',
-  'openai/o3',
-  'openai/o3-mini',
-  'openai/o4-mini',
+  "openai/o1",
+  "openai/o1-mini",
+  "openai/o1-preview",
+  "openai/o3",
+  "openai/o3-mini",
+  "openai/o4-mini",
   // GPT-5 series (all GPT-5 models are reasoning models)
-  'openai/gpt-5',
-  'openai/gpt-5-mini',
-  'openai/gpt-5-nano',
-  'openai/gpt-5-turbo',
+  "openai/gpt-5",
+  "openai/gpt-5-mini",
+  "openai/gpt-5-nano",
+  "openai/gpt-5-turbo",
   // DeepSeek R1 (native reasoning)
-  'deepseek/deepseek-r1',
-  'deepseek/deepseek-r1-distill-llama-70b',
-  'deepseek/deepseek-r1-distill-qwen-32b',
-  'deepseek/deepseek-r1-distill-qwen-14b',
-  'deepseek/deepseek-r1-0528',
-  'deepseek/deepseek-r1:free',
+  "deepseek/deepseek-r1",
+  "deepseek/deepseek-r1-distill-llama-70b",
+  "deepseek/deepseek-r1-distill-qwen-32b",
+  "deepseek/deepseek-r1-distill-qwen-14b",
+  "deepseek/deepseek-r1-0528",
+  "deepseek/deepseek-r1:free",
   // Anthropic Claude with extended thinking
-  'anthropic/claude-3.7-sonnet',
-  'anthropic/claude-3.7-sonnet:thinking',
-  'anthropic/claude-sonnet-4',
-  'anthropic/claude-sonnet-4:thinking',
+  "anthropic/claude-3.7-sonnet",
+  "anthropic/claude-3.7-sonnet:thinking",
+  "anthropic/claude-sonnet-4",
+  "anthropic/claude-sonnet-4:thinking",
   // xAI Grok with reasoning
-  'x-ai/grok-3-mini-beta',
-  'x-ai/grok-3-mini',
+  "x-ai/grok-3-mini-beta",
+  "x-ai/grok-3-mini",
   // Google Gemini with thinking
-  'google/gemini-2.5-flash-preview-05-20',
-  'google/gemini-2.5-pro-preview-05-06',
-])
+  "google/gemini-2.5-flash-preview-05-20",
+  "google/gemini-2.5-pro-preview-05-06",
+]);
 
 // Check if a model supports reasoning effort control
 export function supportsReasoningEffort(modelId: string): boolean {
   // Direct match
-  if (REASONING_CAPABLE_MODELS.has(modelId)) return true
-  
+  if (REASONING_CAPABLE_MODELS.has(modelId)) return true;
+
   // Pattern matching for variants
   const patterns = [
     /^openai\/o[134]-/,
@@ -474,9 +467,9 @@ export function supportsReasoningEffort(modelId: string): boolean {
     /:thinking$/,
     /-r1$/,
     /-r1-/,
-  ]
-  
-  return patterns.some(pattern => pattern.test(modelId))
+  ];
+
+  return patterns.some((pattern) => pattern.test(modelId));
 }
 
 // ============================================================================
@@ -484,60 +477,59 @@ export function supportsReasoningEffort(modelId: string): boolean {
 // ============================================================================
 
 interface ModelState {
-  selectedModelId: string
-  setSelectedModel: (modelId: string) => void
-  favorites: Set<string>
-  toggleFavorite: (modelId: string) => boolean
-  isFavorite: (modelId: string) => boolean
+  selectedModelId: string;
+  setSelectedModel: (modelId: string) => void;
+  favorites: Set<string>;
+  toggleFavorite: (modelId: string) => boolean;
+  isFavorite: (modelId: string) => boolean;
   // Reasoning effort control
-  reasoningEffort: ReasoningEffort
-  setReasoningEffort: (effort: ReasoningEffort) => void
+  reasoningEffort: ReasoningEffort;
+  setReasoningEffort: (effort: ReasoningEffort) => void;
   // Max steps for multi-step tool calls (searches, etc.)
-  maxSteps: number // Max tool call iterations (1-10)
-  setMaxSteps: (steps: number) => void
+  maxSteps: number; // Max tool call iterations (1-10)
+  setMaxSteps: (steps: number) => void;
 }
 
 export const useModelStore = create<ModelState>()(
   devtools(
     persist(
       (set, get) => ({
-        selectedModelId: 'anthropic/claude-3.5-sonnet',
+        selectedModelId: "anthropic/claude-3.5-sonnet",
 
-        setSelectedModel: (modelId) =>
-          set({ selectedModelId: modelId }, false, 'model/select'),
+        setSelectedModel: (modelId) => set({ selectedModelId: modelId }, false, "model/select"),
 
         favorites: new Set<string>(),
 
         toggleFavorite: (modelId) => {
-          const isFav = get().favorites.has(modelId)
+          const isFav = get().favorites.has(modelId);
           set(
             (state) => {
-              const newFavs = new Set(state.favorites)
-              if (isFav) newFavs.delete(modelId)
-              else newFavs.add(modelId)
-              return { favorites: newFavs }
+              const newFavs = new Set(state.favorites);
+              if (isFav) newFavs.delete(modelId);
+              else newFavs.add(modelId);
+              return { favorites: newFavs };
             },
             false,
-            'model/toggleFavorite',
-          )
-          return !isFav
+            "model/toggleFavorite",
+          );
+          return !isFav;
         },
 
         isFavorite: (modelId) => get().favorites.has(modelId),
 
         // Reasoning effort - default to 'none' (disabled)
-        reasoningEffort: 'none' as ReasoningEffort,
+        reasoningEffort: "none" as ReasoningEffort,
 
         setReasoningEffort: (effort) =>
-          set({ reasoningEffort: effort }, false, 'model/reasoningEffort'),
+          set({ reasoningEffort: effort }, false, "model/reasoningEffort"),
 
         // Max steps for multi-step tool calls (always enabled, controls iterations)
         maxSteps: 5, // Default: 5 steps max for tools
         setMaxSteps: (steps) =>
-          set({ maxSteps: Math.max(1, Math.min(10, steps)) }, false, 'model/maxSteps'),
+          set({ maxSteps: Math.max(1, Math.min(10, steps)) }, false, "model/maxSteps"),
       }),
       {
-        name: 'model-store',
+        name: "model-store",
         partialize: (state) => ({
           selectedModelId: state.selectedModelId,
           favorites: Array.from(state.favorites),
@@ -546,143 +538,138 @@ export const useModelStore = create<ModelState>()(
         }),
         merge: (persisted, current) => {
           const data = persisted as {
-            selectedModelId?: string
-            favorites?: string[]
-            reasoningEffort?: ReasoningEffort
-            maxSteps?: number
-          }
+            selectedModelId?: string;
+            favorites?: string[];
+            reasoningEffort?: ReasoningEffort;
+            maxSteps?: number;
+          };
           return {
             ...current,
             selectedModelId: data?.selectedModelId ?? current.selectedModelId,
             favorites: new Set(data?.favorites ?? []),
             reasoningEffort: data?.reasoningEffort ?? current.reasoningEffort,
             maxSteps: data?.maxSteps ?? current.maxSteps,
-          }
+          };
         },
       },
     ),
-    { name: 'model-store' },
+    { name: "model-store" },
   ),
-)
+);
 
 // ============================================================================
 // React Hook - Load ALL models
 // ============================================================================
 
 export function useModels() {
-  const [models, setModels] = useState<Model[]>(
-    () => cache.models || getFallbackModels(),
-  )
-  const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models)
-  const [error, setError] = useState<Error | null>(() => cache.error)
-  const [, forceUpdate] = useState(0)
+  const [models, setModels] = useState<Model[]>(() => cache.models || getFallbackModels());
+  const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models);
+  const [error, setError] = useState<Error | null>(() => cache.error);
+  const [, forceUpdate] = useState(0);
 
   // Subscribe to cache changes
   useEffect(() => {
-    return subscribe(() => forceUpdate((n) => n + 1))
-  }, [])
+    return subscribe(() => forceUpdate((n) => n + 1));
+  }, []);
 
   // Fetch on mount
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function load() {
       if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
-        setModels(cache.models)
-        setIsLoading(false)
-        setError(null)
-        return
+        setModels(cache.models);
+        setIsLoading(false);
+        setError(null);
+        return;
       }
 
-      setIsLoading(true)
+      setIsLoading(true);
 
       try {
-        const fetched = await fetchAllModels()
+        const fetched = await fetchAllModels();
         if (!cancelled) {
-          setModels(fetched)
-          setError(null)
+          setModels(fetched);
+          setError(null);
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e : new Error('Failed'))
-          setModels(getFallbackModels())
+          setError(e instanceof Error ? e : new Error("Failed"));
+          setModels(getFallbackModels());
         }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) setIsLoading(false);
       }
     }
 
-    load()
+    load();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   // Reload function
   const reload = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
     try {
-      const fetched = await reloadModels()
-      setModels(fetched)
+      const fetched = await reloadModels();
+      setModels(fetched);
     } catch (e) {
-      setError(e instanceof Error ? e : new Error('Failed'))
+      setError(e instanceof Error ? e : new Error("Failed"));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [])
+  }, []);
 
   // Group by provider
   const modelsByProvider = useMemo(() => {
-    const groups: Record<string, Model[]> = {}
+    const groups: Record<string, Model[]> = {};
     for (const model of models) {
-      if (!groups[model.provider]) groups[model.provider] = []
-      groups[model.provider].push(model)
+      if (!groups[model.provider]) groups[model.provider] = [];
+      groups[model.provider].push(model);
     }
-    return groups
-  }, [models])
+    return groups;
+  }, [models]);
 
   // Group by family
   const modelsByFamily = useMemo(() => {
-    const groups: Record<string, Model[]> = {}
+    const groups: Record<string, Model[]> = {};
     for (const model of models) {
-      const key = model.family || model.provider
-      if (!groups[key]) groups[key] = []
-      groups[key].push(model)
+      const key = model.family || model.provider;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(model);
     }
-    return groups
-  }, [models])
+    return groups;
+  }, [models]);
 
   // Get providers sorted
   const providers = useMemo(() => {
     return Object.keys(modelsByProvider).sort((a, b) => {
-      const aModels = modelsByProvider[a]
-      const bModels = modelsByProvider[b]
-      const aHasPopular = aModels.some((m) => m.isPopular)
-      const bHasPopular = bModels.some((m) => m.isPopular)
-      if (aHasPopular && !bHasPopular) return -1
-      if (!aHasPopular && bHasPopular) return 1
-      return bModels.length - aModels.length
-    })
-  }, [modelsByProvider])
+      const aModels = modelsByProvider[a];
+      const bModels = modelsByProvider[b];
+      const aHasPopular = aModels.some((m) => m.isPopular);
+      const bHasPopular = bModels.some((m) => m.isPopular);
+      if (aHasPopular && !bHasPopular) return -1;
+      if (!aHasPopular && bHasPopular) return 1;
+      return bModels.length - aModels.length;
+    });
+  }, [modelsByProvider]);
 
   // Get families sorted
   const families = useMemo(() => {
     return Object.keys(modelsByFamily).sort((a, b) => {
-      const aModels = modelsByFamily[a]
-      const bModels = modelsByFamily[b]
-      const aHasPopular = aModels.some((m) => m.isPopular)
-      const bHasPopular = bModels.some((m) => m.isPopular)
-      if (aHasPopular && !bHasPopular) return -1
-      if (!aHasPopular && bHasPopular) return 1
-      return bModels.length - aModels.length
-    })
-  }, [modelsByFamily])
+      const aModels = modelsByFamily[a];
+      const bModels = modelsByFamily[b];
+      const aHasPopular = aModels.some((m) => m.isPopular);
+      const bHasPopular = bModels.some((m) => m.isPopular);
+      if (aHasPopular && !bHasPopular) return -1;
+      if (!aHasPopular && bHasPopular) return 1;
+      return bModels.length - aModels.length;
+    });
+  }, [modelsByFamily]);
 
-  const popularModels = useMemo(
-    () => models.filter((m) => m.isPopular),
-    [models],
-  )
+  const popularModels = useMemo(() => models.filter((m) => m.isPopular), [models]);
 
   return {
     models,
@@ -695,7 +682,7 @@ export function useModels() {
     error,
     reload,
     totalCount: models.length,
-  }
+  };
 }
 
 // ============================================================================
@@ -703,11 +690,11 @@ export function useModels() {
 // ============================================================================
 
 export function getModelById(models: Model[], id: string): Model | undefined {
-  return models.find((m) => m.id === id)
+  return models.find((m) => m.id === id);
 }
 
 export function prefetchModels() {
-  fetchAllModels().catch(() => {})
+  fetchAllModels().catch(() => {});
 }
 
 // Get cache status
@@ -719,5 +706,5 @@ export function getCacheStatus() {
     age: cache.timestamp ? Date.now() - cache.timestamp : null,
     isStale: cache.timestamp ? Date.now() - cache.timestamp > CACHE_TTL : true,
     isLoading: cache.loading,
-  }
+  };
 }

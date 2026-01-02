@@ -2,15 +2,15 @@
  * Convex Client - Singleton instance for the entire app
  */
 
-import { ConvexReactClient } from 'convex/react'
-import { env } from './env'
+import { ConvexReactClient } from "convex/react";
+import { env } from "./env";
 
 // Create client only in browser environment with valid URL
 // During SSR, convexClient will be null - components must handle this gracefully
 export const convexClient =
-  typeof window !== 'undefined' && env.CONVEX_URL
+  typeof window !== "undefined" && env.CONVEX_URL
     ? new ConvexReactClient(env.CONVEX_URL, { expectAuth: true })
-    : null
+    : null;
 
 // Helper to check if Convex is available (for conditional hook usage)
-export const isConvexAvailable = () => convexClient !== null
+export const isConvexAvailable = () => convexClient !== null;
