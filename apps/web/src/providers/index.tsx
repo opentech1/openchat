@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexProviderWithAuth } from "convex/react";
 import { Toaster } from "sonner";
 import { convexClient } from "../lib/convex";
-import { authClient, StableAuthProvider } from "../lib/auth-client";
+import { authClient, useAuth, StableAuthProvider } from "../lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { PostHogProvider } from "./posthog";
 import { prefetchModels } from "../stores/model";
@@ -28,34 +28,27 @@ interface ProvidersProps {
 }
 
 function useStableConvexAuth() {
+  const { isAuthenticated, loading } = useAuth();
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const fetchedRef = { current: false };
+  const tokenFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-
-    (async () => {
-      try {
-        const session = await authClient.getSession();
-        if (session.data?.session) {
-          const tokenResult = await authClient.convex.token();
-          setToken(tokenResult.data?.token || null);
-          setIsAuthenticated(true);
-        }
-      } catch {
-        setToken(null);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, []);
+    if (loading || tokenFetchedRef.current) return;
+    if (!isAuthenticated) {
+      tokenFetchedRef.current = true;
+      return;
+    }
+    tokenFetchedRef.current = true;
+    authClient.convex.token().then((result) => {
+      setToken(result.data?.token || null);
+    }).catch(() => {
+      setToken(null);
+    });
+  }, [isAuthenticated, loading]);
 
   const fetchAccessToken = useCallback(async () => {
     if (token) return token;
+    if (!isAuthenticated) return null;
     try {
       const result = await authClient.convex.token();
       const newToken = result.data?.token || null;
@@ -64,11 +57,19 @@ function useStableConvexAuth() {
     } catch {
       return null;
     }
-  }, [token]);
+  }, [token, isAuthenticated]);
 
   return useMemo(
-    () => ({ isLoading, isAuthenticated, fetchAccessToken }),
-    [isLoading, isAuthenticated, fetchAccessToken]
+    () => ({ isLoading: loading, isAuthenticated, fetchAccessToken }),
+    [loading, isAuthenticated, fetchAccessToken]
+  );
+}
+
+function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <ConvexProviderWithAuth client={convexClient!} useAuth={useStableConvexAuth}>
+      {children}
+    </ConvexProviderWithAuth>
   );
 }
 
@@ -95,9 +96,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <PostHogProvider>
       <StableAuthProvider>
-        <ConvexProviderWithAuth client={convexClient} useAuth={useStableConvexAuth}>
-          {content}
-        </ConvexProviderWithAuth>
+        <ConvexAuthWrapper>{content}</ConvexAuthWrapper>
       </StableAuthProvider>
     </PostHogProvider>
   );
