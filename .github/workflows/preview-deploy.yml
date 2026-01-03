@@ -4,13 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-env:
-  RAILWAY_PROJECT_ID: e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a
-  RAILWAY_SERVICE_ID: f12f449e-b9d8-471b-94ea-7107b7c5da47
-
 jobs:
   deploy-preview:
-    name: Deploy Preview Environment
+    name: Deploy Convex Preview
     runs-on: ubuntu-latest
     # Only run for PRs from the same repo (not forks)
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -65,78 +61,84 @@ jobs:
         working-directory: apps/server
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GITHUB_CLIENT_ID: ${{ secrets.AUTH_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.AUTH_GITHUB_CLIENT_SECRET }}
         run: |
           echo "⚙️ Setting Convex environment variables..."
 
           PR_NUM=${{ github.event.pull_request.number }}
-          SITE_URL="https://pr-${PR_NUM}.osschat.dev"
+          RAILWAY_URL="https://web-openchat-pr-${PR_NUM}.up.railway.app"
 
-          bunx convex env set SITE_URL "$SITE_URL" --preview-name pr-${PR_NUM}
+          # Core settings
+          bunx convex env set SITE_URL "$RAILWAY_URL" --preview-name pr-${PR_NUM}
           bunx convex env set NEXT_PUBLIC_DEPLOYMENT "preview" --preview-name pr-${PR_NUM}
 
-          echo "✅ Convex env vars set"
-          echo "   SITE_URL: $SITE_URL"
-          echo "   NEXT_PUBLIC_DEPLOYMENT: preview"
+          # Auth settings - must match production for oAuthProxy to work
+          bunx convex env set BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET" --preview-name pr-${PR_NUM}
+          bunx convex env set GITHUB_CLIENT_ID "$GITHUB_CLIENT_ID" --preview-name pr-${PR_NUM}
+          bunx convex env set GITHUB_CLIENT_SECRET "$GITHUB_CLIENT_SECRET" --preview-name pr-${PR_NUM}
 
-      - name: Install Railway CLI
-        run: |
-          npm install -g @railway/cli
+          echo "✅ Convex env vars set"
+          echo "   SITE_URL: $RAILWAY_URL"
+          echo "   NEXT_PUBLIC_DEPLOYMENT: preview"
+          echo "   BETTER_AUTH_SECRET: [set]"
+          echo "   GITHUB_CLIENT_ID: [set]"
+          echo "   GITHUB_CLIENT_SECRET: [set]"
 
       - name: Configure Railway Environment
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo "🚂 Configuring Railway PR environment..."
+          echo "🚂 Configuring Railway environment via GraphQL API..."
 
           PR_NUM=${{ github.event.pull_request.number }}
           CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
           CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
+          ENV_NAME="openchat-pr-${PR_NUM}"
+          PROJECT_ID="e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a"
+          SERVICE_ID="f12f449e-b9d8-471b-94ea-7107b7c5da47"
 
-          # Wait for Railway to create the PR environment (it's auto-created on PR)
-          echo "Waiting for Railway PR environment to be ready..."
-          sleep 10
+          # Wait for Railway to create the PR environment
+          echo "Waiting for Railway PR environment..."
+          sleep 20
 
-          # Set the Convex URLs as Railway variables
-          railway variables --set "VITE_CONVEX_URL=${CONVEX_URL}" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_URL"
+          # Get the environment ID
+          echo "Looking up environment ID for ${ENV_NAME}..."
+          ENV_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"query { project(id: \\\"${PROJECT_ID}\\\") { environments { edges { node { id name } } } } }\"}" \
+            https://backboard.railway.app/graphql/v2)
 
-          railway variables --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_SITE_URL"
+          echo "Environment response: ${ENV_RESPONSE}"
+
+          ENV_ID=$(echo "$ENV_RESPONSE" | jq -r ".data.project.environments.edges[] | select(.node.name == \"${ENV_NAME}\") | .node.id")
+
+          if [ -z "$ENV_ID" ] || [ "$ENV_ID" == "null" ]; then
+            echo "⚠️ Could not find environment ${ENV_NAME}, skipping Railway config"
+            exit 0
+          fi
+
+          echo "Found environment ID: ${ENV_ID}"
+
+          # Set VITE_CONVEX_URL
+          echo "Setting VITE_CONVEX_URL..."
+          curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_URL\\\", value: \\\"${CONVEX_URL}\\\" }) }\"}" \
+            https://backboard.railway.app/graphql/v2
+
+          # Set VITE_CONVEX_SITE_URL
+          echo "Setting VITE_CONVEX_SITE_URL..."
+          curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_SITE_URL\\\", value: \\\"${CONVEX_SITE_URL}\\\" }) }\"}" \
+            https://backboard.railway.app/graphql/v2
 
           echo "✅ Railway environment variables updated"
-
-      - name: Add Custom Domain
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "🌐 Adding custom domain..."
-
-          PR_NUM=${{ github.event.pull_request.number }}
-          CUSTOM_DOMAIN="pr-${PR_NUM}.osschat.dev"
-
-          # Add custom domain to Railway service
-          railway domain "$CUSTOM_DOMAIN" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Domain may already exist"
-
-          echo "✅ Custom domain configured: https://${CUSTOM_DOMAIN}"
-
-      - name: Trigger Railway Redeploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "🔄 Triggering Railway redeploy..."
-
-          PR_NUM=${{ github.event.pull_request.number }}
-
-          # Trigger a redeploy to pick up the new environment variables
-          railway redeploy \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Redeploy may have been triggered automatically"
-
-          echo "✅ Redeploy triggered"
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -145,23 +147,18 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const convexUrl = '${{ steps.convex-deploy.outputs.convex_url }}';
             const convexSiteUrl = '${{ steps.convex-deploy.outputs.convex_site_url }}';
-            const previewUrl = `https://pr-${prNumber}.osschat.dev`;
             const railwayUrl = `https://web-openchat-pr-${prNumber}.up.railway.app`;
 
             const body = `## 🚀 Preview Deployment Ready
 
             | Environment | URL |
             |------------|-----|
-            | **Preview** | [${previewUrl}](${previewUrl}) |
-            | **Railway** | [${railwayUrl}](${railwayUrl}) |
-            | **Convex** | [Dashboard](https://dashboard.convex.dev) |
+            | **Frontend** | [${railwayUrl}](${railwayUrl}) |
+            | **Convex Dashboard** | [Dashboard](https://dashboard.convex.dev) |
 
             ### Convex Preview Backend
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
-
-            ### OAuth
-            GitHub OAuth is configured via **oAuthProxy** - authentication flows through production Convex and redirects back to the preview.
 
             ---
             <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
@@ -179,23 +176,19 @@ jobs:
             );
 
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: botComment.id,
                 body: body
               });
-              console.log('Updated existing preview comment');
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
                 body: body
               });
-              console.log('Created new preview comment');
             }
 
       - name: Summary
@@ -207,9 +200,7 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| Railway PR Env | ✅ Configured |" >> $GITHUB_STEP_SUMMARY
-          echo "| Custom Domain | pr-${PR_NUM}.osschat.dev |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### URLs" >> $GITHUB_STEP_SUMMARY
-          echo "- Preview: https://pr-${PR_NUM}.osschat.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: https://web-openchat-pr-${PR_NUM}.up.railway.app" >> $GITHUB_STEP_SUMMARY
           echo "- Convex: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY
