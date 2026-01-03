@@ -16,6 +16,7 @@ packages/auth/dist/
 apps/server/node_modules.bak/
 .auth.db
 .vercel
+.railway/
 ISSUES_COMPREHENSIVE.txt
 .env.vercel.*
 /.playwright-mcp/
