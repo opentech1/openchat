@@ -16,6 +16,9 @@ import { cronJobs } from "convex/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { decrementStat, getStats, STAT_KEYS } from "./lib/dbStats";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("Cron");
 
 const crons = cronJobs();
 
@@ -74,9 +77,11 @@ export const cleanupSoftDeletedRecords = internalMutation({
 		// Calculate cutoff date
 		const cutoffDate = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
 
-		console.log(
-			`[Cron] Cleanup soft-deleted records - Started (retention: ${retentionDays} days, batch size: ${batchSize}, dry run: ${dryRun})`,
-		);
+		logger.info("Cleanup soft-deleted records - Started", {
+			retentionDays,
+			batchSize,
+			dryRun,
+		});
 
 		let totalDeleted = 0;
 
@@ -90,17 +95,19 @@ export const cleanupSoftDeletedRecords = internalMutation({
 
 			for (const chat of chatsToDelete) {
 				if (dryRun) {
-					console.log(
-						`[Cron] Would delete chat: ${chat._id} (deleted at: ${new Date(chat.deletedAt!).toISOString()})`,
-					);
+					logger.debug("Would delete chat", {
+						chatId: chat._id,
+						deletedAt: new Date(chat.deletedAt!).toISOString(),
+					});
 				} else {
 					await ctx.db.delete(chat._id);
 					// PERFORMANCE OPTIMIZATION: Update stats counters instead of recalculating
 					await decrementStat(ctx, STAT_KEYS.CHATS_TOTAL);
 					await decrementStat(ctx, STAT_KEYS.CHATS_SOFT_DELETED);
-					console.log(
-						`[Cron] Hard deleted chat: ${chat._id} (deleted at: ${new Date(chat.deletedAt!).toISOString()})`,
-					);
+					logger.debug("Hard deleted chat", {
+						chatId: chat._id,
+						deletedAt: new Date(chat.deletedAt!).toISOString(),
+					});
 				}
 				totalDeleted++;
 			}
@@ -114,24 +121,27 @@ export const cleanupSoftDeletedRecords = internalMutation({
 
 			for (const message of messagesToDelete) {
 				if (dryRun) {
-					console.log(
-						`[Cron] Would delete message: ${message._id} (deleted at: ${new Date(message.deletedAt!).toISOString()})`,
-					);
+					logger.debug("Would delete message", {
+						messageId: message._id,
+						deletedAt: new Date(message.deletedAt!).toISOString(),
+					});
 				} else {
 					await ctx.db.delete(message._id);
 					// PERFORMANCE OPTIMIZATION: Update stats counters instead of recalculating
 					await decrementStat(ctx, STAT_KEYS.MESSAGES_TOTAL);
 					await decrementStat(ctx, STAT_KEYS.MESSAGES_SOFT_DELETED);
-					console.log(
-						`[Cron] Hard deleted message: ${message._id} (deleted at: ${new Date(message.deletedAt!).toISOString()})`,
-					);
+					logger.debug("Hard deleted message", {
+						messageId: message._id,
+						deletedAt: new Date(message.deletedAt!).toISOString(),
+					});
 				}
 				totalDeleted++;
 			}
 
-			console.log(
-				`[Cron] Cleanup soft-deleted records - Completed (${totalDeleted} records ${dryRun ? "would be" : ""} deleted)`,
-			);
+			logger.info("Cleanup soft-deleted records - Completed", {
+				totalDeleted,
+				dryRun,
+			});
 
 			return {
 				success: true,
@@ -140,7 +150,7 @@ export const cleanupSoftDeletedRecords = internalMutation({
 				cutoffDate: new Date(cutoffDate).toISOString(),
 			};
 		} catch (error) {
-			console.error("[Cron] Cleanup soft-deleted records - Failed", error);
+			logger.error("Cleanup soft-deleted records - Failed", error);
 			throw error;
 		}
 	},
@@ -174,7 +184,7 @@ export const cleanupSoftDeletedRecords = internalMutation({
 export const generateDatabaseStats = internalMutation({
 	args: {},
 	handler: async (ctx) => {
-		console.log("[Cron] Generate database stats - Started");
+		logger.info("Generate database stats - Started");
 
 		try {
 			// PERFORMANCE OPTIMIZATION: Read from stats counters instead of full table scans
@@ -208,18 +218,18 @@ export const generateDatabaseStats = internalMutation({
 				},
 			};
 
-			console.log("[Cron] Database statistics:", JSON.stringify(stats, null, 2));
+			logger.info("Database statistics", stats);
 
 			// TODO: Send alerts if any metrics exceed thresholds
 
-			console.log("[Cron] Generate database stats - Completed");
+			logger.info("Generate database stats - Completed");
 
 			return {
 				success: true,
 				stats,
 			};
 		} catch (error) {
-			console.error("[Cron] Generate database stats - Failed", error);
+			logger.error("Generate database stats - Failed", error);
 			throw error;
 		}
 	},

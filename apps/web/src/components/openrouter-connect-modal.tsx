@@ -103,11 +103,11 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
             {apiKey ? (
               // Success state
               <div className="flex flex-col items-center gap-4 py-4">
-                <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/10">
-                  <CheckIcon className="size-8 text-emerald-500" />
+                <div className="flex size-16 items-center justify-center rounded-full bg-success/10">
+                  <CheckIcon className="size-8 text-success" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium text-emerald-600">Successfully connected!</p>
+                  <p className="font-medium text-success">Successfully connected!</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Your OpenRouter account is now linked.
                   </p>
@@ -122,15 +122,15 @@ export function OpenRouterConnectModal({ open, onOpenChange }: OpenRouterConnect
                   </p>
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center gap-2">
-                      <CheckIcon className="size-4 text-emerald-500" />
+                      <CheckIcon className="size-4 text-success" />
                       <span>Unlimited access to 350+ AI models</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <CheckIcon className="size-4 text-emerald-500" />
+                      <CheckIcon className="size-4 text-success" />
                       <span>No daily usage limits</span>
                     </li>
                     <li className="flex items-center gap-2">
-                      <CheckIcon className="size-4 text-emerald-500" />
+                      <CheckIcon className="size-4 text-success" />
                       <span>Pay only for what you use</span>
                     </li>
                   </ul>

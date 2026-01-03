@@ -290,7 +290,7 @@ function ProvidersSection() {
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-2">
                 <p className="font-semibold">OSSChat Cloud</p>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-caption font-medium text-success">
                   FREE
                 </span>
               </div>
@@ -312,8 +312,8 @@ function ProvidersSection() {
                         remainingBudget <= 0
                           ? "bg-destructive"
                           : remainingBudget < DAILY_LIMIT_CENTS * 0.3
-                            ? "bg-amber-500"
-                            : "bg-emerald-500",
+                            ? "bg-warning"
+                            : "bg-success",
                       )}
                       style={{
                         width: `${Math.min(100, (dailyUsageCents / DAILY_LIMIT_CENTS) * 100)}%`,
@@ -375,7 +375,7 @@ function ProvidersSection() {
                 <div className="flex items-center gap-2">
                   <p className="font-semibold">Personal OpenRouter</p>
                   {apiKey && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-caption font-medium text-primary">
                       CONNECTED
                     </span>
                   )}
@@ -494,7 +494,7 @@ function ModelsSection() {
             <div className="flex-1 space-y-1">
               <div className="flex items-center gap-2">
                 <p className="font-semibold">OpenRouter</p>
-                <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-500">
+                <span className="rounded-full px-2 py-0.5 text-caption font-medium bg-info/10 text-info">
                   FULL CATALOG
                 </span>
               </div>
@@ -527,12 +527,12 @@ function ModelsSection() {
             </div>
             <div className="flex items-center gap-2">
               {cacheStatus.hasData && !cacheStatus.isStale && (
-                <span className="flex items-center gap-1 text-xs text-emerald-500">
+                <span className="flex items-center gap-1 text-xs text-success">
                   <CheckCircleIcon className="size-3.5" />
                   Fresh
                 </span>
               )}
-              {cacheStatus.isStale && <span className="text-xs text-amber-500">Stale</span>}
+              {cacheStatus.isStale && <span className="text-xs text-warning">Stale</span>}
             </div>
           </div>
 
@@ -599,12 +599,12 @@ function ModelsSection() {
                     <p className="text-xs text-muted-foreground">{model.provider}</p>
                   </div>
                   {model.isPopular && (
-                    <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+                    <span className="rounded-full bg-warning/10 px-2 py-0.5 text-caption font-medium text-warning">
                       POPULAR
                     </span>
                   )}
                   {model.isFree && (
-                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-caption font-medium text-success">
                       FREE
                     </span>
                   )}
