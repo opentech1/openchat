@@ -1,27 +1,21 @@
-/**
- * App Providers - Clean provider composition
- */
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react";
+import { ConvexProviderWithAuth } from "convex/react";
 import { Toaster } from "sonner";
 import { convexClient } from "../lib/convex";
-import { authClient } from "../lib/auth-client";
+import { authClient, StableAuthProvider } from "../lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { PostHogProvider } from "./posthog";
 import { prefetchModels } from "../stores/model";
 
-// Prefetch models.dev data early (cached, won't block render)
 if (typeof window !== "undefined") {
   prefetchModels();
 }
 
-// Singleton query client - disable refetch on window focus to prevent tab-switch flashing
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
+      staleTime: 1000 * 60 * 5,
       retry: 1,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
@@ -33,8 +27,52 @@ interface ProvidersProps {
   children: React.ReactNode;
 }
 
+function useStableConvexAuth() {
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const fetchedRef = { current: false };
+
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    (async () => {
+      try {
+        const session = await authClient.getSession();
+        if (session.data?.session) {
+          const tokenResult = await authClient.convex.token();
+          setToken(tokenResult.data?.token || null);
+          setIsAuthenticated(true);
+        }
+      } catch {
+        setToken(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
+
+  const fetchAccessToken = useCallback(async () => {
+    if (token) return token;
+    try {
+      const result = await authClient.convex.token();
+      const newToken = result.data?.token || null;
+      setToken(newToken);
+      return newToken;
+    } catch {
+      return null;
+    }
+  }, [token]);
+
+  return useMemo(
+    () => ({ isLoading, isAuthenticated, fetchAccessToken }),
+    [isLoading, isAuthenticated, fetchAccessToken]
+  );
+}
+
 export function Providers({ children }: ProvidersProps) {
-  // Track if we're on the client side with Convex available
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -50,18 +88,17 @@ export function Providers({ children }: ProvidersProps) {
     </ThemeProvider>
   );
 
-  // During SSR or before hydration, don't render Convex-dependent content
-  // This prevents the "Could not find Convex client" error
   if (!isClient || !convexClient) {
     return <PostHogProvider>{content}</PostHogProvider>;
   }
 
-  // Client-side with valid Convex client - use full auth provider
   return (
     <PostHogProvider>
-      <ConvexBetterAuthProvider client={convexClient} authClient={authClient}>
-        {content}
-      </ConvexBetterAuthProvider>
+      <StableAuthProvider>
+        <ConvexProviderWithAuth client={convexClient} useAuth={useStableConvexAuth}>
+          {content}
+        </ConvexProviderWithAuth>
+      </StableAuthProvider>
     </PostHogProvider>
   );
 }
