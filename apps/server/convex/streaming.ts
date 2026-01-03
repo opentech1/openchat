@@ -786,7 +786,7 @@ export const streamLLM = httpAction(async (ctx, request) => {
 						}
 					} catch (parseError) {
 						// Log JSON parse errors for debugging OpenRouter protocol issues
-						console.warn("Failed to parse streaming chunk:", {
+						logger.warn("Failed to parse streaming chunk", {
 							data: data.slice(0, 200), // Truncate for logging
 							error: parseError instanceof Error ? parseError.message : String(parseError),
 						});
@@ -874,7 +874,7 @@ export const streamLLM = httpAction(async (ctx, request) => {
 			headers,
 		});
 	} catch (error) {
-		console.error("Stream error:", error);
+		logger.error("Stream error", error);
 		return new Response(
 			JSON.stringify({
 				error: error instanceof Error ? error.message : "Stream failed",

@@ -73,86 +73,6 @@ import {
   PlusIcon,
 } from "lucide-react";
 
-// Shimmer text effect for streaming content
-function ShimmerText({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="relative inline-block">
-      <span className="animate-shimmer bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] bg-clip-text text-transparent">
-        {children}
-      </span>
-    </span>
-  );
-}
-
-// Reasoning part component for AI messages
-interface ReasoningPartProps {
-  text: string;
-  // State from AI SDK: 'streaming' while thinking, 'done' when complete
-  state?: "streaming" | "done";
-}
-
-function ReasoningPart({ text, state }: ReasoningPartProps) {
-  // If state is 'streaming', show animated shimmer. Otherwise (done or undefined with text), show "Thought process"
-  const isStreaming = state === "streaming";
-  const [isOpen, setIsOpen] = useState(isStreaming); // Auto-open when streaming
-
-  // Auto-open when streaming starts, auto-close when done
-  useEffect(() => {
-    if (isStreaming) {
-      setIsOpen(true);
-    } else if (state === "done") {
-      // Auto-collapse after streaming completes
-      setIsOpen(false);
-    }
-  }, [isStreaming, state]);
-
-  return (
-    <details
-      open={isOpen}
-      onToggle={(e) => setIsOpen((e.target as HTMLDetailsElement).open)}
-      className="group overflow-hidden rounded-xl border border-border/50 bg-muted/30"
-    >
-      <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/50 list-none [&::-webkit-details-marker]:hidden">
-        {/* Brain icon with pulse animation when streaming */}
-        <BrainIcon
-          className={cn("size-4 transition-all", isStreaming && "text-primary animate-pulse")}
-        />
-
-        <span className="text-sm font-medium">
-          {isStreaming ? <ShimmerText>Thinking...</ShimmerText> : "Thought process"}
-        </span>
-
-        {/* Streaming indicator */}
-        {isStreaming && (
-          <span className="flex items-center gap-1 ml-2">
-            <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-          </span>
-        )}
-
-        <span className="ml-auto text-xs opacity-70">
-          {isOpen ? "Click to collapse" : "Click to expand"}
-        </span>
-      </summary>
-      <div className="border-t border-border/30 px-4 py-3 max-h-[300px] overflow-y-auto">
-        {/* Use Streamdown for markdown rendering in reasoning text */}
-        <div
-          className={cn(
-            "prose prose-sm dark:prose-invert max-w-none",
-            "prose-p:text-xs prose-p:leading-relaxed prose-p:text-muted-foreground prose-p:my-1",
-            "prose-strong:text-foreground/80 prose-strong:font-semibold",
-            "prose-em:text-muted-foreground",
-            "prose-code:text-xs prose-code:bg-muted prose-code:px-1 prose-code:rounded",
-            "prose-ul:my-1 prose-ol:my-1 prose-li:text-xs prose-li:text-muted-foreground",
-            isStreaming && "animate-pulse",
-          )}
-        >
-          <Streamdown>{text || ""}</Streamdown>
-        </div>
-      </div>
-    </details>
-  );
-}
-
 // Auto-scroll component - scrolls to bottom when messages change
 function AutoScroll({ messageCount }: { messageCount: number }) {
   const { scrollToBottom, isAtBottom } = useConversationScroll();
@@ -261,11 +181,11 @@ function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
   };
 
   return (
-    <div className="w-full rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+    <div className="w-full rounded-xl border border-destructive/30 bg-destructive/10 p-4">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           <svg
-            className="size-5 text-red-400"
+            className="size-5 text-destructive"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -279,21 +199,21 @@ function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="text-sm font-medium text-red-400">{getErrorTitle(error.code)}</h4>
-          <p className="mt-1 text-sm text-red-300/80">{error.message}</p>
+          <h4 className="text-sm font-medium text-destructive">{getErrorTitle(error.code)}</h4>
+          <p className="mt-1 text-sm text-destructive/80">{error.message}</p>
           {error.provider && (
-            <p className="mt-1 text-xs text-red-300/60">Provider: {error.provider}</p>
+            <p className="mt-1 text-xs text-destructive/60">Provider: {error.provider}</p>
           )}
           {error.details && (
             <div className="mt-2">
               <button
                 onClick={() => setShowDetails(!showDetails)}
-                className="text-xs text-red-300/60 hover:text-red-300 transition-colors"
+                className="text-xs text-destructive/60 hover:text-destructive transition-colors"
               >
                 {showDetails ? "Hide details" : "Show details"}
               </button>
               {showDetails && (
-                <pre className="mt-2 p-2 rounded bg-red-950/50 text-xs text-red-300/70 overflow-x-auto max-h-32 overflow-y-auto">
+                <pre className="mt-2 p-2 rounded bg-destructive/20 text-xs text-destructive/70 overflow-x-auto max-h-32 overflow-y-auto">
                   {error.details}
                 </pre>
               )}
@@ -304,7 +224,7 @@ function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
               variant="ghost"
               size="sm"
               onClick={onRetry}
-              className="mt-3 text-red-400 hover:text-red-300 hover:bg-red-500/20"
+              className="mt-3 text-destructive hover:text-destructive/80 hover:bg-destructive/20"
             >
               Try again
             </Button>
@@ -455,8 +375,8 @@ function ChainOfThought({
               hasActiveStep
                 ? "bg-primary animate-pulse"
                 : errorSteps > 0
-                  ? "bg-red-500"
-                  : "bg-green-500",
+                  ? "bg-destructive"
+                  : "bg-success",
             )}
           />
           <span className="font-medium">Thinking</span>
@@ -546,7 +466,7 @@ function ChainOfThoughtStepItem({ step }: { step: ChainOfThoughtStep }) {
         <div
           className={cn(
             "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs",
-            step.status === "complete" && "bg-green-500/20 text-green-500",
+            step.status === "complete" && "bg-success/20 text-success",
             step.status === "active" && "bg-primary/20 text-primary animate-pulse",
             step.status === "pending" && "bg-muted text-muted-foreground",
           )}
@@ -611,7 +531,7 @@ function ChainOfThoughtStepItem({ step }: { step: ChainOfThoughtStep }) {
 
       {/* Tool error display */}
       {step.type === "tool" && step.toolState === "output-error" && step.errorText && (
-        <div className="mt-2 ml-9 text-xs text-red-400">Error: {step.errorText}</div>
+        <div className="mt-2 ml-9 text-xs text-destructive">Error: {step.errorText}</div>
       )}
     </div>
   );

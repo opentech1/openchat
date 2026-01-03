@@ -1,79 +1,10 @@
-/**
- * Command Palette - Keyboard-first navigation (CMD+K / Ctrl+K)
- *
- * Replaces traditional sidebar with a search-driven approach.
- * Features fuzzy search, keyboard navigation, and smooth animations.
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { useUIStore } from "../stores/ui";
 import { signOut } from "../lib/auth-client";
 import { cn } from "../lib/utils";
-
-// Note: Once routes are created, uncomment this import and update navigation
-// import { useNavigate } from "@tanstack/react-router";
-
-// Icons as inline SVGs for simplicity
-const SearchIcon = () => (
-  <svg
-    className="size-5 text-muted-foreground"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-    />
-  </svg>
-);
-
-const PlusIcon = () => (
-  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-  </svg>
-);
-
-const SettingsIcon = () => (
-  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-    />
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-    />
-  </svg>
-);
-
-const LogOutIcon = () => (
-  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-    />
-  </svg>
-);
-
-const ChatIcon = () => (
-  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-    />
-  </svg>
-);
+import { fuzzyMatch } from "@/lib/fuzzy-search";
+import { SearchIcon, PlusIcon, SettingsIcon, LogOutIcon, ChatIcon } from "@/components/icons";
 
 // Types
 interface CommandItem {
@@ -133,25 +64,8 @@ function formatRelativeTime(date: Date): string {
   return `${Math.floor(diffDays / 30)} months ago`;
 }
 
-// Fuzzy search implementation
-function fuzzyMatch(text: string, query: string): boolean {
-  const searchLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-
-  // Direct substring match
-  if (textLower.includes(searchLower)) return true;
-
-  // Fuzzy character matching
-  let searchIndex = 0;
-  for (let i = 0; i < textLower.length && searchIndex < searchLower.length; i++) {
-    if (textLower[i] === searchLower[searchIndex]) {
-      searchIndex++;
-    }
-  }
-  return searchIndex === searchLower.length;
-}
-
 export function CommandPalette() {
+  const navigate = useNavigate();
   const { commandPaletteOpen, setCommandPaletteOpen } = useUIStore();
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -160,40 +74,35 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Build command items
-  // Note: Using window.location for routes that don't exist yet in the route tree
-  // These will be updated to use navigate() once the routes are created
   const allItems = useMemo<CommandItem[]>(() => {
     const actions: CommandItem[] = [
       {
         id: "new-chat",
         type: "action",
         title: "New Chat",
-        icon: <PlusIcon />,
+        icon: <PlusIcon className="size-4" />,
         keywords: ["create", "start", "new", "chat"],
         action: () => {
           setCommandPaletteOpen(false);
-          // TODO: Update to navigate({ to: "/chat/new" }) once route exists
-          window.location.href = "/chat/new";
+          navigate({ to: "/" });
         },
       },
       {
         id: "settings",
         type: "action",
         title: "Settings",
-        icon: <SettingsIcon />,
+        icon: <SettingsIcon className="size-4" />,
         keywords: ["preferences", "config", "options"],
         action: () => {
           setCommandPaletteOpen(false);
-          // TODO: Update to navigate({ to: "/settings" }) once route exists
-          window.location.href = "/settings";
+          navigate({ to: "/settings" });
         },
       },
       {
         id: "sign-out",
         type: "action",
         title: "Sign Out",
-        icon: <LogOutIcon />,
+        icon: <LogOutIcon className="size-4" />,
         keywords: ["logout", "exit", "leave"],
         action: () => {
           setCommandPaletteOpen(false);
@@ -207,16 +116,15 @@ export function CommandPalette() {
       type: "chat",
       title: chat.title,
       subtitle: formatRelativeTime(chat.updatedAt),
-      icon: <ChatIcon />,
+      icon: <ChatIcon className="size-4" />,
       action: () => {
         setCommandPaletteOpen(false);
-        // TODO: Update to navigate({ to: "/chat/$id", params: { id: chat.id } }) once route exists
-        window.location.href = `/chat/${chat.id}`;
+        navigate({ to: "/c/$chatId", params: { chatId: chat.id } });
       },
     }));
 
     return [...actions, ...chats];
-  }, [setCommandPaletteOpen]);
+  }, [setCommandPaletteOpen, navigate]);
 
   // Filter items based on query
   const filteredItems = useMemo(() => {
@@ -382,7 +290,7 @@ export function CommandPalette() {
             autoCorrect="off"
             spellCheck={false}
           />
-          <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+          <kbd className="hidden sm:inline-flex h-5 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-caption font-medium text-muted-foreground">
             ESC
           </kbd>
         </div>
@@ -447,13 +355,13 @@ export function CommandPalette() {
         <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-muted/30">
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+              <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
                 ↑↓
               </kbd>
               <span>Navigate</span>
             </span>
             <span className="flex items-center gap-1">
-              <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+              <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
                 ↵
               </kbd>
               <span>Select</span>
@@ -509,7 +417,7 @@ function CommandItem({
         )}
       </div>
       {isSelected && (
-        <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground pointer-events-none">
+        <kbd className="hidden sm:inline-flex h-5 items-center rounded border border-border bg-muted px-1.5 font-mono text-caption font-medium text-muted-foreground pointer-events-none">
           ↵
         </kbd>
       )}

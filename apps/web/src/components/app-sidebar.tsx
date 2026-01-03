@@ -1,7 +1,3 @@
-/**
- * App Sidebar - Premium sidebar with smooth collapse animation
- */
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
@@ -21,43 +17,7 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "./ui/sidebar";
-
-// Icons
-const PlusIcon = () => (
-  <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
-  </svg>
-);
-
-const ChatIcon = () => (
-  <svg className="size-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-    />
-  </svg>
-);
-
-// Sidebar panel icon (clean, modern design)
-const SidebarIcon = () => (
-  <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-    <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth={1.5} />
-    <path d="M9 3v18" strokeWidth={1.5} />
-  </svg>
-);
-
-const ChevronRightIcon = () => (
-  <svg
-    className="size-4 text-sidebar-foreground/40 transition-transform group-hover:translate-x-0.5"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-  </svg>
-);
+import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon } from "@/components/icons";
 
 // Group chats by time periods
 interface ChatItem {
@@ -101,6 +61,36 @@ function groupChatsByTime(chats: ChatItem[]) {
   }
 
   return { today, last7Days, last30Days, older };
+}
+
+interface ChatGroupProps {
+  label: string;
+  chats: ChatItem[];
+  currentChatId?: string;
+  onChatClick: (chatId: string) => void;
+}
+
+function ChatGroup({ label, chats, currentChatId, onChatClick }: ChatGroupProps) {
+  if (chats.length === 0) return null;
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarMenu>
+        {chats.map((chat) => (
+          <SidebarMenuItem key={chat._id}>
+            <SidebarMenuButton
+              isActive={currentChatId === chat._id}
+              onClick={() => onChatClick(chat._id)}
+            >
+              <ChatIcon />
+              <span className="truncate">{chat.title}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
+      </SidebarMenu>
+    </SidebarGroup>
+  );
 }
 
 export function AppSidebar() {
@@ -249,81 +239,10 @@ export function AppSidebar() {
             </div>
           ) : (
             <>
-              {grouped.today.length > 0 && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Today</SidebarGroupLabel>
-                  <SidebarMenu>
-                    {grouped.today.map((chat) => (
-                      <SidebarMenuItem key={chat._id}>
-                        <SidebarMenuButton
-                          isActive={currentChatId === chat._id}
-                          onClick={() => handleChatClick(chat._id)}
-                        >
-                          <ChatIcon />
-                          <span className="truncate">{chat.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroup>
-              )}
-
-              {grouped.last7Days.length > 0 && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Last 7 days</SidebarGroupLabel>
-                  <SidebarMenu>
-                    {grouped.last7Days.map((chat) => (
-                      <SidebarMenuItem key={chat._id}>
-                        <SidebarMenuButton
-                          isActive={currentChatId === chat._id}
-                          onClick={() => handleChatClick(chat._id)}
-                        >
-                          <ChatIcon />
-                          <span className="truncate">{chat.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroup>
-              )}
-
-              {grouped.last30Days.length > 0 && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Last 30 days</SidebarGroupLabel>
-                  <SidebarMenu>
-                    {grouped.last30Days.map((chat) => (
-                      <SidebarMenuItem key={chat._id}>
-                        <SidebarMenuButton
-                          isActive={currentChatId === chat._id}
-                          onClick={() => handleChatClick(chat._id)}
-                        >
-                          <ChatIcon />
-                          <span className="truncate">{chat.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroup>
-              )}
-
-              {grouped.older.length > 0 && (
-                <SidebarGroup>
-                  <SidebarGroupLabel>Older</SidebarGroupLabel>
-                  <SidebarMenu>
-                    {grouped.older.map((chat) => (
-                      <SidebarMenuItem key={chat._id}>
-                        <SidebarMenuButton
-                          isActive={currentChatId === chat._id}
-                          onClick={() => handleChatClick(chat._id)}
-                        >
-                          <ChatIcon />
-                          <span className="truncate">{chat.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroup>
-              )}
+              <ChatGroup label="Today" chats={grouped.today} currentChatId={currentChatId} onChatClick={handleChatClick} />
+              <ChatGroup label="Last 7 days" chats={grouped.last7Days} currentChatId={currentChatId} onChatClick={handleChatClick} />
+              <ChatGroup label="Last 30 days" chats={grouped.last30Days} currentChatId={currentChatId} onChatClick={handleChatClick} />
+              <ChatGroup label="Older" chats={grouped.older} currentChatId={currentChatId} onChatClick={handleChatClick} />
             </>
           )}
         </SidebarContent>

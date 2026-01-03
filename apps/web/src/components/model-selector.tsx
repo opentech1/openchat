@@ -1,67 +1,9 @@
-/**
- * Model Selector - Searchable model picker with provider grouping
- *
- * Dynamically loads ALL models from OpenRouter API.
- * Features fuzzy search, keyboard navigation, and provider grouping.
- * Uses models.dev for provider logos.
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
 import { useModels, useModelStore, getModelById } from "@/stores/model";
-
-// Icons
-const ChevronDownIcon = () => (
-  <svg
-    className="size-4 text-muted-foreground"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg
-    className="size-4 text-muted-foreground"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-    />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-  </svg>
-);
-
-// Fuzzy search implementation
-function fuzzyMatch(text: string, query: string): boolean {
-  const searchLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-
-  // Direct substring match
-  if (textLower.includes(searchLower)) return true;
-
-  // Fuzzy character matching
-  let searchIndex = 0;
-  for (let i = 0; i < textLower.length && searchIndex < searchLower.length; i++) {
-    if (textLower[i] === searchLower[searchIndex]) {
-      searchIndex++;
-    }
-  }
-  return searchIndex === searchLower.length;
-}
+import { fuzzyMatch } from "@/lib/fuzzy-search";
+import { SearchIcon, ChevronDownIcon, CheckIcon } from "@/components/icons";
 
 // Provider logo from models.dev
 function ProviderLogo({ providerId, className }: { providerId: string; className?: string }) {
@@ -109,7 +51,7 @@ function ModelItem({
       <ProviderLogo providerId={model.providerId} />
       <span className="flex-1 truncate">{model.name}</span>
       {model.isFree && (
-        <span className="text-[10px] font-medium text-green-500 uppercase">Free</span>
+        <span className="text-caption font-medium text-success uppercase">Free</span>
       )}
       {isSelected && (
         <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center text-primary">
@@ -395,7 +337,7 @@ export function ModelSelector({
                 {/* Popular Models Section */}
                 {filteredPopular.length > 0 && (
                   <>
-                    <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-amber-500">
+                    <div className="px-3 py-2 text-caption font-semibold uppercase tracking-widest text-warning">
                       Popular
                     </div>
                     {filteredPopular.map((model) => {
@@ -420,7 +362,7 @@ export function ModelSelector({
                   <>
                     <div
                       className={cn(
-                        "px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70",
+                        "px-3 py-2 text-caption font-semibold uppercase tracking-widest text-muted-foreground/70",
                         filteredPopular.length > 0 && "mt-2 border-t border-border pt-2",
                       )}
                     >
@@ -463,13 +405,13 @@ export function ModelSelector({
           <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-1.5">
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
                   ↑↓
                 </kbd>
                 <span>Navigate</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-[10px]">
+                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
                   ↵
                 </kbd>
                 <span>Select</span>
