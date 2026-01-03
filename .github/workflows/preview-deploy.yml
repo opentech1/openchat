@@ -74,6 +74,60 @@ jobs:
           echo "   SITE_URL: $RAILWAY_URL"
           echo "   NEXT_PUBLIC_DEPLOYMENT: preview"
 
+      - name: Configure Railway Environment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "🚂 Configuring Railway environment via GraphQL API..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
+          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
+          ENV_NAME="openchat-pr-${PR_NUM}"
+          PROJECT_ID="e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a"
+          SERVICE_ID="f12f449e-b9d8-471b-94ea-7107b7c5da47"
+
+          # Wait for Railway to create the PR environment
+          echo "Waiting for Railway PR environment..."
+          sleep 20
+
+          # Get the environment ID
+          echo "Looking up environment ID for ${ENV_NAME}..."
+          ENV_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"query { project(id: \\\"${PROJECT_ID}\\\") { environments { edges { node { id name } } } } }\"}" \
+            https://backboard.railway.app/graphql/v2)
+
+          echo "Environment response: ${ENV_RESPONSE}"
+
+          ENV_ID=$(echo "$ENV_RESPONSE" | jq -r ".data.project.environments.edges[] | select(.node.name == \"${ENV_NAME}\") | .node.id")
+
+          if [ -z "$ENV_ID" ] || [ "$ENV_ID" == "null" ]; then
+            echo "⚠️ Could not find environment ${ENV_NAME}, skipping Railway config"
+            exit 0
+          fi
+
+          echo "Found environment ID: ${ENV_ID}"
+
+          # Set VITE_CONVEX_URL
+          echo "Setting VITE_CONVEX_URL..."
+          curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_URL\\\", value: \\\"${CONVEX_URL}\\\" }) }\"}" \
+            https://backboard.railway.app/graphql/v2
+
+          # Set VITE_CONVEX_SITE_URL
+          echo "Setting VITE_CONVEX_SITE_URL..."
+          curl -s -X POST \
+            -H "Authorization: Bearer ${RAILWAY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { variableUpsert(input: { projectId: \\\"${PROJECT_ID}\\\", environmentId: \\\"${ENV_ID}\\\", serviceId: \\\"${SERVICE_ID}\\\", name: \\\"VITE_CONVEX_SITE_URL\\\", value: \\\"${CONVEX_SITE_URL}\\\" }) }\"}" \
+            https://backboard.railway.app/graphql/v2
+
+          echo "✅ Railway environment variables updated"
+
       - name: Comment on PR
         uses: actions/github-script@v7
         with:
