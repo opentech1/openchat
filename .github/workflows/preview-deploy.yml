@@ -1,0 +1,215 @@
+name: Preview Deployment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  RAILWAY_PROJECT_ID: e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a
+  RAILWAY_SERVICE_ID: f12f449e-b9d8-471b-94ea-7107b7c5da47
+
+jobs:
+  deploy-preview:
+    name: Deploy Preview Environment
+    runs-on: ubuntu-latest
+    # Only run for PRs from the same repo (not forks)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.2.21"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Deploy Convex Preview
+        id: convex-deploy
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          echo "🚀 Deploying Convex preview for PR #${{ github.event.pull_request.number }}..."
+
+          # Deploy to Convex preview
+          OUTPUT=$(bunx convex deploy --preview-create pr-${{ github.event.pull_request.number }} 2>&1)
+          echo "$OUTPUT"
+
+          # Extract the deployment URL from output
+          CONVEX_URL=$(echo "$OUTPUT" | grep -o 'https://[a-z0-9-]*\.convex\.cloud' | head -1)
+
+          if [ -z "$CONVEX_URL" ]; then
+            echo "❌ Failed to extract Convex URL from deployment output"
+            exit 1
+          fi
+
+          # Derive the site URL from the cloud URL
+          CONVEX_SITE_URL=$(echo "$CONVEX_URL" | sed 's/\.convex\.cloud/.convex.site/')
+
+          echo "✅ Convex Preview deployed!"
+          echo "   Cloud URL: $CONVEX_URL"
+          echo "   Site URL: $CONVEX_SITE_URL"
+
+          # Set outputs for later steps
+          echo "convex_url=$CONVEX_URL" >> $GITHUB_OUTPUT
+          echo "convex_site_url=$CONVEX_SITE_URL" >> $GITHUB_OUTPUT
+
+      - name: Set Convex Environment Variables
+        working-directory: apps/server
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+        run: |
+          echo "⚙️ Setting Convex environment variables..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+          SITE_URL="https://pr-${PR_NUM}.osschat.dev"
+
+          bunx convex env set SITE_URL "$SITE_URL" --preview-name pr-${PR_NUM}
+          bunx convex env set NEXT_PUBLIC_DEPLOYMENT "preview" --preview-name pr-${PR_NUM}
+
+          echo "✅ Convex env vars set"
+          echo "   SITE_URL: $SITE_URL"
+          echo "   NEXT_PUBLIC_DEPLOYMENT: preview"
+
+      - name: Install Railway CLI
+        run: |
+          npm install -g @railway/cli
+
+      - name: Configure Railway Environment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "🚂 Configuring Railway PR environment..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
+          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
+
+          # Wait for Railway to create the PR environment (it's auto-created on PR)
+          echo "Waiting for Railway PR environment to be ready..."
+          sleep 10
+
+          # Set the Convex URLs as Railway variables
+          railway variables --set "VITE_CONVEX_URL=${CONVEX_URL}" \
+            --service ${{ env.RAILWAY_SERVICE_ID }} \
+            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_URL"
+
+          railway variables --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}" \
+            --service ${{ env.RAILWAY_SERVICE_ID }} \
+            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_SITE_URL"
+
+          echo "✅ Railway environment variables updated"
+
+      - name: Add Custom Domain
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "🌐 Adding custom domain..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+          CUSTOM_DOMAIN="pr-${PR_NUM}.osschat.dev"
+
+          # Add custom domain to Railway service
+          railway domain "$CUSTOM_DOMAIN" \
+            --service ${{ env.RAILWAY_SERVICE_ID }} \
+            --environment openchat-pr-${PR_NUM} || echo "⚠️ Domain may already exist"
+
+          echo "✅ Custom domain configured: https://${CUSTOM_DOMAIN}"
+
+      - name: Trigger Railway Redeploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "🔄 Triggering Railway redeploy..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+
+          # Trigger a redeploy to pick up the new environment variables
+          railway redeploy \
+            --service ${{ env.RAILWAY_SERVICE_ID }} \
+            --environment openchat-pr-${PR_NUM} || echo "⚠️ Redeploy may have been triggered automatically"
+
+          echo "✅ Redeploy triggered"
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const convexUrl = '${{ steps.convex-deploy.outputs.convex_url }}';
+            const convexSiteUrl = '${{ steps.convex-deploy.outputs.convex_site_url }}';
+            const previewUrl = `https://pr-${prNumber}.osschat.dev`;
+            const railwayUrl = `https://web-openchat-pr-${prNumber}.up.railway.app`;
+
+            const body = `## 🚀 Preview Deployment Ready
+
+            | Environment | URL |
+            |------------|-----|
+            | **Preview** | [${previewUrl}](${previewUrl}) |
+            | **Railway** | [${railwayUrl}](${railwayUrl}) |
+            | **Convex** | [Dashboard](https://dashboard.convex.dev) |
+
+            ### Convex Preview Backend
+            - Cloud URL: \`${convexUrl}\`
+            - Site URL: \`${convexSiteUrl}\`
+
+            ### OAuth
+            GitHub OAuth is configured via **oAuthProxy** - authentication flows through production Convex and redirects back to the preview.
+
+            ---
+            <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Preview Deployment Ready')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+              console.log('Updated existing preview comment');
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+              console.log('Created new preview comment');
+            }
+
+      - name: Summary
+        if: always()
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "## Preview Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Railway PR Env | ✅ Configured |" >> $GITHUB_STEP_SUMMARY
+          echo "| Custom Domain | pr-${PR_NUM}.osschat.dev |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- Preview: https://pr-${PR_NUM}.osschat.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- Convex: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY

@@ -7,6 +7,18 @@ import { authComponent, createAuth } from "./auth";
 
 const http = httpRouter();
 
+/**
+ * Generate explicit preview origins for PR environments.
+ * Convex CORS doesn't support wildcards, so we generate explicit URLs.
+ */
+function getPreviewOrigins(): string[] {
+  const origins: string[] = [];
+  for (let i = 1; i <= 200; i++) {
+    origins.push(`https://pr-${i}.osschat.dev`);
+  }
+  return origins;
+}
+
 // Register Better Auth routes with CORS enabled for client-side requests
 authComponent.registerRoutes(http, createAuth, {
   cors: {
@@ -14,6 +26,8 @@ authComponent.registerRoutes(http, createAuth, {
       "http://localhost:3000",
       "https://osschat.dev",
       "https://beta.osschat.dev",
+      // Preview PR environments (Convex CORS doesn't support wildcards)
+      ...getPreviewOrigins(),
     ],
     allowedHeaders: ["content-type", "authorization", "better-auth-cookie"],
     exposedHeaders: ["set-better-auth-cookie"],
