@@ -239,3 +239,7 @@ REDIS_URL=redis://localhost:6379 bun dev
 ## License
 
 OpenChat is licensed under the [GNU Affero General Public License v3](LICENSE).
+
+---
+
+Happy coding! If you have questions, feel free to open an issue.
