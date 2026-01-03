@@ -1,9 +1,0 @@
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "docker/web.Dockerfile"
-
-[deploy]
-sleepApplication = false
-restartPolicyType = "ALWAYS"
-healthcheckPath = "/"
-healthcheckTimeout = 30

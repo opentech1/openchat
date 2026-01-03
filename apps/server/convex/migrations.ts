@@ -30,15 +30,18 @@ export const clearJwks = internalMutation({
 		console.log("[Migration] Clear JWKS - Started");
 		
 		try {
-			// First find all JWKS records
+			// First find all JWKS records using the correct input format
 			const jwksRecords = await ctx.runQuery(components.betterAuth.adapter.findMany, {
-				model: "jwks",
+				input: {
+					model: "jwks",
+					where: [],
+				},
 				paginationOpts: { numItems: 100, cursor: null },
 			} as any);
 			
 			console.log(`[Migration] Found ${jwksRecords.page.length} JWKS records`);
 			
-			// Delete each one using deleteMany (needs input wrapper)
+			// Delete each one using deleteMany
 			const result = await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
 				input: {
 					model: "jwks",

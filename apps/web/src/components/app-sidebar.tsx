@@ -2,6 +2,7 @@
  * App Sidebar - Premium sidebar with smooth collapse animation
  */
 
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -130,8 +131,32 @@ export function AppSidebar() {
   );
 
   const chats = chatsResult?.chats ?? [];
+  
+  // Loading state with timeout protection
+  // If queries don't resolve after 10 seconds, stop showing loading skeleton
+  // This prevents eternally stuck loading states on connection issues
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    const timer = setTimeout(() => {
+      setLoadingTimeout(true);
+    }, 10000); // 10 second timeout
+    
+    // Clear timeout if data loads
+    if (convexUser !== undefined && chatsResult !== undefined) {
+      clearTimeout(timer);
+      setLoadingTimeout(false);
+    }
+    
+    return () => clearTimeout(timer);
+  }, [user?.id, convexUser, chatsResult]);
+  
   // Show loading while user OR chats are loading (prevents flash of "No chats yet")
-  const isLoadingChats = user?.id ? convexUser === undefined || chatsResult === undefined : false;
+  // But don't show loading forever if connection fails (timeout after 10s)
+  const isLoadingChats = user?.id 
+    ? !loadingTimeout && (convexUser === undefined || chatsResult === undefined) 
+    : false;
   const grouped = groupChatsByTime(chats as unknown as ChatItem[]);
 
   const handleNewChat = () => {

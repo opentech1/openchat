@@ -7,7 +7,6 @@ This file contains important patterns and guidelines for AI agents working on th
 ```
 apps/
   web/          # TanStack Start frontend (Vite + TanStack Router)
-  web-old/      # Legacy Next.js frontend (deprecated)
   server/       # Convex backend
 ```
 
