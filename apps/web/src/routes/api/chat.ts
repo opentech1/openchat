@@ -24,6 +24,9 @@ export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        // Get abort signal from request for cancellation support
+        const abortSignal = request.signal;
+        
         try {
           // Parse and validate request body
           const body = await request.json();
@@ -91,6 +94,8 @@ export const Route = createFileRoute("/api/chat")({
           const streamOptions: Parameters<typeof streamText>[0] = {
             model: aiModel,
             messages: modelMessages,
+            // Pass abort signal for cancellation support (stop button)
+            abortSignal,
           };
 
           // Add web search tool if enabled and API key available

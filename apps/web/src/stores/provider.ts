@@ -226,6 +226,8 @@ export const useProviderStore = create<ProviderState>()(
           lastResetDate: state.lastResetDate,
           dailySearchCount: state.dailySearchCount,
           lastSearchResetDate: state.lastSearchResetDate,
+          // Persist web search toggle so it survives page reloads
+          webSearchEnabled: state.webSearchEnabled,
         }),
       },
     ),

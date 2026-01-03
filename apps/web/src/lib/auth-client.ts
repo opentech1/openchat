@@ -58,9 +58,26 @@ const hybridStorage = {
 
 /**
  * Better Auth client with Convex integration
+ *
+ * IMPORTANT: Session options are configured to prevent excessive API calls.
+ * Without these settings, Better Auth will spam findOne/findMany on every
+ * window focus, tab switch, and at regular intervals - causing millions of
+ * unnecessary Convex function calls.
  */
 export const authClient = createAuthClient({
   baseURL: env.CONVEX_SITE_URL,
+  // Disable aggressive session refetching to prevent API spam
+  // See: https://www.better-auth.com/docs/concepts/session-management
+  sessionOptions: {
+    // Disable refetch on window focus - this was causing massive API spam
+    // Every tab switch triggered findOne + findMany calls to Convex
+    refetchOnWindowFocus: false,
+    // Disable polling interval (0 = no polling)
+    // Session will only be fetched on initial load and after auth actions
+    refetchInterval: 0,
+    // Don't refetch when coming back online
+    refetchWhenOffline: false,
+  },
   plugins: [
     convexAuthPlugin(),
     crossDomainClient({

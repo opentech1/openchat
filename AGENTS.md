@@ -3,7 +3,6 @@
 ## Project Structure & Module Organization
 - Monorepo managed by Turborepo + Bun.
 - apps/web — TanStack Start (Vite, TanStack Router, Tailwind v4, shadcn). Key paths: `src/routes`, `src/components`, `src/lib`, `src/stores`.
-- apps/web-old — Legacy Next.js frontend (deprecated, kept for reference).
 - apps/server — Convex backend. Key paths: `convex/`.
 - Env per app (e.g., `apps/web/.env.local`); web uses Vite env vars with `VITE_` prefix.
 
