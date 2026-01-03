@@ -2,9 +2,16 @@ import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { getAuthConfigProvider } from "@convex-dev/better-auth/auth-config";
 import { betterAuth } from "better-auth";
+import { oAuthProxy } from "better-auth/plugins";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
+
+/**
+ * Production Convex site URL - used for OAuth callbacks.
+ * All OAuth flows (including from preview environments) route through production.
+ */
+const PRODUCTION_CONVEX_SITE_URL = "https://outgoing-setter-201.convex.site";
 
 /**
  * Better Auth component client for Convex integration.
@@ -29,12 +36,35 @@ export const createAuth = (
 		throw new Error("CONVEX_SITE_URL environment variable is not set");
 	}
 	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
-	
+
+	// Detect if this is a preview environment
+	const isPreview = process.env.NEXT_PUBLIC_DEPLOYMENT === "preview" ||
+		(convexSiteUrl !== PRODUCTION_CONVEX_SITE_URL && !convexSiteUrl.includes("localhost"));
+
 	// Build authConfig at runtime when CONVEX_SITE_URL is available
 	const authConfig = {
 		providers: [getAuthConfigProvider()],
 	};
-	
+
+	// Build plugins array - add oAuthProxy for preview environments
+	const plugins = [
+		// Required for Convex compatibility - pass authConfig for JWT configuration
+		convex({ authConfig }),
+		// Enable cross-domain auth for frontend on different domain (localhost:3000 -> convex.site)
+		crossDomain({ siteUrl }),
+	];
+
+	// Add oAuthProxy plugin for preview environments
+	// This routes OAuth callbacks through production and redirects back to preview
+	if (isPreview) {
+		plugins.push(
+			oAuthProxy({
+				productionURL: PRODUCTION_CONVEX_SITE_URL,
+				currentURL: convexSiteUrl,
+			})
+		);
+	}
+
 	const auth = betterAuth({
 		// Disable logging when createAuth is called just to generate options
 		logger: {
@@ -51,16 +81,23 @@ export const createAuth = (
 			github: {
 				clientId: process.env.GITHUB_CLIENT_ID!,
 				clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+				// Always use production callback URL so GitHub OAuth works for all environments
+				redirectURI: `${PRODUCTION_CONVEX_SITE_URL}/api/auth/callback/github`,
 			},
 		},
-		// Trust both the Convex site and the frontend site
-		trustedOrigins: [convexSiteUrl, siteUrl],
-		plugins: [
-			// Required for Convex compatibility - pass authConfig for JWT configuration
-			convex({ authConfig }),
-			// Enable cross-domain auth for frontend on different domain (localhost:3000 -> convex.site)
-			crossDomain({ siteUrl }),
+		// Trust origins including wildcard patterns for previews
+		trustedOrigins: [
+			PRODUCTION_CONVEX_SITE_URL,
+			convexSiteUrl,
+			siteUrl,
+			"https://osschat.dev",
+			"https://beta.osschat.dev",
+			// Wildcard patterns for preview environments
+			"https://*.osschat.dev",
+			"https://*.up.railway.app",
+			"https://*.convex.site",
 		],
+		plugins,
 	});
 	
 	return auth;
