@@ -148,8 +148,6 @@ jobs:
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
 
-            > **Note:** Railway frontend uses production Convex by default. To test with preview Convex, manually update Railway env vars.
-
             ---
             <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
 
