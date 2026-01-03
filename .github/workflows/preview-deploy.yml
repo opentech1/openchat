@@ -4,13 +4,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-env:
-  RAILWAY_PROJECT_ID: e3803b5c-22bf-4cbe-a8b3-2e4c8a5fbe8a
-  RAILWAY_SERVICE_ID: f12f449e-b9d8-471b-94ea-7107b7c5da47
-
 jobs:
   deploy-preview:
-    name: Deploy Preview Environment
+    name: Deploy Convex Preview
     runs-on: ubuntu-latest
     # Only run for PRs from the same repo (not forks)
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -69,42 +65,14 @@ jobs:
           echo "⚙️ Setting Convex environment variables..."
 
           PR_NUM=${{ github.event.pull_request.number }}
-          SITE_URL="https://pr-${PR_NUM}.osschat.dev"
+          RAILWAY_URL="https://web-openchat-pr-${PR_NUM}.up.railway.app"
 
-          bunx convex env set SITE_URL "$SITE_URL" --preview-name pr-${PR_NUM}
+          bunx convex env set SITE_URL "$RAILWAY_URL" --preview-name pr-${PR_NUM}
           bunx convex env set NEXT_PUBLIC_DEPLOYMENT "preview" --preview-name pr-${PR_NUM}
 
           echo "✅ Convex env vars set"
-          echo "   SITE_URL: $SITE_URL"
+          echo "   SITE_URL: $RAILWAY_URL"
           echo "   NEXT_PUBLIC_DEPLOYMENT: preview"
-
-      - name: Install Railway CLI
-        run: |
-          npm install -g @railway/cli
-
-      - name: Configure Railway Environment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        continue-on-error: true
-        run: |
-          echo "🚂 Configuring Railway PR environment..."
-
-          PR_NUM=${{ github.event.pull_request.number }}
-          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
-          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
-
-          # Wait for Railway to create the PR environment (it's auto-created on PR)
-          echo "Waiting for Railway PR environment to be ready..."
-          sleep 15
-
-          # Set the Convex URLs as Railway variables using -e flag for environment
-          railway variables \
-            --set "VITE_CONVEX_URL=${CONVEX_URL}" \
-            --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}" \
-            -e openchat-pr-${PR_NUM} \
-            -s ${{ env.RAILWAY_SERVICE_ID }}
-
-          echo "✅ Railway environment variables updated"
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -119,15 +87,14 @@ jobs:
 
             | Environment | URL |
             |------------|-----|
-            | **Preview** | [${railwayUrl}](${railwayUrl}) |
-            | **Convex** | [Dashboard](https://dashboard.convex.dev) |
+            | **Frontend** | [${railwayUrl}](${railwayUrl}) |
+            | **Convex Dashboard** | [Dashboard](https://dashboard.convex.dev) |
 
             ### Convex Preview Backend
             - Cloud URL: \`${convexUrl}\`
             - Site URL: \`${convexSiteUrl}\`
 
-            ### OAuth
-            GitHub OAuth is configured via **oAuthProxy** - authentication flows through production Convex and redirects back to the preview.
+            > **Note:** Railway frontend uses production Convex by default. To test with preview Convex, manually update Railway env vars.
 
             ---
             <sub>🤖 Deployed automatically by GitHub Actions</sub>`;
@@ -145,23 +112,19 @@ jobs:
             );
 
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: botComment.id,
                 body: body
               });
-              console.log('Updated existing preview comment');
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
                 body: body
               });
-              console.log('Created new preview comment');
             }
 
       - name: Summary
@@ -173,8 +136,7 @@ jobs:
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| Railway PR Env | ✅ Configured |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### URLs" >> $GITHUB_STEP_SUMMARY
-          echo "- Preview: https://web-openchat-pr-${PR_NUM}.up.railway.app" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: https://web-openchat-pr-${PR_NUM}.up.railway.app" >> $GITHUB_STEP_SUMMARY
           echo "- Convex: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY
