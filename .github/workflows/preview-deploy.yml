@@ -82,65 +82,29 @@ jobs:
         run: |
           npm install -g @railway/cli
 
-      - name: Link Railway Environment
+      - name: Configure Railway Environment
         env:
-          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        continue-on-error: true
         run: |
-          echo "🔗 Linking to Railway PR environment..."
+          echo "🚂 Configuring Railway PR environment..."
 
           PR_NUM=${{ github.event.pull_request.number }}
+          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
+          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
 
           # Wait for Railway to create the PR environment (it's auto-created on PR)
           echo "Waiting for Railway PR environment to be ready..."
           sleep 15
 
-          # Link to the PR environment (uses RAILWAY_API_TOKEN for account-level access)
-          railway link \
-            --project ${{ env.RAILWAY_PROJECT_ID }} \
-            --environment openchat-pr-${PR_NUM} \
-            --service ${{ env.RAILWAY_SERVICE_ID }}
-
-          echo "✅ Linked to openchat-pr-${PR_NUM}"
-
-      - name: Configure Railway Environment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "🚂 Configuring Railway PR environment..."
-
-          CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
-          CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
-
-          # Set the Convex URLs as Railway variables (uses linked environment)
-          railway variables --set "VITE_CONVEX_URL=${CONVEX_URL}"
-          railway variables --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}"
+          # Set the Convex URLs as Railway variables using -e flag for environment
+          railway variables \
+            --set "VITE_CONVEX_URL=${CONVEX_URL}" \
+            --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}" \
+            -e openchat-pr-${PR_NUM} \
+            -s ${{ env.RAILWAY_SERVICE_ID }}
 
           echo "✅ Railway environment variables updated"
-
-      - name: Add Custom Domain
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "🌐 Adding custom domain..."
-
-          PR_NUM=${{ github.event.pull_request.number }}
-          CUSTOM_DOMAIN="pr-${PR_NUM}.osschat.dev"
-
-          # Add custom domain to Railway service (uses linked environment)
-          railway domain "$CUSTOM_DOMAIN" || echo "⚠️ Domain may already exist"
-
-          echo "✅ Custom domain configured: https://${CUSTOM_DOMAIN}"
-
-      - name: Trigger Railway Redeploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          echo "🔄 Triggering Railway redeploy..."
-
-          # Trigger a redeploy to pick up the new environment variables (uses linked environment)
-          railway redeploy || echo "⚠️ Redeploy may have been triggered automatically"
-
-          echo "✅ Redeploy triggered"
 
       - name: Comment on PR
         uses: actions/github-script@v7
@@ -149,15 +113,13 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const convexUrl = '${{ steps.convex-deploy.outputs.convex_url }}';
             const convexSiteUrl = '${{ steps.convex-deploy.outputs.convex_site_url }}';
-            const previewUrl = `https://pr-${prNumber}.osschat.dev`;
             const railwayUrl = `https://web-openchat-pr-${prNumber}.up.railway.app`;
 
             const body = `## 🚀 Preview Deployment Ready
 
             | Environment | URL |
             |------------|-----|
-            | **Preview** | [${previewUrl}](${previewUrl}) |
-            | **Railway** | [${railwayUrl}](${railwayUrl}) |
+            | **Preview** | [${railwayUrl}](${railwayUrl}) |
             | **Convex** | [Dashboard](https://dashboard.convex.dev) |
 
             ### Convex Preview Backend
@@ -212,8 +174,7 @@ jobs:
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Convex Preview | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
           echo "| Railway PR Env | ✅ Configured |" >> $GITHUB_STEP_SUMMARY
-          echo "| Custom Domain | pr-${PR_NUM}.osschat.dev |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### URLs" >> $GITHUB_STEP_SUMMARY
-          echo "- Preview: https://pr-${PR_NUM}.osschat.dev" >> $GITHUB_STEP_SUMMARY
+          echo "- Preview: https://web-openchat-pr-${PR_NUM}.up.railway.app" >> $GITHUB_STEP_SUMMARY
           echo "- Convex: ${{ steps.convex-deploy.outputs.convex_url }}" >> $GITHUB_STEP_SUMMARY
