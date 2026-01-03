@@ -82,28 +82,38 @@ jobs:
         run: |
           npm install -g @railway/cli
 
+      - name: Link Railway Environment
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "🔗 Linking to Railway PR environment..."
+
+          PR_NUM=${{ github.event.pull_request.number }}
+
+          # Wait for Railway to create the PR environment (it's auto-created on PR)
+          echo "Waiting for Railway PR environment to be ready..."
+          sleep 15
+
+          # Link to the PR environment
+          railway link \
+            --project ${{ env.RAILWAY_PROJECT_ID }} \
+            --environment openchat-pr-${PR_NUM} \
+            --service ${{ env.RAILWAY_SERVICE_ID }}
+
+          echo "✅ Linked to openchat-pr-${PR_NUM}"
+
       - name: Configure Railway Environment
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           echo "🚂 Configuring Railway PR environment..."
 
-          PR_NUM=${{ github.event.pull_request.number }}
           CONVEX_URL="${{ steps.convex-deploy.outputs.convex_url }}"
           CONVEX_SITE_URL="${{ steps.convex-deploy.outputs.convex_site_url }}"
 
-          # Wait for Railway to create the PR environment (it's auto-created on PR)
-          echo "Waiting for Railway PR environment to be ready..."
-          sleep 10
-
-          # Set the Convex URLs as Railway variables
-          railway variables --set "VITE_CONVEX_URL=${CONVEX_URL}" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_URL"
-
-          railway variables --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Failed to set VITE_CONVEX_SITE_URL"
+          # Set the Convex URLs as Railway variables (uses linked environment)
+          railway variables --set "VITE_CONVEX_URL=${CONVEX_URL}"
+          railway variables --set "VITE_CONVEX_SITE_URL=${CONVEX_SITE_URL}"
 
           echo "✅ Railway environment variables updated"
 
@@ -116,10 +126,8 @@ jobs:
           PR_NUM=${{ github.event.pull_request.number }}
           CUSTOM_DOMAIN="pr-${PR_NUM}.osschat.dev"
 
-          # Add custom domain to Railway service
-          railway domain "$CUSTOM_DOMAIN" \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Domain may already exist"
+          # Add custom domain to Railway service (uses linked environment)
+          railway domain "$CUSTOM_DOMAIN" || echo "⚠️ Domain may already exist"
 
           echo "✅ Custom domain configured: https://${CUSTOM_DOMAIN}"
 
@@ -129,12 +137,8 @@ jobs:
         run: |
           echo "🔄 Triggering Railway redeploy..."
 
-          PR_NUM=${{ github.event.pull_request.number }}
-
-          # Trigger a redeploy to pick up the new environment variables
-          railway redeploy \
-            --service ${{ env.RAILWAY_SERVICE_ID }} \
-            --environment openchat-pr-${PR_NUM} || echo "⚠️ Redeploy may have been triggered automatically"
+          # Trigger a redeploy to pick up the new environment variables (uses linked environment)
+          railway redeploy || echo "⚠️ Redeploy may have been triggered automatically"
 
           echo "✅ Redeploy triggered"
 
