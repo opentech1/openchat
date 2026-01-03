@@ -84,7 +84,7 @@ jobs:
 
       - name: Link Railway Environment
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           echo "🔗 Linking to Railway PR environment..."
 
@@ -94,7 +94,7 @@ jobs:
           echo "Waiting for Railway PR environment to be ready..."
           sleep 15
 
-          # Link to the PR environment
+          # Link to the PR environment (uses RAILWAY_API_TOKEN for account-level access)
           railway link \
             --project ${{ env.RAILWAY_PROJECT_ID }} \
             --environment openchat-pr-${PR_NUM} \
