@@ -10,6 +10,7 @@
 
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
+import { analytics } from "@/lib/analytics";
 
 // Provider types - both use OpenRouter, just different API keys
 export type ProviderType = "osschat" | "openrouter";
@@ -158,19 +159,20 @@ export const useProviderStore = create<ProviderState>()(
 
         toggleWebSearch: () => {
           const state = get();
-          // Check search limit before enabling
           if (!state.webSearchEnabled && state.isSearchLimitReached()) {
-            return; // Can't enable if at limit
+            return;
           }
-          set({ webSearchEnabled: !state.webSearchEnabled }, false, "provider/toggleWebSearch");
+          const newValue = !state.webSearchEnabled;
+          analytics.searchToggled(newValue);
+          set({ webSearchEnabled: newValue }, false, "provider/toggleWebSearch");
         },
 
         setWebSearchEnabled: (enabled) => {
           const state = get();
-          // Check search limit before enabling
           if (enabled && state.isSearchLimitReached()) {
             return;
           }
+          analytics.searchToggled(enabled);
           set({ webSearchEnabled: enabled }, false, "provider/setWebSearch");
         },
 

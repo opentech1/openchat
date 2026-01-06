@@ -13,6 +13,7 @@ import {
   crossDomainClient,
 } from "@convex-dev/better-auth/client/plugins";
 import { env } from "./env";
+import { analytics } from "./analytics";
 
 const AUTH_SESSION_COOKIE = "ba_session";
 
@@ -198,6 +199,7 @@ export function StableAuthProvider({ children }: { children: ReactNode }) {
       authClient.crossDomain.oneTimeToken
         .verify({ token: ott })
         .then(() => {
+          analytics.signedIn();
           const url = new URL(window.location.href);
           url.searchParams.delete("ott");
           window.history.replaceState({}, "", url.toString());

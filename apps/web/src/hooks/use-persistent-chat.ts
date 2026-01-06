@@ -22,6 +22,7 @@ import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore, calculateCost } from "@/stores/provider";
 import { usePendingMessageStore } from "@/stores/pending-message";
 import { toast } from "sonner";
+import { analytics } from "@/lib/analytics";
 
 export interface UsePersistentChatOptions {
   chatId?: string;
@@ -552,15 +553,15 @@ export function usePersistentChat({
           });
 
           const newChatId = result.chatId;
+          analytics.chatCreated();
+          analytics.messageSent(selectedModelId);
 
-          // Store the pending message - it will be sent on the new page
           usePendingMessageStore.getState().set({
             chatId: newChatId,
             text: message.text,
             files: message.files,
           });
 
-          // Navigate immediately - streaming will happen on the new page
           if (onChatCreatedRef.current) {
             onChatCreatedRef.current(newChatId);
           }
@@ -568,10 +569,9 @@ export function usePersistentChat({
           console.error("Failed to create chat:", e);
         }
       } else {
-        // Existing chat - send directly
-        // Store pending message for onFinish callback
         const messageId = crypto.randomUUID();
         pendingUserMessageRef.current = { text: message.text, id: messageId };
+        analytics.messageSent(selectedModelId);
 
         await aiSendMessage({
           text: message.text,
