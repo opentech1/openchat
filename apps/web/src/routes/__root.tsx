@@ -28,7 +28,6 @@ export const Route = createRootRoute({
       { rel: "icon", href: "/favicon.ico" },
     ],
     scripts: [
-      // Inline script to prevent flash of wrong theme
       {
         children: `
           (function() {
@@ -39,6 +38,16 @@ export const Route = createRootRoute({
           })();
         `,
       },
+      import.meta.env.DEV
+        ? {
+            src: "https://assets.onedollarstats.com/stonks.js",
+            defer: true,
+            "data-debug": "osschat.dev",
+          }
+        : {
+            src: "https://assets.onedollarstats.com/stonks.js",
+            defer: true,
+          },
     ],
   }),
 
