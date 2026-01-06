@@ -188,9 +188,27 @@ export function StableAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Only fetch once on mount
-    if (!fetchedRef.current) {
-      fetchedRef.current = true;
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const ott = urlParams.get("ott");
+
+    if (ott) {
+      authClient.crossDomain.oneTimeToken
+        .verify({ token: ott })
+        .then(() => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("ott");
+          window.history.replaceState({}, "", url.toString());
+        })
+        .catch((err: unknown) => {
+          console.error("Failed to verify one-time token:", err);
+        })
+        .finally(() => {
+          fetchSession();
+        });
+    } else {
       fetchSession();
     }
   }, [fetchSession]);
