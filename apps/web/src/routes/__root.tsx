@@ -38,16 +38,10 @@ export const Route = createRootRoute({
           })();
         `,
       },
-      import.meta.env.DEV
-        ? {
-            src: "https://assets.onedollarstats.com/stonks.js",
-            defer: true,
-            "data-debug": "osschat.dev",
-          }
-        : {
-            src: "https://assets.onedollarstats.com/stonks.js",
-            defer: true,
-          },
+      {
+        src: "https://assets.onedollarstats.com/stonks.js",
+        defer: true,
+      },
     ],
   }),
 
