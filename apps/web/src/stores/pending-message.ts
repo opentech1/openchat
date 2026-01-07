@@ -12,10 +12,17 @@
 
 import { create } from "zustand";
 
+interface ChatFileAttachment {
+  type: "file";
+  mediaType: string;
+  filename?: string;
+  url: string;
+}
+
 interface PendingMessage {
   chatId: string;
   text: string;
-  files?: any[];
+  files?: ChatFileAttachment[];
 }
 
 interface PendingMessageStore {

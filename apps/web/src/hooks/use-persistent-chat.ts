@@ -12,6 +12,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import type { UIMessage } from "ai";
+
+interface ChatFileAttachment {
+  type: "file";
+  mediaType: string;
+  filename?: string;
+  url: string;
+}
 import { useQuery, useMutation } from "convex/react";
 import { convexClient } from "@/lib/convex";
 import { api } from "@server/convex/_generated/api";
@@ -31,7 +38,7 @@ export interface UsePersistentChatOptions {
 
 export interface UsePersistentChatReturn {
   messages: UIMessage[];
-  sendMessage: (message: { text: string; files?: any[] }) => Promise<void>;
+  sendMessage: (message: { text: string; files?: ChatFileAttachment[] }) => Promise<void>;
   status: "ready" | "submitted" | "streaming" | "error";
   error: Error | undefined;
   stop: () => void;
@@ -520,7 +527,7 @@ export function usePersistentChat({
 
   // Handle sending messages with new chat creation
   const handleSendMessage = useCallback(
-    async (message: { text: string; files?: any[] }) => {
+    async (message: { text: string; files?: ChatFileAttachment[] }) => {
       if (!convexUserId) return;
 
       if (!message.text.trim() && (!message.files || message.files.length === 0)) {

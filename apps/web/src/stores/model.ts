@@ -16,6 +16,25 @@ import { analytics } from "@/lib/analytics";
 // Types
 // ============================================================================
 
+/** Raw model data from OpenRouter API */
+interface OpenRouterModel {
+  id: string;
+  name?: string;
+  description?: string;
+  context_length?: number;
+  pricing?: {
+    prompt?: string;
+    completion?: string;
+  };
+  top_provider?: {
+    max_completion_tokens?: number;
+  };
+  architecture?: {
+    modality?: string;
+  };
+  supported_parameters?: string[];
+}
+
 export interface Model {
   id: string;
   name: string;
@@ -151,7 +170,9 @@ function loadFromStorage(): { models: Model[] | null; timestamp: number } {
         return { models: parsed.models, timestamp: parsed.timestamp };
       }
     }
-  } catch {}
+  } catch (e) {
+    console.warn("Failed to load models from localStorage:", e);
+  }
   return { models: null, timestamp: 0 };
 }
 
@@ -159,7 +180,9 @@ function saveToStorage(models: Model[], timestamp: number) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ models, timestamp }));
-  } catch {}
+  } catch (e) {
+    console.warn("Failed to save models to localStorage:", e);
+  }
 }
 
 const stored = loadFromStorage();
@@ -242,7 +265,7 @@ function extractFamily(id: string, name: string): string | undefined {
   return undefined;
 }
 
-function transformModel(raw: any): Model {
+function transformModel(raw: OpenRouterModel): Model {
   const id = raw.id as string;
   const providerSlug = id.split("/")[0] || "unknown";
   const info = PROVIDER_INFO[providerSlug] || {
@@ -313,8 +336,8 @@ async function fetchAllModels(): Promise<Model[]> {
       const rawModels = data.data || [];
 
       // Transform all models
-      const models: Model[] = rawModels
-        .filter((m: any) => m.id && typeof m.id === "string")
+      const models: Model[] = (rawModels as OpenRouterModel[])
+        .filter((m): m is OpenRouterModel & { id: string } => !!m.id && typeof m.id === "string")
         .map(transformModel)
         // Sort: Popular first, then by provider priority, then alphabetically
         .sort((a: Model, b: Model) => {

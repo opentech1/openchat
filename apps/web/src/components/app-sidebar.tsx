@@ -18,12 +18,12 @@ import {
   useSidebar,
 } from "./ui/sidebar";
 import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon } from "@/components/icons";
+import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
 
-// Group chats by time periods
 interface ChatItem {
-  _id: string;
+  _id: Id<"chats">;
   title: string;
   updatedAt: number;
   status?: string;
@@ -130,19 +130,23 @@ export function AppSidebar() {
       if (stored && !cachedChatsRef.current) {
         cachedChatsRef.current = JSON.parse(stored);
       }
-    } catch {}
+    } catch (e) {
+      console.warn("Failed to load chats from localStorage:", e);
+    }
   }, []);
 
   useEffect(() => {
     if (chatsResult?.chats && chatsResult.chats.length > 0) {
-      cachedChatsRef.current = chatsResult.chats as unknown as ChatItem[];
+      cachedChatsRef.current = chatsResult.chats;
       try {
         localStorage.setItem(CHATS_CACHE_KEY, JSON.stringify(chatsResult.chats));
-      } catch {}
+      } catch (e) {
+        console.warn("Failed to save chats to localStorage:", e);
+      }
     }
   }, [chatsResult?.chats]);
 
-  const chats = (chatsResult?.chats ?? cachedChatsRef.current ?? []) as unknown as ChatItem[];
+  const chats = chatsResult?.chats ?? cachedChatsRef.current ?? [];
   
   const hasCachedChats = chats.length > 0;
   
