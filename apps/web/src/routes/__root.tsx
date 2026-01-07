@@ -69,30 +69,16 @@ function AppShell() {
 
   const { isAuthenticated, loading } = useAuth();
 
-  // Wait for Convex client to be available (client-side only)
-  // This prevents SSR errors with Convex hooks in AppSidebar
-  if (!convexClient) {
+  if (!convexClient || loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="flex h-screen w-full bg-sidebar">
+        <div className="w-64 shrink-0 bg-sidebar" />
+        <div className="flex-1 bg-background" />
       </div>
     );
   }
 
-  // During SSR and initial load, render a neutral layout that works for both states
-  // This prevents hydration mismatches since auth state is only known client-side
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  // Show sidebar for authenticated users
-  // OSSChat Cloud provides free access - no API key required
   if (!isAuthenticated) {
-    // No sidebar layout for unauthenticated users
     return (
       <>
         <Outlet />
@@ -101,8 +87,6 @@ function AppShell() {
     );
   }
 
-  // Full sidebar layout for authenticated users
-  // Uses a darker sidebar background with rounded content area (T3.chat style)
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full bg-sidebar">

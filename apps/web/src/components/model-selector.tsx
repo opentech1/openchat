@@ -1,12 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
 import { useModels, useModelStore, getModelById } from "@/stores/model";
-import { fuzzyMatch } from "@/lib/fuzzy-search";
+import { useFavoriteModels } from "@/hooks/use-favorite-models";
 import { SearchIcon, ChevronDownIcon, CheckIcon } from "@/components/icons";
 
-// Provider logo from models.dev
 function ProviderLogo({ providerId, className }: { providerId: string; className?: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-md bg-muted/80 text-[10px] font-semibold uppercase text-muted-foreground",
+          className || "size-4",
+        )}
+      >
+        {providerId.charAt(0)}
+      </div>
+    );
+  }
+
   return (
     <img
       alt={`${providerId} logo`}
@@ -14,55 +29,161 @@ function ProviderLogo({ providerId, className }: { providerId: string; className
       height={16}
       width={16}
       src={`https://models.dev/logos/${providerId}.svg`}
-      onError={(e) => {
-        // Fallback to first letter if logo not found
-        e.currentTarget.style.display = "none";
-      }}
+      onError={() => setHasError(true)}
     />
   );
 }
 
-// Model item component
+function BrainIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("size-3.5", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19 14.5M14.25 3.104c.251.023.501.05.75.082M19 14.5l-3.75 5.25m0 0l-3.75-3.75m3.75 3.75V21m-7.5-1.25l3.75-5.25m0 0L8 10.75m3.75 3.75H3"
+      />
+    </svg>
+  );
+}
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("size-3.5", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+      />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
+function StarIcon({ className, filled }: { className?: string; filled?: boolean }) {
+  return (
+    <svg
+      className={cn("size-3.5", className)}
+      viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+      />
+    </svg>
+  );
+}
+
 function ModelItem({
   model,
   isSelected,
   isHighlighted,
+  isFavorite,
   onSelect,
   onHover,
+  onToggleFavorite,
   dataIndex,
 }: {
   model: Model;
   isSelected: boolean;
   isHighlighted: boolean;
+  isFavorite: boolean;
   onSelect: () => void;
   onHover: () => void;
+  onToggleFavorite: (e: React.MouseEvent) => void;
   dataIndex: number;
 }) {
+  const hasVision = model.modality?.includes("image");
+  const hasReasoning = model.reasoning;
+
   return (
-    <button
+    <div
       data-index={dataIndex}
       onClick={onSelect}
       onMouseEnter={onHover}
+      onKeyDown={(e) => e.key === "Enter" && onSelect()}
+      role="option"
+      tabIndex={0}
+      aria-selected={isSelected}
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2.5 rounded-xl py-2 pl-3 pr-8 text-left text-sm outline-none transition-colors",
-        isHighlighted ? "bg-accent text-accent-foreground" : "bg-transparent text-foreground",
+        "group relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition-all duration-200 ease-out",
+        isHighlighted
+          ? "bg-accent/90 shadow-sm"
+          : "hover:bg-accent/50",
+        isSelected && "bg-accent/60",
       )}
     >
-      <ProviderLogo providerId={model.providerId} />
-      <span className="flex-1 truncate">{model.name}</span>
-      {model.isFree && (
-        <span className="text-caption font-medium text-success uppercase">Free</span>
-      )}
-      {isSelected && (
-        <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center text-primary">
-          <CheckIcon />
-        </span>
-      )}
-    </button>
+      <ProviderLogo providerId={model.providerId} className="size-5 shrink-0" />
+
+      <span className={cn(
+        "flex-1 truncate text-[13px] font-medium tracking-tight transition-colors duration-150",
+        isSelected ? "text-foreground" : "text-foreground/90 group-hover:text-foreground",
+      )}>
+        {model.name}
+      </span>
+
+      <div className="flex items-center gap-1.5">
+        {hasReasoning && (
+          <span
+            className="flex size-5 items-center justify-center rounded-md bg-amber-500/15 text-amber-500 transition-transform duration-150 group-hover:scale-105"
+            title="Reasoning capable"
+          >
+            <BrainIcon className="size-3" />
+          </span>
+        )}
+        {hasVision && (
+          <span
+            className="flex size-5 items-center justify-center rounded-md bg-sky-500/15 text-sky-500 transition-transform duration-150 group-hover:scale-105"
+            title="Vision capable"
+          >
+            <EyeIcon className="size-3" />
+          </span>
+        )}
+        {model.isFree && (
+          <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
+            Free
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          className={cn(
+            "flex size-5 items-center justify-center rounded-md transition-all duration-150",
+            isFavorite
+              ? "text-amber-400 hover:text-amber-300 hover:scale-110"
+              : "text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:scale-110",
+          )}
+          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          <StarIcon filled={isFavorite} className="size-3.5" />
+        </button>
+
+        {isSelected && (
+          <span className="flex size-5 items-center justify-center text-primary">
+            <CheckIcon className="size-4" />
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
-// Props for the ModelSelector component
 interface ModelSelectorProps {
   value: string;
   onValueChange: (modelId: string) => void;
@@ -80,109 +201,127 @@ export function ModelSelector({
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [isClosing, setIsClosing] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load ALL models from OpenRouter
+  // Calculate dropdown position when open
+  useLayoutEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const dropdownHeight = 480;
+      const spaceAbove = rect.top;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      
+      // Open above if more space, otherwise below
+      if (spaceAbove > spaceBelow && spaceAbove >= dropdownHeight) {
+        setDropdownPosition({
+          top: rect.top - dropdownHeight - 8,
+          left: rect.left,
+        });
+      } else {
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          left: rect.left,
+        });
+      }
+    }
+  }, [open]);
+
   const { models, isLoading } = useModels();
+  const { favorites, toggleFavorite, isFavorite, addDefaults, missingDefaultsCount } = useFavoriteModels();
+
+  const deferredQuery = useDeferredValue(query);
+  const isSearching = deferredQuery.trim().length > 0;
 
   const selectedModel = useMemo(() => getModelById(models, value), [models, value]);
 
-  // Filter models based on query
-  const filteredModels = useMemo(() => {
-    if (!query.trim()) return models;
-
-    return models.filter(
-      (model) =>
-        fuzzyMatch(model.name, query) ||
-        fuzzyMatch(model.provider, query) ||
-        fuzzyMatch(model.id, query) ||
-        (model.family && fuzzyMatch(model.family, query)),
-    );
-  }, [models, query]);
-
-  // Separate popular and other models from filtered results
-  const { filteredPopular, filteredOthers } = useMemo(() => {
-    const popular: Array<Model> = [];
-    const others: Array<Model> = [];
-    for (const model of filteredModels) {
-      if (model.isPopular) {
-        popular.push(model);
+  const uniqueProviders = useMemo(() => {
+    const providerMap = new Map<string, { id: string; name: string; count: number }>();
+    for (const model of models) {
+      const existing = providerMap.get(model.providerId);
+      if (existing) {
+        existing.count++;
       } else {
-        others.push(model);
+        providerMap.set(model.providerId, {
+          id: model.providerId,
+          name: model.provider,
+          count: 1,
+        });
       }
     }
-    return { filteredPopular: popular, filteredOthers: others };
+    return Array.from(providerMap.values()).sort((a, b) => b.count - a.count);
+  }, [models]);
+
+  const filteredModels = useMemo(() => {
+    if (deferredQuery.trim()) {
+      const q = deferredQuery.toLowerCase().replace(/[-_\s]/g, "");
+      const normalize = (s: string) => s.toLowerCase().replace(/[-_\s]/g, "");
+      return models.filter(
+        (model) =>
+          normalize(model.name).includes(q) ||
+          normalize(model.provider).includes(q) ||
+          normalize(model.id).includes(q) ||
+          (model.family && normalize(model.family).includes(q)),
+      );
+    }
+
+    let result = models;
+
+    if (showFavoritesOnly) {
+      result = result.filter((m) => favorites.has(m.id));
+    }
+
+    if (selectedProvider) {
+      result = result.filter((m) => m.providerId === selectedProvider);
+    }
+
+    return result;
+  }, [models, deferredQuery, selectedProvider, showFavoritesOnly, favorites]);
+
+  const flatList = useMemo(() => {
+    const popularModels = filteredModels.filter((m) => m.isPopular);
+    const otherModels = filteredModels.filter((m) => !m.isPopular);
+    return [...popularModels, ...otherModels];
   }, [filteredModels]);
 
-  // Group other models by family/prefix
-  const groupedOtherModels = useMemo(() => {
-    const grouped: Record<string, Array<Model>> = {};
-    for (const model of filteredOthers) {
-      // Group by family if available, otherwise by ID prefix
-      const group = model.family || model.id.split("/")[0] || "Other";
-      const groupName = group.charAt(0).toUpperCase() + group.slice(1).replace(/-/g, " ");
-
-      if (!grouped[groupName]) {
-        grouped[groupName] = [];
-      }
-      grouped[groupName].push(model);
-    }
-    return grouped;
-  }, [filteredOthers]);
-
-  // Get visible groups sorted
-  const visibleGroups = useMemo(() => {
-    return Object.keys(groupedOtherModels).sort((a, b) => {
-      // Put larger groups first
-      const aLen = groupedOtherModels[a]?.length || 0;
-      const bLen = groupedOtherModels[b]?.length || 0;
-      if (aLen !== bLen) return bLen - aLen;
-      return a.localeCompare(b);
-    });
-  }, [groupedOtherModels]);
-
-  // Flat list for keyboard navigation
-  const flatList = useMemo(() => {
-    const result: Array<Model> = [];
-    result.push(...filteredPopular);
-    for (const group of visibleGroups) {
-      result.push(...groupedOtherModels[group]);
-    }
-    return result;
-  }, [filteredPopular, visibleGroups, groupedOtherModels]);
-
-  // Reset highlighted index when filtered list changes
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [query]);
+  }, [deferredQuery, selectedProvider, showFavoritesOnly]);
 
-  // Open handler
   const handleOpen = useCallback(() => {
     if (disabled) return;
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
     setOpen(true);
     setQuery("");
     setHighlightedIndex(0);
     setIsClosing(false);
+    setSelectedProvider(null);
+    setShowFavoritesOnly(favorites.size > 0);
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-  }, [disabled]);
+  }, [disabled, favorites.size]);
 
-  // Close handler with animation
   const handleClose = useCallback(() => {
     setIsClosing(true);
-    setTimeout(() => {
+    closeTimeoutRef.current = setTimeout(() => {
       setOpen(false);
       setIsClosing(false);
+      closeTimeoutRef.current = null;
       triggerRef.current?.focus();
     }, 150);
   }, []);
 
-  // Select handler
   const handleSelect = useCallback(
     (modelId: string) => {
       onValueChange(modelId);
@@ -191,7 +330,14 @@ export function ModelSelector({
     [onValueChange, handleClose],
   );
 
-  // Keyboard navigation
+  const handleToggleFavorite = useCallback(
+    (e: React.MouseEvent, modelId: string) => {
+      e.stopPropagation();
+      toggleFavorite(modelId);
+    },
+    [toggleFavorite],
+  );
+
   useEffect(() => {
     if (!open) return;
 
@@ -226,7 +372,6 @@ export function ModelSelector({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, flatList, highlightedIndex, handleSelect, handleClose]);
 
-  // Scroll highlighted item into view
   useEffect(() => {
     if (!listRef.current || !open) return;
     const selectedElement = listRef.current.querySelector(`[data-index="${highlightedIndex}"]`);
@@ -235,7 +380,6 @@ export function ModelSelector({
     }
   }, [highlightedIndex, open]);
 
-  // Close on click outside
   useEffect(() => {
     if (!open) return;
 
@@ -254,17 +398,10 @@ export function ModelSelector({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, handleClose]);
 
-  // Get flat index for a model
-  const getFlatIndex = useCallback(
-    (modelId: string) => {
-      return flatList.findIndex((m) => m.id === modelId);
-    },
-    [flatList],
-  );
+  const hasFavorites = favorites.size > 0;
 
   return (
     <div className={cn("relative inline-block", className)}>
-      {/* Trigger button */}
       <button
         ref={triggerRef}
         type="button"
@@ -274,162 +411,216 @@ export function ModelSelector({
         aria-expanded={open}
         aria-label="Select model"
         className={cn(
-          "border-input data-[placeholder]:text-muted-foreground bg-input/30 hover:bg-input/50 focus-visible:border-ring focus-visible:ring-ring/50 gap-2 rounded-4xl border px-3 py-2 text-sm transition-colors focus-visible:ring-[3px]",
-          "flex h-9 w-fit min-w-[180px] items-center justify-between whitespace-nowrap outline-none",
+          "group flex items-center gap-2",
+          "h-9 px-3.5 rounded-xl",
+          "text-sm text-muted-foreground",
+          "bg-muted/40 hover:bg-muted/70 hover:text-foreground",
+          "border border-border/40 hover:border-border/60",
+          "shadow-sm shadow-black/5",
+          "transition-all duration-200 ease-out",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          open && "border-ring ring-ring/50 ring-[3px]",
+          open && "bg-muted/70 text-foreground border-border/60",
         )}
       >
         {selectedModel ? (
-          <span className="flex items-center gap-2">
-            <ProviderLogo providerId={selectedModel.providerId} />
-            <span className="truncate">{selectedModel.name}</span>
-          </span>
+          <>
+            <ProviderLogo providerId={selectedModel.providerId} className="size-4" />
+            <span className="truncate max-w-[140px] font-medium">{selectedModel.name}</span>
+          </>
         ) : (
-          <span className="text-muted-foreground">
-            {isLoading ? "Loading..." : "Select model..."}
-          </span>
+          <span className="font-medium">{isLoading ? "Loading..." : "Select model"}</span>
         )}
-        <ChevronDownIcon />
+        <ChevronDownIcon className={cn(
+          "size-3.5 text-muted-foreground/60 transition-transform duration-200",
+          open && "rotate-180"
+        )} />
       </button>
 
-      {/* Dropdown content */}
-      {open && (
+      {open && createPortal(
         <div
           ref={contentRef}
+          style={{ 
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            height: Math.min(480, window.innerHeight - 100),
+          }}
           className={cn(
-            "absolute left-0 top-full z-50 mt-1.5 w-[320px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
+            "z-[9999] flex w-[420px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
             isClosing
-              ? "animate-out fade-out-0 zoom-out-95 slide-out-to-top-2 duration-150"
-              : "animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-200",
+              ? "animate-out fade-out-0 zoom-out-95 duration-150"
+              : "animate-in fade-in-0 zoom-in-95 duration-200",
           )}
           role="listbox"
           aria-label="Models"
         >
-          {/* Search input */}
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <SearchIcon />
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search models..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
-
-          {/* Model list */}
-          <div ref={listRef} className="max-h-[400px] overflow-y-auto overscroll-contain p-1">
-            {isLoading ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                Loading models...
-              </div>
-            ) : flatList.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                No models found
-              </div>
-            ) : (
-              <>
-                {/* Popular Models Section */}
-                {filteredPopular.length > 0 && (
-                  <>
-                    <div className="px-3 py-2 text-caption font-semibold uppercase tracking-widest text-warning">
-                      Popular
-                    </div>
-                    {filteredPopular.map((model) => {
-                      const flatIndex = getFlatIndex(model.id);
-                      return (
-                        <ModelItem
-                          key={model.id}
-                          model={model}
-                          isSelected={model.id === value}
-                          isHighlighted={flatIndex === highlightedIndex}
-                          onSelect={() => handleSelect(model.id)}
-                          onHover={() => setHighlightedIndex(flatIndex)}
-                          dataIndex={flatIndex}
-                        />
-                      );
-                    })}
-                  </>
+          {!isSearching && (
+            <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r border-border/50 bg-muted/20 py-3">
+              <button
+                onClick={() => {
+                  if (hasFavorites) {
+                    setShowFavoritesOnly(true);
+                    setSelectedProvider(null);
+                  } else {
+                    addDefaults();
+                  }
+                }}
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
+                  showFavoritesOnly
+                    ? "bg-amber-500/20 text-amber-400 shadow-sm shadow-amber-500/10"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground hover:scale-105",
                 )}
+                title={hasFavorites ? "Show favorites" : "Add suggested favorites"}
+              >
+                <StarIcon filled={showFavoritesOnly || hasFavorites} className="size-[18px]" />
+              </button>
 
-                {/* All Models by Group */}
-                {visibleGroups.length > 0 && (
-                  <>
-                    <div
-                      className={cn(
-                        "px-3 py-2 text-caption font-semibold uppercase tracking-widest text-muted-foreground/70",
-                        filteredPopular.length > 0 && "mt-2 border-t border-border pt-2",
-                      )}
+              <div className="my-1.5 h-px w-7 bg-border/60" />
+
+              <div className="flex flex-col gap-1.5 px-1">
+                {uniqueProviders.slice(0, 6).map((provider) => (
+                  <button
+                    key={provider.id}
+                    onClick={() => {
+                      if (selectedProvider !== provider.id) {
+                        setSelectedProvider(provider.id);
+                        setShowFavoritesOnly(false);
+                      }
+                    }}
+                    className={cn(
+                      "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
+                      selectedProvider === provider.id
+                        ? "bg-accent text-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:scale-105",
+                    )}
+                    title={provider.name}
+                  >
+                    <ProviderLogo providerId={provider.id} className="size-5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3">
+              <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search all models..."
+                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              {query && (
+                <button
+                  onClick={() => {
+                    setQuery("");
+                    inputRef.current?.focus();
+                  }}
+                  className="flex size-6 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground"
+                  title="Clear search"
+                >
+                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div ref={listRef} className="flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
+              {isLoading ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading models...
+                </div>
+              ) : flatList.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                  <span className="text-muted-foreground/70">
+                    {isSearching ? "No models found" : showFavoritesOnly ? "No favorites yet" : "No models found"}
+                  </span>
+                  {isSearching ? (
+                    <button
+                      type="button"
+                      onClick={() => setQuery("")}
+                      className="text-xs text-primary transition-colors hover:text-primary/80"
                     >
-                      All Models
-                    </div>
-                    {visibleGroups.map((group: string) => (
-                      <div key={group} className="py-0.5">
-                        <div className="px-3 py-1 text-xs font-medium text-muted-foreground flex items-center gap-2">
-                          <ProviderLogo
-                            providerId={
-                              groupedOtherModels[group]?.[0]?.providerId || group.toLowerCase()
-                            }
-                            className="size-3"
-                          />
-                          {group}
-                        </div>
-                        {groupedOtherModels[group].map((model: Model) => {
-                          const flatIndex = getFlatIndex(model.id);
-                          return (
-                            <ModelItem
-                              key={model.id}
-                              model={model}
-                              isSelected={model.id === value}
-                              isHighlighted={flatIndex === highlightedIndex}
-                              onSelect={() => handleSelect(model.id)}
-                              onHover={() => setHighlightedIndex(flatIndex)}
-                              dataIndex={flatIndex}
-                            />
-                          );
-                        })}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+                      Clear search
+                    </button>
+                  ) : showFavoritesOnly ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        addDefaults();
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+                    >
+                      <StarIcon filled className="size-3" />
+                      Add suggested models
+                    </button>
+                  ) : null}
+                </div>
+              ) : (
+                flatList.map((model, index) => (
+                  <ModelItem
+                    key={model.id}
+                    model={model}
+                    isSelected={model.id === value}
+                    isHighlighted={index === highlightedIndex}
+                    isFavorite={isFavorite(model.id)}
+                    onSelect={() => handleSelect(model.id)}
+                    onHover={() => setHighlightedIndex(index)}
+                    onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
+                    dataIndex={index}
+                  />
+                ))
+              )}
+            </div>
 
-          {/* Footer with keyboard hints */}
-          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-3 py-1.5">
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
-                  ↑↓
-                </kbd>
-                <span>Navigate</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <kbd className="inline-flex h-4 items-center rounded border border-border bg-muted px-1 font-mono text-caption">
-                  ↵
-                </kbd>
-                <span>Select</span>
+            <div className="flex items-center justify-between border-t border-border/50 bg-muted/10 px-4 py-2">
+              {showFavoritesOnly && missingDefaultsCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addDefaults();
+                  }}
+                  className="flex items-center gap-1 text-[11px] text-primary transition-colors hover:text-primary/80"
+                >
+                  <StarIcon filled className="size-3" />
+                  Add {missingDefaultsCount} suggested
+                </button>
+              ) : (
+                <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                  <kbd className="inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
+                    ↑↓
+                  </kbd>
+                  <span className="text-[10px]">navigate</span>
+                  <kbd className="ml-1 inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
+                    ↵
+                  </kbd>
+                  <span className="text-[10px]">select</span>
+                </div>
+              )}
+              <span className="text-[11px] tabular-nums text-muted-foreground/50">
+                {flatList.length} model{flatList.length !== 1 ? "s" : ""}
               </span>
             </div>
-            <span className="text-xs text-muted-foreground">
-              {flatList.length} model{flatList.length !== 1 ? "s" : ""}
-            </span>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
 }
 
-/**
- * ModelSelector with built-in Zustand store connection
- */
 export function ConnectedModelSelector({
   className,
   disabled,

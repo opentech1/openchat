@@ -35,19 +35,8 @@ import {
   usePromptInputController,
   type PromptInputMessage,
 } from "./ai-elements/prompt-input";
-import {
-  ModelSelector,
-  ModelSelectorTrigger,
-  ModelSelectorContent,
-  ModelSelectorInput,
-  ModelSelectorList,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
-  ModelSelectorItem,
-  ModelSelectorLogo,
-  ModelSelectorName,
-} from "./ai-elements/model-selector";
-import { useModelStore, useModels, type Model, type ReasoningEffort } from "@/stores/model";
+import { ConnectedModelSelector } from "./model-selector";
+import { useModelStore, type ReasoningEffort } from "@/stores/model";
 import { useWebSearch } from "@/stores/provider";
 import {
   DropdownMenu,
@@ -63,7 +52,6 @@ import { usePersistentChat } from "@/hooks/use-persistent-chat";
 import { toast } from "sonner";
 import {
   ChevronDownIcon,
-  CheckIcon,
   PaperclipIcon,
   ArrowUpIcon,
   SquareIcon,
@@ -883,70 +871,6 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-// Connected Model Selector - Uses AI Elements pattern with SVG logos
-interface ConnectedModelSelectorProps {
-  disabled?: boolean;
-}
-
-function ConnectedModelSelector({ disabled }: ConnectedModelSelectorProps) {
-  const { selectedModelId, setSelectedModel } = useModelStore();
-  const { models, modelsByFamily, families, isLoading } = useModels();
-  const [open, setOpen] = useState(false);
-
-  const selectedModel = models.find((m: Model) => m.id === selectedModelId);
-
-  return (
-    <ModelSelector open={open} onOpenChange={setOpen}>
-      <ModelSelectorTrigger
-        disabled={disabled || isLoading}
-        className={cn(
-          "flex items-center gap-2",
-          "h-8 px-3 rounded-full",
-          "text-sm text-muted-foreground",
-          "bg-muted/50 hover:bg-muted hover:text-foreground",
-          "border border-border/50",
-          "transition-all duration-150",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
-        )}
-      >
-        {selectedModel && <ModelSelectorLogo provider={selectedModel.providerId || "openrouter"} />}
-        <span className="truncate max-w-[140px]">
-          {isLoading ? "Loading..." : selectedModel?.name || "Select model"}
-        </span>
-        <ChevronDownIcon className="size-3.5 opacity-50" />
-      </ModelSelectorTrigger>
-      <ModelSelectorContent className="w-[420px]">
-        <ModelSelectorInput placeholder="Search models..." />
-        <ModelSelectorList>
-          <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
-          {families.map((family: string) => (
-            <ModelSelectorGroup key={family} heading={family}>
-              {(modelsByFamily[family] || []).map((model: Model) => (
-                <ModelSelectorItem
-                  key={model.id}
-                  value={model.id}
-                  onSelect={() => {
-                    setSelectedModel(model.id);
-                    setOpen(false);
-                  }}
-                >
-                  <ModelSelectorLogo provider={model.providerId || "openrouter"} />
-                  <ModelSelectorName>{model.name}</ModelSelectorName>
-                  {model.id === selectedModelId ? (
-                    <CheckIcon className="ml-auto size-4" />
-                  ) : (
-                    <div className="ml-auto size-4" />
-                  )}
-                </ModelSelectorItem>
-              ))}
-            </ModelSelectorGroup>
-          ))}
-        </ModelSelectorList>
-      </ModelSelectorContent>
-    </ModelSelector>
   );
 }
 
