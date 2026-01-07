@@ -127,7 +127,7 @@ const PROVIDER_PRIORITY = [
 ];
 
 // ============================================================================
-// Cache
+// Cache with localStorage persistence
 // ============================================================================
 
 interface ModelCache {
@@ -139,10 +139,34 @@ interface ModelCache {
 }
 
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+const STORAGE_KEY = "openchat-models-cache";
+
+function loadFromStorage(): { models: Model[] | null; timestamp: number } {
+  if (typeof window === "undefined") return { models: null, timestamp: 0 };
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.models && parsed.timestamp) {
+        return { models: parsed.models, timestamp: parsed.timestamp };
+      }
+    }
+  } catch {}
+  return { models: null, timestamp: 0 };
+}
+
+function saveToStorage(models: Model[], timestamp: number) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ models, timestamp }));
+  } catch {}
+}
+
+const stored = loadFromStorage();
 
 let cache: ModelCache = {
-  models: null,
-  timestamp: 0,
+  models: stored.models,
+  timestamp: stored.timestamp,
   loading: false,
   error: null,
   promise: null,
@@ -315,7 +339,8 @@ async function fetchAllModels(): Promise<Model[]> {
       cache.timestamp = Date.now();
       cache.error = null;
 
-      // Initialize pricing lookup for cost calculation
+      saveToStorage(models, cache.timestamp);
+
       initPricingLookup((modelId: string) => {
         const model = models.find((m) => m.id === modelId);
         return model?.pricing;

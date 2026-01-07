@@ -20,26 +20,10 @@ function ChatPage() {
   const { chatId } = Route.useParams();
   const { isAuthenticated, loading } = useAuth();
 
-  // Wait for Convex client to be available (client-side only)
-  // This prevents SSR hydration issues with Convex hooks
-  if (!convexClient) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
+  if (!convexClient || loading) {
+    return <div className="flex h-full bg-background" />;
   }
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  // Not authenticated
   if (!isAuthenticated) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
@@ -52,7 +36,5 @@ function ChatPage() {
     );
   }
 
-  // Authenticated - show chat interface
-  // OSSChat Cloud provides free access with daily limits, no API key needed
   return <ChatInterface chatId={chatId} />;
 }

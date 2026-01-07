@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -18,6 +18,8 @@ import {
   useSidebar,
 } from "./ui/sidebar";
 import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon } from "@/components/icons";
+
+const CHATS_CACHE_KEY = "openchat-chats-cache";
 
 // Group chats by time periods
 interface ChatItem {
@@ -114,40 +116,41 @@ export function AppSidebar() {
     convexClient && user?.id ? { externalId: user.id } : "skip",
   );
 
-  // Then fetch chat history using the Convex user ID
   const chatsResult = useQuery(
     api.chats.list,
     convexClient && convexUser?._id ? { userId: convexUser._id } : "skip",
   );
 
-  const chats = chatsResult?.chats ?? [];
+  const cachedChatsRef = useRef<ChatItem[] | null>(null);
   
-  // Loading state with timeout protection
-  // If queries don't resolve after 10 seconds, stop showing loading skeleton
-  // This prevents eternally stuck loading states on connection issues
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
   useEffect(() => {
-    if (!user?.id) return;
-    
-    const timer = setTimeout(() => {
-      setLoadingTimeout(true);
-    }, 10000); // 10 second timeout
-    
-    // Clear timeout if data loads
-    if (convexUser !== undefined && chatsResult !== undefined) {
-      clearTimeout(timer);
-      setLoadingTimeout(false);
+    if (typeof window === "undefined") return;
+    try {
+      const stored = localStorage.getItem(CHATS_CACHE_KEY);
+      if (stored && !cachedChatsRef.current) {
+        cachedChatsRef.current = JSON.parse(stored);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (chatsResult?.chats && chatsResult.chats.length > 0) {
+      cachedChatsRef.current = chatsResult.chats as unknown as ChatItem[];
+      try {
+        localStorage.setItem(CHATS_CACHE_KEY, JSON.stringify(chatsResult.chats));
+      } catch {}
     }
-    
-    return () => clearTimeout(timer);
-  }, [user?.id, convexUser, chatsResult]);
+  }, [chatsResult?.chats]);
+
+  const chats = (chatsResult?.chats ?? cachedChatsRef.current ?? []) as unknown as ChatItem[];
   
-  // Show loading while user OR chats are loading (prevents flash of "No chats yet")
-  // But don't show loading forever if connection fails (timeout after 10s)
-  const isLoadingChats = user?.id 
-    ? !loadingTimeout && (convexUser === undefined || chatsResult === undefined) 
+  const hasCachedChats = chats.length > 0;
+  
+  const isLoadingChats = user?.id && !hasCachedChats
+    ? convexUser === undefined || chatsResult === undefined
     : false;
-  const grouped = groupChatsByTime(chats as unknown as ChatItem[]);
+    
+  const grouped = groupChatsByTime(chats);
 
   const handleNewChat = () => {
     if (isMobile) {

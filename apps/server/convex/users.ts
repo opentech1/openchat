@@ -351,3 +351,59 @@ export const removeOpenRouterKey = mutation({
 		return { success: true };
 	},
 });
+
+export const getFavoriteModels = query({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.union(v.array(v.string()), v.null()),
+	handler: async (ctx, args) => {
+		const profile = await getProfileByUserId(ctx, args.userId);
+		// Return null if favorites have never been set (allows frontend to apply defaults)
+		// Return [] if user explicitly cleared all favorites
+		if (!profile) return null;
+		return profile.favoriteModels ?? null;
+	},
+});
+
+export const toggleFavoriteModel = mutation({
+	args: {
+		userId: v.id("users"),
+		modelId: v.string(),
+	},
+	returns: v.object({ isFavorite: v.boolean(), favorites: v.array(v.string()) }),
+	handler: async (ctx, args) => {
+		const profile = await getOrCreateProfile(ctx, args.userId);
+		const currentFavorites = profile.favoriteModels ?? [];
+		const isFavorite = currentFavorites.includes(args.modelId);
+		
+		const newFavorites = isFavorite
+			? currentFavorites.filter((id) => id !== args.modelId)
+			: [...currentFavorites, args.modelId];
+
+		await ctx.db.patch(profile._id, {
+			favoriteModels: newFavorites,
+			updatedAt: Date.now(),
+		});
+
+		return { isFavorite: !isFavorite, favorites: newFavorites };
+	},
+});
+
+export const setFavoriteModels = mutation({
+	args: {
+		userId: v.id("users"),
+		modelIds: v.array(v.string()),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		const profile = await getOrCreateProfile(ctx, args.userId);
+		
+		await ctx.db.patch(profile._id, {
+			favoriteModels: args.modelIds,
+			updatedAt: Date.now(),
+		});
+
+		return { success: true };
+	},
+});

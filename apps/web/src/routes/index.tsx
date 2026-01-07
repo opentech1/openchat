@@ -1,5 +1,4 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useRef } from "react";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { ChatInterface } from "../components/chat-interface";
@@ -11,33 +10,11 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const { isAuthenticated, loading } = useAuth();
-  const hasLoadedOnce = useRef(false);
 
-  // Wait for Convex client to be available (client-side only)
-  // This prevents SSR hydration issues with Convex hooks
-  if (!convexClient) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
+  if (!convexClient || loading) {
+    return <div className="flex h-full bg-background" />;
   }
 
-  // Only show loading on first load, not on refetches
-  if (loading && !hasLoadedOnce.current) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    );
-  }
-
-  // Mark as loaded after first successful load
-  if (!loading) {
-    hasLoadedOnce.current = true;
-  }
-
-  // Not authenticated - show sign in
   if (!isAuthenticated) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
@@ -50,7 +27,5 @@ function HomePage() {
     );
   }
 
-  // Authenticated - show chat interface (new chat mode)
-  // OSSChat Cloud provides free access with daily limits, no API key needed
   return <ChatInterface />;
 }

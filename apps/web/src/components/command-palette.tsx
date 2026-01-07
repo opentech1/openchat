@@ -430,18 +430,4 @@ function CommandItem({
  * Should be used in the root layout
  */
 export function useCommandPaletteShortcut() {
-  const { toggleCommandPalette } = useUIStore();
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      // CMD+K (Mac) or Ctrl+K (Windows/Linux)
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        toggleCommandPalette();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggleCommandPalette]);
 }

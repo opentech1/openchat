@@ -36,11 +36,10 @@ export default defineSchema({
 		avatarUrl: v.optional(v.string()),
 		encryptedOpenRouterKey: v.optional(v.string()),
 		fileUploadCount: v.optional(v.number()),
-		// Future expansion for user preferences
+		favoriteModels: v.optional(v.array(v.string())),
 		preferences: v.optional(
 			v.object({
 				theme: v.optional(v.string()),
-				// Add more preferences as needed
 			})
 		),
 		createdAt: v.number(),
@@ -70,55 +69,38 @@ export default defineSchema({
 		chatId: v.id("chats"),
 		clientMessageId: v.optional(v.string()),
 		role: v.string(),
-		// Content can be encrypted (prefixed with enc_v1:). Max length: 100KB (102400 bytes)
 		content: v.string(),
-		// Model ID used to generate this message (e.g., "x-ai/grok-4-fast")
 		modelId: v.optional(v.string()),
-		// DEPRECATED: Use chainOfThoughtParts instead. Kept for backward compatibility.
-		// Reasoning content from models with reasoning capabilities (e.g., Claude 4, GPT-5, DeepSeek R1)
 		reasoning: v.optional(v.string()),
-		// Time spent thinking in milliseconds (for reasoning models)
 		thinkingTimeMs: v.optional(v.number()),
-		// Whether reasoning was requested for this message (used to show "redacted" state when
-		// provider doesn't return reasoning data)
 		reasoningRequested: v.optional(v.boolean()),
-		// DEPRECATED: Use chainOfThoughtParts instead. Kept for backward compatibility.
-		// Tool invocations that occurred during this message's generation
 		toolInvocations: v.optional(
 			v.array(
 				v.object({
 					toolName: v.string(),
 					toolCallId: v.string(),
-					state: v.string(), // "input-streaming" | "input-available" | "output-available" | "output-error"
+					state: v.string(),
 					input: v.optional(v.any()),
 					output: v.optional(v.any()),
 					errorText: v.optional(v.string()),
 				})
 			)
 		),
-		// NEW: Unified chain of thought parts - preserves exact stream order
-		// This replaces the separate reasoning and toolInvocations fields
-		// Each part has an index representing its position in the original stream
 		chainOfThoughtParts: v.optional(
 			v.array(
 				v.object({
-					// Part type: "reasoning" for thinking, "tool" for tool calls
 					type: v.union(v.literal("reasoning"), v.literal("tool")),
-					// Original position in the AI stream (for ordering)
 					index: v.number(),
-					// For reasoning parts
 					text: v.optional(v.string()),
-					// For tool parts
 					toolName: v.optional(v.string()),
 					toolCallId: v.optional(v.string()),
-					state: v.optional(v.string()), // "input-streaming" | "input-available" | "output-available" | "output-error"
+					state: v.optional(v.string()),
 					input: v.optional(v.any()),
 					output: v.optional(v.any()),
 					errorText: v.optional(v.string()),
 				})
 			)
 		),
-		// Token usage for this message
 		tokenUsage: v.optional(
 			v.object({
 				promptTokens: v.number(),
@@ -126,7 +108,6 @@ export default defineSchema({
 				totalTokens: v.number(),
 			})
 		),
-		// File attachments
 		attachments: v.optional(
 			v.array(
 				v.object({
@@ -139,24 +120,15 @@ export default defineSchema({
 				})
 			)
 		),
-		// ERROR HANDLING: Store error information for failed AI responses (like T3.chat)
-		// This allows errors to be displayed inline in the conversation history
 		error: v.optional(
 			v.object({
-				// Error classification: "rate_limit", "auth_error", "model_error", "network_error", "content_filter", "context_length", "unknown"
 				code: v.string(),
-				// Human-readable error message
 				message: v.string(),
-				// Optional detailed error info (stack trace, API response, etc.) for debugging
 				details: v.optional(v.string()),
-				// Which provider/model caused the error
 				provider: v.optional(v.string()),
-				// Whether the user can retry this request
 				retryable: v.optional(v.boolean()),
 			})
 		),
-		// Message type to distinguish content types: "text" (default), "error", "system"
-		// "error" messages display with error styling, "system" for notifications
 		messageType: v.optional(
 			v.union(v.literal("text"), v.literal("error"), v.literal("system"))
 		),
@@ -164,7 +136,6 @@ export default defineSchema({
 		status: v.optional(v.string()),
 		userId: v.optional(v.id("users")),
 		deletedAt: v.optional(v.number()),
-		// Stream ID for persistent text streaming - links to @convex-dev/persistent-text-streaming
 		streamId: v.optional(v.string()),
 	})
 		.index("by_chat", ["chatId", "createdAt"])
@@ -173,7 +144,8 @@ export default defineSchema({
 		.index("by_user_status", ["userId", "status", "createdAt"])
 		.index("by_chat_not_deleted", ["chatId", "deletedAt", "createdAt"])
 		.index("by_user_created", ["userId", "createdAt"])
-		.index("by_stream_id", ["streamId"]),
+		.index("by_stream_id", ["streamId"])
+		.index("by_chat_status", ["chatId", "status", "deletedAt"]),
 	fileUploads: defineTable({
 		userId: v.id("users"),
 		chatId: v.id("chats"),
