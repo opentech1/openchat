@@ -1,6 +1,6 @@
 [build]
 builder = "RAILPACK"
-buildCommand = "cd apps/server && bunx convex codegen && cd ../web && bun run build"
+buildCommand = "cd apps/web && bun run build"
 watchPatterns = ["apps/web/**", "apps/server/convex/**"]
 
 [deploy]
