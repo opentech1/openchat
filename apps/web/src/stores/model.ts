@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { initPricingLookup } from "./provider";
+import { analytics } from "@/lib/analytics";
 
 // ============================================================================
 // Types
@@ -496,7 +497,10 @@ export const useModelStore = create<ModelState>()(
       (set, get) => ({
         selectedModelId: "anthropic/claude-3.5-sonnet",
 
-        setSelectedModel: (modelId) => set({ selectedModelId: modelId }, false, "model/select"),
+        setSelectedModel: (modelId) => {
+          analytics.modelSwitched(modelId);
+          set({ selectedModelId: modelId }, false, "model/select");
+        },
 
         favorites: new Set<string>(),
 
@@ -520,8 +524,10 @@ export const useModelStore = create<ModelState>()(
         // Reasoning effort - default to 'none' (disabled)
         reasoningEffort: "none" as ReasoningEffort,
 
-        setReasoningEffort: (effort) =>
-          set({ reasoningEffort: effort }, false, "model/reasoningEffort"),
+        setReasoningEffort: (effort) => {
+          analytics.thinkingModeChanged(effort);
+          set({ reasoningEffort: effort }, false, "model/reasoningEffort");
+        },
 
         // Max steps for multi-step tool calls (always enabled, controls iterations)
         maxSteps: 5, // Default: 5 steps max for tools
