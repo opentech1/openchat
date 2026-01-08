@@ -116,10 +116,10 @@ function Logo({
         className,
       )}
     >
-      <img src="/logo.png" alt="OpenChat" className={sizes.logo} />
+      <img src="/logo.png" alt="osschat" className={sizes.logo} />
       <span className={cn("font-sans font-bold", sizes.text)}>
-        <span className="text-foreground">Open</span>
-        <span className="text-primary">Chat</span>
+        <span className="text-foreground">oss</span>
+        <span className="text-primary">chat</span>
       </span>
     </span>
   );
@@ -197,7 +197,7 @@ function SignInPage() {
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs space-y-6">
             <div className="space-y-1 text-center">
-              <h1 className="text-xl font-semibold tracking-tight">Welcome to OpenChat</h1>
+              <h1 className="text-xl font-semibold tracking-tight">Welcome to osschat</h1>
               <p className="text-muted-foreground text-sm">Sign in to access your workspace</p>
             </div>
 

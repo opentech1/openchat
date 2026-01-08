@@ -18,8 +18,8 @@ function HomePage() {
   if (!isAuthenticated) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
-        <h1 className="text-4xl font-bold tracking-tight">OpenChat</h1>
-        <p className="text-muted-foreground">AI Chat powered by OpenRouter</p>
+        <h1 className="text-4xl font-bold tracking-tight">osschat</h1>
+        <p className="text-muted-foreground">Open source AI chat powered by OpenRouter</p>
         <Link to="/auth/sign-in">
           <Button>Sign In</Button>
         </Link>
