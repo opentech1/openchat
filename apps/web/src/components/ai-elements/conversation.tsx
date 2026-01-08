@@ -163,15 +163,15 @@ export const ConversationScrollButton = ({
       type="button"
       className={cn(
         "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg",
-        "flex size-9 items-center justify-center",
+        "flex size-11 md:size-9 items-center justify-center",
         "bg-background border border-border",
-        "hover:bg-muted transition-colors",
+        "hover:bg-muted active:scale-95 transition-all",
         className,
       )}
       onClick={handleScrollToBottom}
       {...props}
     >
-      <ArrowDownIcon className="size-4" />
+      <ArrowDownIcon className="size-5 md:size-4" />
     </button>
   );
 };

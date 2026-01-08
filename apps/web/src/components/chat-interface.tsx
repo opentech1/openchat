@@ -13,6 +13,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import type { UIMessagePart, UIDataTypes, UITools } from "ai";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 // Note: Using details/summary instead of Collapsible for now
 import { SlidersHorizontalIcon, BrainIcon, SearchIcon, Loader2Icon } from "lucide-react";
@@ -59,7 +59,21 @@ import {
   LinkIcon,
   MinusIcon,
   PlusIcon,
+  XIcon,
 } from "lucide-react";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  return isMobile;
+}
 
 // Auto-scroll component - scrolls to bottom when messages change
 function AutoScroll({ messageCount }: { messageCount: number }) {
@@ -707,7 +721,6 @@ function ReasoningSlider({ value, onChange }: ReasoningSliderProps) {
   );
 }
 
-// Model Config Popover - Reasoning effort slider + Web search toggle
 interface ModelConfigPopoverProps {
   disabled?: boolean;
 }
@@ -722,8 +735,9 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
     isLimitReached,
   } = useWebSearch();
   const [open, setOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const isMobile = useIsMobile();
 
-  // Badge text for the button
   const getBadgeText = () => {
     const parts: string[] = [];
     if (reasoningEffort !== "none") {
@@ -751,42 +765,40 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
     toggleWebSearch();
   };
 
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger
-        disabled={disabled}
-        className={cn(
-          "flex items-center gap-1.5",
-          "h-8 px-3 rounded-full",
-          "text-sm",
-          "border transition-all duration-150",
-          badgeText
-            ? "bg-primary/10 text-primary border-primary/50 hover:bg-primary/20"
-            : "text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground border-border/50",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
-        )}
-      >
-        <SlidersHorizontalIcon className="size-4" />
-        {badgeText && <span className="text-xs font-medium">{badgeText}</span>}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72 p-3">
-        {/* Reasoning Effort Section - Only for OpenAI models */}
-        {selectedModelId.startsWith("openai/") && (
-          <>
-            <div className="flex items-center gap-2 px-0 py-1 text-xs text-muted-foreground">
-              <BrainIcon className="size-4" />
-              <span className="font-medium">Reasoning effort</span>
-            </div>
-            <div className="py-2">
-              {/* Slider bar with labels */}
-              <ReasoningSlider value={reasoningEffort} onChange={handleReasoningChange} />
-            </div>
-            <DropdownMenuSeparator />
-          </>
-        )}
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setOpen(false);
+      setIsClosing(false);
+    }, 150);
+  }, []);
 
-        {/* Web Search Section */}
-        <div className="flex items-center gap-2 px-0 py-1 text-xs text-muted-foreground">
+  const handleOpen = useCallback(() => {
+    if (disabled) return;
+    setOpen(true);
+    setIsClosing(false);
+  }, [disabled]);
+
+  const configContent = (
+    <>
+      {selectedModelId.startsWith("openai/") && (
+        <div className={cn("pb-4", isMobile ? "border-b border-border/50" : "")}>
+          <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+            <BrainIcon className="size-4" />
+            <span className="font-medium">Reasoning effort</span>
+          </div>
+          <div className="py-2">
+            <ReasoningSlider value={reasoningEffort} onChange={handleReasoningChange} />
+          </div>
+        </div>
+      )}
+
+      <div className={cn(
+        selectedModelId.startsWith("openai/") ? "pt-4" : "",
+        webSearchEnabled && !isMobile ? "pb-4" : "",
+        webSearchEnabled && isMobile ? "pb-4 border-b border-border/50" : ""
+      )}>
+        <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
           <GlobeIcon className="size-4" />
           <span className="font-medium">Web search</span>
           <span className="ml-auto">{remainingSearches} left</span>
@@ -797,78 +809,181 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
             onClick={handleSearchToggle}
             disabled={isLimitReached && !webSearchEnabled}
             className={cn(
-              "w-full flex items-center justify-between py-2 px-3 rounded-lg transition-all",
+              "w-full flex items-center justify-between rounded-lg transition-all",
+              isMobile ? "py-3 px-4 min-h-[52px]" : "py-2 px-3",
               webSearchEnabled
                 ? "bg-primary/10 border border-primary/30"
                 : "bg-muted/50 border border-transparent hover:bg-muted",
               isLimitReached && !webSearchEnabled && "opacity-50 cursor-not-allowed",
             )}
           >
-            <span className="text-sm">{webSearchEnabled ? "Enabled" : "Disabled"}</span>
+            <span className={cn(isMobile ? "text-base" : "text-sm")}>
+              {webSearchEnabled ? "Enabled" : "Disabled"}
+            </span>
             <div
               className={cn(
-                "w-10 h-6 rounded-full transition-all relative",
+                "rounded-full transition-all relative",
+                isMobile ? "w-12 h-7" : "w-10 h-6",
                 webSearchEnabled ? "bg-primary" : "bg-muted-foreground/30",
               )}
             >
               <div
                 className={cn(
-                  "absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm",
-                  webSearchEnabled ? "left-5" : "left-1",
+                  "absolute rounded-full bg-white transition-all shadow-sm",
+                  isMobile ? "top-1 w-5 h-5" : "top-1 w-4 h-4",
+                  webSearchEnabled ? (isMobile ? "left-6" : "left-5") : "left-1",
                 )}
               />
             </div>
           </button>
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className={cn("text-muted-foreground mt-2", isMobile ? "text-sm" : "text-xs")}>
             Allow the AI to search the web for current information
           </p>
         </div>
+      </div>
 
-        {/* Max iterations control - only show when web search is enabled */}
-        {webSearchEnabled && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="flex items-center gap-2 px-0 py-1 text-xs text-muted-foreground">
-              <LinkIcon className="size-4" />
-              <span className="font-medium">Max iterations</span>
-            </div>
-            <div className="py-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Search/tool steps</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMaxSteps(maxSteps - 1)}
-                    disabled={maxSteps <= 1}
-                    className={cn(
-                      "w-6 h-6 rounded flex items-center justify-center",
-                      "bg-muted hover:bg-muted/80 transition-colors",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                    )}
-                  >
-                    <MinusIcon className="size-3" />
-                  </button>
-                  <span className="w-6 text-center text-sm font-medium">{maxSteps}</span>
-                  <button
-                    type="button"
-                    onClick={() => setMaxSteps(maxSteps + 1)}
-                    disabled={maxSteps >= 10}
-                    className={cn(
-                      "w-6 h-6 rounded flex items-center justify-center",
-                      "bg-muted hover:bg-muted/80 transition-colors",
-                      "disabled:opacity-50 disabled:cursor-not-allowed",
-                    )}
-                  >
-                    <PlusIcon className="size-3" />
-                  </button>
-                </div>
+      {webSearchEnabled && (
+        <div className={cn(isMobile ? "pt-4" : "pt-4 border-t border-border/50")}>
+          <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
+            <LinkIcon className="size-4" />
+            <span className="font-medium">Max iterations</span>
+          </div>
+          <div className="py-2">
+            <div className="flex items-center justify-between">
+              <span className={cn("text-muted-foreground", isMobile ? "text-sm" : "text-xs")}>
+                Search/tool steps
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMaxSteps(maxSteps - 1)}
+                  disabled={maxSteps <= 1}
+                  className={cn(
+                    "rounded flex items-center justify-center",
+                    "bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    isMobile ? "w-10 h-10" : "w-6 h-6",
+                  )}
+                >
+                  <MinusIcon className={cn(isMobile ? "size-5" : "size-3")} />
+                </button>
+                <span className={cn(
+                  "text-center font-medium tabular-nums",
+                  isMobile ? "w-8 text-lg" : "w-6 text-sm"
+                )}>
+                  {maxSteps}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMaxSteps(maxSteps + 1)}
+                  disabled={maxSteps >= 10}
+                  className={cn(
+                    "rounded flex items-center justify-center",
+                    "bg-muted hover:bg-muted/80 active:bg-muted/60 transition-colors",
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
+                    isMobile ? "w-10 h-10" : "w-6 h-6",
+                  )}
+                >
+                  <PlusIcon className={cn(isMobile ? "size-5" : "size-3")} />
+                </button>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Maximum search/tool iterations per response
-              </p>
             </div>
-          </>
+            <p className={cn("text-muted-foreground mt-2", isMobile ? "text-sm" : "text-xs")}>
+              Maximum search/tool iterations per response
+            </p>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const triggerButton = (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => (isMobile ? handleOpen() : undefined)}
+      className={cn(
+        "flex items-center justify-center gap-1.5",
+        "size-10 md:size-auto md:h-8 md:px-3 rounded-full",
+        "text-sm",
+        "border transition-all duration-150",
+        badgeText
+          ? "bg-primary/10 text-primary border-primary/50 hover:bg-primary/20"
+          : "text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground border-border/50",
+        "disabled:opacity-50 disabled:cursor-not-allowed",
+      )}
+    >
+      <SlidersHorizontalIcon className="size-4" />
+      {badgeText && <span className="hidden md:inline text-xs font-medium">{badgeText}</span>}
+    </button>
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {triggerButton}
+        {open && createPortal(
+          <>
+            <div
+              className={cn(
+                "fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm",
+                isClosing
+                  ? "animate-out fade-out-0 duration-150"
+                  : "animate-in fade-in-0 duration-200",
+              )}
+              onClick={handleClose}
+            />
+            <div
+              className={cn(
+                "fixed inset-x-0 bottom-0 z-[9999] flex flex-col overflow-hidden rounded-t-2xl border-t border-border bg-popover text-popover-foreground shadow-2xl",
+                isClosing
+                  ? "animate-out slide-out-to-bottom fade-out-0 duration-200"
+                  : "animate-in slide-in-from-bottom fade-in-0 duration-300",
+              )}
+            >
+              <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+                <h2 className="text-base font-semibold text-foreground">Model Settings</h2>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+                  aria-label="Close"
+                >
+                  <XIcon className="size-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                {configContent}
+              </div>
+            </div>
+          </>,
+          document.body
         )}
+      </>
+    );
+  }
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger
+        disabled={disabled}
+        className={cn(
+          "flex items-center justify-center gap-1.5",
+          "size-10 md:size-auto md:h-8 md:px-3 rounded-full",
+          "text-sm",
+          "border transition-all duration-150",
+          badgeText
+            ? "bg-primary/10 text-primary border-primary/50 hover:bg-primary/20"
+            : "text-muted-foreground bg-muted/50 hover:bg-muted hover:text-foreground border-border/50",
+          "disabled:opacity-50 disabled:cursor-not-allowed",
+        )}
+      >
+        <SlidersHorizontalIcon className="size-4" />
+        {badgeText && <span className="hidden md:inline text-xs font-medium">{badgeText}</span>}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72 p-3">
+        {configContent}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -881,16 +996,20 @@ interface PillButtonProps {
   onClick?: () => void;
   active?: boolean;
   className?: string;
+  hideLabel?: boolean;
 }
 
-function PillButton({ icon, label, onClick, active, className }: PillButtonProps) {
+function PillButton({ icon, label, onClick, active, className, hideLabel }: PillButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
       className={cn(
-        "flex items-center gap-1.5",
-        "h-8 px-3 rounded-full",
+        "flex items-center justify-center gap-1.5",
+        // Mobile: icon-only with 44px touch target, Desktop: with label
+        hideLabel ? "size-10 md:size-auto md:h-8 md:px-3" : "h-8 px-3",
+        "rounded-full",
         "text-sm",
         "border transition-all duration-150",
         active
@@ -900,7 +1019,7 @@ function PillButton({ icon, label, onClick, active, className }: PillButtonProps
       )}
     >
       {icon}
-      <span>{label}</span>
+      {!hideLabel && <span className="hidden md:inline">{label}</span>}
     </button>
   );
 }
@@ -920,7 +1039,7 @@ function SendButton({ isLoading, hasContent, onStop }: SendButtonProps) {
         onClick={onStop}
         className={cn(
           "flex items-center justify-center",
-          "size-9 rounded-full",
+          "size-11 md:size-9 rounded-full",
           "bg-foreground text-background",
           "transition-all duration-150",
           "hover:scale-105 active:scale-95",
@@ -938,7 +1057,7 @@ function SendButton({ isLoading, hasContent, onStop }: SendButtonProps) {
       disabled={!hasContent}
       className={cn(
         "flex items-center justify-center",
-        "size-9 rounded-full",
+        "size-11 md:size-9 rounded-full",
         "transition-all duration-150",
         hasContent
           ? "bg-primary text-primary-foreground hover:scale-105 active:scale-95"
@@ -1003,20 +1122,18 @@ function PremiumPromptInputInner({
           {(attachment) => <PromptInputAttachment data={attachment} />}
         </PromptInputAttachments>
 
-        {/* Textarea - taller for better UX */}
         <PromptInputTextarea
           ref={textareaRef}
           placeholder="Type your message here..."
           disabled={isLoading}
           className={cn(
-            "min-h-[100px] py-4 px-4",
+            "min-h-[72px] md:min-h-[100px] py-3 md:py-4 px-4",
             "text-[15px] leading-relaxed",
             "placeholder:text-muted-foreground/50",
             "resize-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0",
           )}
         />
 
-        {/* Hidden file input for Attach button */}
         <input
           ref={fileInputRef}
           type="file"
@@ -1026,26 +1143,19 @@ function PremiumPromptInputInner({
           onChange={handleFileChange}
         />
 
-        {/* Footer - T3.chat inspired layout */}
-        <PromptInputFooter className="px-3 pb-3 pt-1">
-          {/* Left side: Model selector + Config + Attach pills */}
-          <PromptInputTools className="gap-2">
-            {/* Model selector dropdown */}
+        <PromptInputFooter className="px-2 md:px-3 pb-2 md:pb-3 pt-1 gap-1.5 md:gap-2">
+          <PromptInputTools className="gap-1.5 md:gap-2 flex-1 min-w-0">
             <ConnectedModelSelector disabled={isLoading} />
-
-            {/* Model config popover (reasoning effort + web search) */}
             <ModelConfigPopover disabled={isLoading} />
-
-            {/* Attach pill */}
             <PillButton
               icon={<PaperclipIcon className="size-4" />}
               label="Attach"
               onClick={handleAttachClick}
+              hideLabel
             />
           </PromptInputTools>
 
-          {/* Right side: Send button */}
-          <PromptInputTools>
+          <PromptInputTools className="shrink-0">
             <SendButton isLoading={isLoading} hasContent={hasContent} onStop={onStop} />
           </PromptInputTools>
         </PromptInputFooter>
@@ -1186,9 +1296,10 @@ function ChatInterfaceContent({
   return (
     <div className="flex h-full flex-col">
       {/* Messages area - using AI Elements Conversation */}
-      <Conversation className="flex-1 px-4">
+      <Conversation className="flex-1 px-2 md:px-4">
         <AutoScroll messageCount={messages.length} />
-        <ConversationContent className="mx-auto max-w-3xl pt-6 pb-16 px-4">
+        {/* Mobile: extra top padding to clear hamburger menu (fixed left-3 top-3 size-11 = 12px + 44px + 8px breathing room = 64px) */}
+        <ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
           {/* Smart loading: skeleton for existing chats, StartScreen for new */}
           {messages.length === 0 ? (
             chatId && isLoadingMessages ? (
@@ -1307,8 +1418,7 @@ function ChatInterfaceContent({
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Premium Input area - fixed to bottom */}
-      <div className="px-4 pb-4 pt-4">
+      <div className="px-2 md:px-4 pt-2 md:pt-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-4">
         <div className="mx-auto max-w-3xl">
           <PremiumPromptInputInner
             onSubmit={handleSubmit}
