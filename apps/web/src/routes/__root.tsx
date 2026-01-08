@@ -20,12 +20,21 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "OpenChat" },
-      { name: "description", content: "AI Chat powered by OpenRouter" },
+      { title: "osschat" },
+      { name: "description", content: "Open source AI chat powered by OpenRouter" },
+      { property: "og:title", content: "osschat" },
+      { property: "og:description", content: "Open source AI chat powered by OpenRouter" },
+      { property: "og:image", content: "/logo512.png" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:title", content: "osschat" },
+      { name: "twitter:description", content: "Open source AI chat powered by OpenRouter" },
+      { name: "twitter:image", content: "/logo512.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
       { rel: "icon", href: "/favicon.ico" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
     scripts: [
       {
