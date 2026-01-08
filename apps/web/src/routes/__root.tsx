@@ -24,17 +24,17 @@ export const Route = createRootRoute({
       { name: "description", content: "Open source AI chat powered by OpenRouter" },
       { property: "og:title", content: "osschat" },
       { property: "og:description", content: "Open source AI chat powered by OpenRouter" },
-      { property: "og:image", content: "/logo512.png" },
+      { property: "og:image", content: "/logo512.png?v=2" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "osschat" },
       { name: "twitter:description", content: "Open source AI chat powered by OpenRouter" },
-      { name: "twitter:image", content: "/logo512.png" },
+      { name: "twitter:image", content: "/logo512.png?v=2" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico" },
-      { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      { rel: "icon", href: "/favicon.ico?v=2" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png?v=2" },
     ],
     scripts: [
       {
