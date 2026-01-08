@@ -109,9 +109,9 @@ function CategoryPill({
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 px-4 py-2 rounded-full",
+        "flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 md:py-2 rounded-full",
         "text-sm font-medium",
-        "transition-all duration-200",
+        "transition-all duration-200 active:scale-95",
         isActive
           ? "bg-primary text-primary-foreground shadow-sm"
           : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -129,9 +129,9 @@ function SuggestionItem({ text, onClick }: { text: string; onClick: () => void }
       onClick={onClick}
       className={cn(
         "group flex w-full items-center justify-between",
-        "px-4 py-3 rounded-xl",
-        "text-left text-[15px] text-foreground/80",
-        "bg-transparent hover:bg-muted/50",
+        "px-3 md:px-4 py-3.5 md:py-3 rounded-xl",
+        "text-left text-sm md:text-[15px] text-foreground/80",
+        "bg-transparent hover:bg-muted/50 active:bg-muted/70",
         "border border-transparent hover:border-border/30",
         "transition-all duration-200",
       )}
@@ -139,7 +139,7 @@ function SuggestionItem({ text, onClick }: { text: string; onClick: () => void }
       <span className="group-hover:text-foreground transition-colors">{text}</span>
       <ChevronRightIcon
         className={cn(
-          "size-4 text-muted-foreground/40 shrink-0 ml-3",
+          "size-4 text-muted-foreground/40 shrink-0 ml-2 md:ml-3",
           "opacity-0 group-hover:opacity-100",
           "translate-x-0 group-hover:translate-x-1",
           "transition-all duration-200",
@@ -182,21 +182,21 @@ export function StartScreen({ onPromptSelect, className }: StartScreenProps) {
       className={cn(
         "flex flex-col items-center",
         "w-full max-w-3xl mx-auto",
-        "pt-16 pb-8",
+        "pt-4 md:pt-16 pb-8",
         className,
       )}
     >
       {/* Greeting - Time-based with name */}
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+      <div className="mb-6 md:mb-8 text-center px-2">
+        <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
           {greeting}
           {firstName ? `, ${firstName}` : ""}
         </h1>
-        <p className="mt-2 text-base text-muted-foreground">How can I help you today?</p>
+        <p className="mt-1.5 md:mt-2 text-sm md:text-base text-muted-foreground">How can I help you today?</p>
       </div>
 
       {/* Category Pills - Selectable */}
-      <div className="mb-8 flex flex-wrap justify-center gap-2">
+      <div className="mb-6 md:mb-8 flex flex-wrap justify-center gap-1.5 md:gap-2 px-2">
         {CATEGORIES.map((category) => (
           <CategoryPill
             key={category.id}

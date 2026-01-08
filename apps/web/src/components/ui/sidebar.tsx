@@ -65,13 +65,20 @@ function SidebarProvider({
     setSidebarCollapsed,
   ]);
 
-  // Handle responsive breakpoint
+  // Handle responsive breakpoint - only auto-close when transitioning TO mobile
+  const wasMobileRef = React.useRef<boolean | null>(null);
+  
   React.useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
+      const wasMobile = wasMobileRef.current;
+      wasMobileRef.current = mobile;
+      
       setIsMobile(mobile);
-      // Auto-close on mobile
-      if (mobile && sidebarOpen) {
+      
+      // Only auto-close when TRANSITIONING from desktop to mobile while sidebar is open
+      // Don't close on every render or when user manually opens on mobile
+      if (mobile && !wasMobile && wasMobile !== null && sidebarOpen) {
         setSidebarOpen(false);
       }
     };

@@ -2,9 +2,36 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { createPortal } from "react-dom";
 import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
-import { useModels, useModelStore, getModelById } from "@/stores/model";
+import { getModelById, useModels, useModelStore } from "@/stores/model";
 import { useFavoriteModels } from "@/hooks/use-favorite-models";
-import { SearchIcon, ChevronDownIcon, CheckIcon } from "@/components/icons";
+import { CheckIcon, ChevronDownIcon, SearchIcon } from "@/components/icons";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
+function CloseIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("size-5", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
 
 function ProviderLogo({ providerId, className }: { providerId: string; className?: string }) {
   const [hasError, setHasError] = useState(false);
@@ -121,10 +148,11 @@ function ModelItem({
       tabIndex={0}
       aria-selected={isSelected}
       className={cn(
-        "group relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition-all duration-200 ease-out",
+        "group relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none transition-all duration-200 ease-out md:py-2.5",
+        "min-h-[44px] md:min-h-0",
         isHighlighted
           ? "bg-accent/90 shadow-sm"
-          : "hover:bg-accent/50",
+          : "hover:bg-accent/50 active:bg-accent/70",
         isSelected && "bg-accent/60",
       )}
     >
@@ -164,19 +192,19 @@ function ModelItem({
           type="button"
           onClick={onToggleFavorite}
           className={cn(
-            "flex size-5 items-center justify-center rounded-md transition-all duration-150",
+            "flex size-8 items-center justify-center rounded-lg transition-all duration-150 md:size-5 md:rounded-md",
             isFavorite
               ? "text-amber-400 hover:text-amber-300 hover:scale-110"
-              : "text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:scale-110",
+              : "text-muted-foreground/30 opacity-100 active:text-amber-400 md:opacity-0 md:group-hover:opacity-100 hover:text-amber-400 hover:scale-110",
           )}
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          <StarIcon filled={isFavorite} className="size-3.5" />
+          <StarIcon filled={isFavorite} className="size-4 md:size-3.5" />
         </button>
 
         {isSelected && (
-          <span className="flex size-5 items-center justify-center text-primary">
-            <CheckIcon className="size-4" />
+          <span className="flex size-8 items-center justify-center text-primary md:size-5">
+            <CheckIcon className="size-5 md:size-4" />
           </span>
         )}
       </div>
@@ -205,15 +233,16 @@ export function ModelSelector({
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
+  const isMobile = useIsMobile();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Calculate dropdown position when open
+  // Calculate dropdown position when open (desktop only)
   useLayoutEffect(() => {
-    if (open && triggerRef.current) {
+    if (open && triggerRef.current && !isMobile) {
       const rect = triggerRef.current.getBoundingClientRect();
       const dropdownHeight = 480;
       const spaceAbove = rect.top;
@@ -232,7 +261,7 @@ export function ModelSelector({
         });
       }
     }
-  }, [open]);
+  }, [open, isMobile]);
 
   const { models, isLoading } = useModels();
   const { favorites, toggleFavorite, isFavorite, addDefaults, missingDefaultsCount } = useFavoriteModels();
@@ -411,8 +440,8 @@ export function ModelSelector({
         aria-expanded={open}
         aria-label="Select model"
         className={cn(
-          "group flex items-center gap-2",
-          "h-9 px-3.5 rounded-xl",
+          "group flex items-center gap-1.5 md:gap-2",
+          "h-10 md:h-9 px-3 md:px-3.5 rounded-xl",
           "text-sm text-muted-foreground",
           "bg-muted/40 hover:bg-muted/70 hover:text-foreground",
           "border border-border/40 hover:border-border/60",
@@ -425,196 +454,380 @@ export function ModelSelector({
         {selectedModel ? (
           <>
             <ProviderLogo providerId={selectedModel.providerId} className="size-4" />
-            <span className="truncate max-w-[140px] font-medium">{selectedModel.name}</span>
+            <span className="truncate max-w-[80px] md:max-w-[140px] font-medium">{selectedModel.name}</span>
           </>
         ) : (
           <span className="font-medium">{isLoading ? "Loading..." : "Select model"}</span>
         )}
         <ChevronDownIcon className={cn(
-          "size-3.5 text-muted-foreground/60 transition-transform duration-200",
+          "size-3.5 text-muted-foreground/60 transition-transform duration-200 shrink-0",
           open && "rotate-180"
         )} />
       </button>
 
       {open && createPortal(
-        <div
-          ref={contentRef}
-          style={{ 
-            position: 'fixed',
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            height: Math.min(480, window.innerHeight - 100),
-          }}
-          className={cn(
-            "z-[9999] flex w-[420px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
-            isClosing
-              ? "animate-out fade-out-0 zoom-out-95 duration-150"
-              : "animate-in fade-in-0 zoom-in-95 duration-200",
-          )}
-          role="listbox"
-          aria-label="Models"
-        >
-          {!isSearching && (
-            <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r border-border/50 bg-muted/20 py-3">
-              <button
-                onClick={() => {
-                  if (hasFavorites) {
-                    setShowFavoritesOnly(true);
-                    setSelectedProvider(null);
-                  } else {
-                    addDefaults();
-                  }
-                }}
-                className={cn(
-                  "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
-                  showFavoritesOnly
-                    ? "bg-amber-500/20 text-amber-400 shadow-sm shadow-amber-500/10"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground hover:scale-105",
-                )}
-                title={hasFavorites ? "Show favorites" : "Add suggested favorites"}
-              >
-                <StarIcon filled={showFavoritesOnly || hasFavorites} className="size-[18px]" />
-              </button>
+        isMobile ? (
+          <>
+            <div
+              className={cn(
+                "fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm",
+                isClosing
+                  ? "animate-out fade-out-0 duration-150"
+                  : "animate-in fade-in-0 duration-200",
+              )}
+              onClick={handleClose}
+            />
+            <div
+              ref={contentRef}
+              className={cn(
+                "fixed inset-x-0 bottom-0 z-[9999] flex max-h-[85vh] flex-col overflow-hidden rounded-t-3xl border-t border-border bg-popover text-popover-foreground shadow-2xl",
+                isClosing
+                  ? "animate-out slide-out-to-bottom fade-out-0 duration-200"
+                  : "animate-in slide-in-from-bottom fade-in-0 duration-300",
+              )}
+              role="listbox"
+              aria-label="Models"
+            >
+              <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
+                <h2 className="text-base font-semibold text-foreground">Select Model</h2>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+                  aria-label="Close"
+                >
+                  <CloseIcon className="size-5" />
+                </button>
+              </div>
 
-              <div className="my-1.5 h-px w-7 bg-border/60" />
-
-              <div className="flex flex-col gap-1.5 px-1">
-                {uniqueProviders.slice(0, 6).map((provider) => (
+              <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+                <SearchIcon className="size-5 shrink-0 text-muted-foreground" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search all models..."
+                  className="min-h-[44px] flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground/60 outline-none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                {query && (
                   <button
-                    key={provider.id}
                     onClick={() => {
-                      if (selectedProvider !== provider.id) {
-                        setSelectedProvider(provider.id);
-                        setShowFavoritesOnly(false);
+                      setQuery("");
+                      inputRef.current?.focus();
+                    }}
+                    className="flex size-10 items-center justify-center rounded-full text-muted-foreground transition-colors active:bg-accent active:text-foreground"
+                  >
+                    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {!isSearching && (
+                <div className="flex items-center gap-2 overflow-x-auto border-b border-border/50 px-4 py-2.5 scrollbar-none">
+                  <button
+                    onClick={() => {
+                      if (hasFavorites) {
+                        setShowFavoritesOnly(true);
+                        setSelectedProvider(null);
+                      } else {
+                        addDefaults();
                       }
                     }}
                     className={cn(
-                      "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
-                      selectedProvider === provider.id
-                        ? "bg-accent text-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:scale-105",
+                      "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-all duration-200",
+                      showFavoritesOnly
+                        ? "bg-amber-500/20 text-amber-400"
+                        : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
                     )}
-                    title={provider.name}
                   >
-                    <ProviderLogo providerId={provider.id} className="size-5" />
+                    <StarIcon filled={showFavoritesOnly || hasFavorites} className="size-4" />
+                    <span>Favorites</span>
                   </button>
-                ))}
+
+                  <div className="mx-1 h-5 w-px shrink-0 bg-border/60" />
+
+                  {uniqueProviders.slice(0, 8).map((provider) => (
+                    <button
+                      key={provider.id}
+                      onClick={() => {
+                        if (selectedProvider !== provider.id) {
+                          setSelectedProvider(provider.id);
+                          setShowFavoritesOnly(false);
+                        }
+                      }}
+                      className={cn(
+                        "flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-all duration-200",
+                        selectedProvider === provider.id
+                          ? "bg-accent text-foreground"
+                          : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
+                      )}
+                    >
+                      <ProviderLogo providerId={provider.id} className="size-4" />
+                      <span className="max-w-[80px] truncate">{provider.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div ref={listRef} className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
+                {isLoading ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                    Loading models...
+                  </div>
+                ) : flatList.length === 0 ? (
+                  <div className="flex h-32 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                    <span className="text-muted-foreground/70">
+                      {isSearching ? "No models found" : showFavoritesOnly ? "No favorites yet" : "No models found"}
+                    </span>
+                    {isSearching ? (
+                      <button
+                        type="button"
+                        onClick={() => setQuery("")}
+                        className="min-h-[44px] rounded-xl bg-primary/10 px-4 text-sm font-medium text-primary transition-colors active:bg-primary/20"
+                      >
+                        Clear search
+                      </button>
+                    ) : showFavoritesOnly ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          addDefaults();
+                        }}
+                        className="flex min-h-[44px] items-center gap-2 rounded-xl bg-primary/10 px-4 text-sm font-medium text-primary transition-colors active:bg-primary/20"
+                      >
+                        <StarIcon filled className="size-4" />
+                        Add suggested models
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  flatList.map((model, index) => (
+                    <ModelItem
+                      key={model.id}
+                      model={model}
+                      isSelected={model.id === value}
+                      isHighlighted={index === highlightedIndex}
+                      isFavorite={isFavorite(model.id)}
+                      onSelect={() => handleSelect(model.id)}
+                      onHover={() => setHighlightedIndex(index)}
+                      onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
+                      dataIndex={index}
+                    />
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/50 bg-muted/10 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                {showFavoritesOnly && missingDefaultsCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addDefaults();
+                    }}
+                    className="flex min-h-[44px] items-center gap-1.5 text-sm text-primary transition-colors active:text-primary/80"
+                  >
+                    <StarIcon filled className="size-3.5" />
+                    Add {missingDefaultsCount} suggested
+                  </button>
+                ) : (
+                  <span className="text-xs text-muted-foreground/60">Tap to select</span>
+                )}
+                <span className="text-sm tabular-nums text-muted-foreground/50">
+                  {flatList.length} model{flatList.length !== 1 ? "s" : ""}
+                </span>
               </div>
             </div>
-          )}
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3">
-              <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search all models..."
-                className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              {query && (
+          </>
+        ) : (
+          <div
+            ref={contentRef}
+            style={{ 
+              position: 'fixed',
+              top: dropdownPosition.top,
+              left: dropdownPosition.left,
+              height: Math.min(480, window.innerHeight - 100),
+            }}
+            className={cn(
+              "z-[9999] flex w-[420px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
+              isClosing
+                ? "animate-out fade-out-0 zoom-out-95 duration-150"
+                : "animate-in fade-in-0 zoom-in-95 duration-200",
+            )}
+            role="listbox"
+            aria-label="Models"
+          >
+            {!isSearching && (
+              <div className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r border-border/50 bg-muted/20 py-3">
                 <button
                   onClick={() => {
-                    setQuery("");
-                    inputRef.current?.focus();
+                    if (hasFavorites) {
+                      setShowFavoritesOnly(true);
+                      setSelectedProvider(null);
+                    } else {
+                      addDefaults();
+                    }
                   }}
-                  className="flex size-6 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground"
-                  title="Clear search"
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
+                    showFavoritesOnly
+                      ? "bg-amber-500/20 text-amber-400 shadow-sm shadow-amber-500/10"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground hover:scale-105",
+                  )}
+                  title={hasFavorites ? "Show favorites" : "Add suggested favorites"}
                 >
-                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <StarIcon filled={showFavoritesOnly || hasFavorites} className="size-[18px]" />
                 </button>
-              )}
-            </div>
 
-            <div ref={listRef} className="flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
-              {isLoading ? (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Loading models...
-                </div>
-              ) : flatList.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                  <span className="text-muted-foreground/70">
-                    {isSearching ? "No models found" : showFavoritesOnly ? "No favorites yet" : "No models found"}
-                  </span>
-                  {isSearching ? (
+                <div className="my-1.5 h-px w-7 bg-border/60" />
+
+                <div className="flex flex-col gap-1.5 px-1">
+                  {uniqueProviders.slice(0, 6).map((provider) => (
                     <button
-                      type="button"
-                      onClick={() => setQuery("")}
-                      className="text-xs text-primary transition-colors hover:text-primary/80"
-                    >
-                      Clear search
-                    </button>
-                  ) : showFavoritesOnly ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        addDefaults();
+                      key={provider.id}
+                      onClick={() => {
+                        if (selectedProvider !== provider.id) {
+                          setSelectedProvider(provider.id);
+                          setShowFavoritesOnly(false);
+                        }
                       }}
-                      className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+                      className={cn(
+                        "flex size-9 items-center justify-center rounded-xl transition-all duration-200",
+                        selectedProvider === provider.id
+                          ? "bg-accent text-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-accent/60 hover:text-foreground hover:scale-105",
+                      )}
+                      title={provider.name}
                     >
-                      <StarIcon filled className="size-3" />
-                      Add suggested models
+                      <ProviderLogo providerId={provider.id} className="size-5" />
                     </button>
-                  ) : null}
+                  ))}
                 </div>
-              ) : (
-                flatList.map((model, index) => (
-                  <ModelItem
-                    key={model.id}
-                    model={model}
-                    isSelected={model.id === value}
-                    isHighlighted={index === highlightedIndex}
-                    isFavorite={isFavorite(model.id)}
-                    onSelect={() => handleSelect(model.id)}
-                    onHover={() => setHighlightedIndex(index)}
-                    onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
-                    dataIndex={index}
-                  />
-                ))
-              )}
-            </div>
+              </div>
+            )}
 
-            <div className="flex items-center justify-between border-t border-border/50 bg-muted/10 px-4 py-2">
-              {showFavoritesOnly && missingDefaultsCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    addDefaults();
-                  }}
-                  className="flex items-center gap-1 text-[11px] text-primary transition-colors hover:text-primary/80"
-                >
-                  <StarIcon filled className="size-3" />
-                  Add {missingDefaultsCount} suggested
-                </button>
-              ) : (
-                <div className="flex items-center gap-1.5 text-muted-foreground/60">
-                  <kbd className="inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
-                    ↑↓
-                  </kbd>
-                  <span className="text-[10px]">navigate</span>
-                  <kbd className="ml-1 inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
-                    ↵
-                  </kbd>
-                  <span className="text-[10px]">select</span>
-                </div>
-              )}
-              <span className="text-[11px] tabular-nums text-muted-foreground/50">
-                {flatList.length} model{flatList.length !== 1 ? "s" : ""}
-              </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-center gap-2.5 border-b border-border/50 px-4 py-3">
+                <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search all models..."
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+                {query && (
+                  <button
+                    onClick={() => {
+                      setQuery("");
+                      inputRef.current?.focus();
+                    }}
+                    className="flex size-6 items-center justify-center rounded-lg text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-foreground"
+                    title="Clear search"
+                  >
+                    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <div ref={listRef} className="flex-1 space-y-0.5 overflow-y-auto overscroll-contain p-2">
+                {isLoading ? (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Loading models...
+                  </div>
+                ) : flatList.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                    <span className="text-muted-foreground/70">
+                      {isSearching ? "No models found" : showFavoritesOnly ? "No favorites yet" : "No models found"}
+                    </span>
+                    {isSearching ? (
+                      <button
+                        type="button"
+                        onClick={() => setQuery("")}
+                        className="text-xs text-primary transition-colors hover:text-primary/80"
+                      >
+                        Clear search
+                      </button>
+                    ) : showFavoritesOnly ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          addDefaults();
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+                      >
+                        <StarIcon filled className="size-3" />
+                        Add suggested models
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  flatList.map((model, index) => (
+                    <ModelItem
+                      key={model.id}
+                      model={model}
+                      isSelected={model.id === value}
+                      isHighlighted={index === highlightedIndex}
+                      isFavorite={isFavorite(model.id)}
+                      onSelect={() => handleSelect(model.id)}
+                      onHover={() => setHighlightedIndex(index)}
+                      onToggleFavorite={(e) => handleToggleFavorite(e, model.id)}
+                      dataIndex={index}
+                    />
+                  ))
+                )}
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/50 bg-muted/10 px-4 py-2">
+                {showFavoritesOnly && missingDefaultsCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      addDefaults();
+                    }}
+                    className="flex items-center gap-1 text-[11px] text-primary transition-colors hover:text-primary/80"
+                  >
+                    <StarIcon filled className="size-3" />
+                    Add {missingDefaultsCount} suggested
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                    <kbd className="inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
+                      ↑↓
+                    </kbd>
+                    <span className="text-[10px]">navigate</span>
+                    <kbd className="ml-1 inline-flex h-5 items-center rounded-md border border-border/60 bg-muted/50 px-1.5 font-mono text-[10px]">
+                      ↵
+                    </kbd>
+                    <span className="text-[10px]">select</span>
+                  </div>
+                )}
+                <span className="text-[11px] tabular-nums text-muted-foreground/50">
+                  {flatList.length} model{flatList.length !== 1 ? "s" : ""}
+                </span>
+              </div>
             </div>
           </div>
-        </div>,
+        ),
         document.body
       )}
     </div>

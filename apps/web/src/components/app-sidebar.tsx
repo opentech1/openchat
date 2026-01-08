@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "./ui/sidebar";
-import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon } from "@/components/icons";
+import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon, MenuIcon } from "@/components/icons";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
@@ -172,16 +172,22 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* Collapsed floating bar - aligns with sidebar header */}
+      {/* Mobile hamburger menu - CSS-based visibility (md:hidden), no JS required */}
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed left-3 top-3 z-50 flex size-11 items-center justify-center rounded-xl bg-sidebar/95 shadow-lg ring-1 ring-sidebar-border/50 backdrop-blur-sm text-sidebar-foreground/70 transition-all duration-200 hover:bg-sidebar hover:text-sidebar-foreground active:scale-95 md:hidden"
+        aria-label="Open menu"
+      >
+        <MenuIcon />
+      </button>
+
+      {/* Collapsed floating bar - desktop only, shows when sidebar is closed */}
       <div
         className={cn(
           "fixed left-3 top-3 z-50 flex items-center gap-1 rounded-xl bg-sidebar/95 p-1 shadow-lg ring-1 ring-sidebar-border/50 backdrop-blur-sm",
           "transition-[opacity,transform] duration-[220ms] ease-[cubic-bezier(0.25,0.1,0.25,1)]",
-          open && !isMobile
-            ? "pointer-events-none opacity-0 scale-95"
-            : !isMobile
-              ? "opacity-100 scale-100"
-              : "pointer-events-none opacity-0 scale-95",
+          "hidden md:flex",
+          open ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100",
         )}
       >
         <button
