@@ -1,10 +1,10 @@
 # OpenChat
 
-OpenChat is an open-source AI chat workspace that you can self-host or run on OpenChat Cloud. It pairs a streaming Next.js 15 frontend with Convex for persistence and live sync, and ships with WorkOS AuthKit, OpenRouter integration, and a Tailwind v4 + shadcn design system. The monorepo is managed with Turborepo and Bun so the web app, Convex functions, shared packages, and browser extension stay in lockstep.
+OpenChat is an open-source AI chat workspace that you can self-host or run on OpenChat Cloud. It pairs a streaming TanStack Start frontend with Convex for persistence and live sync, and ships with Better Auth (GitHub OAuth), OpenRouter integration, and a Tailwind v4 + shadcn design system. The monorepo is managed with Turborepo and Bun so the web app, Convex functions, shared packages, and browser extension stay in lockstep.
 
 ## Highlights
 - Streaming chat UI with optimistic updates, sidebar sync, and attachment awareness backed by Convex message storage.
-- WorkOS AuthKit sign-in flow plus helpers for guest fallbacks and session-aware analytics.
+- Better Auth sign-in flow with GitHub OAuth, automatic user sync to Convex, and session-aware analytics.
 - OpenRouter proxy with rate limiting, per-user API key vaulting, and smooth streaming utilities for custom AI model responses.
 - Customizable component library built with Tailwind v4, shadcn primitives, and theming helpers for brand-specific deployments.
 - Batteries-included observability via PostHog event scaffolding and optional extension surface for in-browser shortcuts.
@@ -12,20 +12,19 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
 ## Repository Layout
 | Path | Purpose |
 | --- | --- |
-| `apps/web` | Next.js 15 marketing site + authenticated chat workspace (`src/app`, `src/components`, `src/lib`). |
+| `apps/web` | TanStack Start app with authenticated chat workspace (`src/routes`, `src/components`, `src/lib`). |
 | `apps/server/convex` | Convex functions that persist users, chats, and messages and expose realtime sync topics. |
 | `apps/extension` | Browser extension (WXT + React) for quick OpenChat access. |
-| `packages/auth` | Reusable Better-Auth layer for Postgres-backed sessions with memory fallbacks. |
 | `docs/` | Deployment runbooks (`deployment/`) and deep-dive architecture notes. |
 | `scripts/` | Operational scripts such as production canaries and secret generation. |
 
 ## Technology Stack
 - **Runtime & tooling:** Bun 1.3+, Turborepo, TypeScript (ES modules).
-- **Web app:** Next.js 15, React 19, Tailwind CSS v4, shadcn UI, TanStack Query/Form/DB, PostHog.
-- **Backend:** Convex data layer (chats, messages, users) with typed client access via `apps/web/src/lib/convex-server.ts`.
-- **Auth:** WorkOS AuthKit on the web, Better-Auth package for Postgres + memory fallback.
-- **AI models:** OpenRouter provider, smooth streaming helpers, and rate limiting in `apps/web/src/app/api/chat`.
-- **Analytics:** PostHog client + server capture via shared helpers (`posthog.md` contains the event plan).
+- **Web app:** TanStack Start (Vite), React 19, Tailwind CSS v4, shadcn UI, TanStack Router/Query, PostHog.
+- **Backend:** Convex data layer (chats, messages, users) with typed client access via `apps/web/src/lib/convex.ts`.
+- **Auth:** Better Auth with GitHub OAuth, synced to Convex users table.
+- **AI models:** OpenRouter provider, smooth streaming helpers, and rate limiting in `apps/web/src/routes/api/chat.ts`.
+- **Analytics:** PostHog client + server capture via shared helpers.
 
 
 ## Sponsors
