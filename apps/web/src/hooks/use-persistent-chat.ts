@@ -44,6 +44,7 @@ export interface UsePersistentChatReturn {
   stop: () => void;
   isNewChat: boolean;
   isLoadingMessages: boolean;
+  isUserLoading: boolean;
   chatId: string | null;
 }
 
@@ -525,10 +526,31 @@ export function usePersistentChat({
     }
   }, [chatId, convexUserId, aiSendMessage]);
 
+  const isUserLoading = !!(isConvexAvailable && user?.id && convexUser === undefined);
+
   // Handle sending messages with new chat creation
   const handleSendMessage = useCallback(
     async (message: { text: string; files?: ChatFileAttachment[] }) => {
-      if (!convexUserId) return;
+      if (!convexUserId) {
+        if (isUserLoading) {
+          toast.error("Please wait", {
+            description: "Setting up your account. Try again in a moment.",
+          });
+        } else if (!user?.id) {
+          toast.error("Sign in required", {
+            description: "Please sign in to send messages.",
+          });
+        } else {
+          toast.error("Account sync failed", {
+            description: "Unable to connect to your account. Please refresh the page.",
+            action: {
+              label: "Refresh",
+              onClick: () => window.location.reload(),
+            },
+          });
+        }
+        return;
+      }
 
       if (!message.text.trim() && (!message.files || message.files.length === 0)) {
         return;
@@ -597,6 +619,7 @@ export function usePersistentChat({
     stop,
     isNewChat,
     isLoadingMessages: chatId ? messagesResult === undefined : false,
+    isUserLoading,
     chatId: currentChatId,
   };
 }

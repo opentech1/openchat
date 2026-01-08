@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ConvexProviderWithAuth } from "convex/react";
+import { ConvexProviderWithAuth, useMutation } from "convex/react";
 import { Toaster } from "sonner";
 import { convexClient } from "../lib/convex";
 import { authClient, useAuth, StableAuthProvider } from "../lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { PostHogProvider } from "./posthog";
 import { prefetchModels } from "../stores/model";
+import { api } from "@server/convex/_generated/api";
 
 if (typeof window !== "undefined") {
   prefetchModels();
@@ -65,10 +66,50 @@ function useStableConvexAuth() {
   );
 }
 
+/**
+ * Component that syncs Better Auth users to Convex users table.
+ * This is CRITICAL - without this, convexUserId will be undefined
+ * and message sending will silently fail.
+ */
+function UserSyncProvider({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, loading } = useAuth();
+  const ensureUser = useMutation(api.users.ensure);
+  const syncedRef = useRef(false);
+  const syncingRef = useRef(false);
+
+  useEffect(() => {
+    // Only sync once when user is authenticated and we have user data
+    if (loading || !isAuthenticated || !user?.id || syncedRef.current || syncingRef.current) {
+      return;
+    }
+
+    syncingRef.current = true;
+
+    // Sync Better Auth user to Convex users table
+    ensureUser({
+      externalId: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.image ?? undefined,
+    })
+      .then(() => {
+        syncedRef.current = true;
+        console.log("[UserSync] User synced to Convex successfully");
+      })
+      .catch((error) => {
+        console.error("[UserSync] Failed to sync user to Convex:", error);
+        // Reset so we can retry on next render
+        syncingRef.current = false;
+      });
+  }, [loading, isAuthenticated, user, ensureUser]);
+
+  return <>{children}</>;
+}
+
 function ConvexAuthWrapper({ children }: { children: React.ReactNode }) {
   return (
     <ConvexProviderWithAuth client={convexClient!} useAuth={useStableConvexAuth}>
-      {children}
+      <UserSyncProvider>{children}</UserSyncProvider>
     </ConvexProviderWithAuth>
   );
 }
