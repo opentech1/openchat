@@ -142,6 +142,7 @@
   }
   html {
     font-family: 'Nunito Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    scrollbar-gutter: stable;
   }
   body {
     @apply bg-background text-foreground;
@@ -149,7 +150,10 @@
   }
 }
 
-/* Hide scrollbar but keep scrolling */
+[data-state="closed"] {
+  overflow: hidden !important;
+}
+
 @layer utilities {
   .scrollbar-none {
     -ms-overflow-style: none;
@@ -160,7 +164,6 @@
   }
 }
 
-/* Shimmer animation for reasoning/thinking text */
 @keyframes shimmer {
   0% {
     background-position: 200% 0;

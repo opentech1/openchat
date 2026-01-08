@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
 import { getModelById, useModels, useModelStore } from "@/stores/model";
@@ -225,43 +225,21 @@ export function ModelSelector({
   className,
   disabled = false,
 }: ModelSelectorProps) {
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [isClosing, setIsClosing] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, openAbove: false });
+  const [hasEverOpened, setHasEverOpened] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   const isMobile = useIsMobile();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Calculate dropdown position when open (desktop only)
-  useLayoutEffect(() => {
-    if (open && triggerRef.current && !isMobile) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const dropdownHeight = 480;
-      const spaceAbove = rect.top;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      
-      // Open above if more space, otherwise below
-      if (spaceAbove > spaceBelow && spaceAbove >= dropdownHeight) {
-        setDropdownPosition({
-          top: rect.top - dropdownHeight - 8,
-          left: rect.left,
-        });
-      } else {
-        setDropdownPosition({
-          top: rect.bottom + 8,
-          left: rect.left,
-        });
-      }
-    }
-  }, [open, isMobile]);
+  
+  const open = visible;
 
   const { models, isLoading } = useModels();
   const { favorites, toggleFavorite, isFavorite, addDefaults, missingDefaultsCount } = useFavoriteModels();
@@ -324,31 +302,57 @@ export function ModelSelector({
     setHighlightedIndex(0);
   }, [deferredQuery, selectedProvider, showFavoritesOnly]);
 
+  const calculateDropdownPosition = useCallback(() => {
+    if (!triggerRef.current || isMobile) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const dropdownHeight = 480;
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    
+    if (spaceAbove > spaceBelow && spaceAbove >= dropdownHeight) {
+      setDropdownPosition({
+        top: rect.top - dropdownHeight - 8,
+        left: rect.left,
+        openAbove: true,
+      });
+    } else {
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        openAbove: false,
+      });
+    }
+  }, [isMobile]);
+
+  useLayoutEffect(() => {
+    if (open) calculateDropdownPosition();
+  }, [open, calculateDropdownPosition]);
+
   const handleOpen = useCallback(() => {
     if (disabled) return;
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-    setOpen(true);
+    
+    calculateDropdownPosition();
+    
+    flushSync(() => {
+      setHasEverOpened(true);
+      setVisible(true);
+    });
+    
     setQuery("");
     setHighlightedIndex(0);
-    setIsClosing(false);
     setSelectedProvider(null);
     setShowFavoritesOnly(favorites.size > 0);
+    
     requestAnimationFrame(() => {
       inputRef.current?.focus();
     });
-  }, [disabled, favorites.size]);
+  }, [disabled, favorites.size, calculateDropdownPosition]);
 
   const handleClose = useCallback(() => {
-    setIsClosing(true);
-    closeTimeoutRef.current = setTimeout(() => {
-      setOpen(false);
-      setIsClosing(false);
-      closeTimeoutRef.current = null;
-      triggerRef.current?.focus();
-    }, 150);
+    flushSync(() => {
+      setVisible(false);
+    });
+    triggerRef.current?.focus();
   }, []);
 
   const handleSelect = useCallback(
@@ -465,25 +469,25 @@ export function ModelSelector({
         )} />
       </button>
 
-      {open && createPortal(
+      {hasEverOpened && createPortal(
         isMobile ? (
           <>
             <div
               className={cn(
                 "fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm",
-                isClosing
-                  ? "animate-out fade-out-0 duration-150"
-                  : "animate-in fade-in-0 duration-200",
+                "transition-opacity duration-150 ease-out",
+                visible ? "opacity-100" : "opacity-0 pointer-events-none",
               )}
               onClick={handleClose}
             />
             <div
               ref={contentRef}
               className={cn(
-                "fixed inset-x-0 bottom-0 z-[9999] flex max-h-[85vh] flex-col overflow-hidden rounded-t-3xl border-t border-border bg-popover text-popover-foreground shadow-2xl",
-                isClosing
-                  ? "animate-out slide-out-to-bottom fade-out-0 duration-200"
-                  : "animate-in slide-in-from-bottom fade-in-0 duration-300",
+                "fixed inset-x-0 bottom-0 z-[9999] flex max-h-[85vh] flex-col rounded-t-3xl border-t border-border bg-popover text-popover-foreground shadow-2xl",
+                "transition-all duration-200 ease-out",
+                visible 
+                  ? "translate-y-0 opacity-100" 
+                  : "translate-y-full opacity-0 pointer-events-none",
               )}
               role="listbox"
               aria-label="Models"
@@ -658,10 +662,12 @@ export function ModelSelector({
               height: Math.min(480, window.innerHeight - 100),
             }}
             className={cn(
-              "z-[9999] flex w-[420px] overflow-hidden rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
-              isClosing
-                ? "animate-out fade-out-0 zoom-out-95 duration-150"
-                : "animate-in fade-in-0 zoom-in-95 duration-200",
+              "z-[9999] flex w-[420px] rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl",
+              dropdownPosition.openAbove ? "origin-bottom-left" : "origin-top-left",
+              "transition-all duration-150 ease-out",
+              visible 
+                ? "scale-100 opacity-100" 
+                : "scale-95 opacity-0 pointer-events-none",
             )}
             role="listbox"
             aria-label="Models"
