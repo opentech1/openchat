@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useAuth } from '../lib/auth-client'
-import { ChatInterface } from '../components/chat-interface'
-import { convexClient } from '../lib/convex'
-import { Button } from '../components/ui/button'
-import { useRef, useCallback, useState, useEffect } from 'react'
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAuth } from "../lib/auth-client";
+import { Button } from "../components/ui/button";
+import { ChatInterface } from "../components/chat-interface";
+import { ChangelogButton } from "../components/changelog-button";
+import { convexClient } from "../lib/convex";
+import { useRef, useCallback, useState, useEffect } from "react";
 
 export const Route = createFileRoute('/')({
   component: HomePage,

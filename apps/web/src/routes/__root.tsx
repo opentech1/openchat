@@ -12,6 +12,7 @@ import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../lib/auth-client";
 import { usePostHogPageView } from "../providers/posthog";
 import { convexClient } from "../lib/convex";
+import { ChangelogButton } from "../components/changelog-button";
 
 import appCss from "../styles.css?url";
 
@@ -100,7 +101,10 @@ function AppShell() {
     <SidebarProvider>
       <div className="flex h-screen w-full bg-sidebar">
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="relative">
+          <div className="absolute top-3 right-3 z-10">
+            <ChangelogButton />
+          </div>
           <Outlet />
         </SidebarInset>
       </div>
