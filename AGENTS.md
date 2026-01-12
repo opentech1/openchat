@@ -37,8 +37,27 @@
 - Server env: `OPENROUTER_API_KEY`, `VALYU_API_KEY` for AI features. Store in `apps/web/.env.local` and never commit.
 - Convex: `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` for backend connection.
 
+## Documentation Site (docs-site/)
+- External Mintlify docs integrated via **git subtree** from `https://github.com/tryosschat/docs.git`.
+- NOT a Turborepo workspace — Mintlify handles build/deploy separately.
+- Content: MDX files for quickstart, API reference, guides.
+
+### Subtree Commands
+```bash
+# Pull latest docs from upstream
+git subtree pull --prefix=docs-site https://github.com/tryosschat/docs.git main --squash
+
+# Push local doc changes back to docs repo
+git subtree push --prefix=docs-site https://github.com/tryosschat/docs.git main
+```
+
+### Important
+- Edit docs in `docs-site/` — changes can be pushed back to the docs repo.
+- Don't confuse with `docs/` (internal deployment guides).
+
 ## Agent Pitfalls & Checks
 - TanStack Start uses Vite, NOT Next.js. Don't use `NEXT_PUBLIC_*` env vars.
 - Routes are in `apps/web/src/routes/` using file-based routing (TanStack Router).
 - Auth flow: Better Auth -> Convex user sync via `users.ensure` mutation.
 - AI providers: OpenRouter for all models, dual mode (OSSChat Cloud free tier + personal BYOK).
+- `docs-site/` is a git subtree — use subtree commands to sync, not regular git operations on that folder.
