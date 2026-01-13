@@ -1,0 +1,387 @@
+---
+title: Contributing
+description: How to contribute to OpenChat development
+---
+
+# Contributing to OpenChat
+
+Thanks for your interest in contributing to OpenChat! This guide will help you get started.
+
+## Before You Start
+
+<Steps>
+  <Step title="Install Prerequisites">
+    - **Bun 1.3+** - Package manager and runtime
+    - **Node.js 20+** - Required for some tooling
+    - **Git** - Version control
+    - **Docker** (optional) - For container-based development
+  </Step>
+  
+  <Step title="Read the Codebase">
+    Familiarize yourself with:
+    - [Architecture Overview](/guides/architecture) - How components work together
+    - [README.md](https://github.com/tryosschat/openchat) - Project overview
+    - `AGENTS.md` - Condensed guidelines for AI tools
+  </Step>
+  
+  <Step title="Set Up Development Environment">
+    Follow the [Quickstart](/quickstart) to get OpenChat running locally.
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### 1. Create a Branch
+
+```bash
+# Sync with main
+git checkout main
+git pull --rebase origin main
+
+# Create feature branch
+git checkout -b feat/your-feature-name
+```
+
+Branch naming conventions:
+- `feat/` - New features
+- `fix/` - Bug fixes
+- `docs/` - Documentation changes
+- `refactor/` - Code refactoring
+- `chore/` - Maintenance tasks
+
+### 2. Make Changes
+
+Follow our coding standards:
+
+| Convention | Example |
+|------------|---------|
+| **Indentation** | Tabs |
+| **File names** | kebab-case (`sign-in.tsx`) |
+| **Components** | `apps/web/src/components/` |
+| **Type imports** | `import type { Foo } from "..."` |
+
+### 3. Verify Your Changes
+
+Run these before pushing:
+
+```bash
+# Lint
+bun check
+
+# Type check
+bun check-types
+
+# Run tests
+bun test
+
+# Build (for build-critical changes)
+bun build
+```
+
+### 4. Commit with Conventional Commits
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) format:
+
+```bash
+# Feature
+git commit -m "feat(web): add workspace picker"
+
+# Bug fix
+git commit -m "fix(server): prevent duplicate chat titles"
+
+# Documentation
+git commit -m "docs: update deployment guide"
+
+# Chore
+git commit -m "chore: update dependencies"
+```
+
+Scopes: `web`, `server`, `docs`, `extension`, or omit for cross-cutting changes.
+
+### 5. Open a Pull Request
+
+Include in your PR:
+- **Summary** - What changed and why
+- **Scope** - Which apps affected (web/server/both)
+- **Testing notes** - How to verify the change
+- **Screenshots/GIFs** - For UI changes
+
+<Tip>
+  Link related issues with `Fixes #123` or `Closes #123` to auto-close them on merge.
+</Tip>
+
+## Coding Standards
+
+### TypeScript
+
+```typescript
+// ✅ Good: Type-only import
+import type { User } from "@/lib/types";
+
+// ✅ Good: Named exports
+export function useAuth() { ... }
+export const AUTH_COOKIE = "ba_session";
+
+// ❌ Avoid: Default exports (except for pages)
+export default function Component() { ... }
+```
+
+### React Components
+
+```tsx
+// ✅ Good: Clear, focused component
+function ChatMessage({ message }: { message: Message }) {
+  return (
+    <div className="p-4">
+      <span>{message.content}</span>
+    </div>
+  );
+}
+
+// ✅ Good: Use cn() for conditional classes
+import { cn } from "@/lib/utils";
+
+<div className={cn(
+  "base-class",
+  isActive && "active-class"
+)} />
+```
+
+### Convex Functions
+
+```typescript
+// ✅ Good: Use new syntax
+export const myQuery = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
+  },
+});
+
+// ✅ Good: Rate limit mutations
+export const myMutation = mutation({
+  args: { ... },
+  handler: async (ctx, args) => {
+    const { ok, retryAfter } = await rateLimiter.limit(ctx, "myMutation", {
+      key: args.userId,
+    });
+    if (!ok) throwRateLimitError("action", retryAfter);
+    
+    // ... rest of handler
+  },
+});
+```
+
+## Testing
+
+### Running Tests
+
+```bash
+# All tests
+bun test
+
+# Specific workspace
+bun test:web
+bun test:server
+
+# Watch mode
+bun test:watch
+
+# With coverage
+bun test -- --coverage
+```
+
+### Writing Tests
+
+Colocate tests with source files:
+
+```
+src/
+  lib/
+    utils.ts
+    utils.test.ts
+  components/
+    Button.tsx
+    Button.test.tsx
+```
+
+Example test:
+
+```typescript
+// utils.test.ts
+import { describe, it, expect } from "vitest";
+import { formatDate } from "./utils";
+
+describe("formatDate", () => {
+  it("formats date correctly", () => {
+    const date = new Date("2024-01-15");
+    expect(formatDate(date)).toBe("January 15, 2024");
+  });
+});
+```
+
+### Convex Tests
+
+Use `convex-test` for Convex function tests:
+
+```typescript
+// chats.test.ts
+import { describe, it, expect, beforeEach } from "vitest";
+import { convexTest } from "convex-test";
+import { api } from "./_generated/api";
+
+describe("chats", () => {
+  it("creates a chat", async () => {
+    const t = convexTest(schema);
+    
+    // Insert test user
+    const userId = await t.run(async (ctx) => {
+      return ctx.db.insert("users", { ... });
+    });
+    
+    // Test the mutation
+    const chatId = await t.mutation(api.chats.create, {
+      userId,
+      title: "Test Chat",
+    });
+    
+    expect(chatId).toBeDefined();
+  });
+});
+```
+
+## Documentation
+
+Update docs when:
+- Adding user-facing features
+- Changing configuration options
+- Modifying API behavior
+- Updating deployment steps
+
+### Docs Structure
+
+```
+docs-site/           # Mintlify documentation
+├── index.mdx        # Introduction
+├── quickstart.mdx   # Getting started
+├── guides/          # In-depth guides
+│   ├── architecture.mdx
+│   ├── authentication.mdx
+│   └── ...
+└── self-hosting/    # Deployment docs
+    ├── docker.mdx
+    └── environment.mdx
+```
+
+### Local Docs Preview
+
+```bash
+cd docs-site
+npx mintlify dev
+# Open http://localhost:3000
+```
+
+## Pull Request Review
+
+### What We Look For
+
+- [ ] Code follows project conventions
+- [ ] Tests added/updated for changes
+- [ ] Documentation updated if needed
+- [ ] No breaking changes (or clearly documented)
+- [ ] Commits are clean and well-described
+- [ ] CI checks pass
+
+### Automated Checks
+
+PRs trigger:
+- **Lint** - oxlint
+- **Type check** - TypeScript
+- **Tests** - Vitest
+- **Build** - Production build verification
+- **CodeQL** - Security scanning
+
+### Getting Reviews
+
+1. **Self-review first** - Check your own PR before requesting review
+2. **Respond to feedback** - Address comments or explain why you disagree
+3. **Keep it small** - Smaller PRs get faster, better reviews
+
+## Common Tasks
+
+### Adding a New Page
+
+1. Create route file in `apps/web/src/routes/`
+2. Use auth guard pattern if needed
+3. Add navigation link to sidebar
+
+```tsx
+// apps/web/src/routes/new-page.tsx
+import { createFileRoute } from "@tanstack/react-router";
+import { useAuth } from "@/lib/auth-client";
+
+export const Route = createFileRoute("/new-page")({
+  component: NewPage,
+});
+
+function NewPage() {
+  const { isAuthenticated, loading } = useAuth();
+  
+  if (loading) return <Loading />;
+  if (!isAuthenticated) return <SignInPrompt />;
+  
+  return <div>Your content here</div>;
+}
+```
+
+### Adding a Convex Function
+
+1. Add to appropriate file in `apps/server/convex/`
+2. Update schema if adding new table
+3. Run `bun x convex codegen` to update types
+
+```typescript
+// apps/server/convex/example.ts
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const myQuery = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, args) => {
+    return ctx.db.get(args.id);
+  },
+});
+```
+
+### Adding UI Components
+
+1. Use shadcn/ui primitives when possible
+2. Add to `apps/web/src/components/`
+3. Follow existing patterns in the codebase
+
+```bash
+# Add shadcn component
+cd apps/web
+bunx shadcn@latest add button
+```
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Discussions" icon="comments" href="https://github.com/tryosschat/openchat/discussions">
+    Ask questions and share ideas
+  </Card>
+  <Card title="GitHub Issues" icon="bug" href="https://github.com/tryosschat/openchat/issues">
+    Report bugs or check existing issues
+  </Card>
+</CardGroup>
+
+## Code of Conduct
+
+We follow the [Contributor Covenant](https://www.contributor-covenant.org/). Be respectful, inclusive, and constructive.
+
+For security issues, please email the maintainers directly rather than opening a public issue.
+
+---
+
+Thank you for contributing to OpenChat! Every contribution helps make the project better.
