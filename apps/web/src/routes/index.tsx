@@ -2,7 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { ChatInterface } from "../components/chat-interface";
-import { ChangelogButton } from "../components/changelog-button";
 import { convexClient } from "../lib/convex";
 import { useRef, useCallback, useState, useEffect } from "react";
 
@@ -35,6 +34,7 @@ function InteractiveStaircase({
   className?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const rectRef = useRef<DOMRect | null>(null)
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
     null,
   )
@@ -44,10 +44,9 @@ function InteractiveStaircase({
     const updateLayout = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
-        // Portrait: use width to make staircase bigger
-        // Landscape: use smaller dimension
+        rectRef.current = rect
         const gridSize = 12
-        
+
         const availableSize = Math.min(rect.width, rect.height)
         const squareSize = Math.floor(
           (availableSize - GAP * (gridSize - 1)) / gridSize,
@@ -57,17 +56,19 @@ function InteractiveStaircase({
       }
     }
 
-    const timer = setTimeout(updateLayout, 50)
+    // Use requestAnimationFrame for proper initial layout timing
+    const rafId = requestAnimationFrame(updateLayout)
     window.addEventListener('resize', updateLayout)
     return () => {
-      clearTimeout(timer)
+      cancelAnimationFrame(rafId)
       window.removeEventListener('resize', updateLayout)
     }
   }, [])
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect()
+    // Use cached rect to avoid getBoundingClientRect on every mouse move
+    const rect = rectRef.current
+    if (rect) {
       setMousePos({
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
@@ -93,9 +94,9 @@ function InteractiveStaircase({
     return 0.6 + 0.4 * (distance / effectRadius)
   }
 
-  const rect = containerRef.current?.getBoundingClientRect()
-  const containerWidth = rect?.width ?? 0
-  const containerHeight = rect?.height ?? 0
+  // Use cached rect for container dimensions
+  const containerWidth = rectRef.current?.width ?? 0
+  const containerHeight = rectRef.current?.height ?? 0
 
   return (
     <div
