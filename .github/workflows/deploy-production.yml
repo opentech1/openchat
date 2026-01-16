@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  checks: read
+
 jobs:
   # Wait for canary checks to pass before deploying
   wait-for-canary:
