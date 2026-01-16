@@ -17,8 +17,8 @@ const chatDoc = v.object({
 	lastMessageAt: v.optional(v.number()),
 	deletedAt: v.optional(v.number()),
 	messageCount: v.optional(v.number()),
-	// Chat streaming status: "idle" | "streaming" - used for stream resumption
 	status: v.optional(v.union(v.literal("idle"), v.literal("streaming"))),
+	activeStreamId: v.optional(v.string()),
 });
 
 // Optimized chat list response: exclude redundant fields to reduce bandwidth
@@ -310,13 +310,11 @@ export const updateTitle = mutation({
 	},
 	returns: v.null(),
 	handler: async (ctx, args) => {
-		// Verify user owns the chat
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
 			return null;
 		}
 
-		// Only update if title is still "New Chat" or empty
 		if (chat.title === "New Chat" || !chat.title) {
 			const sanitizedTitle = sanitizeTitle(args.title.trim().slice(0, 100));
 			await ctx.db.patch(args.chatId, {
@@ -326,6 +324,44 @@ export const updateTitle = mutation({
 		}
 
 		return null;
+	},
+});
+
+export const setActiveStream = mutation({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		streamId: v.union(v.string(), v.null()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
+			return null;
+		}
+
+		await ctx.db.patch(args.chatId, {
+			activeStreamId: args.streamId ?? undefined,
+			status: args.streamId ? "streaming" : "idle",
+			updatedAt: Date.now(),
+		});
+
+		return null;
+	},
+});
+
+export const getActiveStream = query({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
+			return null;
+		}
+		return chat.activeStreamId ?? null;
 	},
 });
 

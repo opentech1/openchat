@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, generateId } from "ai";
 import type { UIMessage } from "ai";
 
 interface ChatFileAttachment {
@@ -28,6 +28,7 @@ import { useModelStore } from "@/stores/model";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore, calculateCost } from "@/stores/provider";
 import { usePendingMessageStore } from "@/stores/pending-message";
+import { useStreamStore } from "@/stores/stream";
 import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
 
@@ -46,6 +47,8 @@ export interface UsePersistentChatReturn {
   isLoadingMessages: boolean;
   isUserLoading: boolean;
   chatId: string | null;
+  isResuming: boolean;
+  resumedContent: string;
 }
 
 // Error metadata type (matches Convex schema)
@@ -260,8 +263,14 @@ export function usePersistentChat({
     setMessages,
   } = useChat({
     id: chatId ?? "new-chat",
+    generateId,
+    resume: !!chatId,
     transport: new DefaultChatTransport({
       api: "/api/chat",
+      prepareReconnectToStreamRequest: ({ id }) => ({
+        api: `/api/chat?chatId=${id}&userId=${convexUserIdRef.current ?? ""}`,
+        credentials: "include",
+      }),
       prepareSendMessagesRequest: ({ messages }) => ({
         body: {
           messages,
@@ -269,6 +278,7 @@ export function usePersistentChat({
           provider: activeProvider,
           apiKey: activeProvider === "openrouter" ? apiKey : undefined,
           chatId: chatIdRef.current,
+          userId: convexUserIdRef.current,
           enableWebSearch: webSearchEnabled,
           // Reasoning effort control - always send, server maps 'none' to 'minimal'
           reasoningEffort: reasoningEffort,
@@ -278,17 +288,16 @@ export function usePersistentChat({
       }),
     }),
     onFinish: async ({ message }) => {
-      // Save completed message to Convex
-      // This callback runs even if the component has navigated away
+      useStreamStore.getState().completeStream();
+
       const pendingUserMessage = pendingUserMessageRef.current;
       const currentConvexUserId = convexUserIdRef.current;
 
-      // Track usage for OSSChat Cloud provider
-      // Message metadata contains token usage info sent from the server
       const metadata = message.metadata as
         | {
             model?: string;
             provider?: string;
+            streamId?: string;
             inputTokens?: number;
             outputTokens?: number;
             totalTokens?: number;
@@ -501,6 +510,22 @@ export function usePersistentChat({
     }
   }, [chatId, messagesResult, setMessages]);
 
+  useEffect(() => {
+    if (status !== "streaming" || !chatIdRef.current) return;
+
+    const lastMessage = aiMessages[aiMessages.length - 1];
+    if (!lastMessage || lastMessage.role !== "assistant") return;
+
+    const metadata = lastMessage.metadata as { streamId?: string } | undefined;
+    const streamId = metadata?.streamId;
+    if (!streamId) return;
+
+    const streamStore = useStreamStore.getState();
+    if (streamStore.redisStreamId !== streamId) {
+      streamStore.setRedisStreamId(streamId, chatIdRef.current);
+    }
+  }, [status, aiMessages]);
+
   // Check for pending message and auto-send it (for seamless navigation)
   // This runs when navigating from home page to chat page with a pending message
   const pendingMessageConsumed = useRef(false);
@@ -621,5 +646,7 @@ export function usePersistentChat({
     isLoadingMessages: chatId ? messagesResult === undefined : false,
     isUserLoading,
     chatId: currentChatId,
+    isResuming: false,
+    resumedContent: "",
   };
 }

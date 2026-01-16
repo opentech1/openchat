@@ -30,11 +30,11 @@ interface ChatItem {
 }
 
 // Skeleton for loading chat items
-function ChatItemSkeleton() {
+function ChatItemSkeleton({ delay = 0 }: { delay?: number }) {
   return (
     <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-      <div className="size-4 rounded bg-sidebar-foreground/10 animate-pulse" />
-      <div className="h-4 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
+      <div className={cn("size-4 rounded bg-sidebar-foreground/10 animate-pulse", delay > 0 && `[animation-delay:${delay}ms]`)} style={delay > 0 ? { animationDelay: `${delay}ms` } : undefined} />
+      <div className={cn("h-4 flex-1 rounded bg-sidebar-foreground/10 animate-pulse", delay > 0 && `[animation-delay:${delay}ms]`)} style={delay > 0 ? { animationDelay: `${delay}ms` } : undefined} />
     </div>
   );
 }
@@ -241,10 +241,10 @@ export function AppSidebar() {
         <SidebarContent className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
           {isLoadingChats ? (
             <div className="px-3 py-2 space-y-1">
-              <ChatItemSkeleton />
-              <ChatItemSkeleton />
-              <ChatItemSkeleton />
-              <ChatItemSkeleton />
+              <ChatItemSkeleton delay={0} />
+              <ChatItemSkeleton delay={75} />
+              <ChatItemSkeleton delay={150} />
+              <ChatItemSkeleton delay={225} />
             </div>
           ) : chats.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-sidebar-foreground/50">

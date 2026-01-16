@@ -1,5 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import type { GenericCtx } from "@convex-dev/better-auth";
+import type { DataModel } from "./_generated/dataModel";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
@@ -183,7 +185,7 @@ export const ensure = mutation({
 export const getCurrentAuthUser = query({
 	args: {},
 	handler: async (ctx) => {
-		return authComponent.getAuthUser(ctx);
+		return authComponent.getAuthUser(ctx as unknown as GenericCtx<DataModel>);
 	},
 });
 

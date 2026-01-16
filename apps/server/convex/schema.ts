@@ -47,18 +47,14 @@ export default defineSchema({
 	}).index("by_user", ["userId"]),
 	chats: defineTable({
 		userId: v.id("users"),
-		// Title can be encrypted (prefixed with enc_v1:)
 		title: v.string(),
 		createdAt: v.number(),
 		updatedAt: v.number(),
 		lastMessageAt: v.optional(v.number()),
 		deletedAt: v.optional(v.number()),
-		// PERFORMANCE OPTIMIZATION: Track message count to avoid expensive queries
-		// This field is maintained by message insert/delete operations
 		messageCount: v.optional(v.number()),
-		// Chat streaming status: "idle" | "streaming" - used to show spinner in sidebar
-		// and enable stream resumption on page reload
 		status: v.optional(v.union(v.literal("idle"), v.literal("streaming"))),
+		activeStreamId: v.optional(v.string()),
 	})
 		.index("by_user", ["userId", "updatedAt"])
 		.index("by_user_created", ["userId", "createdAt"])

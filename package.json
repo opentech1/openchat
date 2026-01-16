@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "check": "turbo lint",
-    "dev": "turbo -F web -F server dev",
+    "dev": "bun ./scripts/check-redis.ts && turbo -F web -F server dev",
     "build": "turbo -F server build",
     "build:web": "turbo -F web build",
     "deploy": "bun ./scripts/deploy.ts",

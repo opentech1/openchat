@@ -8,7 +8,10 @@ export const getRouter = () => {
   const router = createRouter({
     routeTree,
     scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 30000,
+    defaultPendingMs: 150,
+    defaultPendingMinMs: 200,
   });
 
   return router;

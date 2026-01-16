@@ -89,13 +89,13 @@ export const MessageContent = ({ children, className, ...props }: MessageContent
 
 export interface MessageResponseProps extends ComponentProps<"div"> {
   children: string;
+  isStreaming?: boolean;
 }
 
-export const MessageResponse = ({ children, className, ...props }: MessageResponseProps) => {
+export const MessageResponse = ({ children, className, isStreaming, ...props }: MessageResponseProps) => {
   const { from } = useMessage();
   const isUser = from === "user";
 
-  // User messages: simple bubble styling
   if (isUser) {
     return (
       <div
@@ -107,36 +107,34 @@ export const MessageResponse = ({ children, className, ...props }: MessageRespon
     );
   }
 
-  // Assistant messages: full markdown rendering
   return (
     <div
       className={cn(
         "prose dark:prose-invert max-w-none",
-        // Typography
         "prose-p:text-[15px] prose-p:leading-relaxed prose-p:text-foreground/90",
         "prose-headings:text-foreground prose-headings:font-semibold",
         "prose-h1:text-xl prose-h1:mt-6 prose-h1:mb-3",
         "prose-h2:text-lg prose-h2:mt-5 prose-h2:mb-2",
         "prose-h3:text-base prose-h3:mt-4 prose-h3:mb-2",
-        // Lists
         "prose-li:text-[15px] prose-li:leading-relaxed prose-li:text-foreground/90",
         "prose-ul:my-3 prose-ol:my-3 prose-ul:pl-4 prose-ol:pl-4",
-        // Code
         "prose-code:text-sm prose-code:font-medium prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none",
         "prose-pre:bg-muted prose-pre:border prose-pre:border-border/50 prose-pre:rounded-lg prose-pre:my-4",
-        // Links
         "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
-        // Blockquotes
         "prose-blockquote:border-l-primary prose-blockquote:text-foreground/80 prose-blockquote:not-italic",
-        // Horizontal rules
         "prose-hr:border-border/50 prose-hr:my-6",
-        // Strong
         "prose-strong:text-foreground prose-strong:font-semibold",
         className,
       )}
       {...props}
     >
       <Streamdown>{children || ""}</Streamdown>
+      {isStreaming && (
+        <span
+          className="inline-block w-[3px] h-[1.1em] bg-foreground/70 rounded-sm ml-0.5 align-text-bottom animate-pulse"
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 };
