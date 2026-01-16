@@ -1,0 +1,294 @@
+---
+title: Environment Variables
+description: Complete reference for all OpenChat configuration options
+---
+
+# Environment Variables
+
+This guide covers all environment variables used by OpenChat.
+
+## Quick Reference
+
+| Category | Required | Optional |
+|----------|----------|----------|
+| [Authentication](#authentication) | 4 | 0 |
+| [Convex](#convex) | 2 | 0 |
+| [AI Providers](#ai-providers) | 0 | 2 |
+| [Analytics](#analytics) | 0 | 2 |
+| [Development](#development) | 0 | 2 |
+
+## Web App (`apps/web/.env.local`)
+
+### Authentication
+
+<Note>
+  All authentication variables are **required** for the app to function.
+</Note>
+
+```bash
+# GitHub OAuth
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Auth encryption key (min 32 characters)
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=your_random_secret_min_32_chars
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_CLIENT_ID` | Yes | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth app client secret |
+| `BETTER_AUTH_SECRET` | Yes | Session encryption key (32+ chars) |
+
+<Tip>
+  Generate a secure secret with:
+  ```bash
+  openssl rand -base64 32
+  ```
+</Tip>
+
+### Convex
+
+```bash
+# Convex deployment URLs
+VITE_CONVEX_URL=https://your-project.convex.cloud
+VITE_CONVEX_SITE_URL=https://your-project.convex.site
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_CONVEX_URL` | Yes | Convex deployment URL (for queries/mutations) |
+| `VITE_CONVEX_SITE_URL` | Yes | Convex site URL (for HTTP actions, auth) |
+
+<Warning>
+  These must use the `VITE_` prefix to be available on the client side (TanStack Start uses Vite).
+</Warning>
+
+### AI Providers
+
+```bash
+# OpenRouter API key (for OSSChat Cloud free tier)
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Valyu API key (for web search)
+VALYU_API_KEY=...
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENROUTER_API_KEY` | No | Server's OpenRouter key for free tier |
+| `VALYU_API_KEY` | No | Web search API key |
+
+<Info>
+  Without `OPENROUTER_API_KEY`, users must bring their own key (BYOK) to use AI features.
+</Info>
+
+### Analytics
+
+```bash
+# PostHog analytics
+VITE_POSTHOG_KEY=phc_...
+VITE_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_POSTHOG_KEY` | No | PostHog project API key |
+| `VITE_POSTHOG_HOST` | No | PostHog ingestion host |
+
+### Development
+
+```bash
+# Auth bypass for testing (NEVER use in production!)
+NEXT_PUBLIC_DEV_BYPASS_AUTH=0
+NEXT_PUBLIC_DEV_USER_ID=dev-user
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_DEV_BYPASS_AUTH` | No | Set to `1` to skip auth (dev only) |
+| `NEXT_PUBLIC_DEV_USER_ID` | No | Mock user ID when bypassing auth |
+
+<Warning>
+  **NEVER** set `NEXT_PUBLIC_DEV_BYPASS_AUTH=1` in production. This completely disables authentication.
+</Warning>
+
+## Server (`apps/server/.env.local`)
+
+The Convex backend automatically configures most variables during `convex dev`. You typically only need to add secrets for production.
+
+```bash
+# Production deployment
+CONVEX_DEPLOY_KEY=prod:your-deploy-key
+
+# GitHub OAuth (same as web app)
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+```
+
+## Production Checklist
+
+<Steps>
+  <Step title="Authentication">
+    - [ ] `GITHUB_CLIENT_ID` - From GitHub OAuth app
+    - [ ] `GITHUB_CLIENT_SECRET` - From GitHub OAuth app
+    - [ ] `BETTER_AUTH_SECRET` - Random 32+ character string
+    - [ ] GitHub callback URL points to production Convex site
+  </Step>
+  
+  <Step title="Convex">
+    - [ ] `VITE_CONVEX_URL` - Production Convex URL
+    - [ ] `VITE_CONVEX_SITE_URL` - Production Convex site URL
+    - [ ] Convex deployed to production project
+  </Step>
+  
+  <Step title="AI Features">
+    - [ ] `OPENROUTER_API_KEY` - If providing free tier
+    - [ ] `VALYU_API_KEY` - If enabling web search
+    - [ ] Rate limits configured for expected traffic
+  </Step>
+  
+  <Step title="Security">
+    - [ ] All secrets in secure secret manager
+    - [ ] `NEXT_PUBLIC_DEV_BYPASS_AUTH` removed or set to `0`
+    - [ ] HTTPS enabled for all endpoints
+    - [ ] Sensitive env vars NOT in client bundle
+  </Step>
+</Steps>
+
+## Environment Validation
+
+OpenChat validates environment variables on startup. If required variables are missing, the app will fail to start with a clear error:
+
+```
+❌ Invalid environment variables:
+  - GITHUB_CLIENT_ID: Required
+  - VITE_CONVEX_URL: Invalid url
+```
+
+### Validation Schema
+
+```typescript
+// lib/env.ts
+const serverEnvSchema = z.object({
+  GITHUB_CLIENT_ID: z.string().min(1),
+  GITHUB_CLIENT_SECRET: z.string().min(1),
+  BETTER_AUTH_SECRET: z.string().min(32),
+  OPENROUTER_API_KEY: z.string().optional(),
+  VALYU_API_KEY: z.string().optional(),
+});
+
+const clientEnvSchema = z.object({
+  VITE_CONVEX_URL: z.string().url(),
+  VITE_CONVEX_SITE_URL: z.string().url(),
+  VITE_POSTHOG_KEY: z.string().optional(),
+  VITE_POSTHOG_HOST: z.string().url().optional(),
+});
+```
+
+## Docker / Container Deployment
+
+When deploying with Docker, pass environment variables via:
+
+### docker-compose.yml
+
+```yaml
+services:
+  web:
+    environment:
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+```
+
+### .env file
+
+```bash
+# .env (in project root, loaded by docker-compose)
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+BETTER_AUTH_SECRET=...
+```
+
+### Docker run
+
+```bash
+docker run -e GITHUB_CLIENT_ID=... -e GITHUB_CLIENT_SECRET=... ...
+```
+
+## Secret Management
+
+<Warning>
+  Never commit secrets to git. Use `.env.local` files (gitignored) or a proper secret manager.
+</Warning>
+
+### Recommended Secret Managers
+
+| Platform | Solution |
+|----------|----------|
+| Vercel | Vercel Environment Variables |
+| AWS | AWS Secrets Manager, Parameter Store |
+| GCP | Google Secret Manager |
+| Self-hosted | Doppler, Vault, 1Password |
+
+### Example: Using Doppler
+
+```bash
+# Install Doppler
+brew install dopplerhq/cli/doppler
+
+# Login and configure
+doppler login
+doppler setup
+
+# Run with secrets injected
+doppler run -- bun dev
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Environment variables not loading">
+    Check:
+    1. File is named `.env.local` (not `.env`)
+    2. Variables use correct prefix (`VITE_` for client)
+    3. No syntax errors in the file
+    4. App was restarted after changes
+  </Accordion>
+  
+  <Accordion title="VITE_ variables not available on client">
+    Only variables prefixed with `VITE_` are exposed to the client. This is a Vite security feature.
+    
+    ```bash
+    # Available on client
+    VITE_CONVEX_URL=...
+    
+    # Server-only (NOT on client)
+    GITHUB_CLIENT_SECRET=...
+    ```
+  </Accordion>
+  
+  <Accordion title="Convex URL mismatch">
+    Common issue with Docker: internal vs external URLs.
+    
+    ```bash
+    # Internal (container-to-container)
+    CONVEX_URL=http://convex:3210
+    
+    # External (browser access)
+    VITE_CONVEX_SITE_URL=http://localhost:3211
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/self-hosting/docker">
+    Deploy with Docker Compose
+  </Card>
+  <Card title="Authentication" icon="lock" href="/guides/authentication">
+    Configure GitHub OAuth
+  </Card>
+</CardGroup>
