@@ -32,72 +32,72 @@ bun install || {
     bun install --ignore-scripts
 }
 
-# Set up environment variables
+# Set up local-only Convex deployment (no cloud, no prompts)
 echo ""
-echo "Setting up environment variables..."
+echo "Setting up local-only Convex deployment..."
 
-# Copy server .env.local (contains CONVEX_DEPLOYMENT config)
-if [ -f "$CONDUCTOR_ROOT_PATH/apps/server/.env.local" ]; then
-    echo "Copying apps/server/.env.local from main project..."
-    mkdir -p apps/server
-    cp "$CONDUCTOR_ROOT_PATH/apps/server/.env.local" apps/server/.env.local
-    echo "✅ Copied apps/server/.env.local (includes Convex configuration)"
+# Use a shared anonymous deployment name for all conductor workspaces
+# This avoids the complexity of bootstrapping new deployments non-interactively
+# All workspaces share the same local database, which is fine for development
+DEPLOY_NAME="anonymous-openchat-dev"
+DEPLOY_STATE_DIR="$HOME/.convex/anonymous-convex-backend-state/$DEPLOY_NAME"
+
+# Check if the deployment exists, if not it will be created on first run
+if [ -d "$DEPLOY_STATE_DIR" ] && [ -f "$DEPLOY_STATE_DIR/config.json" ]; then
+    echo "✅ Using existing local deployment: $DEPLOY_NAME"
 else
-    echo "⚠️  No apps/server/.env.local found in main project"
-    if [ -f "apps/server/.env.example" ]; then
-        mkdir -p apps/server
-        cp apps/server/.env.example apps/server/.env.local
-        echo "⚠️  Created apps/server/.env.local from example - you'll need to configure Convex"
-    fi
+    echo "⚠️  No local deployment found. One will be created on first run."
+    echo "   (This may require a one-time interactive setup)"
 fi
 
-# Copy web .env.local (contains all frontend env vars)
-if [ -f "$CONDUCTOR_ROOT_PATH/apps/web/.env.local" ]; then
-    echo "Copying apps/web/.env.local from main project..."
-    mkdir -p apps/web
-    cp "$CONDUCTOR_ROOT_PATH/apps/web/.env.local" apps/web/.env.local
-    echo "✅ Copied apps/web/.env.local"
-else
-    echo "⚠️  No apps/web/.env.local found in main project"
-    if [ -f "apps/web/.env.example" ]; then
-        mkdir -p apps/web
-        cp apps/web/.env.example apps/web/.env.local
-        echo "⚠️  Created apps/web/.env.local from example - you may need to configure it"
-    fi
-fi
-
-# Also handle root .env.local if it exists
-if [ -f "$CONDUCTOR_ROOT_PATH/.env.local" ]; then
-    echo "Copying root .env.local from main project..."
-    cp "$CONDUCTOR_ROOT_PATH/.env.local" .env.local
-    echo "✅ Copied root .env.local"
-fi
-
-# Set up Convex for local deployment
+# Set up environment files for local development
 echo ""
-echo "Configuring Convex to use local deployment..."
+echo "Configuring environment for local development..."
 
-# Modify server package.json to use local Convex deployment
+mkdir -p apps/server apps/web
+
+# Create apps/server/.env.local for Convex
+cat > apps/server/.env.local << EOF
+# Local Convex deployment (auto-configured by Conductor)
+CONVEX_DEPLOYMENT=anonymous:$DEPLOY_NAME
+CONVEX_URL=http://127.0.0.1:3210
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+EOF
+echo "✅ Created apps/server/.env.local"
+
+# Create apps/web/.env.local for frontend
+cat > apps/web/.env.local << EOF
+# Local Convex URLs (auto-configured by Conductor)
+VITE_CONVEX_URL=http://127.0.0.1:3210
+VITE_CONVEX_SITE_URL=http://127.0.0.1:3211
+EOF
+echo "✅ Created apps/web/.env.local"
+
+# Modify server package.json to use local Convex deployment with force-upgrade
 if [ -f "apps/server/package.json" ]; then
-    # Use Node.js to safely modify the JSON file
     node -e "
         const fs = require('fs');
         const pkg = JSON.parse(fs.readFileSync('apps/server/package.json', 'utf8'));
         pkg.scripts.dev = 'convex dev --local';
         fs.writeFileSync('apps/server/package.json', JSON.stringify(pkg, null, 2) + '\n');
     "
-    echo "✅ Configured Convex to use local deployment (isolated from main project)"
-    echo "   Your worktree has its own Convex backend - schema changes won't conflict!"
+    echo "✅ Configured Convex for local-only development"
 else
     echo "⚠️  Could not find apps/server/package.json"
 fi
+
+# Store deployment name for the run script
+echo "$DEPLOY_NAME" > .convex-deployment-name
 
 echo ""
 echo "======================================"
 echo "✅ Setup complete!"
 echo "======================================"
 echo ""
+echo "Your workspace uses a local Convex backend (no cloud needed)."
+echo "Data is stored at: ~/.convex/anonymous-convex-backend-state/$DEPLOY_NAME"
+echo ""
 echo "Next steps:"
 echo "  1. Click the 'Run' button to start the dev servers"
-echo "  2. Your worktree is configured to use the same Convex deployment"
+echo "  2. No login prompts - it just works!"
 echo ""
