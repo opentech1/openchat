@@ -17,11 +17,11 @@
     "check": "prettier --write . && eslint --fix"
   },
   "dependencies": {
-    "@ai-sdk/react": "^2.0.117",
+    "@ai-sdk/react": "3.0.39",
     "@base-ui/react": "^1.0.0",
     "@convex-dev/better-auth": "^0.10.5",
     "@fontsource-variable/nunito-sans": "^5.2.7",
-    "@openrouter/ai-sdk-provider": "^1.5.4",
+    "@openrouter/ai-sdk-provider": "6.0.0-alpha.1",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@tailwindcss/vite": "^4.0.6",
     "@tanstack/react-query": "^5.90.12",
@@ -31,7 +31,7 @@
     "@tanstack/router-plugin": "^1.132.0",
     "@valyu/ai-sdk": "^1.0.3",
     "@xyflow/react": "^12.10.0",
-    "ai": "^6.0.5",
+    "ai": "6.0.37",
     "ai-elements": "^1.6.3",
     "better-auth": "^1.4.7",
     "class-variance-authority": "^0.7.1",
@@ -47,6 +47,8 @@
     "posthog-js": "^1.311.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "redis": "^5.10.0",
+    "resumable-stream": "^2.2.10",
     "server": "workspace:*",
     "shadcn": "^3.6.2",
     "shiki": "^3.20.0",
@@ -73,6 +75,7 @@
     "typescript": "^5.7.2",
     "vite": "^7.1.7",
     "vitest": "^3.0.5",
-    "web-vitals": "^5.1.0"
+    "web-vitals": "^5.1.0",
+    "zod": "^4.3.5"
   }
 }

@@ -42,6 +42,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { nanoid } from "nanoid";
 import {
   type ChangeEvent,
@@ -1032,16 +1033,22 @@ export const PromptInputSubmit = ({
   }
 
   return (
-    <InputGroupButton
-      aria-label="Submit"
-      className={cn(className)}
-      size={size}
-      type="submit"
-      variant={variant}
-      {...props}
+    <motion.div
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      className="inline-flex"
     >
-      {children ?? Icon}
-    </InputGroupButton>
+      <InputGroupButton
+        aria-label="Submit"
+        className={cn(className)}
+        size={size}
+        type="submit"
+        variant={variant}
+        {...props}
+      >
+        {children ?? Icon}
+      </InputGroupButton>
+    </motion.div>
   );
 };
 

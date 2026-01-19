@@ -1,625 +1,342 @@
-/**
- * usePersistentChat - Wrapper around AI SDK's useChat with Convex persistence
- *
- * Features:
- * - Creates new chat on first message (when chatId is undefined)
- * - Loads existing messages from Convex
- * - Saves messages to Convex on completion
- * - Supports navigation to chat page after creation
- */
-
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import type { UIMessage } from "ai";
-
-interface ChatFileAttachment {
-  type: "file";
-  mediaType: string;
-  filename?: string;
-  url: string;
-}
 import { useQuery, useMutation } from "convex/react";
-import { convexClient } from "@/lib/convex";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth-client";
 import { useModelStore } from "@/stores/model";
 import { useOpenRouterKey } from "@/stores/openrouter";
-import { useProviderStore, calculateCost } from "@/stores/provider";
-import { usePendingMessageStore } from "@/stores/pending-message";
+import { useProviderStore } from "@/stores/provider";
+import { useStreamStore } from "@/stores/stream";
 import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
+import type { UIMessage } from "ai";
+
+interface ChatFileAttachment {
+	type: "file";
+	mediaType: string;
+	filename?: string;
+	url: string;
+}
 
 export interface UsePersistentChatOptions {
-  chatId?: string;
-  onChatCreated?: (chatId: string) => void;
+	chatId?: string;
+	onChatCreated?: (chatId: string) => void;
 }
 
 export interface UsePersistentChatReturn {
-  messages: UIMessage[];
-  sendMessage: (message: { text: string; files?: ChatFileAttachment[] }) => Promise<void>;
-  status: "ready" | "submitted" | "streaming" | "error";
-  error: Error | undefined;
-  stop: () => void;
-  isNewChat: boolean;
-  isLoadingMessages: boolean;
-  isUserLoading: boolean;
-  chatId: string | null;
+	messages: UIMessage[];
+	sendMessage: (message: { text: string; files?: ChatFileAttachment[] }) => Promise<void>;
+	status: "ready" | "submitted" | "streaming" | "error";
+	error: Error | undefined;
+	stop: () => void;
+	isNewChat: boolean;
+	isLoadingMessages: boolean;
+	isUserLoading: boolean;
+	chatId: string | null;
+	isResuming: boolean;
+	resumedContent: string;
 }
 
-// Error metadata type (matches Convex schema)
-interface MessageError {
-  code: string;
-  message: string;
-  details?: string;
-  provider?: string;
-  retryable?: boolean;
+interface StreamingState {
+	id: string;
+	content: string;
+	reasoning: string;
 }
 
-// DEPRECATED: Tool invocation type from Convex (legacy format)
-interface ToolInvocation {
-  toolName: string;
-  toolCallId: string;
-  state: string; // "input-streaming" | "input-available" | "output-available" | "output-error"
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
-}
-
-// NEW: Chain of thought part type - preserves exact stream order
-interface ChainOfThoughtPart {
-  type: "reasoning" | "tool";
-  index: number; // Original position in the AI stream
-  // For reasoning parts
-  text?: string;
-  // For tool parts
-  toolName?: string;
-  toolCallId?: string;
-  state?: string; // "input-streaming" | "input-available" | "output-available" | "output-error"
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
-}
-
-// Convert Convex message to AI SDK UIMessage format
-// Supports both new chainOfThoughtParts format and legacy reasoning/toolInvocations
 function convexMessageToUIMessage(msg: {
-  _id: string;
-  role: string;
-  content: string;
-  // DEPRECATED: Legacy fields
-  reasoning?: string;
-  toolInvocations?: ToolInvocation[];
-  // NEW: Unified chain of thought parts with preserved order
-  chainOfThoughtParts?: ChainOfThoughtPart[];
-  createdAt: number;
-  attachments?: Array<{
-    storageId: string;
-    filename: string;
-    contentType: string;
-    size: number;
-    url?: string;
-  }>;
-  // Error handling fields
-  error?: MessageError;
-  messageType?: "text" | "error" | "system";
-}): UIMessage & { error?: MessageError; messageType?: string } {
-  const parts: UIMessage["parts"] = [];
+	_id: string;
+	clientMessageId?: string;
+	role: string;
+	content: string;
+	reasoning?: string;
+	createdAt: number;
+}): UIMessage {
+	const parts: UIMessage["parts"] = [];
 
-  // NEW FORMAT: Use chainOfThoughtParts if available (preserves exact stream order)
-  if (msg.chainOfThoughtParts && msg.chainOfThoughtParts.length > 0) {
-    // Sort by index to ensure correct order
-    const sortedParts = [...msg.chainOfThoughtParts].sort((a, b) => a.index - b.index);
+	if (msg.reasoning) {
+		parts.push({ type: "reasoning", text: msg.reasoning });
+	}
 
-    for (const cotPart of sortedParts) {
-      if (cotPart.type === "reasoning" && cotPart.text) {
-        parts.push({ type: "reasoning", text: cotPart.text });
-      } else if (cotPart.type === "tool" && cotPart.toolName) {
-        parts.push({
-          type: `tool-${cotPart.toolName}` as any,
-          toolCallId: cotPart.toolCallId,
-          state: cotPart.state || "output-available",
-          input: cotPart.input,
-          output: cotPart.output,
-          errorText: cotPart.errorText,
-        } as any);
-      }
-    }
-  } else {
-    // LEGACY FORMAT: Fallback for old messages without chainOfThoughtParts
-    // Add reasoning first (legacy behavior)
-    if (msg.reasoning) {
-      parts.push({ type: "reasoning", text: msg.reasoning });
-    }
+	if (msg.content) {
+		parts.push({ type: "text", text: msg.content });
+	}
 
-    // Add tool invocation parts (after reasoning, before text)
-    if (msg.toolInvocations) {
-      for (const tool of msg.toolInvocations) {
-        parts.push({
-          type: `tool-${tool.toolName}` as any,
-          toolCallId: tool.toolCallId,
-          state: tool.state,
-          input: tool.input,
-          output: tool.output,
-          errorText: tool.errorText,
-        } as any);
-      }
-    }
-  }
-
-  // Add text part (skip for error messages with no content)
-  // Text is always last in the message
-  if (msg.content) {
-    parts.push({ type: "text", text: msg.content });
-  }
-
-  // Add file parts for attachments (at the end)
-  if (msg.attachments) {
-    for (const attachment of msg.attachments) {
-      if (attachment.url) {
-        parts.push({
-          type: "file",
-          mediaType: attachment.contentType,
-          filename: attachment.filename,
-          url: attachment.url,
-        } as any);
-      }
-    }
-  }
-
-  return {
-    id: msg._id,
-    role: msg.role as "user" | "assistant",
-    parts,
-    // Pass through error metadata for rendering
-    error: msg.error,
-    messageType: msg.messageType,
-  };
+	return {
+		id: msg.clientMessageId || msg._id,
+		role: msg.role as "user" | "assistant",
+		parts,
+	};
 }
 
 export function usePersistentChat({
-  chatId,
-  onChatCreated,
+	chatId,
+	onChatCreated,
 }: UsePersistentChatOptions): UsePersistentChatReturn {
-  const { user } = useAuth();
-  const { selectedModelId, reasoningEffort, maxSteps } = useModelStore();
-  const { apiKey } = useOpenRouterKey();
-  const activeProvider = useProviderStore((s) => s.activeProvider);
-  const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled);
+	const { user } = useAuth();
+	const { selectedModelId, reasoningEffort, maxSteps } = useModelStore();
+	const { apiKey } = useOpenRouterKey();
+	const activeProvider = useProviderStore((s) => s.activeProvider);
+	const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled);
 
-  // Check if Convex client is available (null during SSR or if env var missing)
-  const isConvexAvailable = !!convexClient;
+	const [messages, setMessages] = useState<UIMessage[]>([]);
+	const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
+	const [error, setError] = useState<Error | undefined>(undefined);
+	const [currentChatId, setCurrentChatId] = useState<string | null>(chatId ?? null);
 
-  // Track current chat ID (may change when new chat is created)
-  const [currentChatId, setCurrentChatId] = useState<string | null>(chatId ?? null);
-  const chatIdRef = useRef<string | null>(chatId ?? null);
+	const chatIdRef = useRef<string | null>(chatId ?? null);
+	const streamingRef = useRef<StreamingState | null>(null);
 
-  // Track pending user message for onFinish callback (avoids stale closure)
-  const pendingUserMessageRef = useRef<{ text: string; id: string } | null>(null);
+	const onChatCreatedRef = useRef(onChatCreated);
+	useEffect(() => {
+		onChatCreatedRef.current = onChatCreated;
+	}, [onChatCreated]);
 
-  // Track mount state to prevent stale operations after unmount
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+	useEffect(() => {
+		if (chatId) {
+			chatIdRef.current = chatId;
+			setCurrentChatId(chatId);
+		}
+	}, [chatId]);
 
-  // Store onChatCreated in a ref to avoid stale closure
-  const onChatCreatedRef = useRef(onChatCreated);
-  useEffect(() => {
-    onChatCreatedRef.current = onChatCreated;
-  }, [onChatCreated]);
+	const convexUser = useQuery(
+		api.users.getByExternalId,
+		user?.id ? { externalId: user.id } : "skip",
+	);
+	const convexUserId = convexUser?._id;
 
-  // Update ref when chatId prop changes
-  useEffect(() => {
-    if (chatId) {
-      chatIdRef.current = chatId;
-      setCurrentChatId(chatId);
-    }
-  }, [chatId]);
+	const messagesResult = useQuery(
+		api.messages.list,
+		chatId && convexUserId ? { chatId: chatId as Id<"chats">, userId: convexUserId } : "skip",
+	);
 
-  // First, get the Convex user by Better Auth external ID
-  // Skip if Convex client is not available (SSR or missing env)
-  const convexUser = useQuery(
-    api.users.getByExternalId,
-    isConvexAvailable && user?.id ? { externalId: user.id } : "skip",
-  );
+	const activeStreamJob = useQuery(
+		api.backgroundStream.getActiveStreamJob,
+		chatId && convexUserId ? { chatId: chatId as Id<"chats">, userId: convexUserId } : "skip",
+	);
 
-  // Get the Convex user ID
-  const convexUserId = convexUser?._id;
+	const createChat = useMutation(api.chats.create);
+	const sendMessages = useMutation(api.messages.send);
+	const updateTitle = useMutation(api.chats.updateTitle);
+	const startBackgroundStream = useMutation(api.backgroundStream.startStream);
 
-  // Store convexUserId in a ref to avoid stale closure in onFinish
-  // This is critical because onFinish callback may capture an old value
-  const convexUserIdRef = useRef(convexUserId);
-  useEffect(() => {
-    convexUserIdRef.current = convexUserId;
-  }, [convexUserId]);
+	const isNewChat = !chatId;
 
-  // Convex queries and mutations
-  const messagesResult = useQuery(
-    api.messages.list,
-    chatId && convexUserId ? { chatId: chatId as Id<"chats">, userId: convexUserId } : "skip",
-  );
+	useEffect(() => {
+		if (!messagesResult || status === "streaming" || status === "submitted") return;
+		
+		setMessages((prevMessages) => {
+			const convexMessages = messagesResult.map(convexMessageToUIMessage);
+			
+			if (prevMessages.length === 0) {
+				return convexMessages;
+			}
+			
+			const lastPrev = prevMessages[prevMessages.length - 1];
+			const isLastPrevStreaming = lastPrev?.id.startsWith("resume-") || 
+				(lastPrev?.role === "assistant" && !messagesResult.find(m => m._id === lastPrev.id));
+			
+			if (isLastPrevStreaming && convexMessages.length > 0) {
+				const lastConvex = convexMessages[convexMessages.length - 1];
+				if (lastConvex?.role === "assistant") {
+					return [
+						...convexMessages.slice(0, -1),
+						{ ...lastConvex, id: lastPrev.id }
+					];
+				}
+			}
+			
+			return convexMessages;
+		});
+	}, [messagesResult, status]);
 
-  const createChat = useMutation(api.chats.create);
-  const sendMessages = useMutation(api.messages.send);
-  const updateTitle = useMutation(api.chats.updateTitle);
+	useEffect(() => {
+		if (!activeStreamJob) return;
+		if (activeStreamJob.status === "completed" || activeStreamJob.status === "error") {
+			if (status === "streaming") {
+				setStatus("ready");
+				streamingRef.current = null;
+				useStreamStore.getState().completeStream();
+			}
+			return;
+		}
 
-  // Track if we're in new chat mode
-  const isNewChat = !chatId;
+		if (activeStreamJob.status === "running" || activeStreamJob.status === "pending") {
+			const streamId = activeStreamJob.messageId;
+			const jobContent = activeStreamJob.content || "";
+			const jobReasoning = activeStreamJob.reasoning || "";
 
-  // Use AI SDK's useChat
-  const {
-    messages: aiMessages,
-    sendMessage: aiSendMessage,
-    status,
-    error,
-    stop,
-    setMessages,
-  } = useChat({
-    id: chatId ?? "new-chat",
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      prepareSendMessagesRequest: ({ messages }) => ({
-        body: {
-          messages,
-          model: selectedModelId,
-          provider: activeProvider,
-          apiKey: activeProvider === "openrouter" ? apiKey : undefined,
-          chatId: chatIdRef.current,
-          enableWebSearch: webSearchEnabled,
-          // Reasoning effort control - always send, server maps 'none' to 'minimal'
-          reasoningEffort: reasoningEffort,
-          // Max steps for multi-step tool calls (always enabled when tools are used)
-          maxSteps: maxSteps,
-        },
-      }),
-    }),
-    onFinish: async ({ message }) => {
-      // Save completed message to Convex
-      // This callback runs even if the component has navigated away
-      const pendingUserMessage = pendingUserMessageRef.current;
-      const currentConvexUserId = convexUserIdRef.current;
+			if (status !== "streaming" && status !== "submitted") {
+				console.log("[BackgroundStream] Detected running stream job, resuming UI...");
+				setStatus("streaming");
+				useStreamStore.getState().setResuming();
+			}
 
-      // Track usage for OSSChat Cloud provider
-      // Message metadata contains token usage info sent from the server
-      const metadata = message.metadata as
-        | {
-            model?: string;
-            provider?: string;
-            inputTokens?: number;
-            outputTokens?: number;
-            totalTokens?: number;
-          }
-        | undefined;
+			if (!streamingRef.current || streamingRef.current.id !== streamId) {
+				streamingRef.current = { id: streamId, content: jobContent, reasoning: jobReasoning };
+				
+				setMessages((prev) => {
+					if (prev.find(m => m.id === streamId)) return prev;
+					return [
+						...prev,
+						{ id: streamId, role: "assistant" as const, parts: [{ type: "text" as const, text: jobContent }] },
+					];
+				});
+			} else if (
+				streamingRef.current.content !== jobContent || 
+				streamingRef.current.reasoning !== jobReasoning
+			) {
+				streamingRef.current.content = jobContent;
+				streamingRef.current.reasoning = jobReasoning;
+				
+				setMessages((prev) => {
+					const idx = prev.findIndex((m) => m.id === streamId);
+					if (idx < 0) return prev;
+					
+					const currentText = prev[idx].parts?.find(p => p.type === "text");
+					if (currentText && "text" in currentText && currentText.text === jobContent) {
+						return prev;
+					}
+					
+					const parts: UIMessage["parts"] = [];
+					if (jobReasoning) parts.push({ type: "reasoning", text: jobReasoning });
+					parts.push({ type: "text", text: jobContent });
+					
+					const updated = [...prev];
+					updated[idx] = { ...updated[idx], parts };
+					return updated;
+				});
+			}
+		}
+	}, [activeStreamJob, status]);
 
-      if (metadata?.inputTokens && metadata?.outputTokens && metadata?.model) {
-        const providerState = useProviderStore.getState();
-        // Only track usage for OSSChat Cloud (free tier with limits)
-        if (providerState.activeProvider === "osschat") {
-          const costCents = calculateCost(
-            metadata.model,
-            metadata.inputTokens,
-            metadata.outputTokens,
-          );
-          providerState.addUsage(costCents);
 
-          // Warn when approaching limit (below 2¢ remaining)
-          const remaining = providerState.remainingBudgetCents();
-          if (remaining > 0 && remaining <= 2) {
-            toast.warning("Approaching daily limit", {
-              description: `Only ${remaining.toFixed(1)}¢ remaining of your free daily quota.`,
-            });
-          } else if (remaining <= 0) {
-            toast.error("Daily limit reached", {
-              description: "Add your OpenRouter API key in settings to continue.",
-            });
-          }
-        }
-      }
 
-      // Track web search usage if tool was called
-      // AI SDK 5 uses types like 'tool-webSearch' for the unified tool part type
-      const hasWebSearch = message.parts?.some(
-        (p) =>
-          p.type === "tool-webSearch" ||
-          (typeof p.type === "string" &&
-            p.type.startsWith("tool-") &&
-            p.type.includes("webSearch")),
-      );
-      if (hasWebSearch) {
-        const providerState = useProviderStore.getState();
-        providerState.addSearchUsage();
+	const isUserLoading = !!(user?.id && convexUser === undefined);
 
-        // Disable web search if limit reached
-        if (providerState.isSearchLimitReached()) {
-          providerState.setWebSearchEnabled(false);
-          toast.info("Web search disabled", {
-            description: "You've reached your daily limit of 20 searches.",
-          });
-        }
-      }
+	const handleSendMessage = useCallback(
+		async (message: { text: string; files?: ChatFileAttachment[] }) => {
+			if (!convexUserId) {
+				if (isUserLoading) {
+					toast.error("Please wait", { description: "Setting up your account." });
+				} else if (!user?.id) {
+					toast.error("Sign in required");
+				} else {
+					toast.error("Account sync failed");
+				}
+				return;
+			}
 
-      if (chatIdRef.current && currentConvexUserId && pendingUserMessage) {
-        try {
-          // Get assistant response text
-          const assistantText =
-            message.parts
-              ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-              .map((p) => p.text)
-              .join("\n") || "";
+			if (!message.text.trim()) return;
 
-          // NEW: Extract chain of thought parts WITH their original indices
-          // This preserves the exact order from the AI stream
-          const chainOfThoughtParts: ChainOfThoughtPart[] = [];
-          const allParts = message.parts || [];
+			const providerState = useProviderStore.getState();
+			if (providerState.activeProvider === "osschat" && providerState.isOverLimit()) {
+				toast.error("Daily limit reached", { description: "Add your OpenRouter API key to continue." });
+				return;
+			}
 
-          allParts.forEach((part, index) => {
-            if (part.type === "reasoning") {
-              const reasoningPart = part as { type: "reasoning"; text: string };
-              chainOfThoughtParts.push({
-                type: "reasoning",
-                index,
-                text: reasoningPart.text,
-              });
-            } else if (
-              typeof part.type === "string" &&
-              part.type.startsWith("tool-") &&
-              part.type !== "tool-call" &&
-              part.type !== "tool-result" &&
-              "toolCallId" in part
-            ) {
-              const toolPart = part as unknown as {
-                type: string;
-                toolCallId: string;
-                state: string;
-                input?: unknown;
-                output?: unknown;
-                errorText?: string;
-              };
-              chainOfThoughtParts.push({
-                type: "tool",
-                index,
-                toolName: toolPart.type.replace("tool-", ""),
-                toolCallId: toolPart.toolCallId,
-                state: toolPart.state,
-                input: toolPart.input,
-                output: toolPart.output,
-                errorText: toolPart.errorText,
-              });
-            }
-          });
+			let targetChatId = chatIdRef.current;
 
-          // Save to Convex with the NEW chainOfThoughtParts format
-          await sendMessages({
-            chatId: chatIdRef.current as Id<"chats">,
-            userId: currentConvexUserId,
-            userMessage: {
-              content: pendingUserMessage.text,
-              clientMessageId: pendingUserMessage.id,
-              createdAt: Date.now(),
-            },
-            assistantMessage: {
-              content: assistantText,
-              clientMessageId: message.id,
-              createdAt: Date.now(),
-              // NEW: Use unified chainOfThoughtParts that preserves order
-              chainOfThoughtParts: chainOfThoughtParts.length > 0 ? chainOfThoughtParts : undefined,
-            },
-          });
+			if (!targetChatId) {
+				try {
+					const result = await createChat({ userId: convexUserId, title: "New Chat" });
+					targetChatId = result.chatId;
+					chatIdRef.current = targetChatId;
+					setCurrentChatId(targetChatId);
+					analytics.chatCreated();
+					onChatCreatedRef.current?.(targetChatId);
+				} catch (e) {
+					console.error("Failed to create chat:", e);
+					toast.error("Failed to create chat");
+					return;
+				}
+			}
 
-          // Update chat title from first message
-          if (pendingUserMessage.text && !chatId) {
-            const title =
-              pendingUserMessage.text.slice(0, 100) +
-              (pendingUserMessage.text.length > 100 ? "..." : "");
-            await updateTitle({
-              chatId: chatIdRef.current as Id<"chats">,
-              userId: currentConvexUserId,
-              title,
-            });
-          }
+			const userMsgId = crypto.randomUUID();
+			const assistantMsgId = crypto.randomUUID();
+			const userCreatedAt = Date.now();
 
-          // Clear pending message after successful save
-          pendingUserMessageRef.current = null;
-        } catch (e) {
-          console.error("Failed to save messages to Convex:", e);
-        }
-      }
-    },
-    onError: async (error) => {
-      // Save error as a message in Convex (like T3.chat inline error display)
-      const pendingUserMessage = pendingUserMessageRef.current;
-      const currentConvexUserId = convexUserIdRef.current;
+			setMessages((prev) => [
+				...prev,
+				{ id: userMsgId, role: "user", parts: [{ type: "text", text: message.text }] },
+			]);
+			setStatus("submitted");
+			setError(undefined);
+			analytics.messageSent(selectedModelId);
 
-      console.error("AI request error:", error);
+			sendMessages({
+				chatId: targetChatId as Id<"chats">,
+				userId: convexUserId,
+				userMessage: { content: message.text, clientMessageId: userMsgId, createdAt: userCreatedAt },
+			}).catch(console.error);
 
-      // Only save error if we have a chat and user
-      if (chatIdRef.current && currentConvexUserId && pendingUserMessage) {
-        try {
-          // Classify the error
-          const errorMessage = error.message || "An unexpected error occurred";
-          const isRateLimit =
-            errorMessage.toLowerCase().includes("rate limit") ||
-            errorMessage.toLowerCase().includes("too many requests");
-          const isAuth =
-            errorMessage.toLowerCase().includes("unauthorized") ||
-            errorMessage.toLowerCase().includes("authentication") ||
-            errorMessage.toLowerCase().includes("api key");
-          const isContextLength =
-            errorMessage.toLowerCase().includes("context length") ||
-            errorMessage.toLowerCase().includes("token limit");
-          const isContentFilter =
-            errorMessage.toLowerCase().includes("content filter") ||
-            errorMessage.toLowerCase().includes("safety");
+			try {
+				const allMsgs = messages.map((m) => {
+					const textPart = m.parts?.find((p): p is { type: "text"; text: string } => p.type === "text");
+					return { role: m.role, content: textPart?.text || "" };
+				});
+				allMsgs.push({ role: "user", content: message.text });
 
-          let errorCode = "unknown";
-          if (isRateLimit) errorCode = "rate_limit";
-          else if (isAuth) errorCode = "auth_error";
-          else if (isContextLength) errorCode = "context_length";
-          else if (isContentFilter) errorCode = "content_filter";
+				await startBackgroundStream({
+					chatId: targetChatId as Id<"chats">,
+					userId: convexUserId,
+					messageId: assistantMsgId,
+					model: selectedModelId,
+					provider: activeProvider,
+					apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
+					messages: allMsgs,
+					options: {
+						reasoningEffort: reasoningEffort || undefined,
+						enableWebSearch: webSearchEnabled,
+						maxSteps,
+					},
+				});
 
-          // Save error message to Convex
-          await sendMessages({
-            chatId: chatIdRef.current as Id<"chats">,
-            userId: currentConvexUserId,
-            userMessage: {
-              content: pendingUserMessage.text,
-              clientMessageId: pendingUserMessage.id,
-              createdAt: Date.now(),
-            },
-            assistantMessage: {
-              content: "", // Empty content for error messages
-              clientMessageId: crypto.randomUUID(),
-              createdAt: Date.now(),
-              messageType: "error",
-              error: {
-                code: errorCode,
-                message: errorMessage,
-                provider: useProviderStore.getState().activeProvider,
-                retryable: isRateLimit || errorCode === "unknown",
-              },
-            },
-          });
+				setStatus("streaming");
+				streamingRef.current = { id: assistantMsgId, content: "", reasoning: "" };
 
-          // Clear pending message after saving error
-          pendingUserMessageRef.current = null;
-        } catch (e) {
-          console.error("Failed to save error message to Convex:", e);
-        }
-      }
-    },
-  });
+				setMessages((prev) => [
+					...prev,
+					{ id: assistantMsgId, role: "assistant", parts: [{ type: "text", text: "" }] },
+				]);
 
-  // Sync initial messages from Convex when they load
-  useEffect(() => {
-    if (chatId && messagesResult && messagesResult.length > 0) {
-      const convexMessages = messagesResult.map(convexMessageToUIMessage);
-      setMessages(convexMessages);
-    }
-  }, [chatId, messagesResult, setMessages]);
+				if (!chatId) {
+					await updateTitle({
+						chatId: targetChatId as Id<"chats">,
+						userId: convexUserId,
+						title: message.text.slice(0, 100) + (message.text.length > 100 ? "..." : ""),
+					});
+				}
+			} catch (err) {
+				console.error("[Chat] Error:", err);
+				setError(err instanceof Error ? err : new Error("Unknown error"));
+				setStatus("error");
+				toast.error("Failed to send message");
+			}
+		},
+		[
+			convexUserId, isUserLoading, user?.id, chatId, messages, selectedModelId,
+			activeProvider, apiKey, webSearchEnabled, reasoningEffort, maxSteps,
+			createChat, sendMessages, updateTitle, startBackgroundStream,
+		],
+	);
 
-  // Check for pending message and auto-send it (for seamless navigation)
-  // This runs when navigating from home page to chat page with a pending message
-  const pendingMessageConsumed = useRef(false);
-  useEffect(() => {
-    if (!chatId || !convexUserId || pendingMessageConsumed.current) return;
+	const stop = useCallback(() => {
+		setStatus("ready");
+		streamingRef.current = null;
+		useStreamStore.getState().completeStream();
+	}, []);
 
-    const pending = usePendingMessageStore.getState().consume(chatId);
-    if (pending) {
-      pendingMessageConsumed.current = true;
-
-      // Store pending message for onFinish callback
-      const messageId = crypto.randomUUID();
-      pendingUserMessageRef.current = { text: pending.text, id: messageId };
-
-      // Send the message (streaming will happen with correct useChat id)
-      aiSendMessage({
-        text: pending.text,
-        files: pending.files,
-      }).catch((e) => {
-        console.error("Failed to send pending message:", e);
-        pendingUserMessageRef.current = null;
-      });
-    }
-  }, [chatId, convexUserId, aiSendMessage]);
-
-  const isUserLoading = !!(isConvexAvailable && user?.id && convexUser === undefined);
-
-  // Handle sending messages with new chat creation
-  const handleSendMessage = useCallback(
-    async (message: { text: string; files?: ChatFileAttachment[] }) => {
-      if (!convexUserId) {
-        if (isUserLoading) {
-          toast.error("Please wait", {
-            description: "Setting up your account. Try again in a moment.",
-          });
-        } else if (!user?.id) {
-          toast.error("Sign in required", {
-            description: "Please sign in to send messages.",
-          });
-        } else {
-          toast.error("Account sync failed", {
-            description: "Unable to connect to your account. Please refresh the page.",
-            action: {
-              label: "Refresh",
-              onClick: () => window.location.reload(),
-            },
-          });
-        }
-        return;
-      }
-
-      if (!message.text.trim() && (!message.files || message.files.length === 0)) {
-        return;
-      }
-
-      // Check usage limits for OSSChat Cloud provider
-      const providerState = useProviderStore.getState();
-      if (providerState.activeProvider === "osschat") {
-        if (providerState.isOverLimit()) {
-          toast.error("Daily usage limit reached", {
-            description:
-              "You've used your free 10¢ daily limit. Add your OpenRouter API key in settings to continue.",
-            action: {
-              label: "Settings",
-              onClick: () => (window.location.href = "/settings"),
-            },
-          });
-          return;
-        }
-      }
-
-      // If no chatId, create a new chat and navigate immediately
-      // The message will be auto-sent on the new page (via pending message store)
-      if (!chatIdRef.current) {
-        try {
-          const result = await createChat({
-            userId: convexUserId,
-            title: "New Chat",
-          });
-
-          const newChatId = result.chatId;
-          analytics.chatCreated();
-          analytics.messageSent(selectedModelId);
-
-          usePendingMessageStore.getState().set({
-            chatId: newChatId,
-            text: message.text,
-            files: message.files,
-          });
-
-          if (onChatCreatedRef.current) {
-            onChatCreatedRef.current(newChatId);
-          }
-        } catch (e) {
-          console.error("Failed to create chat:", e);
-        }
-      } else {
-        const messageId = crypto.randomUUID();
-        pendingUserMessageRef.current = { text: message.text, id: messageId };
-        analytics.messageSent(selectedModelId);
-
-        await aiSendMessage({
-          text: message.text,
-          files: message.files,
-        });
-      }
-    },
-    [convexUserId, createChat, aiSendMessage],
-  );
-
-  return {
-    messages: aiMessages,
-    sendMessage: handleSendMessage,
-    status,
-    error,
-    stop,
-    isNewChat,
-    isLoadingMessages: chatId ? messagesResult === undefined : false,
-    isUserLoading,
-    chatId: currentChatId,
-  };
+	return {
+		messages,
+		sendMessage: handleSendMessage,
+		status,
+		error,
+		stop,
+		isNewChat,
+		isLoadingMessages: chatId ? messagesResult === undefined : false,
+		isUserLoading,
+		chatId: currentChatId,
+		isResuming: status === "streaming" && !!activeStreamJob,
+		resumedContent: streamingRef.current?.content || "",
+	};
 }

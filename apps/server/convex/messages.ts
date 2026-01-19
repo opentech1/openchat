@@ -336,6 +336,7 @@ export const streamUpsert = mutation({
 		reasoning: v.optional(v.string()),
 		thinkingTimeMs: v.optional(v.number()),
 		toolInvocations: v.optional(v.array(toolInvocationValidator)),
+		chainOfThoughtParts: v.optional(v.array(chainOfThoughtPartValidator)),
 		createdAt: v.optional(v.number()),
 		status: v.optional(v.string()),
 		attachments: v.optional(
@@ -377,6 +378,7 @@ export const streamUpsert = mutation({
 			reasoning: args.reasoning,
 			thinkingTimeMs: args.thinkingTimeMs,
 			toolInvocations: args.toolInvocations,
+			chainOfThoughtParts: args.chainOfThoughtParts,
 			createdAt: timestamp,
 			status: args.status ?? "streaming",
 			clientMessageId: args.clientMessageId,

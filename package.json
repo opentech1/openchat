@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "check": "turbo lint",
-    "dev": "turbo -F web -F server dev",
+    "dev": "bun ./scripts/check-redis.ts && turbo -F web -F server dev",
     "build": "turbo -F server build",
     "build:web": "turbo -F web build",
     "deploy": "bun ./scripts/deploy.ts",
@@ -36,6 +36,7 @@
     "verify:build": "rm -rf apps/web/.next && (cd apps/web && bunx next build) && bunx turbo run build --filter=web --filter=server"
   },
   "dependencies": {
+    "@ai-sdk/devtools": "^0.0.6",
     "@ai-sdk/provider-utils": "^3.0.17",
     "@emotion/react": "^11.14.0",
     "@opentech1/cc-sync": "^2.0.12",

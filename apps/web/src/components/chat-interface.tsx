@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
+import { motion, AnimatePresence } from "motion/react";
 import type { UIMessagePart, UIDataTypes, UITools } from "ai";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -75,6 +76,16 @@ function useIsMobile() {
   return isMobile;
 }
 
+function useIsMac() {
+  const [isMac, setIsMac] = useState(true);
+
+  useEffect(() => {
+    setIsMac(navigator.platform.toLowerCase().includes("mac"));
+  }, []);
+
+  return isMac;
+}
+
 // Auto-scroll component - scrolls to bottom when messages change
 function AutoScroll({ messageCount }: { messageCount: number }) {
   const { scrollToBottom, isAtBottom } = useConversationScroll();
@@ -118,34 +129,7 @@ function LoadingIndicator() {
   );
 }
 
-// Realistic skeleton for loading messages (matches actual message styling exactly)
-function MessagesLoadingSkeleton() {
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* User message skeleton - matches MessageResponse user: rounded-2xl bg-primary px-4 py-3 */}
-      <div className="flex w-full justify-end">
-        <div className="max-w-[85%] flex flex-col items-end">
-          <div className="space-y-2">
-            <div className="rounded-2xl bg-primary px-4 py-3 animate-pulse">
-              <div className="h-[21px] w-40 rounded bg-primary-foreground/20" />
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Assistant message skeleton - matches prose text: text-[15px] leading-relaxed text-foreground/90 */}
-      <div className="w-full">
-        <div className="space-y-2">
-          <div className="h-[21px] w-[92%] rounded bg-foreground/10 animate-pulse" />
-          <div className="h-[21px] w-[78%] rounded bg-foreground/10 animate-pulse [animation-delay:100ms]" />
-          <div className="h-[21px] w-[85%] rounded bg-foreground/10 animate-pulse [animation-delay:200ms]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Note: ErrorDisplay removed - errors are now shown inline as messages via InlineErrorMessage
 
 // Inline error message component (like T3.chat) - displayed in message thread
 interface InlineErrorMessageProps {
@@ -161,6 +145,31 @@ interface InlineErrorMessageProps {
 
 function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const MAX_RETRIES = 3;
+  const retriesRemaining = MAX_RETRIES - retryCount;
+  const canRetry = error.retryable && onRetry && retryCount < MAX_RETRIES;
+
+  // Exponential backoff: 1s, 2s, 4s
+  const getBackoffDelay = (attempt: number) => Math.pow(2, attempt) * 1000;
+
+  const handleRetry = async () => {
+    if (!canRetry || isRetrying) return;
+
+    setIsRetrying(true);
+    const delay = getBackoffDelay(retryCount);
+
+    // Wait for backoff delay
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    setRetryCount((prev) => prev + 1);
+    setIsRetrying(false);
+
+    // Call the retry function
+    onRetry?.();
+  };
 
   // Get human-readable error title based on code
   const getErrorTitle = (code: string) => {
@@ -225,10 +234,25 @@ function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={onRetry}
-              className="mt-3 text-destructive hover:text-destructive/80 hover:bg-destructive/20"
+              onClick={handleRetry}
+              disabled={!canRetry || isRetrying}
+              className={cn(
+                "mt-3 transition-all",
+                canRetry
+                  ? "text-destructive hover:text-destructive/80 hover:bg-destructive/20"
+                  : "text-destructive/40 cursor-not-allowed",
+              )}
             >
-              Try again
+              {isRetrying ? (
+                <>
+                  <Loader2Icon className="mr-1.5 size-3 animate-spin" />
+                  Retrying...
+                </>
+              ) : retryCount >= MAX_RETRIES ? (
+                "Max retries reached"
+              ) : (
+                `Retry (${retriesRemaining} left)`
+              )}
             </Button>
           )}
         </div>
@@ -262,7 +286,6 @@ function buildChainOfThoughtSteps(parts: Array<any>): {
   const steps: ChainOfThoughtStep[] = [];
   let isAnyStreaming = false;
   let hasTextContent = false;
-  let reasoningCount = 0;
 
   // Process parts in their original order (as they came from the stream)
   for (let i = 0; i < parts.length; i++) {
@@ -277,7 +300,6 @@ function buildChainOfThoughtSteps(parts: Array<any>): {
     if (part.type === "reasoning") {
       const isStreaming = part.state === "streaming";
       if (isStreaming) isAnyStreaming = true;
-      reasoningCount++;
 
       // Each reasoning part is its own step (so they can collapse independently)
       steps.push({
@@ -1087,6 +1109,8 @@ function PremiumPromptInputInner({
   const controller = usePromptInputController();
   const hasContent = controller.textInput.value.trim().length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMac = useIsMac();
+  const focusShortcut = isMac ? "⌘L" : "Ctrl+L";
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();
@@ -1124,7 +1148,7 @@ function PremiumPromptInputInner({
 
         <PromptInputTextarea
           ref={textareaRef}
-          placeholder="Type your message here..."
+          placeholder={`Message... (${focusShortcut} to focus)`}
           disabled={isLoading}
           className={cn(
             "min-h-[72px] md:min-h-[100px] py-3 md:py-4 px-4",
@@ -1175,7 +1199,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const { messages, sendMessage, status, error, stop, isLoadingMessages } = usePersistentChat({
+  const { messages, sendMessage, status, error, stop, isNewChat } = usePersistentChat({
     chatId,
     onChatCreated: (newChatId) => {
       // Navigate to the new chat page
@@ -1214,8 +1238,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
       <ChatInterfaceContent
         messages={messages}
         isLoading={isLoading}
-        isLoadingMessages={isLoadingMessages}
-        chatId={chatId}
+        isNewChat={isNewChat}
         error={error ?? null}
         stop={stop}
         handleSubmit={handleSubmit}
@@ -1233,8 +1256,7 @@ interface ChatInterfaceContentProps {
     parts?: Array<UIMessagePart<UIDataTypes, UITools>>;
   }>;
   isLoading: boolean;
-  isLoadingMessages: boolean;
-  chatId?: string;
+  isNewChat: boolean;
   error: Error | null;
   stop: () => void;
   handleSubmit: (message: PromptInputMessage) => Promise<void>;
@@ -1244,9 +1266,8 @@ interface ChatInterfaceContentProps {
 function ChatInterfaceContent({
   messages,
   isLoading,
-  isLoadingMessages,
-  chatId,
-  error: _error, // Errors are now shown inline as messages
+  isNewChat,
+  error: _error,
   stop,
   handleSubmit,
   textareaRef,
@@ -1300,16 +1321,11 @@ function ChatInterfaceContent({
         <AutoScroll messageCount={messages.length} />
         {/* Mobile: extra top padding to clear hamburger menu (fixed left-3 top-3 size-11 = 12px + 44px + 8px breathing room = 64px) */}
         <ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
-          {/* Smart loading: skeleton for existing chats, StartScreen for new */}
-          {messages.length === 0 ? (
-            chatId && isLoadingMessages ? (
-              <MessagesLoadingSkeleton />
-            ) : (
-              <StartScreen onPromptSelect={onPromptSelect} />
-            )
-          ) : (
-            <>
-              {messages.map((message) => {
+          {messages.length === 0 && isNewChat ? (
+            <StartScreen onPromptSelect={onPromptSelect} />
+          ) : messages.length === 0 ? null : (
+            <AnimatePresence initial={false} mode="popLayout">
+              {messages.map((message, index) => {
                 // Cast to include our custom error fields
                 const msg = message as typeof message & {
                   error?: {
@@ -1325,11 +1341,19 @@ function ChatInterfaceContent({
                 // Render error messages with special styling (like T3.chat)
                 if (msg.messageType === "error" && msg.error) {
                   return (
-                    <Message key={message.id} from={message.role as "user" | "assistant"}>
-                      <MessageContent>
-                        <InlineErrorMessage error={msg.error} />
-                      </MessageContent>
-                    </Message>
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      transition={{ duration: 0.2, ease: "easeOut", delay: index * 0.05 }}
+                    >
+                      <Message from={message.role as "user" | "assistant"}>
+                        <MessageContent>
+                          <InlineErrorMessage error={msg.error} />
+                        </MessageContent>
+                      </Message>
+                    </motion.div>
                   );
                 }
 
@@ -1381,38 +1405,61 @@ function ChatInterfaceContent({
                 } = buildChainOfThoughtSteps(allParts);
 
                 return (
-                  <Message key={message.id} from={message.role as "user" | "assistant"}>
-                    <MessageContent>
-                      {/* Thinking UI - shown for any reasoning or tool calls */}
-                      {thinkingSteps.length > 0 && (
-                        <ChainOfThought
-                          steps={thinkingSteps}
-                          isStreaming={isAnyStepStreaming}
-                          hasTextContent={hasTextContent || textParts.length > 0}
-                        />
-                      )}
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    transition={{ duration: 0.2, ease: "easeOut", delay: index * 0.05 }}
+                    layout
+                  >
+                    <Message from={message.role as "user" | "assistant"}>
+                      <MessageContent>
+                        {/* Thinking UI - shown for any reasoning or tool calls */}
+                        {thinkingSteps.length > 0 && (
+                          <ChainOfThought
+                            steps={thinkingSteps}
+                            isStreaming={isAnyStepStreaming}
+                            hasTextContent={hasTextContent || textParts.length > 0}
+                          />
+                        )}
 
-                      {/* Text content */}
-                      {textParts.map((part, index) => (
-                        <MessageResponse key={`text-${index}`}>{part.text || ""}</MessageResponse>
-                      ))}
+                        {/* Text content */}
+                        {textParts.map((part, index) => (
+                          <MessageResponse
+                            key={`text-${index}`}
+                            isStreaming={isCurrentlyStreaming && index === textParts.length - 1}
+                          >
+                            {part.text || ""}
+                          </MessageResponse>
+                        ))}
 
-                      {/* File attachments */}
-                      {fileParts.map((part, index) => (
-                        <MessageFile
-                          key={`file-${index}`}
-                          filename={part.filename}
-                          url={part.url}
-                          mediaType={part.mediaType}
-                        />
-                      ))}
-                    </MessageContent>
-                  </Message>
+                        {/* File attachments */}
+                        {fileParts.map((part, index) => (
+                          <MessageFile
+                            key={`file-${index}`}
+                            filename={part.filename}
+                            url={part.url}
+                            mediaType={part.mediaType}
+                          />
+                        ))}
+                      </MessageContent>
+                    </Message>
+                  </motion.div>
                 );
               })}
-              {isLoading && messages[messages.length - 1]?.role === "user" && <LoadingIndicator />}
+              {isLoading && messages[messages.length - 1]?.role === "user" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                >
+                  <LoadingIndicator />
+                </motion.div>
+              )}
               {/* Note: Errors are now shown inline as messages via InlineErrorMessage */}
-            </>
+            </AnimatePresence>
           )}
         </ConversationContent>
         <ConversationScrollButton />

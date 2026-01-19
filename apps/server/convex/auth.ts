@@ -61,7 +61,7 @@ export const createAuth = (
 			oAuthProxy({
 				productionURL: PRODUCTION_CONVEX_SITE_URL,
 				currentURL: convexSiteUrl,
-			})
+			}) as unknown as typeof plugins[number]
 		);
 	}
 
@@ -110,6 +110,6 @@ export const createAuth = (
 export const getCurrentUser = query({
 	args: {},
 	handler: async (ctx) => {
-		return authComponent.getAuthUser(ctx);
+		return authComponent.getAuthUser(ctx as unknown as GenericCtx<DataModel>);
 	},
 });

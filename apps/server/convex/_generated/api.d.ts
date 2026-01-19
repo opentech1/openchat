@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as backgroundStream from "../backgroundStream.js";
 import type * as chats from "../chats.js";
 import type * as config_constants from "../config/constants.js";
 import type * as crons from "../crons.js";
@@ -40,6 +41,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  backgroundStream: typeof backgroundStream;
   chats: typeof chats;
   "config/constants": typeof config_constants;
   crons: typeof crons;
