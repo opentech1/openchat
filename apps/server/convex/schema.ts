@@ -208,4 +208,38 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId"])
 		.index("by_user_chat", ["userId", "chatId"]),
+
+	// Background streaming jobs - allows AI generation to continue even if client disconnects
+	streamJobs: defineTable({
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		messageId: v.string(),
+		status: v.union(
+			v.literal("pending"),
+			v.literal("running"),
+			v.literal("completed"),
+			v.literal("error")
+		),
+		model: v.string(),
+		provider: v.string(),
+		messages: v.array(v.object({
+			role: v.string(),
+			content: v.string(),
+		})),
+		options: v.optional(v.object({
+			reasoningEffort: v.optional(v.string()),
+			enableWebSearch: v.optional(v.boolean()),
+			maxSteps: v.optional(v.number()),
+		})),
+		content: v.string(),
+		reasoning: v.optional(v.string()),
+		error: v.optional(v.string()),
+		tokenCount: v.optional(v.number()),
+		startedAt: v.optional(v.number()),
+		completedAt: v.optional(v.number()),
+		createdAt: v.number(),
+	})
+		.index("by_chat", ["chatId", "status"])
+		.index("by_user", ["userId", "status"])
+		.index("by_status", ["status", "createdAt"]),
 });

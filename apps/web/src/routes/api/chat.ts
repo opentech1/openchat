@@ -5,65 +5,106 @@ import {
 	convertToModelMessages,
 	stepCountIs,
 	generateId,
-	UI_MESSAGE_STREAM_HEADERS,
 } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { webSearch } from "@valyu/ai-sdk";
-import { createResumableStreamContext } from "resumable-stream";
+import { redis } from "@/lib/redis";
 import { convexServerClient } from "@/lib/convex-server";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const VALYU_API_KEY = process.env.VALYU_API_KEY;
-const REDIS_URL = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL;
-
-function getStreamContext() {
-	if (!REDIS_URL) {
-		return null;
-	}
-	try {
-		return createResumableStreamContext({
-			waitUntil: async (promise: Promise<unknown>) => {
-				await promise;
-			},
-		});
-	} catch {
-		return null;
-	}
-}
 
 export const Route = createFileRoute("/api/chat")({
-		server: {
-			handlers: {
-				GET: async ({ request }) => {
-					const streamContext = getStreamContext();
-					if (!streamContext) {
-						return new Response(null, { status: 204 });
-					}
-					const url = new URL(request.url);
-					const chatId = url.searchParams.get("chatId");
-					const userId = url.searchParams.get("userId");
-					if (!chatId || !userId || !convexServerClient) {
-						return new Response(null, { status: 204 });
-					}
-					const activeStreamId = await convexServerClient.query(api.chats.getActiveStream, {
-						chatId: chatId as Id<"chats">,
-						userId: userId as Id<"users">,
-					});
-					if (!activeStreamId) {
-						return new Response(null, { status: 204 });
-					}
-					const resumedStream = await streamContext.resumeExistingStream(activeStreamId);
-					if (!resumedStream) {
-						return new Response(null, { status: 204 });
-					}
-					return new Response(resumedStream, {
-						headers: UI_MESSAGE_STREAM_HEADERS,
-					});
-				},
-				POST: async ({ request }) => {
+	server: {
+		handlers: {
+			GET: async ({ request }) => {
+				const url = new URL(request.url);
+				const chatId = url.searchParams.get("chatId");
+				const lastId = url.searchParams.get("lastId") || "0";
+
+				if (!chatId) {
+					return json({ error: "chatId is required" }, { status: 400 });
+				}
+
+				const redisReady = await redis.ensureConnected();
+				if (!redisReady) {
+					console.log("[Chat API GET] Redis not available");
+					return json({ error: "Redis not configured" }, { status: 503 });
+				}
+
+				console.log("[Chat API GET] Reading stream for chat:", chatId);
+				const meta = await redis.stream.getMeta(chatId);
+				if (!meta) {
+					console.log("[Chat API GET] No stream metadata found");
+					return new Response(null, { status: 204 });
+				}
+				console.log("[Chat API GET] Stream meta:", meta.status);
+
+				const encoder = new TextEncoder();
+				const stream = new ReadableStream({
+					async start(controller) {
+						let currentLastId = lastId;
+						let isComplete = false;
+
+						while (!isComplete) {
+							const tokens = await redis.stream.read(chatId, currentLastId);
+
+							for (const token of tokens) {
+								if (token.type === "done") {
+									isComplete = true;
+									controller.enqueue(
+										encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`),
+									);
+									break;
+								}
+
+								if (token.type === "error") {
+									controller.enqueue(
+										encoder.encode(
+											`data: ${JSON.stringify({ type: "error", text: token.text })}\n\n`,
+										),
+									);
+									isComplete = true;
+									break;
+								}
+
+								controller.enqueue(
+									encoder.encode(
+										`data: ${JSON.stringify({ type: token.type, text: token.text, id: token.id })}\n\n`,
+									),
+								);
+								currentLastId = token.id;
+							}
+
+							if (!isComplete && tokens.length === 0) {
+								const currentMeta = await redis.stream.getMeta(chatId);
+								if (currentMeta?.status !== "streaming") {
+									isComplete = true;
+								} else {
+									await new Promise((r) => setTimeout(r, 50));
+								}
+							}
+						}
+
+						controller.close();
+					},
+				});
+
+				return new Response(stream, {
+					headers: {
+						"Content-Type": "text/event-stream",
+						"Cache-Control": "no-cache",
+						Connection: "keep-alive",
+					},
+				});
+			},
+
+			POST: async ({ request }) => {
 				const abortSignal = request.signal;
+				const redisReady = await redis.ensureConnected();
+				console.log("[Chat API POST] Redis ready:", redisReady);
 
 				try {
 					const body = await request.json();
@@ -114,8 +155,8 @@ export const Route = createFileRoute("/api/chat")({
 					}
 
 					const openrouterKey = provider === "osschat" ? OPENROUTER_API_KEY! : apiKey!;
-					const openrouter = createOpenRouter({ apiKey: openrouterKey });
-					const aiModel = openrouter(model);
+					const openRouter = createOpenRouter({ apiKey: openrouterKey });
+					const aiModel = openRouter(model);
 
 					const modelMessages = await convertToModelMessages(messages);
 
@@ -127,8 +168,8 @@ export const Route = createFileRoute("/api/chat")({
 
 					if (enableWebSearch && VALYU_API_KEY) {
 						streamOptions.tools = {
-							webSearch: webSearch({ apiKey: VALYU_API_KEY }) as any,
-						};
+							webSearch: webSearch({ apiKey: VALYU_API_KEY }),
+						} as any;
 					}
 
 					const hasTools = enableWebSearch && VALYU_API_KEY;
@@ -147,49 +188,140 @@ export const Route = createFileRoute("/api/chat")({
 						};
 					}
 
-					if (chatId && userId && convexServerClient) {
-						await convexServerClient.mutation(api.chats.setActiveStream, {
-							chatId: chatId as Id<"chats">,
-							userId: userId as Id<"users">,
-							streamId: null,
-						});
+					const messageId = generateId();
+					const streamId = `${chatId}-${messageId}`;
+
+					if (chatId && userId && redisReady) {
+						console.log("[Chat API POST] Initializing Redis stream for chat:", chatId);
+						await redis.stream.init(chatId, userId, messageId);
+					}
+
+					if (chatId && userId) {
+						if (!convexServerClient) {
+							console.error("[Chat API] convexServerClient is null - VITE_CONVEX_URL not set?");
+						} else {
+							try {
+								console.log("[Chat API] Setting active stream:", streamId);
+								await convexServerClient.mutation(api.chats.setActiveStream, {
+									chatId: chatId as Id<"chats">,
+									userId: userId as Id<"users">,
+									streamId,
+								});
+								console.log("[Chat API] Active stream set successfully");
+							} catch (err) {
+								console.error("[Chat API] Failed to set active stream:", err);
+							}
+						}
 					}
 
 					const result = streamText(streamOptions);
 
-					result.consumeStream();
+					const encoder = new TextEncoder();
+					let fullContent = "";
+					let fullReasoning = "";
 
-					return result.toUIMessageStreamResponse({
-						sendReasoning: true,
-						originalMessages: messages,
-						generateMessageId: generateId,
-						onFinish: async () => {
-							if (chatId && userId && convexServerClient) {
-								await convexServerClient.mutation(api.chats.setActiveStream, {
-									chatId: chatId as Id<"chats">,
-									userId: userId as Id<"users">,
-									streamId: null,
-								});
-							}
-						},
-						async consumeSseStream({ stream }) {
-							const streamContext = getStreamContext();
-							if (!streamContext || !chatId || !userId) {
-								return;
-							}
+					const stream = new ReadableStream({
+						async start(controller) {
+							const markStreamInterrupted = async () => {
+								if (chatId && redisReady) {
+									await redis.stream.complete(chatId);
+								}
+							};
+							
 							try {
-								const streamId = generateId();
-								await streamContext.createNewResumableStream(streamId, () => stream);
-								if (convexServerClient) {
+								for await (const part of result.fullStream) {
+									if (abortSignal?.aborted) {
+										console.log("[Chat API POST] Client disconnected, marking stream interrupted");
+										await markStreamInterrupted();
+										controller.close();
+										return;
+									}
+									
+									if (part.type === "text-delta") {
+										const text = part.text;
+										fullContent += text;
+
+										controller.enqueue(
+											encoder.encode(
+												`data: ${JSON.stringify({ type: "text", text })}\n\n`,
+											),
+										);
+
+										if (chatId && redisReady) {
+											await redis.stream.append(chatId, text, "text");
+										}
+									} else if (part.type === "reasoning-delta") {
+										const text = (part as { type: "reasoning-delta"; text: string }).text;
+										fullReasoning += text;
+
+										controller.enqueue(
+											encoder.encode(
+												`data: ${JSON.stringify({ type: "reasoning", text })}\n\n`,
+											),
+										);
+
+										if (chatId && redisReady) {
+											await redis.stream.append(chatId, text, "reasoning");
+										}
+									}
+								}
+
+								controller.enqueue(
+									encoder.encode(
+										`data: ${JSON.stringify({ 
+											type: "done", 
+											content: fullContent, 
+											reasoning: fullReasoning,
+											messageId,
+										})}\n\n`,
+									),
+								);
+
+								if (chatId && redisReady) {
+									await redis.stream.complete(chatId);
+									console.log("[Chat API POST] Redis stream completed");
+								}
+
+								if (chatId && userId && convexServerClient) {
 									await convexServerClient.mutation(api.chats.setActiveStream, {
 										chatId: chatId as Id<"chats">,
 										userId: userId as Id<"users">,
-										streamId,
+										streamId: null,
 									});
 								}
-							} catch {
-								return;
+
+								controller.close();
+							} catch (err) {
+								if (err instanceof Error && err.name === "AbortError") {
+									console.log("[Chat API POST] Stream aborted, marking stream interrupted");
+									await markStreamInterrupted();
+									controller.close();
+									return;
+								}
+								
+								const errorMessage = err instanceof Error ? err.message : "Stream error";
+
+								controller.enqueue(
+									encoder.encode(
+										`data: ${JSON.stringify({ type: "error", text: errorMessage })}\n\n`,
+									),
+								);
+
+								if (chatId && redisReady) {
+									await redis.stream.error(chatId, errorMessage);
+								}
+
+								controller.close();
 							}
+						},
+					});
+
+					return new Response(stream, {
+						headers: {
+							"Content-Type": "text/event-stream",
+							"Cache-Control": "no-cache",
+							Connection: "keep-alive",
+							"X-Message-Id": messageId,
 						},
 					});
 				} catch (error) {

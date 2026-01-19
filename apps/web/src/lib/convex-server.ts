@@ -6,12 +6,14 @@
 
 import { ConvexHttpClient } from "convex/browser";
 
-const CONVEX_URL = process.env.VITE_CONVEX_URL;
+const CONVEX_URL = process.env.VITE_CONVEX_URL || process.env.CONVEX_URL;
 
 function createServerClient() {
 	if (!CONVEX_URL) {
+		console.warn("[Convex Server] No CONVEX_URL configured");
 		return null;
 	}
+	console.log("[Convex Server] Initializing client with:", CONVEX_URL);
 	return new ConvexHttpClient(CONVEX_URL);
 }
 

@@ -1,16 +1,3 @@
-/**
- * Stream State Machine - Clean, predictable streaming state
- *
- * This replaces the fragmented state from the old codebase:
- * - activeStreamId, isConvexStreaming, redisStreamId, manuallyStopped, isStoppedRef
- *
- * Now we have ONE source of truth with clear state transitions.
- *
- * RESUMABLE STREAMING:
- * When a stream is active, we persist {chatId, streamId, lastEventId, content}
- * to localStorage. On page reload, we can resume from Redis SSE endpoint.
- */
-
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 
@@ -26,22 +13,28 @@ interface ActiveStream {
   startedAt: number;
 }
 
+interface PendingUserMessage {
+  chatId: string;
+  messageId: string;
+  text: string;
+  createdAt: number;
+  mode: "auto-send" | "resume-only";
+  resumeAt?: number;
+}
+
 interface StreamState {
-  // Current stream state
   status: StreamStatus;
   convexStreamId: string | null;
   redisStreamId: string | null;
   error: string | null;
 
-  // Current message being streamed
   activeMessageId: string | null;
   content: string;
   reasoning: string;
 
-  // Resumable stream data (persisted to localStorage)
   activeStream: ActiveStream | null;
+  pendingUserMessage: PendingUserMessage | null;
 
-  // Actions
   startStream: (convexStreamId: string, messageId: string) => void;
   setRedisStreamId: (id: string, chatId: string) => void;
   appendContent: (chunk: string) => void;
@@ -52,6 +45,9 @@ interface StreamState {
   errorStream: (error: string) => void;
   setResuming: () => void;
   reset: () => void;
+  setPendingUserMessage: (message: PendingUserMessage) => void;
+  consumePendingUserMessage: (chatId: string) => PendingUserMessage | null;
+  clearPendingUserMessage: (chatId: string) => void;
   getActiveStreamForChat: (chatId: string) => ActiveStream | null;
 }
 
@@ -64,6 +60,7 @@ const initialState = {
   content: "",
   reasoning: "",
   activeStream: null,
+  pendingUserMessage: null,
 };
 
 export const useStreamStore = create<StreamState>()(
@@ -169,29 +166,51 @@ export const useStreamStore = create<StreamState>()(
             "stream/error",
           ),
 
-        setResuming: () => set({ status: "resuming" }, false, "stream/resuming"),
+		setResuming: () => set({ status: "resuming" }, false, "stream/resuming"),
 
-        reset: () => set(initialState, false, "stream/reset"),
 
-        getActiveStreamForChat: (chatId) => {
-          const stream = get().activeStream;
-          if (!stream) return null;
-          if (stream.chatId !== chatId) return null;
-          // Expire streams older than 10 minutes
-          if (Date.now() - stream.startedAt > 10 * 60 * 1000) {
-            set({ activeStream: null }, false, "stream/expired");
-            return null;
-          }
-          return stream;
-        },
+		reset: () => set(initialState, false, "stream/reset"),
+
+		setPendingUserMessage: (message) =>
+			set({ pendingUserMessage: message }, false, "stream/pending/set"),
+
+		consumePendingUserMessage: (chatId: string) => {
+			const pending = get().pendingUserMessage;
+			if (pending && pending.chatId === chatId) {
+				set({ pendingUserMessage: null }, false, "stream/pending/consume");
+				return pending;
+			}
+			return null;
+		},
+
+		clearPendingUserMessage: (chatId: string) => {
+			const pending = get().pendingUserMessage;
+			if (pending && pending.chatId === chatId) {
+				set({ pendingUserMessage: null }, false, "stream/pending/clear");
+			}
+		},
+
+		getActiveStreamForChat: (chatId: string) => {
+			const stream = get().activeStream;
+			if (!stream) return null;
+			if (stream.chatId !== chatId) return null;
+			if (Date.now() - stream.startedAt > 10 * 60 * 1000) {
+				set({ activeStream: null }, false, "stream/expired");
+				return null;
+			}
+			return stream;
+		},
+
       }),
-      {
-        name: "openchat-stream",
-        storage: createJSONStorage(() => localStorage),
-        partialize: (state) => ({
-          activeStream: state.activeStream,
-        }),
-      },
+		{
+			name: "openchat-stream",
+			storage: createJSONStorage(() => localStorage),
+			partialize: (state) => ({
+				activeStream: state.activeStream,
+				pendingUserMessage: state.pendingUserMessage,
+			}),
+		},
+
     ),
     { name: "stream-store" },
   ),

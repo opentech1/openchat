@@ -129,47 +129,7 @@ function LoadingIndicator() {
   );
 }
 
-function useDelayedBoolean(value: boolean, delayMs: number = 200): boolean {
-  const [delayedValue, setDelayedValue] = useState(false);
 
-  useEffect(() => {
-    if (value) {
-      const timer = setTimeout(() => setDelayedValue(true), delayMs);
-      return () => clearTimeout(timer);
-    }
-    setDelayedValue(false);
-  }, [value, delayMs]);
-
-  return delayedValue;
-}
-
-function MessagesLoadingSkeleton() {
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* User message skeleton - matches MessageResponse user: rounded-2xl bg-primary px-4 py-3 */}
-      <div className="flex w-full justify-end">
-        <div className="max-w-[85%] flex flex-col items-end">
-          <div className="space-y-2">
-            <div className="rounded-2xl bg-primary px-4 py-3 animate-pulse [animation-delay:0ms]">
-              <div className="h-[21px] w-40 rounded bg-primary-foreground/20" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Assistant message skeleton - matches prose text: text-[15px] leading-relaxed text-foreground/90 */}
-      <div className="w-full">
-        <div className="space-y-2">
-          <div className="h-[21px] w-[92%] rounded bg-foreground/10 animate-pulse [animation-delay:75ms]" />
-          <div className="h-[21px] w-[78%] rounded bg-foreground/10 animate-pulse [animation-delay:150ms]" />
-          <div className="h-[21px] w-[85%] rounded bg-foreground/10 animate-pulse [animation-delay:225ms]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Note: ErrorDisplay removed - errors are now shown inline as messages via InlineErrorMessage
 
 // Inline error message component (like T3.chat) - displayed in message thread
 interface InlineErrorMessageProps {
@@ -1239,7 +1199,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Use persistent chat hook with Convex integration
-  const { messages, sendMessage, status, error, stop, isLoadingMessages } = usePersistentChat({
+  const { messages, sendMessage, status, error, stop, isNewChat } = usePersistentChat({
     chatId,
     onChatCreated: (newChatId) => {
       // Navigate to the new chat page
@@ -1278,8 +1238,7 @@ export function ChatInterface({ chatId }: ChatInterfaceProps) {
       <ChatInterfaceContent
         messages={messages}
         isLoading={isLoading}
-        isLoadingMessages={isLoadingMessages}
-        chatId={chatId}
+        isNewChat={isNewChat}
         error={error ?? null}
         stop={stop}
         handleSubmit={handleSubmit}
@@ -1297,8 +1256,7 @@ interface ChatInterfaceContentProps {
     parts?: Array<UIMessagePart<UIDataTypes, UITools>>;
   }>;
   isLoading: boolean;
-  isLoadingMessages: boolean;
-  chatId?: string;
+  isNewChat: boolean;
   error: Error | null;
   stop: () => void;
   handleSubmit: (message: PromptInputMessage) => Promise<void>;
@@ -1308,15 +1266,13 @@ interface ChatInterfaceContentProps {
 function ChatInterfaceContent({
   messages,
   isLoading,
-  isLoadingMessages,
-  chatId,
-  error: _error, // Errors are now shown inline as messages
+  isNewChat,
+  error: _error,
   stop,
   handleSubmit,
   textareaRef,
 }: ChatInterfaceContentProps) {
   const controller = usePromptInputController();
-  const showSkeleton = useDelayedBoolean(isLoadingMessages, 200);
 
   // Cmd+L / Ctrl+L keybind to toggle focus on prompt input
   useEffect(() => {
@@ -1365,14 +1321,9 @@ function ChatInterfaceContent({
         <AutoScroll messageCount={messages.length} />
         {/* Mobile: extra top padding to clear hamburger menu (fixed left-3 top-3 size-11 = 12px + 44px + 8px breathing room = 64px) */}
         <ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
-          {/* Smart loading: skeleton for existing chats, StartScreen for new */}
-          {messages.length === 0 ? (
-            chatId && showSkeleton ? (
-              <MessagesLoadingSkeleton />
-            ) : (
-              <StartScreen onPromptSelect={onPromptSelect} />
-            )
-          ) : (
+          {messages.length === 0 && isNewChat ? (
+            <StartScreen onPromptSelect={onPromptSelect} />
+          ) : messages.length === 0 ? null : (
             <AnimatePresence initial={false} mode="popLayout">
               {messages.map((message, index) => {
                 // Cast to include our custom error fields

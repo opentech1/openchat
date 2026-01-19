@@ -15,6 +15,7 @@ import { Route as OpenrouterCallbackRouteImport } from './routes/openrouter/call
 import { Route as CChatIdRouteImport } from './routes/c/$chatId'
 import { Route as AuthSignInRouteImport } from './routes/auth/sign-in'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as ApiTypingRouteImport } from './routes/api/typing'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -47,6 +48,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTypingRoute = ApiTypingRouteImport.update({
+  id: '/api/typing',
+  path: '/api/typing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/typing': typeof ApiTypingRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/auth/sign-in': typeof AuthSignInRoute
   '/c/$chatId': typeof CChatIdRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/api/chat'
+    | '/api/typing'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/c/$chatId'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/api/chat'
+    | '/api/typing'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/c/$chatId'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/settings'
     | '/api/chat'
+    | '/api/typing'
     | '/auth/callback'
     | '/auth/sign-in'
     | '/c/$chatId'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiTypingRoute: typeof ApiTypingRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
   AuthSignInRoute: typeof AuthSignInRoute
   CChatIdRoute: typeof CChatIdRoute
@@ -165,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/typing': {
+      id: '/api/typing'
+      path: '/api/typing'
+      fullPath: '/api/typing'
+      preLoaderRoute: typeof ApiTypingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiTypingRoute: ApiTypingRoute,
   AuthCallbackRoute: AuthCallbackRoute,
   AuthSignInRoute: AuthSignInRoute,
   CChatIdRoute: CChatIdRoute,
