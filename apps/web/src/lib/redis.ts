@@ -218,7 +218,14 @@ export async function getTypingUsers(chatId: string): Promise<string[]> {
 	if (!client) return [];
 
 	const pattern = `chat:${chatId}:typing:*`;
-	const foundKeys = await client.keys(pattern);
+	const foundKeys: string[] = [];
+	for await (const keys of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+		if (Array.isArray(keys)) {
+			foundKeys.push(...keys);
+		} else {
+			foundKeys.push(keys);
+		}
+	}
 
 	return foundKeys.map((key) => key.split(":").pop() || "");
 }

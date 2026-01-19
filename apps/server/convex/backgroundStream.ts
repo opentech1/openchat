@@ -27,6 +27,17 @@ export const startStream = mutation({
 			throw new Error("Chat not found or unauthorized");
 		}
 
+		const existingActiveStream = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_chat", (q) => 
+				q.eq("chatId", args.chatId).eq("status", "running")
+			)
+			.first();
+		
+		if (existingActiveStream) {
+			throw new Error("Stream already in progress for this chat");
+		}
+
 		const jobId = await ctx.db.insert("streamJobs", {
 			chatId: args.chatId,
 			userId: args.userId,
@@ -288,6 +299,10 @@ export const executeStream = internalAction({
 		}
 
 		try {
+			const timeoutMs = 5 * 60 * 1000; // 5 minutes
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
 			const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
 				method: "POST",
 				headers: {
@@ -304,7 +319,10 @@ export const executeStream = internalAction({
 					})),
 					stream: true,
 				}),
+				signal: controller.signal,
 			});
+
+			clearTimeout(timeoutId);
 
 			if (!response.ok) {
 				const errorText = await response.text();
@@ -365,7 +383,9 @@ export const executeStream = internalAction({
 							});
 							updateCounter = 0;
 						}
-					} catch {}
+					} catch (parseError) {
+						console.error("[BackgroundStream] Failed to parse SSE chunk:", data);
+					}
 				}
 			}
 
