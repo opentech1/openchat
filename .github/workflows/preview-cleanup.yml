@@ -1,0 +1,53 @@
+name: Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup-convex-preview:
+    name: Cleanup Convex Preview
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    
+    steps:
+      - name: Delete Convex Preview Deployment
+        env:
+          CONVEX_TEAM_ACCESS_TOKEN: ${{ secrets.CONVEX_TEAM_ACCESS_TOKEN }}
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          DEPLOYMENT_NAME="pr-${PR_NUM}"
+          
+          echo "🧹 Cleaning up Convex preview deployment: ${DEPLOYMENT_NAME}"
+          
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.convex.dev/v1/deployments/${DEPLOYMENT_NAME}/delete" \
+            -H "Authorization: Bearer ${CONVEX_TEAM_ACCESS_TOKEN}" \
+            -H "Content-Type: application/json")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
+            echo "✅ Convex preview deployment deleted successfully"
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "⚠️ Convex preview deployment not found (may have already been cleaned up)"
+          else
+            echo "❌ Failed to delete Convex preview deployment"
+            echo "   HTTP Code: $HTTP_CODE"
+            echo "   Response: $BODY"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          PR_NUM=${{ github.event.pull_request.number }}
+          echo "## Preview Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Convex Preview (pr-${PR_NUM}) | 🧹 Cleaned up |" >> $GITHUB_STEP_SUMMARY
+          echo "| Railway Preview | 🚂 Auto-cleaned by Railway |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Railway PR environments are automatically deleted when the PR is closed._" >> $GITHUB_STEP_SUMMARY
