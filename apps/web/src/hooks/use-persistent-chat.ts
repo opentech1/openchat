@@ -150,7 +150,17 @@ export function usePersistentChat({
 	}, [messagesResult, status]);
 
 	useEffect(() => {
-		if (!activeStreamJob) return;
+		// getActiveStreamJob only returns "running"/"pending" jobs - null means completed
+		if (!activeStreamJob) {
+			if (status === "streaming" || status === "submitted") {
+				console.log("[BackgroundStream] Stream job completed, resetting UI state");
+				setStatus("ready");
+				streamingRef.current = null;
+				useStreamStore.getState().completeStream();
+			}
+			return;
+		}
+
 		if (activeStreamJob.status === "completed" || activeStreamJob.status === "error") {
 			if (status === "streaming") {
 				setStatus("ready");
