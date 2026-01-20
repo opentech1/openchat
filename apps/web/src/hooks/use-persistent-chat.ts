@@ -359,7 +359,9 @@ export function usePersistentChat({
 								} finally {
 									setTitleGenerating(targetChatId, false);
 								}
-						})();
+								}
+							})();
+						}
 					}
 				}
 			} catch (err) {
