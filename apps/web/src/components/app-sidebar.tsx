@@ -195,6 +195,7 @@ export function AppSidebar() {
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [editOriginal, setEditOriginal] = useState("");
+  const contextMenuRef = useRef(contextMenu);
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -395,14 +396,17 @@ export function AppSidebar() {
   );
 
   useEffect(() => {
-    if (!contextMenu) return;
+    contextMenuRef.current = contextMenu;
+  }, [contextMenu]);
 
+  useEffect(() => {
     const handleDismiss = () => {
+      if (!contextMenuRef.current) return;
       setContextMenu(null);
       setDeleteChatId(null);
     };
     const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && contextMenuRef.current) {
         setContextMenu(null);
         setDeleteChatId(null);
       }
@@ -417,21 +421,7 @@ export function AppSidebar() {
       window.removeEventListener("contextmenu", handleDismiss);
       window.removeEventListener("keydown", handleKey);
     };
-  }, [contextMenu]);
-
-  useEffect(() => {
-    if (!deleteChatId) return;
-
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        handleDeleteChat(deleteChatId);
-      }
-    };
-
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [deleteChatId, handleDeleteChat]);
+  }, []);
 
   return (
     <>
@@ -656,7 +646,15 @@ export function AppSidebar() {
           if (!open) setDeleteChatId(null);
         }}
       >
-        <AlertDialogContent size="sm">
+        <AlertDialogContent
+          size="sm"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && deleteChatId) {
+              event.preventDefault();
+              handleDeleteChat(deleteChatId);
+            }
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete chat</AlertDialogTitle>
             <AlertDialogDescription>
