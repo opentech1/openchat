@@ -2,7 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import type { DataModel } from "./_generated/dataModel";
-import { incrementStat, STAT_KEYS } from "./lib/dbStats";
+import { incrementStat, decrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
@@ -400,11 +400,112 @@ export const setFavoriteModels = mutation({
 	returns: v.object({ success: v.boolean() }),
 	handler: async (ctx, args) => {
 		const profile = await getOrCreateProfile(ctx, args.userId);
-		
+
 		await ctx.db.patch(profile._id, {
 			favoriteModels: args.modelIds,
 			updatedAt: Date.now(),
 		});
+
+		return { success: true };
+	},
+});
+
+/**
+ * Permanently delete a user account and all associated data.
+ * This is an irreversible action that removes:
+ * - All chats and messages
+ * - All file uploads and storage blobs
+ * - All prompt templates
+ * - User profile and settings
+ */
+export const deleteAccount = mutation({
+	args: {
+		userId: v.id("users"),
+		externalId: v.string(),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		// Verify user exists and externalId matches (authorization check)
+		const user = await ctx.db.get(args.userId);
+		if (!user || user.externalId !== args.externalId) {
+			throw new Error("User not found or unauthorized");
+		}
+
+		// 1. Delete streamJobs
+		const streamJobs = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const job of streamJobs) {
+			await ctx.db.delete(job._id);
+		}
+
+		// 2. Delete chatReadStatus
+		const readStatuses = await ctx.db
+			.query("chatReadStatus")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const status of readStatuses) {
+			await ctx.db.delete(status._id);
+		}
+
+		// 3. Delete fileUploads AND storage blobs
+		const fileUploads = await ctx.db
+			.query("fileUploads")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const file of fileUploads) {
+			// Delete the actual file from Convex storage
+			try {
+				await ctx.storage.delete(file.storageId);
+			} catch {
+				// Log but continue - file may already be deleted
+				console.error("Failed to delete storage file:", file.storageId);
+			}
+			await ctx.db.delete(file._id);
+		}
+
+		// 4. Delete messages (all messages for all user's chats)
+		const messages = await ctx.db
+			.query("messages")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const message of messages) {
+			await ctx.db.delete(message._id);
+		}
+
+		// 5. Delete chats
+		const chats = await ctx.db
+			.query("chats")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const chat of chats) {
+			await ctx.db.delete(chat._id);
+		}
+
+		// 6. Delete promptTemplates
+		const templates = await ctx.db
+			.query("promptTemplates")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const template of templates) {
+			await ctx.db.delete(template._id);
+		}
+
+		// 7. Delete profile
+		const profile = await ctx.db
+			.query("profiles")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.unique();
+		if (profile) {
+			await ctx.db.delete(profile._id);
+		}
+
+		// 8. Delete user record last
+		await ctx.db.delete(args.userId);
+
+		// 9. Update stats
+		await decrementStat(ctx, STAT_KEYS.USERS_TOTAL);
 
 		return { success: true };
 	},
