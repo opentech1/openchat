@@ -367,7 +367,7 @@ export function usePersistentChat({
 							}
 						})();
 					}
-					}
+				}
 				} catch (err) {
 				console.error("[Chat] Error:", err);
 				setError(err instanceof Error ? err : new Error("Unknown error"));
