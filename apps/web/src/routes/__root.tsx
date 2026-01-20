@@ -21,7 +21,7 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "osschat" },
       { name: "description", content: "Open source AI chat powered by OpenRouter" },
       { property: "og:title", content: "osschat" },
