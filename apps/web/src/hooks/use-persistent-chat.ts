@@ -44,6 +44,8 @@ interface StreamingState {
 	reasoning: string;
 }
 
+const TITLE_GENERATION_RETRY_DELAY_MS = 1500;
+
 function convexMessageToUIMessage(msg: {
 	_id: string;
 	clientMessageId?: string;
@@ -340,9 +342,11 @@ export function usePersistentChat({
 									return { status: "empty" } as const;
 								} catch (err) {
 									console.warn("[Chat] Title generation failed:", err);
+									const error = err instanceof Error ? err : new Error(String(err));
 									return {
 										status: "error",
-										message: err instanceof Error ? err.message : String(err),
+										message: error.message,
+										name: error.name,
 									} as const;
 								}
 							};
@@ -351,15 +355,17 @@ export function usePersistentChat({
 							try {
 								const result = await attemptGenerate();
 								if (result.status === "error") {
-									const isRateLimit = result.message?.toLowerCase().includes("rate");
+									const isRateLimit = result.name === "RateLimitError";
 									if (!isRateLimit) {
-										await new Promise((resolve) => setTimeout(resolve, 1500));
+										await new Promise((resolve) =>
+											setTimeout(resolve, TITLE_GENERATION_RETRY_DELAY_MS)
+										);
 										const retryResult = await attemptGenerate();
 										if (retryResult.status === "error") {
 											toast.error("Failed to generate chat name");
 										}
 									} else {
-										toast.error("Rate limit reached. Try again later.");
+										toast.error(result.message || "Rate limit reached. Try again later.");
 									}
 								}
 							} finally {

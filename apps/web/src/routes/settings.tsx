@@ -2,7 +2,7 @@
  * Settings Page
  */
 
-import { useState, type MouseEvent } from "react";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -477,13 +477,33 @@ function ChatSection() {
     setLength(TITLE_LENGTH_OPTIONS[index]);
   };
 
-	const handleTrackClick = (e: MouseEvent<HTMLDivElement>) => {
-		e.stopPropagation();
-		const rect = e.currentTarget.getBoundingClientRect();
-		const x = e.clientX - rect.left;
-		const position = x / rect.width;
-		const index = Math.round(position * (TITLE_LENGTH_OPTIONS.length - 1));
-		handleClick(Math.max(0, Math.min(index, TITLE_LENGTH_OPTIONS.length - 1)));
+  const handleTrackClick = (e: MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const position = x / rect.width;
+    const index = Math.round(position * (TITLE_LENGTH_OPTIONS.length - 1));
+    handleClick(Math.max(0, Math.min(index, TITLE_LENGTH_OPTIONS.length - 1)));
+  };
+
+  const handleTrackKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const lastIndex = TITLE_LENGTH_OPTIONS.length - 1;
+    let nextIndex = currentIndex;
+
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      nextIndex = Math.max(0, currentIndex - 1);
+    } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      nextIndex = Math.min(lastIndex, currentIndex + 1);
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = lastIndex;
+    } else {
+      return;
+    }
+
+    event.preventDefault();
+    handleClick(nextIndex);
   };
 
   return (
@@ -506,7 +526,17 @@ function ChatSection() {
           </div>
 
           <div className="space-y-2">
-            <div className="relative h-2 cursor-pointer" onClick={handleTrackClick}>
+            <div
+              className="relative h-2 cursor-pointer"
+              onClick={handleTrackClick}
+              onKeyDown={handleTrackKeyDown}
+              role="slider"
+              tabIndex={0}
+              aria-valuemin={0}
+              aria-valuemax={TITLE_LENGTH_OPTIONS.length - 1}
+              aria-valuenow={currentIndex}
+              aria-valuetext={TITLE_LENGTH_LABELS[length]}
+            >
               <div className="absolute inset-0 bg-muted rounded-full" />
               <div
                 className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-150"
