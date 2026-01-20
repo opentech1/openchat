@@ -320,6 +320,7 @@ export function usePersistentChat({
 							setTitleGenerating(targetChatId, true, "auto");
 							try {
 								const generatedTitle = await generateTitle({
+									userId: convexUserId,
 									seedText,
 									length: chatTitleLength,
 									provider: activeProvider,
@@ -335,6 +336,7 @@ export function usePersistentChat({
 								}
 							} catch (err) {
 								console.warn("[Chat] Title generation failed:", err);
+								toast.error("Failed to generate chat name");
 							} finally {
 								setTitleGenerating(targetChatId, false);
 							}
