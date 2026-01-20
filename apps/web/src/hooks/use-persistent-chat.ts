@@ -98,6 +98,8 @@ export function usePersistentChat({
 
 	const chatIdRef = useRef<string | null>(chatId ?? null);
 	const streamingRef = useRef<StreamingState | null>(null);
+	// Track which chat has had title generation initiated to prevent duplicate attempts on rapid messages
+	const titleGenerationInitiatedRef = useRef<string | null>(null);
 
 	const onChatCreatedRef = useRef(onChatCreated);
 	useEffect(() => {
@@ -108,6 +110,11 @@ export function usePersistentChat({
 		if (chatId) {
 			chatIdRef.current = chatId;
 			setCurrentChatId(chatId);
+			// Reset title generation tracking when navigating to an existing chat
+			titleGenerationInitiatedRef.current = chatId;
+		} else {
+			// Reset when starting a new chat
+			titleGenerationInitiatedRef.current = null;
 		}
 	}, [chatId]);
 
@@ -323,12 +330,13 @@ export function usePersistentChat({
 					{ id: assistantMsgId, role: "assistant", parts: [{ type: "text", text: "" }] },
 				]);
 
-				if (!chatId) {
+				// Only generate title for newly created chats, and only once per chat
+				// The ref check prevents duplicate generation if user sends rapid messages
+				if (!chatId && targetChatId && titleGenerationInitiatedRef.current !== targetChatId) {
+					titleGenerationInitiatedRef.current = targetChatId;
 					const seedText = message.text.trim().slice(0, 300);
 					if (seedText) {
 						void (async () => {
-							if (!targetChatId) return;
-
 							const attemptGenerate = async () => {
 								try {
 									const generatedTitle = await generateTitle({

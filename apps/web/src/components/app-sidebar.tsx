@@ -37,6 +37,22 @@ import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
 const CONTEXT_MENU_PADDING = 12;
+// Estimated context menu dimensions to compute position before render (prevents visual jump)
+const CONTEXT_MENU_WIDTH = 190;
+const CONTEXT_MENU_HEIGHT = 128;
+
+/**
+ * Computes adjusted context menu position to keep it within viewport bounds.
+ * Called before setting state to prevent visual jump from post-render adjustment.
+ */
+function computeContextMenuPosition(clickX: number, clickY: number) {
+  const maxX = Math.max(CONTEXT_MENU_PADDING, window.innerWidth - CONTEXT_MENU_WIDTH - CONTEXT_MENU_PADDING);
+  const maxY = Math.max(CONTEXT_MENU_PADDING, window.innerHeight - CONTEXT_MENU_HEIGHT - CONTEXT_MENU_PADDING);
+  return {
+    x: Math.min(Math.max(clickX, CONTEXT_MENU_PADDING), maxX),
+    y: Math.min(Math.max(clickY, CONTEXT_MENU_PADDING), maxY),
+  };
+}
 
 interface ChatItem {
   _id: Id<"chats">;
@@ -145,8 +161,10 @@ function ChatGroup({
                       onEditSubmit();
                     }
                     if (event.key === "Escape") {
-  useEffect(() => {
-    if (typeof window === "undefined" || !contextMenu || !contextMenuElementRef.current) return;
+                      event.preventDefault();
+                      onEditCancel();
+                    }
+                  }}
                   onBlur={onEditCancel}
                   autoFocus
                 />
@@ -272,7 +290,9 @@ export function AppSidebar() {
   const handleChatContextMenu = (chatId: string, event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    setContextMenu({ chatId, x: event.clientX, y: event.clientY });
+    // Compute adjusted position before setting state to prevent visual jump
+    const { x, y } = computeContextMenuPosition(event.clientX, event.clientY);
+    setContextMenu({ chatId, x, y });
   };
 
   const handleQuickDelete = (chatId: string, event: React.MouseEvent) => {
@@ -410,19 +430,6 @@ export function AppSidebar() {
     contextMenuRef.current = contextMenu;
   }, [contextMenu]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!contextMenu || !contextMenuElementRef.current) return;
-    const rect = contextMenuElementRef.current.getBoundingClientRect();
-    const maxX = Math.max(CONTEXT_MENU_PADDING, window.innerWidth - rect.width - CONTEXT_MENU_PADDING);
-    const maxY = Math.max(CONTEXT_MENU_PADDING, window.innerHeight - rect.height - CONTEXT_MENU_PADDING);
-    const nextX = Math.min(Math.max(contextMenu.x, CONTEXT_MENU_PADDING), maxX);
-    const nextY = Math.min(Math.max(contextMenu.y, CONTEXT_MENU_PADDING), maxY);
-
-    if (nextX !== contextMenu.x || nextY !== contextMenu.y) {
-      setContextMenu((prev) => (prev ? { ...prev, x: nextX, y: nextY } : prev));
-    }
-  }, [contextMenu]);
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
