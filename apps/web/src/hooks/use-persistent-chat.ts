@@ -335,23 +335,31 @@ export function usePersistentChat({
 											userId: convexUserId,
 											title: generatedTitle,
 										});
-										return "success";
+										return { status: "success" } as const;
 									}
-									return "empty";
+									return { status: "empty" } as const;
 								} catch (err) {
 									console.warn("[Chat] Title generation failed:", err);
-									return "error";
+									return {
+										status: "error",
+										message: err instanceof Error ? err.message : String(err),
+									} as const;
 								}
 							};
 
 							setTitleGenerating(targetChatId, true, "auto");
 							try {
 								const result = await attemptGenerate();
-								if (result === "error") {
-									await new Promise((resolve) => setTimeout(resolve, 400));
-									const retryResult = await attemptGenerate();
-									if (retryResult === "error") {
-										toast.error("Failed to generate chat name");
+								if (result.status === "error") {
+									const isRateLimit = result.message?.toLowerCase().includes("rate");
+									if (!isRateLimit) {
+										await new Promise((resolve) => setTimeout(resolve, 1500));
+										const retryResult = await attemptGenerate();
+										if (retryResult.status === "error") {
+											toast.error("Failed to generate chat name");
+										}
+									} else {
+										toast.error("Rate limit reached. Try again later.");
 									}
 								}
 							} finally {
@@ -359,9 +367,8 @@ export function usePersistentChat({
 							}
 						})();
 					}
-				}
-				}
-			} catch (err) {
+					}
+				} catch (err) {
 				console.error("[Chat] Error:", err);
 				setError(err instanceof Error ? err : new Error("Unknown error"));
 				setStatus("error");
