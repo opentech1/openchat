@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/button";
 import { convexClient } from "@/lib/convex";
 
 export const Route = createFileRoute("/c/$chatId")({
+  head: () => ({
+    meta: [
+      { title: "Chat - osschat" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: ChatPage,
 });
 

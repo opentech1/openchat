@@ -1,3 +1,21 @@
 # https://www.robotstxt.org/robotstxt.html
+# osschat - Open source AI chat
+
 User-agent: *
-Disallow:
+
+# Allow public pages
+Allow: /
+Allow: /auth/sign-in
+Allow: /about
+Allow: /privacy
+Allow: /terms
+
+# Block private/auth-required pages
+Disallow: /c/
+Disallow: /settings
+Disallow: /auth/callback
+Disallow: /openrouter/callback
+Disallow: /api/
+
+# Sitemap
+Sitemap: https://osschat.dev/sitemap.xml

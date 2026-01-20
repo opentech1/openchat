@@ -153,7 +153,7 @@ function LandingPage() {
         <div className="flex-1" />
 
         {/* Footer Links */}
-        <div className="mt-12 flex items-center gap-1.5 text-sm text-muted-foreground">
+        <div className="mt-12 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
           <span>by</span>
           <a
             href="https://x.com/leodev"
@@ -181,6 +181,27 @@ function LandingPage() {
           >
             github
           </a>
+          <span>·</span>
+          <Link
+            to="/about"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            about
+          </Link>
+          <span>·</span>
+          <Link
+            to="/privacy"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            privacy
+          </Link>
+          <span>·</span>
+          <Link
+            to="/terms"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            terms
+          </Link>
         </div>
       </div>
 

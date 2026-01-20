@@ -19,6 +19,19 @@ type PublicStats = {
 };
 
 export const Route = createFileRoute("/auth/sign-in")({
+  head: () => ({
+    meta: [
+      { title: "Sign in to osschat - Free AI Chat with 350+ Models" },
+      { name: "description", content: "Sign in to osschat to access GPT-4, Claude, Gemini and 350+ AI models. Free tier available with no API key required." },
+      { name: "robots", content: "index, follow" },
+      { property: "og:title", content: "Sign in to osschat" },
+      { property: "og:description", content: "Sign in to access 350+ AI models including GPT-4, Claude, and Gemini. Free tier available." },
+      { property: "og:url", content: "https://osschat.dev/auth/sign-in" },
+    ],
+    links: [
+      { rel: "canonical", href: "https://osschat.dev/auth/sign-in" },
+    ],
+  }),
   component: SignInPage,
 });
 

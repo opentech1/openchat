@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth-client";
 
 export const Route = createFileRoute("/auth/callback")({
+  head: () => ({
+    meta: [
+      { title: "Completing sign in - osschat" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: AuthCallbackPage,
 });
 

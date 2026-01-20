@@ -22,6 +22,12 @@ import { Button } from "../../components/ui/button";
 // ============================================================================
 
 export const Route = createFileRoute("/openrouter/callback")({
+  head: () => ({
+    meta: [
+      { title: "Connecting OpenRouter - osschat" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: OpenRouterCallbackPage,
 });
 

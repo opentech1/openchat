@@ -16,6 +16,12 @@ import { cn } from "@/lib/utils";
 import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
+  head: () => ({
+    meta: [
+      { title: "Settings - osschat" },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+  }),
   component: SettingsPage,
 });
 
