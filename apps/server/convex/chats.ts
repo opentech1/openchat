@@ -375,7 +375,7 @@ export const generateTitle = action({
 				title = title.slice(1, -1).trim();
 			}
 
-			const sanitizedTitle = sanitizeTitle(title);
+			const sanitizedTitle = sanitizeTitle(title, TITLE_MAX_LENGTH);
 			return sanitizedTitle || null;
 		} catch (error) {
 			console.warn("[Chat Title] Failed to generate title:", error);
