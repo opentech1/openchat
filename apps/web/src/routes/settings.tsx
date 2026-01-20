@@ -59,7 +59,7 @@ function SettingsPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <header className="flex-none border-b bg-background">
+      <header className="flex-none border-b bg-background pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-3xl px-6">
           {/* Top row */}
           <div className="flex h-14 items-center justify-between">

@@ -27,7 +27,7 @@ export const Route = createRootRoute({
     meta: [
       // Basic
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: `${SITE_NAME} - ${SITE_TAGLINE}` },
       { name: "description", content: SITE_DESCRIPTION },
 
