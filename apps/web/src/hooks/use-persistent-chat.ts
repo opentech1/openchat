@@ -314,8 +314,9 @@ export function usePersistentChat({
 				]);
 
 				if (!chatId) {
+				if (!chatId) {
 					const seedText = message.text.trim().slice(0, 300);
-						if (seedText) {
+					if (seedText) {
 							void (async () => {
 								const attemptGenerate = async (attempt: number) => {
 									try {
