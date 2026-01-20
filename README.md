@@ -9,6 +9,10 @@ OpenChat is an open-source AI chat workspace that you can self-host or run on Op
 - Customizable component library built with Tailwind v4, shadcn primitives, and theming helpers for brand-specific deployments.
 - Batteries-included observability via PostHog event scaffolding and optional extension surface for in-browser shortcuts.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=tryosschat/openchat&type=date&legend=top-left)](https://www.star-history.com/#tryosschat/openchat&type=date&legend=top-left)
+
 ## Repository Layout
 | Path | Purpose |
 | --- | --- |
