@@ -194,6 +194,7 @@ export function AppSidebar() {
   const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [editOriginal, setEditOriginal] = useState("");
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -301,11 +302,13 @@ export function AppSidebar() {
     event.stopPropagation();
     setEditingChatId(chatId);
     setEditValue(title);
+    setEditOriginal(title);
   };
 
   const handleCancelEdit = () => {
     setEditingChatId(null);
     setEditValue("");
+    setEditOriginal("");
   };
 
   const handleSubmitEdit = async () => {
@@ -316,6 +319,10 @@ export function AppSidebar() {
 
     const nextTitle = editValue.trim();
     if (!nextTitle) {
+      handleCancelEdit();
+      return;
+    }
+    if (nextTitle === editOriginal.trim()) {
       handleCancelEdit();
       return;
     }
