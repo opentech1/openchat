@@ -13,6 +13,7 @@ import { useProviderStore, DAILY_LIMIT_CENTS } from "@/stores/provider";
 import { useModels, getCacheStatus } from "@/stores/model";
 import { useChatTitleStore, type ChatTitleLength } from "@/stores/chat-title";
 import { OpenRouterConnectModal } from "@/components/openrouter-connect-modal";
+import { DeleteAccountModal } from "@/components/delete-account-modal";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon } from "lucide-react";
@@ -281,7 +282,7 @@ function ProvidersSection() {
                 : "border-border bg-card hover:border-primary/50",
             )}
           >
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-blue-500 to-cyan-500">
               <img
                 src="https://models.dev/logos/openrouter.svg"
                 alt="OpenRouter"
@@ -365,7 +366,7 @@ function ProvidersSection() {
               disabled={!apiKey}
               className={cn("flex w-full items-start gap-4 text-left", !apiKey && "cursor-default")}
             >
-              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-500 to-purple-600">
                 <img
                   src="https://models.dev/logos/openrouter.svg"
                   alt="OpenRouter"
@@ -636,7 +637,7 @@ function ModelsSection() {
         </h2>
         <div className="rounded-xl border bg-card p-4">
           <div className="flex items-start gap-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-violet-500 to-purple-600">
               <ZapIcon className="size-6 text-white" />
             </div>
             <div className="flex-1 space-y-1">
