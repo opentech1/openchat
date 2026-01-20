@@ -197,6 +197,26 @@ function LandingPage() {
 function HomePage() {
   const { isAuthenticated, loading } = useAuth();
 
+  // Load autochangelog in-app widget only on root page for authenticated users
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const scriptId = 'autochangelog-in-app';
+    if (document.getElementById(scriptId)) return;
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://autochangelog.com/embed/opentech1/openchat/in-app.js';
+    document.body.appendChild(script);
+
+    return () => {
+      const existingScript = document.getElementById(scriptId);
+      if (existingScript) {
+        existingScript.remove();
+      }
+    };
+  }, [isAuthenticated]);
+
   if (!convexClient || loading) {
     return <div className="flex h-full bg-background" />;
   }
