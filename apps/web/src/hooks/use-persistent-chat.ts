@@ -314,55 +314,52 @@ export function usePersistentChat({
 				]);
 
 				if (!chatId) {
-				if (!chatId) {
 					const seedText = message.text.trim().slice(0, 300);
 					if (seedText) {
-							void (async () => {
-								const attemptGenerate = async (attempt: number) => {
-									try {
-										const generatedTitle = await generateTitle({
-											userId: convexUserId,
-											seedText,
-											length: chatTitleLength,
-											provider: activeProvider,
-											apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
-										});
+						void (async () => {
+							if (!targetChatId) return;
 
-										if (generatedTitle) {
-											await updateTitle({
-												chatId: targetChatId as Id<"chats">,
-												userId: convexUserId,
-												title: generatedTitle,
-											});
-											return "success";
-										}
-										return "empty";
-									} catch (err) {
-										console.warn("[Chat] Title generation failed:", err);
-										return "error";
-									}
-								};
-
-								if (!targetChatId) return;
-								setTitleGenerating(targetChatId, true, "auto");
+							const attemptGenerate = async () => {
 								try {
-									const result = await attemptGenerate(0);
-									if (result === "error") {
-										await new Promise((resolve) => setTimeout(resolve, 400));
-										const retryResult = await attemptGenerate(1);
-										if (retryResult !== "success") {
-											toast.error("Failed to generate chat name");
-										}
-									} else if (result !== "success") {
+									const generatedTitle = await generateTitle({
+										userId: convexUserId,
+										seedText,
+										length: chatTitleLength,
+										provider: activeProvider,
+										apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
+									});
+
+									if (generatedTitle) {
+										await updateTitle({
+											chatId: targetChatId as Id<"chats">,
+											userId: convexUserId,
+											title: generatedTitle,
+										});
+										return "success";
+									}
+									return "empty";
+								} catch (err) {
+									console.warn("[Chat] Title generation failed:", err);
+									return "error";
+								}
+							};
+
+							setTitleGenerating(targetChatId, true, "auto");
+							try {
+								const result = await attemptGenerate();
+								if (result === "error") {
+									await new Promise((resolve) => setTimeout(resolve, 400));
+									const retryResult = await attemptGenerate();
+									if (retryResult === "error") {
 										toast.error("Failed to generate chat name");
 									}
-								} finally {
-									setTitleGenerating(targetChatId, false);
 								}
-								}
-							})();
-						}
+							} finally {
+								setTitleGenerating(targetChatId, false);
+							}
+						})();
 					}
+				}
 				}
 			} catch (err) {
 				console.error("[Chat] Error:", err);

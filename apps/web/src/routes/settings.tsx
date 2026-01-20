@@ -549,9 +549,9 @@ function ChatSection() {
           </div>
         </div>
 
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Deletion
-        </h3>
+        </h2>
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-4">
             <div>
