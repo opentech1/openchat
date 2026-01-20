@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
+const CONTEXT_MENU_PADDING = 12;
 
 interface ChatItem {
   _id: Id<"chats">;
@@ -148,7 +149,7 @@ function ChatGroup({
                       onEditCancel();
                     }
                   }}
-                  onBlur={onEditSubmit}
+                  onBlur={onEditCancel}
                   autoFocus
                 />
               ) : (
@@ -196,6 +197,7 @@ export function AppSidebar() {
   const [editValue, setEditValue] = useState("");
   const [editOriginal, setEditOriginal] = useState("");
   const contextMenuRef = useRef(contextMenu);
+  const contextMenuElementRef = useRef<HTMLDivElement | null>(null);
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -271,12 +273,7 @@ export function AppSidebar() {
   const handleChatContextMenu = (chatId: string, event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    const menuWidth = 190;
-    const menuItemHeight = 36;
-    const menuHeight = menuItemHeight * 3 + 12;
-    const x = Math.min(event.clientX, window.innerWidth - menuWidth - 12);
-    const y = Math.min(event.clientY, window.innerHeight - menuHeight - 12);
-    setContextMenu({ chatId, x, y });
+    setContextMenu({ chatId, x: event.clientX, y: event.clientY });
   };
 
   const handleQuickDelete = (chatId: string, event: React.MouseEvent) => {
@@ -351,7 +348,7 @@ export function AppSidebar() {
       });
 
       if (!seedText) {
-        setTitleGenerating(chatId, false);
+        toast.error("No message available to generate a name.");
         return;
       }
 
@@ -363,17 +360,24 @@ export function AppSidebar() {
         apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
       });
 
-      if (generatedTitle) {
-        await convexClient.mutation(api.chats.setTitle, {
-          chatId: chatId as Id<"chats">,
-          userId: convexUser._id,
-          title: generatedTitle,
-          updateUpdatedAt: false,
-        });
+      if (!generatedTitle) {
+        toast.error("Unable to generate a new chat name.");
+        return;
       }
+
+      await convexClient.mutation(api.chats.setTitle, {
+        chatId: chatId as Id<"chats">,
+        userId: convexUser._id,
+        title: generatedTitle,
+        updateUpdatedAt: false,
+      });
     } catch (error) {
       console.warn("[Chat] Title regeneration failed:", error);
-      toast.error("Failed to regenerate chat name");
+      if (error instanceof Error && error.name === "RateLimitError") {
+        toast.error(error.message);
+      } else {
+        toast.error("Failed to regenerate chat name");
+      }
     } finally {
       setTitleGenerating(chatId, false);
     }
@@ -386,13 +390,18 @@ export function AppSidebar() {
       setContextMenu(null);
       setDeleteChatId(null);
 
-      await convexClient.mutation(api.chats.remove, {
-        chatId: chatId as Id<"chats">,
-        userId: convexUser._id,
-      });
+      try {
+        await convexClient.mutation(api.chats.remove, {
+          chatId: chatId as Id<"chats">,
+          userId: convexUser._id,
+        });
 
-      if (currentChatId === chatId) {
-        navigate({ to: "/" });
+        if (currentChatId === chatId) {
+          navigate({ to: "/" });
+        }
+      } catch (error) {
+        console.warn("[Chat] Failed to delete chat:", error);
+        toast.error("Failed to delete chat");
       }
     },
     [convexClient, convexUser?._id, currentChatId, navigate],
@@ -402,6 +411,19 @@ export function AppSidebar() {
     contextMenuRef.current = contextMenu;
   }, [contextMenu]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!contextMenu || !contextMenuElementRef.current) return;
+    const rect = contextMenuElementRef.current.getBoundingClientRect();
+    const maxX = Math.max(CONTEXT_MENU_PADDING, window.innerWidth - rect.width - CONTEXT_MENU_PADDING);
+    const maxY = Math.max(CONTEXT_MENU_PADDING, window.innerHeight - rect.height - CONTEXT_MENU_PADDING);
+    const nextX = Math.min(Math.max(contextMenu.x, CONTEXT_MENU_PADDING), maxX);
+    const nextY = Math.min(Math.max(contextMenu.y, CONTEXT_MENU_PADDING), maxY);
+
+    if (nextX !== contextMenu.x || nextY !== contextMenu.y) {
+      setContextMenu((prev) => (prev ? { ...prev, x: nextX, y: nextY } : prev));
+    }
+  }, [contextMenu]);
   useEffect(() => {
     const handleDismiss = () => {
       if (!contextMenuRef.current) return;
@@ -606,6 +628,7 @@ export function AppSidebar() {
       </Sidebar>
       {contextMenu && (
         <div
+          ref={contextMenuElementRef}
           className="fixed z-50 min-w-[190px] rounded-lg border border-sidebar-border/60 bg-sidebar/95 p-1 shadow-lg backdrop-blur"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}

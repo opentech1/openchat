@@ -357,7 +357,8 @@ export const generateTitle = action({
 			});
 
 			if (!response.ok) {
-				console.warn("[Chat Title] OpenRouter error:", response.status);
+				const errorBody = await response.text();
+				console.warn("[Chat Title] OpenRouter error:", response.status, errorBody);
 				return null;
 			}
 
