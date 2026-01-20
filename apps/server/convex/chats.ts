@@ -428,7 +428,7 @@ export const updateTitle = mutation({
 		}
 
 		return null;
-	},
+		return null;
 	},
 });
 
