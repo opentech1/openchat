@@ -569,8 +569,7 @@ function ChatSection() {
                   onClick={() => handleClick(index)}
                   className={cn(
                     "transition-colors hover:text-foreground",
-                    length === option && "text-foreground font-medium",
-                  )}
+          <div className="relative h-2 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleTrackClick(e); }}>
                 >
                   {TITLE_LENGTH_LABELS[option]}
                 </button>
