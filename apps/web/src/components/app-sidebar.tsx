@@ -145,10 +145,8 @@ function ChatGroup({
                       onEditSubmit();
                     }
                     if (event.key === "Escape") {
-                      event.preventDefault();
-                      onEditCancel();
-                    }
-                  }}
+  useEffect(() => {
+    if (typeof window === "undefined" || !contextMenu || !contextMenuElementRef.current) return;
                   onBlur={onEditCancel}
                   autoFocus
                 />
