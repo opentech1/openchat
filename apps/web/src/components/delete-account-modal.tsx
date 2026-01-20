@@ -50,8 +50,14 @@ export function DeleteAccountModal({
 				externalId,
 			});
 
-			// Sign out and redirect after successful deletion
-			await signOut();
+			// Account deleted successfully - sign out and redirect
+			// Even if signOut fails, redirect to sign-in since the account is gone
+			try {
+				await signOut();
+			} catch {
+				// signOut failed but account is deleted, force redirect
+				window.location.href = "/auth/sign-in";
+			}
 		} catch (e) {
 			setError(e instanceof Error ? e.message : "Failed to delete account");
 			setIsDeleting(false);

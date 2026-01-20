@@ -7,6 +7,7 @@ import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
 import { authComponent } from "./auth";
+import { components } from "./_generated/api";
 
 // User document validator with all fields including fileUploadCount
 // Note: Kept for potential future use (e.g., admin queries that need raw user data)
@@ -417,6 +418,11 @@ export const setFavoriteModels = mutation({
  * - All file uploads and storage blobs
  * - All prompt templates
  * - User profile and settings
+ * - Better Auth sessions and account links
+ *
+ * Note: For users with very large amounts of data, this mutation may approach
+ * Convex timeout limits. Consider breaking into scheduled jobs for production
+ * use with high-volume users.
  */
 export const deleteAccount = mutation({
 	args: {
@@ -431,7 +437,35 @@ export const deleteAccount = mutation({
 			throw new Error("User not found or unauthorized");
 		}
 
-		// 1. Delete streamJobs
+		// 1. Delete Better Auth sessions (invalidates all user sessions across devices)
+		// The externalId is the Better Auth user ID
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "session",
+				where: [{ field: "userId", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 1000 },
+		});
+
+		// 2. Delete Better Auth accounts (OAuth provider links)
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "account",
+				where: [{ field: "userId", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 100 },
+		});
+
+		// 3. Delete Better Auth user record
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "user",
+				where: [{ field: "_id", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 1 },
+		});
+
+		// 4. Delete streamJobs
 		const streamJobs = await ctx.db
 			.query("streamJobs")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -440,7 +474,7 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(job._id);
 		}
 
-		// 2. Delete chatReadStatus
+		// 5. Delete chatReadStatus
 		const readStatuses = await ctx.db
 			.query("chatReadStatus")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -449,7 +483,7 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(status._id);
 		}
 
-		// 3. Delete fileUploads AND storage blobs
+		// 6. Delete fileUploads AND storage blobs
 		const fileUploads = await ctx.db
 			.query("fileUploads")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -458,14 +492,17 @@ export const deleteAccount = mutation({
 			// Delete the actual file from Convex storage
 			try {
 				await ctx.storage.delete(file.storageId);
-			} catch {
-				// Log but continue - file may already be deleted
-				console.error("Failed to delete storage file:", file.storageId);
+			} catch (e) {
+				// Only log unexpected errors, not "not found" which is expected if file was already deleted
+				const message = e instanceof Error ? e.message : String(e);
+				if (!message.toLowerCase().includes("not found")) {
+					console.error("Unexpected error deleting storage file:", file.storageId, message);
+				}
 			}
 			await ctx.db.delete(file._id);
 		}
 
-		// 4. Delete messages (all messages for all user's chats)
+		// 7. Delete messages (all messages for all user's chats)
 		const messages = await ctx.db
 			.query("messages")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -474,7 +511,7 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(message._id);
 		}
 
-		// 5. Delete chats
+		// 8. Delete chats
 		const chats = await ctx.db
 			.query("chats")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -483,7 +520,7 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(chat._id);
 		}
 
-		// 6. Delete promptTemplates
+		// 9. Delete promptTemplates
 		const templates = await ctx.db
 			.query("promptTemplates")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -492,7 +529,7 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(template._id);
 		}
 
-		// 7. Delete profile
+		// 10. Delete profile
 		const profile = await ctx.db
 			.query("profiles")
 			.withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -501,10 +538,10 @@ export const deleteAccount = mutation({
 			await ctx.db.delete(profile._id);
 		}
 
-		// 8. Delete user record last
+		// 11. Delete user record last
 		await ctx.db.delete(args.userId);
 
-		// 9. Update stats
+		// 12. Update stats
 		await decrementStat(ctx, STAT_KEYS.USERS_TOTAL);
 
 		return { success: true };
