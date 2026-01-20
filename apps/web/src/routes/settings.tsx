@@ -592,21 +592,21 @@ function ChatSection() {
               </div>
             </div>
 
-			<div className="flex justify-between text-xs text-muted-foreground">
-				{TITLE_LENGTH_OPTIONS.map((option, index) => (
-					<button
-						key={option}
-						type="button"
-						onClick={() => handleClick(index)}
-						className={cn(
-							"transition-colors hover:text-foreground",
-							length === option && "text-foreground font-medium",
-						)}
-					>
-						{TITLE_LENGTH_LABELS[option]}
-					</button>
-				))}
-			</div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              {TITLE_LENGTH_OPTIONS.map((option, index) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleClick(index)}
+                  className={cn(
+                    "transition-colors hover:text-foreground",
+                    length === option && "text-foreground font-medium",
+                  )}
+                >
+                  {TITLE_LENGTH_LABELS[option]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

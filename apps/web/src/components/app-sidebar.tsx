@@ -198,6 +198,7 @@ export function AppSidebar() {
   const [editOriginal, setEditOriginal] = useState("");
   const contextMenuRef = useRef(contextMenu);
   const contextMenuElementRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -425,13 +426,22 @@ export function AppSidebar() {
     }
   }, [contextMenu]);
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     const handleDismiss = () => {
       if (!contextMenuRef.current) return;
+      if (!isMountedRef.current) return;
       setContextMenu(null);
       setDeleteChatId(null);
     };
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape" && contextMenuRef.current) {
+        if (!isMountedRef.current) return;
         setContextMenu(null);
         setDeleteChatId(null);
       }

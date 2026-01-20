@@ -75,6 +75,7 @@ export function usePersistentChat({
 	chatId,
 	onChatCreated,
 }: UsePersistentChatOptions): UsePersistentChatReturn {
+	const isMountedRef = useRef(true);
 	const { user } = useAuth();
 	const { selectedModelId, reasoningEffort, maxSteps } = useModelStore();
 	const { apiKey } = useOpenRouterKey();
@@ -87,6 +88,13 @@ export function usePersistentChat({
 	const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
 	const [error, setError] = useState<Error | undefined>(undefined);
 	const [currentChatId, setCurrentChatId] = useState<string | null>(chatId ?? null);
+
+	useEffect(() => {
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, []);
 
 	const chatIdRef = useRef<string | null>(chatId ?? null);
 	const streamingRef = useRef<StreamingState | null>(null);
@@ -351,7 +359,9 @@ export function usePersistentChat({
 								}
 							};
 
-							setTitleGenerating(targetChatId, true, "auto");
+							if (isMountedRef.current) {
+								setTitleGenerating(targetChatId, true, "auto");
+							}
 							try {
 								const result = await attemptGenerate();
 								if (result.status === "error") {
@@ -362,14 +372,20 @@ export function usePersistentChat({
 										);
 										const retryResult = await attemptGenerate();
 										if (retryResult.status === "error") {
-											toast.error("Failed to generate chat name");
+											if (isMountedRef.current) {
+												toast.error("Failed to generate chat name");
+											}
 										}
 									} else {
-										toast.error(result.message || "Rate limit reached. Try again later.");
+										if (isMountedRef.current) {
+											toast.error(result.message || "Rate limit reached. Try again later.");
+										}
 									}
 								}
 							} finally {
-								setTitleGenerating(targetChatId, false);
+								if (isMountedRef.current) {
+									setTitleGenerating(targetChatId, false);
+								}
 							}
 						})();
 					}
