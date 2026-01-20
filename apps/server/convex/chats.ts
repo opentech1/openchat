@@ -429,6 +429,8 @@ export const updateTitle = mutation({
 
 		return null;
 	},
+	},
+});
 
 /**
  * Force set a chat title (used for manual regeneration).
