@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
@@ -32,6 +32,7 @@ import {
 } from "./ui/sidebar";
 import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon, MenuIcon } from "@/components/icons";
 import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
+import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
@@ -269,7 +270,8 @@ export function AppSidebar() {
     event.preventDefault();
     event.stopPropagation();
     const menuWidth = 190;
-    const menuHeight = 44;
+    const menuItemHeight = 36;
+    const menuHeight = menuItemHeight * 3 + 12;
     const x = Math.min(event.clientX, window.innerWidth - menuWidth - 12);
     const y = Math.min(event.clientY, window.innerHeight - menuHeight - 12);
     setContextMenu({ chatId, x, y });
@@ -343,6 +345,7 @@ export function AppSidebar() {
       if (!seedText) return;
 
       const generatedTitle = await convexClient.action(api.chats.generateTitle, {
+        userId: convexUser._id,
         seedText: seedText.trim().slice(0, 300),
         length: chatTitleLength,
         provider: activeProvider,
@@ -357,26 +360,32 @@ export function AppSidebar() {
           updateUpdatedAt: false,
         });
       }
+    } catch (error) {
+      console.warn("[Chat] Title regeneration failed:", error);
+      toast.error("Failed to regenerate chat name");
     } finally {
       setTitleGenerating(chatId, false);
     }
   };
 
-  const handleDeleteChat = async (chatId: string) => {
-    if (!convexClient || !convexUser?._id) return;
+  const handleDeleteChat = useCallback(
+    async (chatId: string) => {
+      if (!convexClient || !convexUser?._id) return;
 
-    setContextMenu(null);
-    setDeleteChatId(null);
+      setContextMenu(null);
+      setDeleteChatId(null);
 
-    await convexClient.mutation(api.chats.remove, {
-      chatId: chatId as Id<"chats">,
-      userId: convexUser._id,
-    });
+      await convexClient.mutation(api.chats.remove, {
+        chatId: chatId as Id<"chats">,
+        userId: convexUser._id,
+      });
 
-    if (currentChatId === chatId) {
-      navigate({ to: "/" });
-    }
-  };
+      if (currentChatId === chatId) {
+        navigate({ to: "/" });
+      }
+    },
+    [convexClient, convexUser?._id, currentChatId, navigate],
+  );
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -415,7 +424,7 @@ export function AppSidebar() {
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [deleteChatId]);
+  }, [deleteChatId, handleDeleteChat]);
 
   return (
     <>

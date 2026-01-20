@@ -1,6 +1,7 @@
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
@@ -308,6 +309,7 @@ const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
 
 export const generateTitle = action({
 	args: {
+		userId: v.id("users"),
 		seedText: v.string(),
 		length: v.union(v.literal("short"), v.literal("standard"), v.literal("long")),
 		provider: v.union(v.literal("osschat"), v.literal("openrouter")),
@@ -315,6 +317,10 @@ export const generateTitle = action({
 	},
 	returns: v.union(v.string(), v.null()),
 	handler: async (_ctx, args) => {
+		await _ctx.runMutation(internal.chats.enforceTitleRateLimit, {
+			userId: args.userId,
+		});
+
 		const seedText = args.seedText.trim();
 		if (!seedText) return null;
 
@@ -374,6 +380,24 @@ export const generateTitle = action({
 			console.warn("[Chat Title] Failed to generate title:", error);
 			return null;
 		}
+	},
+});
+
+export const enforceTitleRateLimit = internalMutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "chatTitleGenerate", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			throwRateLimitError("title generations", retryAfter);
+		}
+
+		return null;
 	},
 });
 
