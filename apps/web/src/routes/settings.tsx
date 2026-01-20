@@ -590,13 +590,11 @@ function ChatSection() {
                 Require confirmation before deleting a chat.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                id="confirm-delete"
-                checked={confirmDelete}
-                onCheckedChange={setConfirmDelete}
-              />
-            </div>
+            <Switch
+              id="confirm-delete"
+              checked={confirmDelete}
+              onCheckedChange={setConfirmDelete}
+            />
           </div>
         </div>
       </section>
