@@ -413,7 +413,6 @@ export const updateTitle = mutation({
 		title: v.string(),
 	},
 	returns: v.null(),
-	returns: v.null(),
 	handler: async (ctx, args) => {
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
