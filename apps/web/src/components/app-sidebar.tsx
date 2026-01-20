@@ -1,11 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { useAuth } from "@/lib/auth-client";
 import { convexClient } from "@/lib/convex";
+import { useOpenRouterKey } from "@/stores/openrouter";
+import { useProviderStore } from "@/stores/provider";
+import { useChatTitleStore } from "@/stores/chat-title";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +31,7 @@ import {
   useSidebar,
 } from "./ui/sidebar";
 import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon, MenuIcon } from "@/components/icons";
+import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
 import type { Id } from "@server/convex/_generated/dataModel";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
@@ -70,9 +84,32 @@ interface ChatGroupProps {
   chats: ChatItem[];
   currentChatId?: string;
   onChatClick: (chatId: string) => void;
+  onChatContextMenu: (chatId: string, event: MouseEvent) => void;
+  onQuickDelete: (chatId: string, event: React.MouseEvent) => void;
+  generatingChatIds: Record<string, "auto" | "manual">;
+  editingChatId: string | null;
+  editValue: string;
+  onEditChange: (value: string) => void;
+  onStartEdit: (chatId: string, title: string, event: React.MouseEvent) => void;
+  onEditSubmit: () => void;
+  onEditCancel: () => void;
 }
 
-function ChatGroup({ label, chats, currentChatId, onChatClick }: ChatGroupProps) {
+function ChatGroup({
+  label,
+  chats,
+  currentChatId,
+  onChatClick,
+  onChatContextMenu,
+  onQuickDelete,
+  generatingChatIds,
+  editingChatId,
+  editValue,
+  onEditChange,
+  onStartEdit,
+  onEditSubmit,
+  onEditCancel,
+}: ChatGroupProps) {
   if (chats.length === 0) return null;
 
   return (
@@ -83,10 +120,53 @@ function ChatGroup({ label, chats, currentChatId, onChatClick }: ChatGroupProps)
           <SidebarMenuItem key={chat._id}>
             <SidebarMenuButton
               isActive={currentChatId === chat._id}
-              onClick={() => onChatClick(chat._id)}
+              onClick={() => {
+                if (editingChatId === chat._id) return;
+                onChatClick(chat._id);
+              }}
+              onContextMenu={(event) => onChatContextMenu(chat._id, event)}
+              className="group pr-8"
             >
               <ChatIcon />
-              <span className="truncate">{chat.title}</span>
+              {generatingChatIds[chat._id] ? (
+                <span className="block h-5 flex-1 rounded bg-sidebar-foreground/10 animate-pulse" />
+              ) : editingChatId === chat._id ? (
+                <input
+                  className="h-5 w-full bg-transparent text-sm text-sidebar-foreground outline-none"
+                  value={editValue}
+                  onChange={(event) => onEditChange(event.target.value)}
+                  onClick={(event) => event.stopPropagation()}
+                  onFocus={(event) => event.currentTarget.select()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      onEditSubmit();
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      onEditCancel();
+                    }
+                  }}
+                  onBlur={onEditSubmit}
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className="truncate"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onDoubleClick={(event) => onStartEdit(chat._id, chat.title, event)}
+                >
+                  {chat.title}
+                </span>
+              )}
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85"
+                onClick={(event) => onQuickDelete(chat._id, event)}
+                aria-label="Delete chat"
+              >
+                <XIcon className="size-3.5" />
+              </button>
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
@@ -99,6 +179,20 @@ export function AppSidebar() {
   const { user } = useAuth();
   const { open, isMobile, setOpen } = useSidebar();
   const navigate = useNavigate();
+  const { apiKey } = useOpenRouterKey();
+  const activeProvider = useProviderStore((s) => s.activeProvider);
+  const chatTitleLength = useChatTitleStore((s) => s.length);
+  const confirmDelete = useChatTitleStore((s) => s.confirmDelete);
+  const generatingChatIds = useChatTitleStore((s) => s.generatingChatIds);
+  const setTitleGenerating = useChatTitleStore((s) => s.setGenerating);
+  const [contextMenu, setContextMenu] = useState<{
+    chatId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [deleteChatId, setDeleteChatId] = useState<string | null>(null);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   // Get current chat ID from URL if we're on a chat page
   let currentChatId: string | undefined;
@@ -155,6 +249,7 @@ export function AppSidebar() {
     : false;
     
   const grouped = groupChatsByTime(chats);
+  const deleteChat = deleteChatId ? chats.find((chat) => chat._id === deleteChatId) : null;
 
   const handleNewChat = () => {
     if (isMobile) {
@@ -169,6 +264,158 @@ export function AppSidebar() {
     }
     navigate({ to: "/c/$chatId", params: { chatId } });
   };
+
+  const handleChatContextMenu = (chatId: string, event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const menuWidth = 190;
+    const menuHeight = 44;
+    const x = Math.min(event.clientX, window.innerWidth - menuWidth - 12);
+    const y = Math.min(event.clientY, window.innerHeight - menuHeight - 12);
+    setContextMenu({ chatId, x, y });
+  };
+
+  const handleQuickDelete = (chatId: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (confirmDelete) {
+      setDeleteChatId(chatId);
+    } else {
+      void handleDeleteChat(chatId);
+    }
+  };
+
+  const handleRenameFromMenu = () => {
+    if (!contextMenu) return;
+    const chat = chats.find((item) => item._id === contextMenu.chatId);
+    if (!chat) return;
+    setContextMenu(null);
+    setEditingChatId(chat._id);
+    setEditValue(chat.title);
+  };
+
+  const handleStartEdit = (chatId: string, title: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEditingChatId(chatId);
+    setEditValue(title);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingChatId(null);
+    setEditValue("");
+  };
+
+  const handleSubmitEdit = async () => {
+    if (!editingChatId || !convexClient || !convexUser?._id) {
+      handleCancelEdit();
+      return;
+    }
+
+    const nextTitle = editValue.trim();
+    if (!nextTitle) {
+      handleCancelEdit();
+      return;
+    }
+
+    await convexClient.mutation(api.chats.setTitle, {
+      chatId: editingChatId as Id<"chats">,
+      userId: convexUser._id,
+      title: nextTitle,
+      updateUpdatedAt: false,
+    });
+
+    handleCancelEdit();
+  };
+
+  const handleRegenerateTitle = async (chatId: string) => {
+    if (!convexClient || !convexUser?._id) return;
+
+    setContextMenu(null);
+    setDeleteChatId(null);
+    setTitleGenerating(chatId, true, "manual");
+    try {
+      const seedText = await convexClient.query(api.messages.getFirstUserMessage, {
+        chatId: chatId as Id<"chats">,
+        userId: convexUser._id,
+      });
+
+      if (!seedText) return;
+
+      const generatedTitle = await convexClient.action(api.chats.generateTitle, {
+        seedText: seedText.trim().slice(0, 300),
+        length: chatTitleLength,
+        provider: activeProvider,
+        apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
+      });
+
+      if (generatedTitle) {
+        await convexClient.mutation(api.chats.setTitle, {
+          chatId: chatId as Id<"chats">,
+          userId: convexUser._id,
+          title: generatedTitle,
+          updateUpdatedAt: false,
+        });
+      }
+    } finally {
+      setTitleGenerating(chatId, false);
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    if (!convexClient || !convexUser?._id) return;
+
+    setContextMenu(null);
+    setDeleteChatId(null);
+
+    await convexClient.mutation(api.chats.remove, {
+      chatId: chatId as Id<"chats">,
+      userId: convexUser._id,
+    });
+
+    if (currentChatId === chatId) {
+      navigate({ to: "/" });
+    }
+  };
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleDismiss = () => {
+      setContextMenu(null);
+      setDeleteChatId(null);
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContextMenu(null);
+        setDeleteChatId(null);
+      }
+    };
+
+    window.addEventListener("click", handleDismiss);
+    window.addEventListener("contextmenu", handleDismiss);
+    window.addEventListener("keydown", handleKey);
+
+    return () => {
+      window.removeEventListener("click", handleDismiss);
+      window.removeEventListener("contextmenu", handleDismiss);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!deleteChatId) return;
+
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        handleDeleteChat(deleteChatId);
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [deleteChatId]);
 
   return (
     <>
@@ -252,10 +499,66 @@ export function AppSidebar() {
             </div>
           ) : (
             <>
-              <ChatGroup label="Today" chats={grouped.today} currentChatId={currentChatId} onChatClick={handleChatClick} />
-              <ChatGroup label="Last 7 days" chats={grouped.last7Days} currentChatId={currentChatId} onChatClick={handleChatClick} />
-              <ChatGroup label="Last 30 days" chats={grouped.last30Days} currentChatId={currentChatId} onChatClick={handleChatClick} />
-              <ChatGroup label="Older" chats={grouped.older} currentChatId={currentChatId} onChatClick={handleChatClick} />
+              <ChatGroup
+                label="Today"
+                chats={grouped.today}
+                currentChatId={currentChatId}
+                onChatClick={handleChatClick}
+                onChatContextMenu={handleChatContextMenu}
+                onQuickDelete={handleQuickDelete}
+                generatingChatIds={generatingChatIds}
+                editingChatId={editingChatId}
+                editValue={editValue}
+                onEditChange={setEditValue}
+                onStartEdit={handleStartEdit}
+                onEditSubmit={handleSubmitEdit}
+                onEditCancel={handleCancelEdit}
+              />
+              <ChatGroup
+                label="Last 7 days"
+                chats={grouped.last7Days}
+                currentChatId={currentChatId}
+                onChatClick={handleChatClick}
+                onChatContextMenu={handleChatContextMenu}
+                onQuickDelete={handleQuickDelete}
+                generatingChatIds={generatingChatIds}
+                editingChatId={editingChatId}
+                editValue={editValue}
+                onEditChange={setEditValue}
+                onStartEdit={handleStartEdit}
+                onEditSubmit={handleSubmitEdit}
+                onEditCancel={handleCancelEdit}
+              />
+              <ChatGroup
+                label="Last 30 days"
+                chats={grouped.last30Days}
+                currentChatId={currentChatId}
+                onChatClick={handleChatClick}
+                onChatContextMenu={handleChatContextMenu}
+                onQuickDelete={handleQuickDelete}
+                generatingChatIds={generatingChatIds}
+                editingChatId={editingChatId}
+                editValue={editValue}
+                onEditChange={setEditValue}
+                onStartEdit={handleStartEdit}
+                onEditSubmit={handleSubmitEdit}
+                onEditCancel={handleCancelEdit}
+              />
+              <ChatGroup
+                label="Older"
+                chats={grouped.older}
+                currentChatId={currentChatId}
+                onChatClick={handleChatClick}
+                onChatContextMenu={handleChatContextMenu}
+                onQuickDelete={handleQuickDelete}
+                generatingChatIds={generatingChatIds}
+                editingChatId={editingChatId}
+                editValue={editValue}
+                onEditChange={setEditValue}
+                onStartEdit={handleStartEdit}
+                onEditSubmit={handleSubmitEdit}
+                onEditCancel={handleCancelEdit}
+              />
             </>
           )}
         </SidebarContent>
@@ -292,6 +595,70 @@ export function AppSidebar() {
           )}
         </SidebarFooter>
       </Sidebar>
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[190px] rounded-lg border border-sidebar-border/60 bg-sidebar/95 p-1 shadow-lg backdrop-blur"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => handleRegenerateTitle(contextMenu.chatId)}
+          >
+            <SparklesIcon className="size-4" />
+            Regenerate name
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={handleRenameFromMenu}
+          >
+            <PencilIcon className="size-4" />
+            Rename
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive/90 hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => {
+              setContextMenu(null);
+              if (confirmDelete) {
+                setDeleteChatId(contextMenu.chatId);
+              } else {
+                void handleDeleteChat(contextMenu.chatId);
+              }
+            }}
+          >
+            <Trash2Icon className="size-4" />
+            Delete chat
+          </button>
+        </div>
+      )}
+      <AlertDialog
+        open={!!deleteChatId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteChatId(null);
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete chat</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &ldquo;{deleteChat?.title ?? "this chat"}&rdquo;?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteChatId && handleDeleteChat(deleteChatId)}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -189,6 +189,29 @@ export const list = query({
 	},
 });
 
+export const getFirstUserMessage = query({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (ctx, args) => {
+		const chat = await assertOwnsChat(ctx, args.chatId, args.userId);
+		if (!chat) return null;
+
+		const message = await ctx.db
+			.query("messages")
+			.withIndex("by_chat_not_deleted", (q) =>
+				q.eq("chatId", args.chatId).eq("deletedAt", undefined)
+			)
+			.filter((q) => q.eq(q.field("role"), "user"))
+			.order("asc")
+			.first();
+
+		return message?.content ?? null;
+	},
+});
+
 /**
  * Get active streaming message for a chat (for reconnection after page reload)
  * Returns the streamId if there's a message currently streaming
