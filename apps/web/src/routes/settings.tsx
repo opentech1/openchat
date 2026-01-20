@@ -13,7 +13,6 @@ import { useProviderStore, DAILY_LIMIT_CENTS } from "@/stores/provider";
 import { useModels, getCacheStatus } from "@/stores/model";
 import { useChatTitleStore, type ChatTitleLength } from "@/stores/chat-title";
 import { OpenRouterConnectModal } from "@/components/openrouter-connect-modal";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon } from "lucide-react";
