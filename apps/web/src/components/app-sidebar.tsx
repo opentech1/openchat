@@ -350,7 +350,10 @@ export function AppSidebar() {
         userId: convexUser._id,
       });
 
-      if (!seedText) return;
+      if (!seedText) {
+        setTitleGenerating(chatId, false);
+        return;
+      }
 
       const generatedTitle = await convexClient.action(api.chats.generateTitle, {
         userId: convexUser._id,
