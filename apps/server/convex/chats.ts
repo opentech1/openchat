@@ -413,23 +413,23 @@ export const updateTitle = mutation({
 		title: v.string(),
 	},
 	returns: v.null(),
-		handler: async (ctx, args) => {
-			const chat = await ctx.db.get(args.chatId);
-			if (!chat || chat.userId !== args.userId || chat.deletedAt) {
-				return null;
-			}
-
-			if (chat.title === "New Chat" || !chat.title) {
-				const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
-				await ctx.db.patch(args.chatId, {
-					title: sanitizedTitle,
-					updatedAt: Date.now(),
-				});
-			}
-
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
 			return null;
-		},
-	});
+		}
+
+		if (chat.title === "New Chat" || !chat.title) {
+			const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
+			await ctx.db.patch(args.chatId, {
+				title: sanitizedTitle,
+				updatedAt: Date.now(),
+			});
+		}
+
+		return null;
+	},
 
 /**
  * Force set a chat title (used for manual regeneration).
