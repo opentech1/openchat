@@ -9,6 +9,7 @@ import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeTitle } from "./lib/sanitize";
 
 const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
+const TITLE_MAX_LENGTH = 200;
 
 const chatDoc = v.object({
 	_id: v.id("chats"),
@@ -418,12 +419,12 @@ export const updateTitle = mutation({
 			return null;
 		}
 
-		if (chat.title === "New Chat" || !chat.title) {
-			const sanitizedTitle = sanitizeTitle(args.title.trim().slice(0, 100));
-			await ctx.db.patch(args.chatId, {
-				title: sanitizedTitle,
-				updatedAt: Date.now(),
-			});
+			if (chat.title === "New Chat" || !chat.title) {
+				const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
+				await ctx.db.patch(args.chatId, {
+					title: sanitizedTitle,
+					updatedAt: Date.now(),
+				});
 		}
 
 		return null;
@@ -447,7 +448,7 @@ export const setTitle = mutation({
 			return null;
 		}
 
-		const sanitizedTitle = sanitizeTitle(args.title.trim().slice(0, 200));
+		const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
 		const shouldUpdateTimestamp = args.updateUpdatedAt ?? true;
 		await ctx.db.patch(args.chatId, {
 			title: sanitizedTitle,
