@@ -508,12 +508,13 @@ function ChatSection() {
     setLength(TITLE_LENGTH_OPTIONS[index]);
   };
 
-  const handleTrackClick = (e: MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const position = x / rect.width;
-    const index = Math.round(position * (TITLE_LENGTH_OPTIONS.length - 1));
-    handleClick(Math.max(0, Math.min(index, TITLE_LENGTH_OPTIONS.length - 1)));
+	const handleTrackClick = (e: MouseEvent<HTMLDivElement>) => {
+		e.stopPropagation();
+		const rect = e.currentTarget.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const position = x / rect.width;
+		const index = Math.round(position * (TITLE_LENGTH_OPTIONS.length - 1));
+		handleClick(Math.max(0, Math.min(index, TITLE_LENGTH_OPTIONS.length - 1)));
   };
 
   return (
@@ -561,20 +562,21 @@ function ChatSection() {
               </div>
             </div>
 
-            <div className="flex justify-between text-xs text-muted-foreground">
-              {TITLE_LENGTH_OPTIONS.map((option, index) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => handleClick(index)}
-                  className={cn(
-                    "transition-colors hover:text-foreground",
-          <div className="relative h-2 cursor-pointer" onClick={(e) => { e.stopPropagation(); handleTrackClick(e); }}>
-                >
-                  {TITLE_LENGTH_LABELS[option]}
-                </button>
-              ))}
-            </div>
+			<div className="flex justify-between text-xs text-muted-foreground">
+				{TITLE_LENGTH_OPTIONS.map((option, index) => (
+					<button
+						key={option}
+						type="button"
+						onClick={() => handleClick(index)}
+						className={cn(
+							"transition-colors hover:text-foreground",
+							length === option && "text-foreground font-medium",
+						)}
+					>
+						{TITLE_LENGTH_LABELS[option]}
+					</button>
+				))}
+			</div>
           </div>
         </div>
 
