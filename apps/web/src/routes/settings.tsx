@@ -4,7 +4,7 @@
 
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,7 +18,8 @@ import { OpenRouterConnectModal } from "@/components/openrouter-connect-modal";
 import { DeleteAccountModal } from "@/components/delete-account-modal";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon } from "lucide-react";
+import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon, PencilIcon, CheckIcon, XIcon, Loader2Icon } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -140,9 +141,34 @@ function AccountSection({
 	user,
 }: { user: { id: string; name?: string | null; email?: string | null } }) {
 	const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+	const [isEditingName, setIsEditingName] = useState(false);
+	const [nameValue, setNameValue] = useState(user.name || "");
+	const [isSaving, setIsSaving] = useState(false);
 
 	// Get Convex user ID from external ID (Better Auth ID)
 	const convexUser = useQuery(api.users.getByExternalId, { externalId: user.id });
+	const updateName = useMutation(api.users.updateName);
+
+	const handleSaveName = async () => {
+		if (!convexUser || !nameValue.trim()) return;
+		setIsSaving(true);
+		try {
+			await updateName({ userId: convexUser._id, name: nameValue.trim() });
+			setIsEditingName(false);
+		} catch (error) {
+			console.error("Failed to update name:", error);
+		} finally {
+			setIsSaving(false);
+		}
+	};
+
+	const handleCancelEdit = () => {
+		setNameValue(convexUser?.name || user.name || "");
+		setIsEditingName(false);
+	};
+
+	// Use Convex user name (real-time) if available, fall back to auth user name
+	const displayName = convexUser?.name || user.name || "Not set";
 
 	return (
 		<div className="space-y-8">
@@ -169,11 +195,63 @@ function AccountSection({
 									/>
 								</svg>
 							</div>
-							<div>
-								<p className="text-sm font-medium">Name</p>
-								<p className="text-sm text-muted-foreground">{user.name || "Not set"}</p>
-							</div>
+							{isEditingName ? (
+								<div className="flex items-center gap-2">
+									<Input
+										value={nameValue}
+										onChange={(e) => setNameValue(e.target.value)}
+										placeholder="Enter your name"
+										className="h-8 w-48"
+										autoFocus
+										onKeyDown={(e) => {
+											if (e.key === "Enter") handleSaveName();
+											if (e.key === "Escape") handleCancelEdit();
+										}}
+									/>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-8"
+										onClick={handleSaveName}
+										disabled={isSaving || !nameValue.trim()}
+									>
+										{isSaving ? (
+											<Loader2Icon className="size-4 animate-spin" />
+										) : (
+											<CheckIcon className="size-4 text-success" />
+										)}
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon"
+										className="size-8"
+										onClick={handleCancelEdit}
+										disabled={isSaving}
+									>
+										<XIcon className="size-4 text-muted-foreground" />
+									</Button>
+								</div>
+							) : (
+								<div>
+									<p className="text-sm font-medium">Name</p>
+									<p className="text-sm text-muted-foreground">{displayName}</p>
+								</div>
+							)}
 						</div>
+						{!isEditingName && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => {
+									setNameValue(convexUser?.name || user.name || "");
+									setIsEditingName(true);
+								}}
+								disabled={!convexUser}
+							>
+								<PencilIcon className="mr-1.5 size-3.5" />
+								Edit
+							</Button>
+						)}
 					</div>
 					<Separator />
 					<div className="flex items-center justify-between p-4">

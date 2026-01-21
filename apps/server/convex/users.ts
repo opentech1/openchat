@@ -411,6 +411,38 @@ export const setFavoriteModels = mutation({
 	},
 });
 
+export const updateName = mutation({
+	args: {
+		userId: v.id("users"),
+		name: v.string(),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		// Validate name (1-100 chars, no excessive whitespace)
+		const trimmedName = args.name.trim();
+		if (trimmedName.length === 0 || trimmedName.length > 100) {
+			throw new Error("Name must be between 1 and 100 characters");
+		}
+
+		const now = Date.now();
+
+		// Update profile (primary location for name)
+		const profile = await getOrCreateProfile(ctx, args.userId);
+		await ctx.db.patch(profile._id, {
+			name: trimmedName,
+			updatedAt: now,
+		});
+
+		// Also update user table for backwards compatibility during migration
+		await ctx.db.patch(args.userId, {
+			name: trimmedName,
+			updatedAt: now,
+		});
+
+		return { success: true };
+	},
+});
+
 /**
  * Permanently delete a user account and all associated data.
  * This is an irreversible action that removes:
