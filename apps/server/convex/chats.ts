@@ -1,11 +1,15 @@
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { incrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { sanitizeTitle } from "./lib/sanitize";
+
+const TITLE_MODEL_ID = "google/gemini-2.5-flash-lite";
+const TITLE_MAX_LENGTH = 200;
 
 const chatDoc = v.object({
 	_id: v.id("chats"),
@@ -298,6 +302,107 @@ export const getChatReadStatuses = query({
 // Chat Title Update Function
 // ============================================================================
 
+const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
+	short: "Use 2-4 words. Prefer numerals (e.g., 4-day) when present.",
+	standard: "Use 4-6 words. Prefer numerals (e.g., 4-day) when present.",
+	long: "Use 7-10 words. Prefer numerals (e.g., 4-day) when present.",
+};
+
+export const generateTitle = action({
+	args: {
+		userId: v.id("users"),
+		seedText: v.string(),
+		length: v.union(v.literal("short"), v.literal("standard"), v.literal("long")),
+		provider: v.union(v.literal("osschat"), v.literal("openrouter")),
+		apiKey: v.optional(v.string()),
+	},
+	returns: v.union(v.string(), v.null()),
+	handler: async (_ctx, args) => {
+		await _ctx.runMutation(internal.chats.enforceTitleRateLimit, {
+			userId: args.userId,
+		});
+
+		const seedText = args.seedText.trim();
+		if (!seedText) return null;
+
+		const openRouterKey =
+			args.provider === "osschat" ? process.env.OPENROUTER_API_KEY : args.apiKey;
+		if (!openRouterKey) return null;
+
+		const systemPrompt = [
+			"Create a specific, useful chat title.",
+			"Return only the title in Title Case; no quotes, no trailing punctuation.",
+			"Focus on the core task and timeframe; avoid filler words like 'and', 'with', 'about'.",
+			TITLE_STYLE_PROMPTS[args.length],
+		].join(" ");
+
+		try {
+			const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${openRouterKey}`,
+					"HTTP-Referer": process.env.CONVEX_SITE_URL || "https://osschat.io",
+					"X-Title": "OSSChat",
+				},
+				body: JSON.stringify({
+					model: TITLE_MODEL_ID,
+					messages: [
+						{ role: "system", content: systemPrompt },
+						{ role: "user", content: seedText },
+					],
+					temperature: 0.2,
+					max_tokens: 32,
+				}),
+			});
+
+			if (!response.ok) {
+				const errorBody = await response.text();
+				console.warn("[Chat Title] OpenRouter error:", response.status, errorBody);
+				return null;
+			}
+
+			const data = (await response.json()) as {
+				choices?: Array<{ message?: { content?: string } }>;
+			};
+			const content = data.choices?.[0]?.message?.content;
+			if (!content) return null;
+
+			let title = content.trim();
+			if (
+				(title.startsWith("\"") && title.endsWith("\"")) ||
+				(title.startsWith("'") && title.endsWith("'"))
+			) {
+				title = title.slice(1, -1).trim();
+			}
+
+			const sanitizedTitle = sanitizeTitle(title, TITLE_MAX_LENGTH);
+			return sanitizedTitle || null;
+		} catch (error) {
+			console.warn("[Chat Title] Failed to generate title:", error);
+			return null;
+		}
+	},
+});
+
+export const enforceTitleRateLimit = internalMutation({
+	args: {
+		userId: v.id("users"),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const { ok, retryAfter } = await rateLimiter.limit(ctx, "chatTitleGenerate", {
+			key: args.userId,
+		});
+
+		if (!ok) {
+			throwRateLimitError("title generations", retryAfter);
+		}
+
+		return null;
+	},
+});
+
 /**
  * Update a chat's title if it's still the default "New Chat" or empty.
  * Used to automatically generate titles from the first user message.
@@ -316,12 +421,40 @@ export const updateTitle = mutation({
 		}
 
 		if (chat.title === "New Chat" || !chat.title) {
-			const sanitizedTitle = sanitizeTitle(args.title.trim().slice(0, 100));
+			const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
 			await ctx.db.patch(args.chatId, {
 				title: sanitizedTitle,
 				updatedAt: Date.now(),
 			});
 		}
+
+		return null;
+	},
+});
+
+/**
+ * Force set a chat title (used for manual regeneration).
+ */
+export const setTitle = mutation({
+	args: {
+		chatId: v.id("chats"),
+		userId: v.id("users"),
+		title: v.string(),
+		updateUpdatedAt: v.optional(v.boolean()),
+	},
+	returns: v.null(),
+	handler: async (ctx, args) => {
+		const chat = await ctx.db.get(args.chatId);
+		if (!chat || chat.userId !== args.userId || chat.deletedAt) {
+			return null;
+		}
+
+		const sanitizedTitle = sanitizeTitle(args.title, TITLE_MAX_LENGTH);
+		const shouldUpdateTimestamp = args.updateUpdatedAt ?? true;
+		await ctx.db.patch(args.chatId, {
+			title: sanitizedTitle,
+			updatedAt: shouldUpdateTimestamp ? Date.now() : chat.updatedAt,
+		});
 
 		return null;
 	},
@@ -364,4 +497,3 @@ export const getActiveStream = query({
 		return chat.activeStreamId ?? null;
 	},
 });
-

@@ -80,6 +80,12 @@ export const rateLimiter = new RateLimiter(components.rateLimiter, {
 		period: MINUTE,
 		capacity: 2,
 	},
+	chatTitleGenerate: {
+		kind: "token bucket",
+		rate: 20,
+		period: MINUTE,
+		capacity: 5,
+	},
 
 	// Message operations
 	messageSend: {

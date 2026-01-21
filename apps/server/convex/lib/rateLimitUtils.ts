@@ -25,5 +25,7 @@ export function throwRateLimitError(
 	retryAfterMs?: number
 ): never {
 	const waitTime = formatWaitTime(retryAfterMs);
-	throw new Error(`Too many ${action}. Please try again ${waitTime}.`);
+	const error = new Error(`Too many ${action}. Please try again ${waitTime}.`);
+	error.name = "RateLimitError";
+	throw error;
 }

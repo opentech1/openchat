@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth-client";
 import { useModelStore } from "@/stores/model";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore } from "@/stores/provider";
+import { useChatTitleStore } from "@/stores/chat-title";
 import { useStreamStore } from "@/stores/stream";
 import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
@@ -43,6 +44,8 @@ interface StreamingState {
 	reasoning: string;
 }
 
+const TITLE_GENERATION_RETRY_DELAY_MS = 1500;
+
 function convexMessageToUIMessage(msg: {
 	_id: string;
 	clientMessageId?: string;
@@ -72,16 +75,26 @@ export function usePersistentChat({
 	chatId,
 	onChatCreated,
 }: UsePersistentChatOptions): UsePersistentChatReturn {
+	const isMountedRef = useRef(true);
 	const { user } = useAuth();
 	const { selectedModelId, reasoningEffort, maxSteps } = useModelStore();
 	const { apiKey } = useOpenRouterKey();
 	const activeProvider = useProviderStore((s) => s.activeProvider);
 	const webSearchEnabled = useProviderStore((s) => s.webSearchEnabled);
+	const chatTitleLength = useChatTitleStore((s) => s.length);
+	const setTitleGenerating = useChatTitleStore((s) => s.setGenerating);
 
 	const [messages, setMessages] = useState<UIMessage[]>([]);
 	const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
 	const [error, setError] = useState<Error | undefined>(undefined);
 	const [currentChatId, setCurrentChatId] = useState<string | null>(chatId ?? null);
+
+	useEffect(() => {
+		isMountedRef.current = true;
+		return () => {
+			isMountedRef.current = false;
+		};
+	}, []);
 
 	const chatIdRef = useRef<string | null>(chatId ?? null);
 	const streamingRef = useRef<StreamingState | null>(null);
@@ -117,6 +130,7 @@ export function usePersistentChat({
 	const createChat = useMutation(api.chats.create);
 	const sendMessages = useMutation(api.messages.send);
 	const updateTitle = useMutation(api.chats.updateTitle);
+	const generateTitle = useAction(api.chats.generateTitle);
 	const startBackgroundStream = useMutation(api.backgroundStream.startStream);
 
 	const isNewChat = !chatId;
@@ -310,11 +324,71 @@ export function usePersistentChat({
 				]);
 
 				if (!chatId) {
-					await updateTitle({
-						chatId: targetChatId as Id<"chats">,
-						userId: convexUserId,
-						title: message.text.slice(0, 100) + (message.text.length > 100 ? "..." : ""),
-					});
+					const seedText = message.text.trim().slice(0, 300);
+					if (seedText) {
+						void (async () => {
+							if (!targetChatId) return;
+
+							const attemptGenerate = async () => {
+								try {
+									const generatedTitle = await generateTitle({
+										userId: convexUserId,
+										seedText,
+										length: chatTitleLength,
+										provider: activeProvider,
+										apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
+									});
+
+									if (generatedTitle) {
+										await updateTitle({
+											chatId: targetChatId as Id<"chats">,
+											userId: convexUserId,
+											title: generatedTitle,
+										});
+										return { status: "success" } as const;
+									}
+									return { status: "empty" } as const;
+								} catch (err) {
+									console.warn("[Chat] Title generation failed:", err);
+									const error = err instanceof Error ? err : new Error(String(err));
+									return {
+										status: "error",
+										message: error.message,
+										name: error.name,
+									} as const;
+								}
+							};
+
+							if (isMountedRef.current) {
+								setTitleGenerating(targetChatId, true, "auto");
+							}
+							try {
+								const result = await attemptGenerate();
+								if (result.status === "error") {
+									const isRateLimit = result.name === "RateLimitError";
+									if (!isRateLimit) {
+										await new Promise((resolve) =>
+											setTimeout(resolve, TITLE_GENERATION_RETRY_DELAY_MS)
+										);
+										const retryResult = await attemptGenerate();
+										if (retryResult.status === "error") {
+											if (isMountedRef.current) {
+												toast.error("Failed to generate chat name");
+											}
+										}
+									} else {
+										if (isMountedRef.current) {
+											toast.error(result.message || "Rate limit reached. Try again later.");
+										}
+									}
+								}
+							} finally {
+								if (isMountedRef.current) {
+									setTitleGenerating(targetChatId, false);
+								}
+							}
+						})();
+					}
 				}
 			} catch (err) {
 				console.error("[Chat] Error:", err);
@@ -325,8 +399,8 @@ export function usePersistentChat({
 		},
 		[
 			convexUserId, isUserLoading, user?.id, chatId, messages, selectedModelId,
-			activeProvider, apiKey, webSearchEnabled, reasoningEffort, maxSteps,
-			createChat, sendMessages, updateTitle, startBackgroundStream,
+			activeProvider, apiKey, webSearchEnabled, reasoningEffort, maxSteps, chatTitleLength,
+			setTitleGenerating, createChat, sendMessages, updateTitle, generateTitle, startBackgroundStream,
 		],
 	);
 
