@@ -2,11 +2,12 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import type { DataModel } from "./_generated/dataModel";
-import { incrementStat, STAT_KEYS } from "./lib/dbStats";
+import { incrementStat, decrementStat, STAT_KEYS } from "./lib/dbStats";
 import { rateLimiter } from "./lib/rateLimiter";
 import { throwRateLimitError } from "./lib/rateLimitUtils";
 import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
 import { authComponent } from "./auth";
+import { components } from "./_generated/api";
 
 // User document validator with all fields including fileUploadCount
 // Note: Kept for potential future use (e.g., admin queries that need raw user data)
@@ -400,11 +401,148 @@ export const setFavoriteModels = mutation({
 	returns: v.object({ success: v.boolean() }),
 	handler: async (ctx, args) => {
 		const profile = await getOrCreateProfile(ctx, args.userId);
-		
+
 		await ctx.db.patch(profile._id, {
 			favoriteModels: args.modelIds,
 			updatedAt: Date.now(),
 		});
+
+		return { success: true };
+	},
+});
+
+/**
+ * Permanently delete a user account and all associated data.
+ * This is an irreversible action that removes:
+ * - All chats and messages
+ * - All file uploads and storage blobs
+ * - All prompt templates
+ * - User profile and settings
+ * - Better Auth sessions and account links
+ *
+ * Note: For users with very large amounts of data, this mutation may approach
+ * Convex timeout limits. Consider breaking into scheduled jobs for production
+ * use with high-volume users.
+ */
+export const deleteAccount = mutation({
+	args: {
+		userId: v.id("users"),
+		externalId: v.string(),
+	},
+	returns: v.object({ success: v.boolean() }),
+	handler: async (ctx, args) => {
+		// Verify user exists and externalId matches (authorization check)
+		const user = await ctx.db.get(args.userId);
+		if (!user || user.externalId !== args.externalId) {
+			throw new Error("User not found or unauthorized");
+		}
+
+		// 1. Delete Better Auth sessions (invalidates all user sessions across devices)
+		// The externalId is the Better Auth user ID
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "session",
+				where: [{ field: "userId", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 1000 },
+		});
+
+		// 2. Delete Better Auth accounts (OAuth provider links)
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "account",
+				where: [{ field: "userId", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 100 },
+		});
+
+		// 3. Delete Better Auth user record
+		await ctx.runMutation(components.betterAuth.adapter.deleteMany, {
+			input: {
+				model: "user",
+				where: [{ field: "_id", operator: "eq", value: args.externalId }],
+			},
+			paginationOpts: { cursor: null, numItems: 1 },
+		});
+
+		// 4. Delete streamJobs
+		const streamJobs = await ctx.db
+			.query("streamJobs")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const job of streamJobs) {
+			await ctx.db.delete(job._id);
+		}
+
+		// 5. Delete chatReadStatus
+		const readStatuses = await ctx.db
+			.query("chatReadStatus")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const status of readStatuses) {
+			await ctx.db.delete(status._id);
+		}
+
+		// 6. Delete fileUploads AND storage blobs
+		const fileUploads = await ctx.db
+			.query("fileUploads")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const file of fileUploads) {
+			// Delete the actual file from Convex storage
+			try {
+				await ctx.storage.delete(file.storageId);
+			} catch (e) {
+				// Only log unexpected errors, not "not found" which is expected if file was already deleted
+				const message = e instanceof Error ? e.message : String(e);
+				if (!message.toLowerCase().includes("not found")) {
+					console.error("Unexpected error deleting storage file:", file.storageId, message);
+				}
+			}
+			await ctx.db.delete(file._id);
+		}
+
+		// 7. Delete messages (all messages for all user's chats)
+		const messages = await ctx.db
+			.query("messages")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const message of messages) {
+			await ctx.db.delete(message._id);
+		}
+
+		// 8. Delete chats
+		const chats = await ctx.db
+			.query("chats")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const chat of chats) {
+			await ctx.db.delete(chat._id);
+		}
+
+		// 9. Delete promptTemplates
+		const templates = await ctx.db
+			.query("promptTemplates")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.collect();
+		for (const template of templates) {
+			await ctx.db.delete(template._id);
+		}
+
+		// 10. Delete profile
+		const profile = await ctx.db
+			.query("profiles")
+			.withIndex("by_user", (q) => q.eq("userId", args.userId))
+			.unique();
+		if (profile) {
+			await ctx.db.delete(profile._id);
+		}
+
+		// 11. Delete user record last
+		await ctx.db.delete(args.userId);
+
+		// 12. Update stats
+		await decrementStat(ctx, STAT_KEYS.USERS_TOTAL);
 
 		return { success: true };
 	},

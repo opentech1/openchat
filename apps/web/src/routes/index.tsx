@@ -153,7 +153,7 @@ function LandingPage() {
         <div className="flex-1" />
 
         {/* Footer Links */}
-        <div className="mt-12 flex items-center gap-1.5 text-sm text-muted-foreground">
+        <div className="mt-12 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
           <span>by</span>
           <a
             href="https://x.com/leodev"
@@ -181,6 +181,27 @@ function LandingPage() {
           >
             github
           </a>
+          <span>·</span>
+          <Link
+            to="/about"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            about
+          </Link>
+          <span>·</span>
+          <Link
+            to="/privacy"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            privacy
+          </Link>
+          <span>·</span>
+          <Link
+            to="/terms"
+            className="inline-flex items-center gap-0.5 hover:text-foreground transition-colors"
+          >
+            terms
+          </Link>
         </div>
       </div>
 
@@ -196,6 +217,26 @@ function LandingPage() {
 
 function HomePage() {
   const { isAuthenticated, loading } = useAuth();
+
+  // Load autochangelog in-app widget only on root page for authenticated users
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const scriptId = 'autochangelog-in-app';
+    if (document.getElementById(scriptId)) return;
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://autochangelog.com/embed/opentech1/openchat/in-app.js';
+    document.body.appendChild(script);
+
+    return () => {
+      const existingScript = document.getElementById(scriptId);
+      if (existingScript) {
+        existingScript.remove();
+      }
+    };
+  }, [isAuthenticated]);
 
   if (!convexClient || loading) {
     return <div className="flex h-full bg-background" />;
