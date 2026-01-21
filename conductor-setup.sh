@@ -37,7 +37,8 @@ echo "Configuring Convex cloud dev deployment..."
 mkdir -p apps/server apps/web
 
 # Copy .env.local from main repo (contains dev deployment config)
-MAIN_REPO="/Users/leo/projects/openchat"
+# For git worktrees, --git-common-dir points to the main repo's .git directory
+MAIN_REPO="$(cd "$(git rev-parse --git-common-dir)/.." && pwd)"
 
 if [ -f "$MAIN_REPO/apps/server/.env.local" ]; then
     cp "$MAIN_REPO/apps/server/.env.local" apps/server/.env.local
@@ -50,7 +51,9 @@ if [ -f "$MAIN_REPO/apps/web/.env.local" ]; then
     cp "$MAIN_REPO/apps/web/.env.local" apps/web/.env.local
     echo "Copied web env from main repo"
 else
-    # Create default web env pointing to dev deployment
+    # Fallback: use the project's shared dev deployment URLs
+    # NOTE: If the dev deployment is recreated, update these URLs
+    # You can find the current URLs in the main repo's apps/web/.env.local
     cat > apps/web/.env.local << EOF
 VITE_CONVEX_URL=https://sincere-woodpecker-479.convex.cloud
 VITE_CONVEX_SITE_URL=https://sincere-woodpecker-479.convex.site
