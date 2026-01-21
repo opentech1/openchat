@@ -9,7 +9,7 @@ import { api } from "@server/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { useAuth, signOut } from "@/lib/auth-client";
+import { useAuth, signOut, authClient } from "@/lib/auth-client";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore, DAILY_LIMIT_CENTS } from "@/stores/provider";
 import { useModels, getCacheStatus } from "@/stores/model";
@@ -41,7 +41,7 @@ const sections: { id: Section; label: string }[] = [
 ];
 
 function SettingsPage() {
-  const { user, isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading, refetchSession } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>("account");
 
   if (loading) {
@@ -127,7 +127,7 @@ function SettingsPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl p-6">
-          {activeSection === "account" && <AccountSection user={user} />}
+          {activeSection === "account" && <AccountSection user={user} refetchSession={refetchSession} />}
           {activeSection === "providers" && <ProvidersSection />}
           {activeSection === "chat" && <ChatSection />}
           {activeSection === "models" && <ModelsSection />}
@@ -139,7 +139,8 @@ function SettingsPage() {
 
 function AccountSection({
 	user,
-}: { user: { id: string; name?: string | null; email?: string | null } }) {
+	refetchSession,
+}: { user: { id: string; name?: string | null; email?: string | null }; refetchSession: () => Promise<void> }) {
 	const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 	const [isEditingName, setIsEditingName] = useState(false);
 	const [nameValue, setNameValue] = useState(user.name || "");
@@ -153,7 +154,12 @@ function AccountSection({
 		if (!convexUser || !nameValue.trim()) return;
 		setIsSaving(true);
 		try {
+			// Update name in Better Auth (primary auth source)
+			await authClient.updateUser({ name: nameValue.trim() });
+			// Also update in Convex for consistency
 			await updateName({ userId: convexUser._id, name: nameValue.trim() });
+			// Refresh the session to get the updated user data
+			await refetchSession();
 			setIsEditingName(false);
 		} catch (error) {
 			console.error("Failed to update name:", error);
