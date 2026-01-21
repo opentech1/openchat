@@ -23,7 +23,7 @@ export const Route = createFileRoute("/terms")({
 
 function TermsPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-full flex-col overflow-y-auto bg-background">
       {/* Header */}
       <header className="border-b">
         <div className="mx-auto max-w-3xl px-6 py-4">
