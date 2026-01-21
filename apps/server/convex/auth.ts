@@ -84,14 +84,19 @@ export const createAuth = (
 				// Use current environment's URL for OAuth callbacks
 				redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
 			},
-			vercel: {
-				clientId: process.env.VERCEL_CLIENT_ID!,
-				clientSecret: process.env.VERCEL_CLIENT_SECRET!,
-				// Use current environment's URL for OAuth callbacks
-				redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
-				// Request email and profile scopes
-				scope: ["openid", "email", "profile"],
-			},
+			// Only include Vercel OAuth if credentials are configured
+			...(process.env.VERCEL_CLIENT_ID && process.env.VERCEL_CLIENT_SECRET
+				? {
+						vercel: {
+							clientId: process.env.VERCEL_CLIENT_ID,
+							clientSecret: process.env.VERCEL_CLIENT_SECRET,
+							// Use current environment's URL for OAuth callbacks
+							redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
+							// Request email and profile scopes
+							scope: ["openid", "email", "profile"],
+						},
+					}
+				: {}),
 		},
 		// Trust origins including wildcard patterns for previews
 		trustedOrigins: [
