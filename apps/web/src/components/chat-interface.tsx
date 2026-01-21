@@ -22,7 +22,6 @@ import { Button } from "./ui/button";
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton,
   useConversationScroll,
 } from "./ai-elements/conversation";
 import { Message, MessageContent, MessageResponse, MessageFile } from "./ai-elements/message";
@@ -1317,7 +1316,7 @@ function ChatInterfaceContent({
   return (
     <div className="flex h-full flex-col">
       {/* Messages area - using AI Elements Conversation */}
-      <Conversation className="flex-1 px-2 md:px-4">
+      <Conversation className="flex-1 px-2 md:px-4" showScrollButton>
         <AutoScroll messageCount={messages.length} />
         {/* Mobile: extra top padding to clear hamburger menu (fixed left-3 top-3 size-11 = 12px + 44px + 8px breathing room = 64px) */}
         <ConversationContent className="mx-auto max-w-3xl pt-16 md:pt-6 pb-16 px-2 md:px-4">
@@ -1462,7 +1461,6 @@ function ChatInterfaceContent({
             </AnimatePresence>
           )}
         </ConversationContent>
-        <ConversationScrollButton />
       </Conversation>
 
       <div className="px-2 md:px-4 pt-2 md:pt-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-4">

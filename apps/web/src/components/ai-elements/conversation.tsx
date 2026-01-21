@@ -4,7 +4,10 @@
  * Provides:
  * - Scrollable message area
  * - Auto-scroll to bottom via ref
- * - Scroll-to-bottom button
+ * - Scroll-to-bottom button (via showScrollButton prop)
+ *
+ * Note: This component must be used within a flex container with defined height.
+ * The internal scroll area uses absolute positioning and relies on flex-1 for sizing.
  */
 
 "use client";
@@ -38,9 +41,11 @@ export function useConversationScroll() {
 // Conversation
 // ============================================================================
 
-export type ConversationProps = ComponentProps<"div">;
+export type ConversationProps = ComponentProps<"div"> & {
+  showScrollButton?: boolean;
+};
 
-export const Conversation = ({ className, children, ...props }: ConversationProps) => {
+export const Conversation = ({ className, children, showScrollButton = false, ...props }: ConversationProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -73,15 +78,28 @@ export const Conversation = ({ className, children, ...props }: ConversationProp
 
   return (
     <ConversationContext.Provider value={{ scrollRef, isAtBottom, scrollToBottom }}>
-      <div
-        ref={scrollRef}
-        className={cn("relative flex-1 overflow-y-auto", className)}
-        role="log"
-        {...props}
-      >
-        {children}
-        {/* Anchor element for scroll-to-bottom */}
-        <div ref={anchorRef} className="h-0 w-full" aria-hidden="true" />
+      {/* Outer wrapper for positioning the scroll button */}
+      <div className={cn("relative flex-1", className)} {...props}>
+        {/* Scroll container - takes full space */}
+        <div
+          ref={scrollRef}
+          className="absolute inset-0 overflow-y-auto"
+          role="log"
+        >
+          {children}
+          {/* Anchor element for scroll-to-bottom */}
+          <div ref={anchorRef} className="h-0 w-full" aria-hidden="true" />
+        </div>
+        {/* Scroll button - positioned outside scroll area */}
+        {showScrollButton && !isAtBottom && (
+          <button
+            type="button"
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 rounded-full shadow-lg flex size-11 md:size-9 items-center justify-center bg-background border border-border hover:bg-muted active:scale-95 transition-all"
+            onClick={scrollToBottom}
+          >
+            <ArrowDownIcon className="size-5 md:size-4" />
+          </button>
+        )}
       </div>
     </ConversationContext.Provider>
   );
@@ -140,38 +158,3 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-// ============================================================================
-// ConversationScrollButton
-// ============================================================================
-
-export type ConversationScrollButtonProps = ComponentProps<"button">;
-
-export const ConversationScrollButton = ({
-  className,
-  ...props
-}: ConversationScrollButtonProps) => {
-  const { isAtBottom, scrollToBottom } = useConversationScroll();
-
-  const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
-
-  if (isAtBottom) return null;
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full shadow-lg",
-        "flex size-11 md:size-9 items-center justify-center",
-        "bg-background border border-border",
-        "hover:bg-muted active:scale-95 transition-all",
-        className,
-      )}
-      onClick={handleScrollToBottom}
-      {...props}
-    >
-      <ArrowDownIcon className="size-5 md:size-4" />
-    </button>
-  );
-};
