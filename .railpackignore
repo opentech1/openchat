@@ -1,0 +1,113 @@
+# Railpack ignore file - exclude unnecessary files from final Docker image
+# This dramatically reduces image size and build time
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Development & Build Tools
+.turbo
+.bun
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE & Editor
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+docs/
+docs-site/
+CHANGELOG*
+LICENSE*
+CONTRIBUTING*
+CODE_OF_CONDUCT*
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__/
+**/test/
+**/tests/
+coverage/
+.nyc_output/
+vitest.config.ts
+
+# TypeScript source (not needed at runtime - .output has compiled code)
+**/*.ts
+!**/*.d.ts
+**/*.tsx
+tsconfig*.json
+
+# Development configs
+.eslintrc*
+.prettierrc*
+eslint.config.*
+prettier.config.*
+.editorconfig
+biome.json
+oxlint.config.*
+
+# Docker files (not needed inside container)
+Dockerfile*
+docker-compose*.yml
+docker/
+.dockerignore
+
+# Railway configs (used at build time, not runtime)
+railway.toml
+
+# Convex local artifacts
+apps/server/.convex
+
+# Next.js / Vite build artifacts (we only need .output)
+apps/web/.next
+apps/web/out
+apps/web/node_modules/.vite
+apps/web/node_modules/.cache
+
+# Extension (not deployed to web)
+apps/extension/
+
+# Scripts (not needed at runtime)
+scripts/
+
+# Package source files (only need compiled output)
+packages/*/src/
+packages/*/*.ts
+
+# Heavy dev dependencies in node_modules
+node_modules/.cache/
+node_modules/@types/
+node_modules/typescript/
+node_modules/@typescript-eslint/
+node_modules/eslint*/
+node_modules/prettier/
+node_modules/@testing-library/
+node_modules/vitest/
+node_modules/@vitest/
+node_modules/jsdom/
+node_modules/turbo/
+node_modules/@turbo/
+node_modules/oxlint/
+node_modules/@anthropic-ai/
+node_modules/@sentry/
+node_modules/@sentry-internal/
+node_modules/mermaid/
+node_modules/shiki/
+node_modules/hugeicons-react/
+
+# Source maps (not needed in production)
+**/*.map
+**/*.js.map
+**/*.mjs.map
