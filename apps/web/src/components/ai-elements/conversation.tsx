@@ -4,7 +4,10 @@
  * Provides:
  * - Scrollable message area
  * - Auto-scroll to bottom via ref
- * - Scroll-to-bottom button
+ * - Scroll-to-bottom button (via showScrollButton prop)
+ *
+ * Note: This component must be used within a flex container with defined height.
+ * The internal scroll area uses absolute positioning and relies on flex-1 for sizing.
  */
 
 "use client";
@@ -155,40 +158,3 @@ export const ConversationEmptyState = ({
   </div>
 );
 
-// ============================================================================
-// ConversationScrollButton
-// ============================================================================
-
-export type ConversationScrollButtonProps = ComponentProps<"button">;
-
-export const ConversationScrollButton = ({
-  className,
-  ...props
-}: ConversationScrollButtonProps) => {
-  const { isAtBottom, scrollToBottom } = useConversationScroll();
-
-  const handleScrollToBottom = useCallback(() => {
-    scrollToBottom();
-  }, [scrollToBottom]);
-
-  if (isAtBottom) return null;
-
-  return (
-    <div className="sticky bottom-4 flex justify-center pointer-events-none z-10">
-      <button
-        type="button"
-        className={cn(
-          "rounded-full shadow-lg pointer-events-auto",
-          "flex size-11 md:size-9 items-center justify-center",
-          "bg-background border border-border",
-          "hover:bg-muted active:scale-95 transition-all",
-          className,
-        )}
-        onClick={handleScrollToBottom}
-        {...props}
-      >
-        <ArrowDownIcon className="size-5 md:size-4" />
-      </button>
-    </div>
-  );
-};
