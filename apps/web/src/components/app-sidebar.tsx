@@ -119,7 +119,7 @@ function ChatGroup({
       <SidebarGroupLabel>{label}</SidebarGroupLabel>
       <SidebarMenu>
         {chats.map((chat) => (
-          <SidebarMenuItem key={chat._id}>
+          <SidebarMenuItem key={chat._id} className="group relative">
             <SidebarMenuButton
               isActive={currentChatId === chat._id}
               onClick={() => {
@@ -127,7 +127,7 @@ function ChatGroup({
                 onChatClick(chat._id);
               }}
               onContextMenu={(event) => onChatContextMenu(chat._id, event)}
-              className="group pr-8"
+              className="pr-8"
             >
               <ChatIcon />
               {generatingChatIds[chat._id] ? (
@@ -161,15 +161,15 @@ function ChatGroup({
                   {chat.title}
                 </span>
               )}
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85"
-                onClick={(event) => onQuickDelete(chat._id, event)}
-                aria-label="Delete chat"
-              >
-                <XIcon className="size-3.5" />
-              </button>
             </SidebarMenuButton>
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex size-6 items-center justify-center opacity-0 transition-opacity group-hover:opacity-70 text-sidebar-foreground/60 hover:text-sidebar-foreground/85 z-10"
+              onClick={(event) => onQuickDelete(chat._id, event)}
+              aria-label="Delete chat"
+            >
+              <XIcon className="size-3.5" />
+            </button>
           </SidebarMenuItem>
         ))}
       </SidebarMenu>

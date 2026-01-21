@@ -37,9 +37,9 @@ export const createAuth = (
 	}
 	const siteUrl = process.env.SITE_URL || "http://localhost:3000";
 
-	// Detect if this is a preview environment
-	const isPreview = process.env.NEXT_PUBLIC_DEPLOYMENT === "preview" ||
-		(convexSiteUrl !== PRODUCTION_CONVEX_SITE_URL && !convexSiteUrl.includes("localhost"));
+	// Detect if this is a preview environment (explicit opt-in only)
+	// Dev cloud deployments with their own OAuth apps should NOT use oAuthProxy
+	const isPreview = process.env.DEPLOYMENT_TYPE === "preview";
 
 	// Build authConfig at runtime when CONVEX_SITE_URL is available
 	const authConfig = {
@@ -81,8 +81,16 @@ export const createAuth = (
 			github: {
 				clientId: process.env.GITHUB_CLIENT_ID!,
 				clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-				// Always use production callback URL so GitHub OAuth works for all environments
-				redirectURI: `${PRODUCTION_CONVEX_SITE_URL}/api/auth/callback/github`,
+				// Use current environment's URL for OAuth callbacks
+				redirectURI: `${convexSiteUrl}/api/auth/callback/github`,
+			},
+			vercel: {
+				clientId: process.env.VERCEL_CLIENT_ID!,
+				clientSecret: process.env.VERCEL_CLIENT_SECRET!,
+				// Use current environment's URL for OAuth callbacks
+				redirectURI: `${convexSiteUrl}/api/auth/callback/vercel`,
+				// Request email and profile scopes
+				scope: ["openid", "email", "profile"],
 			},
 		},
 		// Trust origins including wildcard patterns for previews

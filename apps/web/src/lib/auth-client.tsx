@@ -278,6 +278,16 @@ export async function signInWithGitHub(callbackURL = "/") {
 }
 
 /**
+ * Sign in with Vercel OAuth
+ */
+export async function signInWithVercel(callbackURL = "/") {
+  return authClient.signIn.social({
+    provider: "vercel",
+    callbackURL,
+  });
+}
+
+/**
  * Sign out
  */
 export async function signOut() {
