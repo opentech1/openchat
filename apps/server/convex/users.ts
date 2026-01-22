@@ -81,13 +81,13 @@ export const ensure = mutation({
 			.withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
 			.unique();
 
-		// MIGRATION: If not found by externalId but email exists, try to link by email
-		// This handles users who previously logged in with WorkOS
+		// MIGRATION: Link WorkOS users to Better Auth by email
+		// Uses .first() since duplicate emails may exist from prior migrations
 		if (!existing && args.email) {
 			const existingByEmail = await ctx.db
 				.query("users")
 				.withIndex("by_email", (q) => q.eq("email", args.email))
-				.unique();
+				.first();
 
 			if (existingByEmail) {
 				// Update externalId to Better Auth user ID (migration from WorkOS)
