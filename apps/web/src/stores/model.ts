@@ -39,7 +39,8 @@ export interface Model {
   id: string;
   name: string;
   provider: string; // Provider display name (e.g., "Anthropic")
-  providerId: string; // Provider slug for logos (e.g., "anthropic")
+  providerId: string; // Provider slug from model ID (e.g., "meta-llama", "qwen")
+  logoId: string; // Logo slug for models.dev (e.g., "llama", "alibaba")
   family?: string; // Model family (e.g., "claude-3.5")
   description?: string;
   contextLength?: number;
@@ -60,7 +61,7 @@ const PROVIDER_INFO: Record<string, { name: string; logoId: string }> = {
   openai: { name: "OpenAI", logoId: "openai" },
   anthropic: { name: "Anthropic", logoId: "anthropic" },
   google: { name: "Google", logoId: "google" },
-  "meta-llama": { name: "Meta Llama", logoId: "llama" },
+  "meta-llama": { name: "Llama", logoId: "llama" },
   mistralai: { name: "Mistral", logoId: "mistral" },
   deepseek: { name: "DeepSeek", logoId: "deepseek" },
   "x-ai": { name: "xAI", logoId: "xai" },
@@ -291,7 +292,8 @@ function transformModel(raw: OpenRouterModel): Model {
     id,
     name: raw.name || id,
     provider: info.name,
-    providerId: info.logoId,
+    providerId: providerSlug,
+    logoId: info.logoId,
     family: extractFamily(id, raw.name || ""),
     description: raw.description,
     contextLength: raw.context_length,
@@ -412,6 +414,7 @@ function getFallbackModels(): Model[] {
       name: "Claude 3.5 Sonnet",
       provider: "Anthropic",
       providerId: "anthropic",
+      logoId: "anthropic",
       family: "Claude 3.5",
       isPopular: true,
     },
@@ -420,6 +423,7 @@ function getFallbackModels(): Model[] {
       name: "GPT-4o",
       provider: "OpenAI",
       providerId: "openai",
+      logoId: "openai",
       family: "GPT-4o",
       isPopular: true,
     },
@@ -428,6 +432,7 @@ function getFallbackModels(): Model[] {
       name: "GPT-4o Mini",
       provider: "OpenAI",
       providerId: "openai",
+      logoId: "openai",
       family: "GPT-4o",
       isPopular: true,
     },
@@ -436,6 +441,7 @@ function getFallbackModels(): Model[] {
       name: "Gemini 2.5 Flash",
       provider: "Google",
       providerId: "google",
+      logoId: "google",
       family: "Gemini 2.5",
       isPopular: true,
     },
@@ -444,14 +450,16 @@ function getFallbackModels(): Model[] {
       name: "DeepSeek Chat",
       provider: "DeepSeek",
       providerId: "deepseek",
+      logoId: "deepseek",
       family: "DeepSeek",
       isPopular: true,
     },
     {
       id: "meta-llama/llama-3.3-70b-instruct",
       name: "Llama 3.3 70B",
-      provider: "Meta Llama",
-      providerId: "llama",
+      provider: "Llama",
+      providerId: "meta-llama",
+      logoId: "llama",
       family: "Llama 3.3",
       isPopular: true,
     },

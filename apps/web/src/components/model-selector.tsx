@@ -156,7 +156,7 @@ function ModelItem({
         isSelected && "bg-accent/60",
       )}
     >
-      <ProviderLogo providerId={model.providerId} className="size-5 shrink-0" />
+      <ProviderLogo providerId={model.logoId} className="size-5 shrink-0" />
 
       <span className={cn(
         "flex-1 truncate text-[13px] font-medium tracking-tight transition-colors duration-150",
@@ -250,7 +250,7 @@ export function ModelSelector({
   const selectedModel = useMemo(() => getModelById(models, value), [models, value]);
 
   const uniqueProviders = useMemo(() => {
-    const providerMap = new Map<string, { id: string; name: string; count: number }>();
+    const providerMap = new Map<string, { id: string; name: string; logoId: string; count: number }>();
     for (const model of models) {
       const existing = providerMap.get(model.providerId);
       if (existing) {
@@ -259,6 +259,7 @@ export function ModelSelector({
         providerMap.set(model.providerId, {
           id: model.providerId,
           name: model.provider,
+          logoId: model.logoId,
           count: 1,
         });
       }
@@ -457,7 +458,7 @@ export function ModelSelector({
       >
         {selectedModel ? (
           <>
-            <ProviderLogo providerId={selectedModel.providerId} className="size-4" />
+            <ProviderLogo providerId={selectedModel.logoId} className="size-4" />
             <span className="truncate max-w-[80px] md:max-w-[140px] font-medium">{selectedModel.name}</span>
           </>
         ) : (
@@ -572,7 +573,7 @@ export function ModelSelector({
                           : "bg-muted/50 text-muted-foreground active:bg-accent active:text-foreground",
                       )}
                     >
-                      <ProviderLogo providerId={provider.id} className="size-4" />
+                      <ProviderLogo providerId={provider.logoId} className="size-4" />
                       <span className="max-w-[80px] truncate">{provider.name}</span>
                     </button>
                   ))}
@@ -714,7 +715,7 @@ export function ModelSelector({
                       )}
                       title={provider.name}
                     >
-                      <ProviderLogo providerId={provider.id} className="size-5" />
+                      <ProviderLogo providerId={provider.logoId} className="size-5" />
                     </button>
                   ))}
                 </div>

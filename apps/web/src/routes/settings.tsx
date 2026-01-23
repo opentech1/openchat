@@ -850,7 +850,7 @@ function ModelsSection() {
               {models.slice(0, 8).map((model) => (
                 <div key={model.id} className="flex items-center gap-3 p-3">
                   <img
-                    src={`https://models.dev/logos/${model.providerId}.svg`}
+                    src={`https://models.dev/logos/${model.logoId}.svg`}
                     alt={model.provider}
                     className="size-5 dark:invert"
                     onError={(e) => {
