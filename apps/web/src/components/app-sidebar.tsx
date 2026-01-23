@@ -1,14 +1,29 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import {  useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
+import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "./ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "./ui/sidebar";
+import type {MouseEvent} from "react";
+import type { Id } from "@server/convex/_generated/dataModel";
 import { useAuth } from "@/lib/auth-client";
 import { convexClient } from "@/lib/convex";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore } from "@/stores/provider";
 import { useChatTitleStore } from "@/stores/chat-title";
 import { cn } from "@/lib/utils";
-import { Button } from "./ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,21 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  useSidebar,
-} from "./ui/sidebar";
-import { PlusIcon, ChatIcon, SidebarIcon, ChevronRightIcon, MenuIcon } from "@/components/icons";
-import { PencilIcon, SparklesIcon, Trash2Icon, XIcon } from "lucide-react";
-import { toast } from "sonner";
-import type { Id } from "@server/convex/_generated/dataModel";
+import { ChatIcon, ChevronRightIcon, MenuIcon, PlusIcon, SidebarIcon } from "@/components/icons";
 
 const CHATS_CACHE_KEY = "openchat-chats-cache";
 const CONTEXT_MENU_PADDING = 12;
@@ -55,11 +56,11 @@ function ChatItemSkeleton({ delay = 0 }: { delay?: number }) {
   );
 }
 
-function groupChatsByTime(chats: ChatItem[]) {
-  const today: ChatItem[] = [];
-  const last7Days: ChatItem[] = [];
-  const last30Days: ChatItem[] = [];
-  const older: ChatItem[] = [];
+function groupChatsByTime(chats: Array<ChatItem>) {
+  const today: Array<ChatItem> = [];
+  const last7Days: Array<ChatItem> = [];
+  const last30Days: Array<ChatItem> = [];
+  const older: Array<ChatItem> = [];
 
   const now = Date.now();
   const oneDayMs = 1000 * 60 * 60 * 24;
@@ -83,12 +84,12 @@ function groupChatsByTime(chats: ChatItem[]) {
 
 interface ChatGroupProps {
   label: string;
-  chats: ChatItem[];
+  chats: Array<ChatItem>;
   currentChatId?: string;
   onChatClick: (chatId: string) => void;
   onChatContextMenu: (chatId: string, event: MouseEvent) => void;
   onQuickDelete: (chatId: string, event: React.MouseEvent) => void;
-  generatingChatIds: Record<string, "auto" | "manual">;
+  generatingChatIds: Partial<Record<string, "auto" | "manual">>;
   editingChatId: string | null;
   editValue: string;
   onEditChange: (value: string) => void;
@@ -221,7 +222,7 @@ export function AppSidebar() {
     convexClient && convexUser?._id ? { userId: convexUser._id } : "skip",
   );
 
-  const cachedChatsRef = useRef<ChatItem[] | null>(null);
+  const cachedChatsRef = useRef<Array<ChatItem> | null>(null);
   
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -678,8 +679,8 @@ export function AppSidebar() {
       )}
       <AlertDialog
         open={!!deleteChatId}
-        onOpenChange={(open) => {
-          if (!open) setDeleteChatId(null);
+        onOpenChange={(isDialogOpen) => {
+          if (!isDialogOpen) setDeleteChatId(null);
         }}
       >
         <AlertDialogContent

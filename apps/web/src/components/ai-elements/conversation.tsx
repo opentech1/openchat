@@ -12,10 +12,10 @@
 
 "use client";
 
-import { cn } from "@/lib/utils";
 import { ArrowDownIcon } from "lucide-react";
-import type { ComponentProps, RefObject } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import type { ComponentProps, RefObject } from "react";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // Context for scroll state

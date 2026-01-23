@@ -9,10 +9,10 @@
 
 "use client";
 
-import { cn } from "@/lib/utils";
-import type { ComponentProps, ReactNode } from "react";
 import { createContext, useContext } from "react";
 import { Streamdown } from "streamdown";
+import type { ComponentProps, ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // Context

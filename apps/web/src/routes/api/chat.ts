@@ -1,17 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
 import {
-	streamText,
 	convertToModelMessages,
-	stepCountIs,
 	generateId,
+	stepCountIs,
+	streamText,
 } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { webSearch } from "@valyu/ai-sdk";
-import { redis } from "@/lib/redis";
-import { convexServerClient } from "@/lib/convex-server";
 import { api } from "@server/convex/_generated/api";
 import type { Id } from "@server/convex/_generated/dataModel";
+import { redis } from "@/lib/redis";
+import { convexServerClient } from "@/lib/convex-server";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const VALYU_API_KEY = process.env.VALYU_API_KEY;
@@ -230,7 +230,7 @@ export const Route = createFileRoute("/api/chat")({
 							
 							try {
 								for await (const part of result.fullStream) {
-									if (abortSignal?.aborted) {
+									if (abortSignal.aborted) {
 										console.log("[Chat API POST] Client disconnected, marking stream interrupted");
 										await markStreamInterrupted();
 										controller.close();

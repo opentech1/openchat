@@ -4,7 +4,7 @@ import { useUIStore } from "../stores/ui";
 import { signOut } from "../lib/auth-client";
 import { cn } from "../lib/utils";
 import { fuzzyMatch } from "@/lib/fuzzy-search";
-import { SearchIcon, PlusIcon, SettingsIcon, LogOutIcon, ChatIcon } from "@/components/icons";
+import { ChatIcon, LogOutIcon, PlusIcon, SearchIcon, SettingsIcon } from "@/components/icons";
 
 // Types
 interface CommandItem {
@@ -14,7 +14,7 @@ interface CommandItem {
   subtitle?: string;
   icon: React.ReactNode;
   action: () => void;
-  keywords?: string[];
+  keywords?: Array<string>;
 }
 
 // Mock recent chats data
@@ -74,8 +74,8 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const allItems = useMemo<CommandItem[]>(() => {
-    const actions: CommandItem[] = [
+  const allItems = useMemo<Array<CommandItem>>(() => {
+    const actions: Array<CommandItem> = [
       {
         id: "new-chat",
         type: "action",
@@ -111,7 +111,7 @@ export function CommandPalette() {
       },
     ];
 
-    const chats: CommandItem[] = mockChats.map((chat) => ({
+    const chats: Array<CommandItem> = mockChats.map((chat) => ({
       id: `chat-${chat.id}`,
       type: "chat",
       title: chat.title,
@@ -166,7 +166,6 @@ export function CommandPalette() {
     }
     // NOTE: isClosing intentionally omitted from deps to prevent the effect
     // from re-running and clearing the close timer when isClosing changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandPaletteOpen, isVisible]);
 
   // Focus input when opening

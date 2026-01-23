@@ -8,7 +8,7 @@
 
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { initPricingLookup } from "./provider";
 import { analytics } from "@/lib/analytics";
 
@@ -32,7 +32,7 @@ interface OpenRouterModel {
   architecture?: {
     modality?: string;
   };
-  supported_parameters?: string[];
+  supported_parameters?: Array<string>;
 }
 
 export interface Model {
@@ -56,7 +56,7 @@ export interface Model {
 // Provider mapping for display names and logo IDs
 // ============================================================================
 
-const PROVIDER_INFO: Record<string, { name: string; logoId: string }> = {
+const PROVIDER_INFO: Partial<Record<string, { name: string; logoId: string }>> = {
   openai: { name: "OpenAI", logoId: "openai" },
   anthropic: { name: "Anthropic", logoId: "anthropic" },
   google: { name: "Google", logoId: "google" },
@@ -150,17 +150,17 @@ const PROVIDER_PRIORITY = [
 // ============================================================================
 
 interface ModelCache {
-  models: Model[] | null;
+  models: Array<Model> | null;
   timestamp: number;
   loading: boolean;
   error: Error | null;
-  promise: Promise<Model[]> | null;
+  promise: Promise<Array<Model>> | null;
 }
 
 const CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 const STORAGE_KEY = "openchat-models-cache";
 
-function loadFromStorage(): { models: Model[] | null; timestamp: number } {
+function loadFromStorage(): { models: Array<Model> | null; timestamp: number } {
   if (typeof window === "undefined") return { models: null, timestamp: 0 };
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -176,7 +176,7 @@ function loadFromStorage(): { models: Model[] | null; timestamp: number } {
   return { models: null, timestamp: 0 };
 }
 
-function saveToStorage(models: Model[], timestamp: number) {
+function saveToStorage(models: Array<Model>, timestamp: number) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ models, timestamp }));
@@ -266,7 +266,7 @@ function extractFamily(id: string, name: string): string | undefined {
 }
 
 function transformModel(raw: OpenRouterModel): Model {
-  const id = raw.id as string;
+  const id = raw.id;
   const providerSlug = id.split("/")[0] || "unknown";
   const info = PROVIDER_INFO[providerSlug] || {
     name: providerSlug.charAt(0).toUpperCase() + providerSlug.slice(1).replace(/-/g, " "),
@@ -309,7 +309,7 @@ function transformModel(raw: OpenRouterModel): Model {
 // Fetch ALL models from OpenRouter
 // ============================================================================
 
-async function fetchAllModels(): Promise<Model[]> {
+async function fetchAllModels(): Promise<Array<Model>> {
   // Return cached if fresh
   if (cache.models && Date.now() - cache.timestamp < CACHE_TTL) {
     return cache.models;
@@ -336,7 +336,7 @@ async function fetchAllModels(): Promise<Model[]> {
       const rawModels = data.data || [];
 
       // Transform all models
-      const models: Model[] = (rawModels as OpenRouterModel[])
+      const models: Array<Model> = (rawModels as Array<OpenRouterModel>)
         .filter((m): m is OpenRouterModel & { id: string } => !!m.id && typeof m.id === "string")
         .map(transformModel)
         // Sort: Popular first, then by provider priority, then alphabetically
@@ -396,7 +396,7 @@ export function clearModelCache() {
 }
 
 // Reload models (clear cache + fetch)
-export async function reloadModels(): Promise<Model[]> {
+export async function reloadModels(): Promise<Array<Model>> {
   clearModelCache();
   return fetchAllModels();
 }
@@ -405,7 +405,7 @@ export async function reloadModels(): Promise<Model[]> {
 // Fallback models
 // ============================================================================
 
-function getFallbackModels(): Model[] {
+function getFallbackModels(): Array<Model> {
   return [
     {
       id: "anthropic/claude-3.5-sonnet",
@@ -458,7 +458,7 @@ function getFallbackModels(): Model[] {
   ];
 }
 
-export const models = getFallbackModels();
+export const defaultModels = getFallbackModels();
 export const fallbackModels = getFallbackModels();
 
 // ============================================================================
@@ -593,16 +593,16 @@ export const useModelStore = create<ModelState>()(
         merge: (persisted, current) => {
           const data = persisted as {
             selectedModelId?: string;
-            favorites?: string[];
+            favorites?: Array<string>;
             reasoningEffort?: ReasoningEffort;
             maxSteps?: number;
           };
           return {
             ...current,
-            selectedModelId: data?.selectedModelId ?? current.selectedModelId,
-            favorites: new Set(data?.favorites ?? []),
-            reasoningEffort: data?.reasoningEffort ?? current.reasoningEffort,
-            maxSteps: data?.maxSteps ?? current.maxSteps,
+            selectedModelId: data.selectedModelId ?? current.selectedModelId,
+            favorites: new Set(data.favorites ?? []),
+            reasoningEffort: data.reasoningEffort ?? current.reasoningEffort,
+            maxSteps: data.maxSteps ?? current.maxSteps,
           };
         },
       },
@@ -616,7 +616,7 @@ export const useModelStore = create<ModelState>()(
 // ============================================================================
 
 export function useModels() {
-  const [models, setModels] = useState<Model[]>(() => cache.models || getFallbackModels());
+  const [models, setModels] = useState<Array<Model>>(() => cache.models || getFallbackModels());
   const [isLoading, setIsLoading] = useState(() => cache.loading || !cache.models);
   const [error, setError] = useState<Error | null>(() => cache.error);
   const [, forceUpdate] = useState(0);
@@ -676,23 +676,19 @@ export function useModels() {
     }
   }, []);
 
-  // Group by provider
   const modelsByProvider = useMemo(() => {
-    const groups: Record<string, Model[]> = {};
+    const groups: Record<string, Array<Model>> = {};
     for (const model of models) {
-      if (!groups[model.provider]) groups[model.provider] = [];
-      groups[model.provider].push(model);
+      (groups[model.provider] ??= []).push(model);
     }
     return groups;
   }, [models]);
 
-  // Group by family
   const modelsByFamily = useMemo(() => {
-    const groups: Record<string, Model[]> = {};
+    const groups: Record<string, Array<Model>> = {};
     for (const model of models) {
       const key = model.family || model.provider;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(model);
+      (groups[key] ??= []).push(model);
     }
     return groups;
   }, [models]);
@@ -743,8 +739,8 @@ export function useModels() {
 // Helpers
 // ============================================================================
 
-export function getModelById(models: Model[], id: string): Model | undefined {
-  return models.find((m) => m.id === id);
+export function getModelById(modelList: Array<Model>, id: string): Model | undefined {
+  return modelList.find((m) => m.id === id);
 }
 
 export function prefetchModels() {

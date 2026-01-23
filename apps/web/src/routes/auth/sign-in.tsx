@@ -2,8 +2,8 @@
  * Sign In Page - GitHub OAuth authentication
  */
 
-import { useState, useEffect } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { signInWithGitHub, signInWithVercel } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

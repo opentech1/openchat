@@ -6,7 +6,7 @@
  * Uses OSSChat Cloud (free tier) by default, no API key required.
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-client";
 import { ChatInterface } from "@/components/chat-interface";
 import { Button } from "@/components/ui/button";

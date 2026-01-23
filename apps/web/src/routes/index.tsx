@@ -1,9 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../lib/auth-client";
 import { Button } from "../components/ui/button";
 import { ChatInterface } from "../components/chat-interface";
 import { convexClient } from "../lib/convex";
-import { useRef, useCallback, useState, useEffect } from "react";
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/')({
 const GAP = 2
 
 function generateStaircaseSquares(gridSize: number) {
-  const squares: { col: number; row: number; key: string }[] = []
+  const squares: Array<{ col: number; row: number; key: string }> = []
 
   for (let row = 0; row < gridSize; row++) {
     const colsToFill = gridSize - row

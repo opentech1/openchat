@@ -2,23 +2,25 @@
  * Settings Page
  */
 
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, useMutation } from "convex/react";
+import {   useState } from "react";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
+import { CheckCircleIcon, CheckIcon, DatabaseIcon, Loader2Icon, PencilIcon, RefreshCwIcon, XIcon, ZapIcon } from "lucide-react";
+import type {KeyboardEvent, MouseEvent} from "react";
+import type {ChatTitleLength} from "@/stores/chat-title";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { useAuth, signOut, authClient } from "@/lib/auth-client";
+import { authClient, signOut, useAuth } from "@/lib/auth-client";
 import { useOpenRouterKey } from "@/stores/openrouter";
-import { useProviderStore, DAILY_LIMIT_CENTS } from "@/stores/provider";
-import { useModels, getCacheStatus } from "@/stores/model";
-import { useChatTitleStore, type ChatTitleLength } from "@/stores/chat-title";
+import { DAILY_LIMIT_CENTS, useProviderStore } from "@/stores/provider";
+import { getCacheStatus, useModels } from "@/stores/model";
+import {  useChatTitleStore } from "@/stores/chat-title";
 import { OpenRouterConnectModal } from "@/components/openrouter-connect-modal";
 import { DeleteAccountModal } from "@/components/delete-account-modal";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { RefreshCwIcon, DatabaseIcon, ZapIcon, CheckCircleIcon, PencilIcon, CheckIcon, XIcon, Loader2Icon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/settings")({
@@ -33,7 +35,7 @@ export const Route = createFileRoute("/settings")({
 
 type Section = "account" | "providers" | "chat" | "models";
 
-const sections: { id: Section; label: string }[] = [
+const sections: Array<{ id: Section; label: string }> = [
   { id: "account", label: "Account" },
   { id: "providers", label: "Providers" },
   { id: "chat", label: "Chat" },
@@ -573,7 +575,7 @@ function ProvidersSection() {
   );
 }
 
-const TITLE_LENGTH_OPTIONS: ChatTitleLength[] = ["short", "standard", "long"];
+const TITLE_LENGTH_OPTIONS: Array<ChatTitleLength> = ["short", "standard", "long"];
 const TITLE_LENGTH_LABELS: Record<ChatTitleLength, string> = {
   short: "Concise (2-4 words)",
   standard: "Standard (4-6 words)",

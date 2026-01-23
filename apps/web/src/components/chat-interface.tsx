@@ -15,52 +15,52 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
-import { motion, AnimatePresence } from "motion/react";
-import type { UIMessagePart, UIDataTypes, UITools } from "ai";
-import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "motion/react";
+import { ArrowUpIcon, BrainIcon, ChevronDownIcon, GlobeIcon,
+  LinkIcon,
+  Loader2Icon,
+  MinusIcon,
+  PaperclipIcon,
+  PlusIcon,
+  SearchIcon,
+  SlidersHorizontalIcon,
+  SquareIcon,
+  XIcon } from "lucide-react";
+import { Streamdown } from "streamdown";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
   Conversation,
   ConversationContent,
   useConversationScroll,
 } from "./ai-elements/conversation";
-import { Message, MessageContent, MessageResponse, MessageFile } from "./ai-elements/message";
+import { Message, MessageContent, MessageFile, MessageResponse } from "./ai-elements/message";
 import {
   PromptInput,
-  PromptInputTextarea,
-  PromptInputFooter,
-  PromptInputTools,
-  PromptInputAttachments,
   PromptInputAttachment,
+  PromptInputAttachments,
+  PromptInputFooter,
+  
   PromptInputProvider,
-  usePromptInputController,
-  type PromptInputMessage,
+  PromptInputTextarea,
+  PromptInputTools,
+  usePromptInputController
 } from "./ai-elements/prompt-input";
 import { ConnectedModelSelector } from "./model-selector";
-import { useModelStore, type ReasoningEffort } from "@/stores/model";
+import { StartScreen } from "./start-screen";
+import type { UIDataTypes, UIMessagePart, UITools } from "ai";
+import type {PromptInputMessage} from "./ai-elements/prompt-input";
+import type {ReasoningEffort} from "@/stores/model";
+import { cn } from "@/lib/utils";
+import {  useModelStore } from "@/stores/model";
 import { useWebSearch } from "@/stores/provider";
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 // Note: Using details/summary instead of Collapsible for now
-import { SlidersHorizontalIcon, BrainIcon, SearchIcon, Loader2Icon } from "lucide-react";
-import { Streamdown } from "streamdown";
-import { StartScreen } from "./start-screen";
 import { usePersistentChat } from "@/hooks/use-persistent-chat";
-import { toast } from "sonner";
-import {
-  ChevronDownIcon,
-  PaperclipIcon,
-  ArrowUpIcon,
-  SquareIcon,
-  GlobeIcon,
-  LinkIcon,
-  MinusIcon,
-  PlusIcon,
-  XIcon,
-} from "lucide-react";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -166,8 +166,7 @@ function InlineErrorMessage({ error, onRetry }: InlineErrorMessageProps) {
     setRetryCount((prev) => prev + 1);
     setIsRetrying(false);
 
-    // Call the retry function
-    onRetry?.();
+    onRetry();
   };
 
   // Get human-readable error title based on code
@@ -278,11 +277,11 @@ interface ChainOfThoughtStep {
 // This preserves the exact stream order
 // Each reasoning part is its own step (not merged) so they can collapse independently
 function buildChainOfThoughtSteps(parts: Array<any>): {
-  steps: ChainOfThoughtStep[];
+  steps: Array<ChainOfThoughtStep>;
   isAnyStreaming: boolean;
   hasTextContent: boolean;
 } {
-  const steps: ChainOfThoughtStep[] = [];
+  const steps: Array<ChainOfThoughtStep> = [];
   let isAnyStreaming = false;
   let hasTextContent = false;
 
@@ -340,7 +339,7 @@ function buildChainOfThoughtSteps(parts: Array<any>): {
 
 // Chain of Thought Component - Multi-step reasoning visualization
 interface ChainOfThoughtProps {
-  steps: ChainOfThoughtStep[];
+  steps: Array<ChainOfThoughtStep>;
   isStreaming?: boolean;
   hasTextContent?: boolean; // Whether the message has text content (for auto-collapse)
 }
@@ -366,7 +365,6 @@ function ChainOfThought({
       hasAutoCollapsedRef.current = false;
     } else if (
       wasStreamingRef.current &&
-      !isStreaming &&
       hasTextContent &&
       !hasAutoCollapsedRef.current
     ) {
@@ -515,7 +513,7 @@ function ChainOfThoughtStepItem({ step }: { step: ChainOfThoughtStep }) {
         </div>
 
         {/* Expand indicator - show for reasoning with content OR tool with output */}
-        {(step.content || (step.type === "tool" && step.toolOutput)) && (
+        {Boolean(step.content || (step.type === "tool" && step.toolOutput)) && (
           <ChevronDownIcon
             className={cn(
               "size-4 text-muted-foreground transition-transform",
@@ -546,7 +544,7 @@ function ChainOfThoughtStepItem({ step }: { step: ChainOfThoughtStep }) {
       )}
 
       {/* Tool output display */}
-      {step.type === "tool" && step.toolState === "output-available" && step.toolOutput && (
+      {step.type === "tool" && step.toolState === "output-available" && !!step.toolOutput && (
         <div className="mt-2 ml-9">
           <SearchResultsDisplay results={step.toolOutput} isExpanded={isExpanded} />
         </div>
@@ -583,7 +581,7 @@ function replaceUtmSource(url: string): string {
 function SearchResultsDisplay({ results, isExpanded }: { results: unknown; isExpanded: boolean }) {
   // Parse the results - handle different structures from various search tools
   // Could be: array directly, { results: [...] }, { data: [...] }, etc.
-  let searchResults: any[] = [];
+  let searchResults: Array<any> = [];
 
   if (Array.isArray(results)) {
     searchResults = results;
@@ -663,7 +661,7 @@ interface ReasoningSliderProps {
   onChange: (value: ReasoningEffort) => void;
 }
 
-const EFFORT_OPTIONS: ReasoningEffort[] = ["none", "low", "medium", "high"];
+const EFFORT_OPTIONS: Array<ReasoningEffort> = ["none", "low", "medium", "high"];
 const EFFORT_LABELS: Record<ReasoningEffort, string> = {
   none: "None",
   low: "Low",
@@ -682,8 +680,8 @@ function ReasoningSlider({ value, onChange }: ReasoningSliderProps) {
   const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const percentage = x / rect.width;
-    const index = Math.round(percentage * (EFFORT_OPTIONS.length - 1));
+    const clickPercentage = x / rect.width;
+    const index = Math.round(clickPercentage * (EFFORT_OPTIONS.length - 1));
     onChange(EFFORT_OPTIONS[Math.max(0, Math.min(index, EFFORT_OPTIONS.length - 1))]);
   };
 
@@ -760,7 +758,7 @@ function ModelConfigPopover({ disabled }: ModelConfigPopoverProps) {
   const isMobile = useIsMobile();
 
   const getBadgeText = () => {
-    const parts: string[] = [];
+    const parts: Array<string> = [];
     if (reasoningEffort !== "none") {
       parts.push(reasoningEffort.toUpperCase());
     }
@@ -1290,7 +1288,7 @@ function ChatInterfaceContent({
         if (isTextareaFocused) {
           textarea.blur();
           // Also blur the document to ensure we're not stuck in the input
-          (document.activeElement as HTMLElement)?.blur?.();
+          (document.activeElement as HTMLElement).blur();
         } else {
           textarea.focus();
         }
@@ -1424,19 +1422,19 @@ function ChatInterfaceContent({
                         )}
 
                         {/* Text content */}
-                        {textParts.map((part, index) => (
+                        {textParts.map((part, partIndex) => (
                           <MessageResponse
-                            key={`text-${index}`}
-                            isStreaming={isCurrentlyStreaming && index === textParts.length - 1}
+                            key={`text-${partIndex}`}
+                            isStreaming={isCurrentlyStreaming && partIndex === textParts.length - 1}
                           >
                             {part.text || ""}
                           </MessageResponse>
                         ))}
 
                         {/* File attachments */}
-                        {fileParts.map((part, index) => (
+                        {fileParts.map((part, partIndex) => (
                           <MessageFile
-                            key={`file-${index}`}
+                            key={`file-${partIndex}`}
                             filename={part.filename}
                             url={part.url}
                             mediaType={part.mediaType}

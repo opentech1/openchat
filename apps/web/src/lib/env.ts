@@ -7,8 +7,8 @@
 export const env = {
   CONVEX_URL: import.meta.env.VITE_CONVEX_URL as string,
   CONVEX_SITE_URL: import.meta.env.VITE_CONVEX_SITE_URL as string,
-  POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY as string | undefined,
-  POSTHOG_HOST: import.meta.env.VITE_POSTHOG_HOST as string | undefined,
+  POSTHOG_KEY: import.meta.env.VITE_POSTHOG_KEY,
+  POSTHOG_HOST: import.meta.env.VITE_POSTHOG_HOST,
 } as const;
 
 // Validate required env vars
