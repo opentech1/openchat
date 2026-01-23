@@ -22,7 +22,7 @@ interface ChatFileAttachment {
 interface PendingMessage {
   chatId: string;
   text: string;
-  files?: ChatFileAttachment[];
+  files?: Array<ChatFileAttachment>;
 }
 
 interface PendingMessageStore {

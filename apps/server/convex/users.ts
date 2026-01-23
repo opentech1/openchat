@@ -9,26 +9,6 @@ import { getProfileByUserId, getOrCreateProfile } from "./lib/profiles";
 import { authComponent } from "./auth";
 import { components } from "./_generated/api";
 
-// User document validator with all fields including fileUploadCount
-// Note: Kept for potential future use (e.g., admin queries that need raw user data)
-const _userDoc = v.object({
-	_id: v.id("users"),
-	_creationTime: v.number(),
-	externalId: v.string(),
-	email: v.optional(v.string()),
-	name: v.optional(v.string()),
-	avatarUrl: v.optional(v.string()),
-	encryptedOpenRouterKey: v.optional(v.string()),
-	fileUploadCount: v.optional(v.number()),
-	// Ban fields
-	banned: v.optional(v.boolean()),
-	bannedAt: v.optional(v.number()),
-	banReason: v.optional(v.string()),
-	banExpiresAt: v.optional(v.number()),
-	createdAt: v.number(),
-	updatedAt: v.number(),
-});
-
 // User with profile data (for backwards-compatible responses)
 // Includes merged profile data that prefers profile over user during migration
 const userWithProfileDoc = v.object({

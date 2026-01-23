@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@server/convex/_generated/api";
+import { AlertTriangleIcon } from "lucide-react";
 import type { Id } from "@server/convex/_generated/dataModel";
 import { signOut } from "@/lib/auth-client";
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AlertTriangleIcon } from "lucide-react";
 
 interface DeleteAccountModalProps {
 	userId: Id<"users">;

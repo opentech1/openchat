@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { Providers } from "../providers";
 import { CommandPalette, useCommandPaletteShortcut } from "../components/command-palette";
-import { SidebarProvider, SidebarInset, useSidebarShortcut } from "../components/ui/sidebar";
+import { SidebarInset, SidebarProvider, useSidebarShortcut } from "../components/ui/sidebar";
 import { NavigationProgress } from "../components/navigation-progress";
 import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../lib/auth-client";

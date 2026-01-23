@@ -7,11 +7,11 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { CheckIcon, ExternalLinkIcon, KeyIcon, XIcon } from "lucide-react";
 import { Button } from "./ui/button";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { cn } from "@/lib/utils";
-import { XIcon, ExternalLinkIcon, CheckIcon, KeyIcon } from "lucide-react";
 
 interface OpenRouterConnectModalProps {
   open: boolean;

@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ConvexProviderWithAuth, useMutation } from "convex/react";
 import { Toaster } from "sonner";
+import { api } from "@server/convex/_generated/api";
 import { convexClient } from "../lib/convex";
-import { authClient, useAuth, StableAuthProvider } from "../lib/auth-client";
+import { StableAuthProvider, authClient, useAuth } from "../lib/auth-client";
+import { prefetchModels } from "../stores/model";
 import { ThemeProvider } from "./theme-provider";
 import { PostHogProvider } from "./posthog";
-import { prefetchModels } from "../stores/model";
-import { api } from "@server/convex/_generated/api";
 
 if (typeof window !== "undefined") {
   prefetchModels();

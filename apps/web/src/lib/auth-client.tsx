@@ -1,11 +1,11 @@
 import {
-  useState,
-  useEffect,
-  useCallback,
+  
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useRef,
-  type ReactNode,
+  useState
 } from "react";
 import { createAuthClient } from "better-auth/react";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@convex-dev/better-auth/client/plugins";
 import { env } from "./env";
 import { analytics } from "./analytics";
+import type {ReactNode} from "react";
 
 const AUTH_SESSION_COOKIE = "ba_session";
 
@@ -172,9 +173,7 @@ export function StableAuthProvider({ children }: { children: ReactNode }) {
               "User",
             image: result.data.user.image ?? null,
           },
-          session: result.data.session
-            ? { id: result.data.session.id, token: result.data.session.token }
-            : null,
+          session: { id: result.data.session.id, token: result.data.session.token },
         });
       } else {
         setSessionData({ user: null, session: null });

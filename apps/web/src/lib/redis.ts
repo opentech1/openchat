@@ -5,7 +5,8 @@
  * Works with any Redis (self-hosted, Upstash, etc.)
  */
 
-import { createClient, type RedisClientType } from "redis";
+import {  createClient } from "redis";
+import type {RedisClientType} from "redis";
 
 let redisClient: RedisClientType | null = null;
 let isConnected = false;
@@ -20,7 +21,7 @@ export function getRedisClient(): RedisClientType | null {
 
 	if (!redisClient) {
 		redisClient = createClient({ url: REDIS_URL });
-		redisClient.on("error", (err) => {
+		redisClient.on("error", (err: Error) => {
 			console.error("[Redis] Error:", err);
 			isConnected = false;
 		});
@@ -32,7 +33,7 @@ export function getRedisClient(): RedisClientType | null {
 			console.log("[Redis] Disconnected");
 			isConnected = false;
 		});
-		connectionPromise = redisClient.connect().then(() => {}).catch((err) => {
+		connectionPromise = redisClient.connect().then(() => {}).catch((err: Error) => {
 			console.error("[Redis] Connection failed:", err);
 			isConnected = false;
 		});
@@ -167,17 +168,17 @@ export async function errorStream(chatId: string, error: string): Promise<void> 
 export async function readStream(
 	chatId: string,
 	lastId: string = "0",
-): Promise<StreamToken[]> {
+): Promise<Array<StreamToken>> {
 	const client = await getConnectedClient();
 	if (!client) return [];
 
 	const streamKey = keys.stream(chatId);
 	const entries = await client.xRange(streamKey, lastId === "0" ? "-" : `(${lastId}`, "+");
 
-	return entries.map((entry) => ({
+	return entries.map((entry: { id: string; message: Record<string, string> }) => ({
 		id: entry.id,
 		text: entry.message.text || "",
-		type: (entry.message.type as StreamToken["type"]) || "text",
+		type: (entry.message.type as StreamToken["type"]),
 		timestamp: parseInt(entry.message.ts || "0", 10),
 	}));
 }
@@ -213,17 +214,17 @@ export async function setTyping(
 	}
 }
 
-export async function getTypingUsers(chatId: string): Promise<string[]> {
+export async function getTypingUsers(chatId: string): Promise<Array<string>> {
 	const client = await getConnectedClient();
 	if (!client) return [];
 
 	const pattern = `chat:${chatId}:typing:*`;
-	const foundKeys: string[] = [];
-	for await (const keys of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-		if (Array.isArray(keys)) {
-			foundKeys.push(...keys);
+	const foundKeys: Array<string> = [];
+	for await (const scanKeys of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+		if (Array.isArray(scanKeys)) {
+			foundKeys.push(...scanKeys);
 		} else {
-			foundKeys.push(keys);
+			foundKeys.push(scanKeys);
 		}
 	}
 

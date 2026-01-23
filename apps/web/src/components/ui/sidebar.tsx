@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/lib/utils";
+import {  cva } from "class-variance-authority";
 import { Button } from "./button";
 import { Separator } from "./separator";
+import type {VariantProps} from "class-variance-authority";
+import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui";
 
 // ============================================================================

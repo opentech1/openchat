@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { createPortal, flushSync } from "react-dom";
 import type { Model } from "@/stores/model";
 import { cn } from "@/lib/utils";
-import { getModelById, useModels, useModelStore } from "@/stores/model";
+import { getModelById, useModelStore, useModels } from "@/stores/model";
 import { useFavoriteModels } from "@/hooks/use-favorite-models";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "@/components/icons";
 

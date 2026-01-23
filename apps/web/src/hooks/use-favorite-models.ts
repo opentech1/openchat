@@ -1,7 +1,7 @@
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-client";
-import { useState, useCallback, useEffect, useRef } from "react";
 
 export const DEFAULT_FAVORITES = [
   "anthropic/claude-opus-4.5",

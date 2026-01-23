@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@server/convex/_generated/api";
+import { toast } from "sonner";
 import type { Id } from "@server/convex/_generated/dataModel";
+import type { UIMessage } from "ai";
 import { useAuth } from "@/lib/auth-client";
 import { useModelStore } from "@/stores/model";
 import { useOpenRouterKey } from "@/stores/openrouter";
 import { useProviderStore } from "@/stores/provider";
 import { useChatTitleStore } from "@/stores/chat-title";
 import { useStreamStore } from "@/stores/stream";
-import { toast } from "sonner";
 import { analytics } from "@/lib/analytics";
-import type { UIMessage } from "ai";
 
 interface ChatFileAttachment {
 	type: "file";
@@ -25,8 +25,8 @@ export interface UsePersistentChatOptions {
 }
 
 export interface UsePersistentChatReturn {
-	messages: UIMessage[];
-	sendMessage: (message: { text: string; files?: ChatFileAttachment[] }) => Promise<void>;
+	messages: Array<UIMessage>;
+	sendMessage: (message: { text: string; files?: Array<ChatFileAttachment> }) => Promise<void>;
 	status: "ready" | "submitted" | "streaming" | "error";
 	error: Error | undefined;
 	stop: () => void;
@@ -84,7 +84,7 @@ export function usePersistentChat({
 	const chatTitleLength = useChatTitleStore((s) => s.length);
 	const setTitleGenerating = useChatTitleStore((s) => s.setGenerating);
 
-	const [messages, setMessages] = useState<UIMessage[]>([]);
+	const [messages, setMessages] = useState<Array<UIMessage>>([]);
 	const [status, setStatus] = useState<"ready" | "submitted" | "streaming" | "error">("ready");
 	const [error, setError] = useState<Error | undefined>(undefined);
 	const [currentChatId, setCurrentChatId] = useState<string | null>(chatId ?? null);
@@ -146,12 +146,12 @@ export function usePersistentChat({
 			}
 			
 			const lastPrev = prevMessages[prevMessages.length - 1];
-			const isLastPrevStreaming = lastPrev?.id.startsWith("resume-") || 
-				(lastPrev?.role === "assistant" && !messagesResult.find(m => m._id === lastPrev.id));
+			const isLastPrevStreaming = lastPrev.id.startsWith("resume-") || 
+				(lastPrev.role === "assistant" && !messagesResult.find(m => m._id === lastPrev.id));
 			
 			if (isLastPrevStreaming && convexMessages.length > 0) {
 				const lastConvex = convexMessages[convexMessages.length - 1];
-				if (lastConvex?.role === "assistant") {
+				if (lastConvex.role === "assistant") {
 					return [
 						...convexMessages.slice(0, -1),
 						{ ...lastConvex, id: lastPrev.id }
@@ -184,52 +184,50 @@ export function usePersistentChat({
 			return;
 		}
 
-		if (activeStreamJob.status === "running" || activeStreamJob.status === "pending") {
-			const streamId = activeStreamJob.messageId;
-			const jobContent = activeStreamJob.content || "";
-			const jobReasoning = activeStreamJob.reasoning || "";
+		const streamId = activeStreamJob.messageId;
+		const jobContent = activeStreamJob.content || "";
+		const jobReasoning = activeStreamJob.reasoning || "";
 
-			if (status !== "streaming" && status !== "submitted") {
-				console.log("[BackgroundStream] Detected running stream job, resuming UI...");
-				setStatus("streaming");
-				useStreamStore.getState().setResuming();
-			}
+		if (status !== "streaming" && status !== "submitted") {
+			console.log("[BackgroundStream] Detected running stream job, resuming UI...");
+			setStatus("streaming");
+			useStreamStore.getState().setResuming();
+		}
 
-			if (!streamingRef.current || streamingRef.current.id !== streamId) {
-				streamingRef.current = { id: streamId, content: jobContent, reasoning: jobReasoning };
+		if (!streamingRef.current || streamingRef.current.id !== streamId) {
+			streamingRef.current = { id: streamId, content: jobContent, reasoning: jobReasoning };
+			
+			setMessages((prev) => {
+				if (prev.find(m => m.id === streamId)) return prev;
+				return [
+					...prev,
+					{ id: streamId, role: "assistant" as const, parts: [{ type: "text" as const, text: jobContent }] },
+				];
+			});
+		} else if (
+			streamingRef.current.content !== jobContent || 
+			streamingRef.current.reasoning !== jobReasoning
+		) {
+			streamingRef.current.content = jobContent;
+			streamingRef.current.reasoning = jobReasoning;
+			
+			setMessages((prev) => {
+				const idx = prev.findIndex((m) => m.id === streamId);
+				if (idx < 0) return prev;
 				
-				setMessages((prev) => {
-					if (prev.find(m => m.id === streamId)) return prev;
-					return [
-						...prev,
-						{ id: streamId, role: "assistant" as const, parts: [{ type: "text" as const, text: jobContent }] },
-					];
-				});
-			} else if (
-				streamingRef.current.content !== jobContent || 
-				streamingRef.current.reasoning !== jobReasoning
-			) {
-				streamingRef.current.content = jobContent;
-				streamingRef.current.reasoning = jobReasoning;
+				const currentText = prev[idx].parts.find(p => p.type === "text");
+				if (currentText && "text" in currentText && currentText.text === jobContent) {
+					return prev;
+				}
 				
-				setMessages((prev) => {
-					const idx = prev.findIndex((m) => m.id === streamId);
-					if (idx < 0) return prev;
-					
-					const currentText = prev[idx].parts?.find(p => p.type === "text");
-					if (currentText && "text" in currentText && currentText.text === jobContent) {
-						return prev;
-					}
-					
-					const parts: UIMessage["parts"] = [];
-					if (jobReasoning) parts.push({ type: "reasoning", text: jobReasoning });
-					parts.push({ type: "text", text: jobContent });
-					
-					const updated = [...prev];
-					updated[idx] = { ...updated[idx], parts };
-					return updated;
-				});
-			}
+				const parts: UIMessage["parts"] = [];
+				if (jobReasoning) parts.push({ type: "reasoning", text: jobReasoning });
+				parts.push({ type: "text", text: jobContent });
+				
+				const updated = [...prev];
+				updated[idx] = { ...updated[idx], parts };
+				return updated;
+			});
 		}
 	}, [activeStreamJob, status]);
 
@@ -238,7 +236,7 @@ export function usePersistentChat({
 	const isUserLoading = !!(user?.id && convexUser === undefined);
 
 	const handleSendMessage = useCallback(
-		async (message: { text: string; files?: ChatFileAttachment[] }) => {
+		async (message: { text: string; files?: Array<ChatFileAttachment> }) => {
 			if (!convexUserId) {
 				if (isUserLoading) {
 					toast.error("Please wait", { description: "Setting up your account." });
@@ -295,7 +293,7 @@ export function usePersistentChat({
 
 			try {
 				const allMsgs = messages.map((m) => {
-					const textPart = m.parts?.find((p): p is { type: "text"; text: string } => p.type === "text");
+					const textPart = m.parts.find((p): p is { type: "text"; text: string } => p.type === "text");
 					return { role: m.role, content: textPart?.text || "" };
 				});
 				allMsgs.push({ role: "user", content: message.text });
@@ -309,7 +307,7 @@ export function usePersistentChat({
 					apiKey: activeProvider === "openrouter" && apiKey ? apiKey : undefined,
 					messages: allMsgs,
 					options: {
-						reasoningEffort: reasoningEffort || undefined,
+						reasoningEffort,
 						enableWebSearch: webSearchEnabled,
 						maxSteps,
 					},
@@ -350,11 +348,11 @@ export function usePersistentChat({
 									return { status: "empty" } as const;
 								} catch (err) {
 									console.warn("[Chat] Title generation failed:", err);
-									const error = err instanceof Error ? err : new Error(String(err));
-									return {
-										status: "error",
-										message: error.message,
-										name: error.name,
+								const parsedError = err instanceof Error ? err : new Error(String(err));
+								return {
+									status: "error",
+									message: parsedError.message,
+									name: parsedError.name,
 									} as const;
 								}
 							};

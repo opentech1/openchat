@@ -64,36 +64,6 @@ function getRedisCredentials(): { url: string; token: string } | null {
 }
 
 /**
- * Execute a Redis command via REST API
- * Note: Currently unused but kept for future single-command operations
- */
-async function _executeCommand<T = unknown>(
-	command: (string | number)[]
-): Promise<T> {
-	const creds = getRedisCredentials();
-	if (!creds) {
-		throw new Error("Redis credentials not configured");
-	}
-
-	const response = await fetch(creds.url, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${creds.token}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(command),
-	});
-
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`Redis command failed: ${response.status} - ${errorText}`);
-	}
-
-	const data = await response.json();
-	return data.result as T;
-}
-
-/**
  * Execute multiple Redis commands in a pipeline
  */
 async function executePipeline<T = unknown[]>(

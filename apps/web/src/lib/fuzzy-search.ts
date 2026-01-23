@@ -14,10 +14,10 @@ export function fuzzyMatch(text: string, query: string): boolean {
 }
 
 export function fuzzyFilter<T>(
-	items: T[],
+	items: Array<T>,
 	query: string,
-	getSearchText: (item: T) => string | string[],
-): T[] {
+	getSearchText: (item: T) => string | Array<string>,
+): Array<T> {
 	if (!query.trim()) return items;
 
 	return items.filter((item) => {

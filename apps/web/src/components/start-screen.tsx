@@ -11,9 +11,9 @@
 "use client";
 
 import { useState } from "react";
+import { BookOpenIcon, ChevronRightIcon, CodeIcon, CompassIcon, PenLineIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-client";
-import { PenLineIcon, CompassIcon, CodeIcon, BookOpenIcon, ChevronRightIcon } from "lucide-react";
 
 // ============================================================================
 // Types
@@ -36,7 +36,7 @@ interface CategoryConfig {
 // Constants
 // ============================================================================
 
-const CATEGORIES: CategoryConfig[] = [
+const CATEGORIES: Array<CategoryConfig> = [
   { id: "create", label: "Create", icon: <PenLineIcon className="size-4" /> },
   { id: "explore", label: "Explore", icon: <CompassIcon className="size-4" /> },
   { id: "code", label: "Code", icon: <CodeIcon className="size-4" /> },
@@ -44,7 +44,7 @@ const CATEGORIES: CategoryConfig[] = [
 ];
 
 // Category-specific suggestions (shown when that category is selected)
-const SUGGESTIONS_BY_CATEGORY: Record<Category, string[]> = {
+const SUGGESTIONS_BY_CATEGORY: Record<Category, Array<string>> = {
   create: [
     "Write a short story about a robot discovering emotions",
     "Help me outline a sci-fi novel set in a post-apocalyptic world",
