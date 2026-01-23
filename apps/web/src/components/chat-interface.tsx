@@ -365,6 +365,7 @@ function ChainOfThought({
       hasAutoCollapsedRef.current = false;
     } else if (
       wasStreamingRef.current &&
+      !isStreaming &&
       hasTextContent &&
       !hasAutoCollapsedRef.current
     ) {

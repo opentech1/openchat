@@ -49,13 +49,19 @@ function SidebarProvider({
 
   const [isMobile, setIsMobile] = React.useState(false);
 
-  // Initialize from store or defaults on first render
+  // Initialize from store or defaults
   React.useEffect(() => {
-    setSidebarOpen(defaultOpen);
-    setSidebarCollapsed(defaultCollapsed);
+    if (sidebarOpen === undefined) {
+      setSidebarOpen(defaultOpen);
+    }
+    if (sidebarCollapsed === undefined) {
+      setSidebarCollapsed(defaultCollapsed);
+    }
   }, [
     defaultOpen,
     defaultCollapsed,
+    sidebarOpen,
+    sidebarCollapsed,
     setSidebarOpen,
     setSidebarCollapsed,
   ]);
