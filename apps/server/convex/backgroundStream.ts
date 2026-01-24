@@ -303,6 +303,38 @@ export const executeStream = internalAction({
 			const controller = new AbortController();
 			const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+			const requestBody: Record<string, unknown> = {
+				model: job.model,
+				messages: job.messages.map((m: { role: string; content: string }) => ({
+					role: m.role,
+					content: m.content,
+				})),
+				stream: true,
+			};
+
+			const reasoningEffort = job.options?.reasoningEffort;
+			if (reasoningEffort && reasoningEffort !== "none") {
+				const isAlwaysReasoning = /deepseek.*r1/i.test(job.model);
+				if (!isAlwaysReasoning) {
+					const effortToMaxTokens: Record<string, number> = {
+						low: 4096,
+						medium: 10000,
+						high: 20000,
+					};
+					const isAnthropicOrGemini = /^(anthropic|google)\//i.test(job.model);
+					if (isAnthropicOrGemini) {
+						const budgetTokens = effortToMaxTokens[reasoningEffort] || 10000;
+						requestBody.reasoning = { max_tokens: budgetTokens };
+						requestBody.max_tokens = budgetTokens + 8192;
+					} else {
+						requestBody.reasoning = { effort: reasoningEffort };
+						if (!requestBody.max_tokens) {
+							requestBody.max_tokens = 16384;
+						}
+					}
+				}
+			}
+
 			const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
 				method: "POST",
 				headers: {
@@ -311,14 +343,7 @@ export const executeStream = internalAction({
 					"HTTP-Referer": process.env.CONVEX_SITE_URL || "https://osschat.io",
 					"X-Title": "OSSChat",
 				},
-				body: JSON.stringify({
-					model: job.model,
-					messages: job.messages.map((m: { role: string; content: string }) => ({
-						role: m.role,
-						content: m.content,
-					})),
-					stream: true,
-				}),
+				body: JSON.stringify(requestBody),
 				signal: controller.signal,
 			});
 
@@ -365,13 +390,30 @@ export const executeStream = internalAction({
 					try {
 						const parsed = JSON.parse(data);
 						const delta = parsed.choices?.[0]?.delta;
-						
+
 						if (delta?.content) {
 							fullContent += delta.content;
 							updateCounter++;
 						}
-						if (delta?.reasoning) {
-							fullReasoning += delta.reasoning;
+
+						let reasoningText = "";
+						if (delta?.reasoning_details && Array.isArray(delta.reasoning_details) && delta.reasoning_details.length > 0) {
+							for (const detail of delta.reasoning_details) {
+								if (detail?.type === "reasoning.text" && detail.text) {
+									reasoningText += detail.text;
+								} else if (detail?.type === "reasoning.summary" && detail.summary) {
+									reasoningText += detail.summary;
+								}
+							}
+						}
+						if (!reasoningText && typeof delta?.reasoning === "string" && delta.reasoning) {
+							reasoningText = delta.reasoning;
+						}
+						if (!reasoningText && typeof delta?.reasoning_content === "string" && delta.reasoning_content) {
+							reasoningText = delta.reasoning_content;
+						}
+						if (reasoningText) {
+							fullReasoning += reasoningText;
 							updateCounter++;
 						}
 
