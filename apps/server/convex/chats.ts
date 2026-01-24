@@ -314,19 +314,72 @@ const TITLE_WORD_LIMITS: Record<"short" | "standard" | "long", number> = {
 	long: 10,
 };
 
+const TITLE_STOPWORDS = new Set([
+	"about",
+	"after",
+	"also",
+	"and",
+	"are",
+	"ask",
+	"before",
+	"brainstorm",
+	"build",
+	"chat",
+	"create",
+	"day",
+	"days",
+	"discussion",
+	"draft",
+	"for",
+	"from",
+	"guide",
+	"help",
+	"how",
+	"ideas",
+	"into",
+	"make",
+	"meeting",
+	"notes",
+	"overview",
+	"plan",
+	"planning",
+	"project",
+	"session",
+	"summary",
+	"task",
+	"tasks",
+	"the",
+	"this",
+	"topic",
+	"with",
+]);
+
 function normalizeTitleTokens(text: string): Array<string> {
 	return text
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, " ")
 		.trim()
 		.split(/\s+/)
-		.filter((token) => token.length > 2);
+		.filter((token) => token.length > 2 && !TITLE_STOPWORDS.has(token));
 }
 
 function hasSeedOverlap(seedText: string, title: string): boolean {
 	const seedTokens = new Set(normalizeTitleTokens(seedText));
-	if (seedTokens.size === 0) return true;
-	return normalizeTitleTokens(title).some((token) => seedTokens.has(token));
+	if (seedTokens.size === 0) return false;
+
+	const titleTokens = new Set(normalizeTitleTokens(title));
+	if (titleTokens.size === 0) return false;
+
+	let overlapCount = 0;
+	for (const token of titleTokens) {
+		if (seedTokens.has(token)) {
+			overlapCount++;
+		}
+	}
+	if (overlapCount === 0) return false;
+
+	const overlapRatio = overlapCount / Math.max(seedTokens.size, titleTokens.size);
+	return overlapCount >= 2 || overlapRatio >= 0.35;
 }
 
 function buildFallbackTitle(

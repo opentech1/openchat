@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 const DAILY_AI_LIMIT_CENTS = 10;
 const FALLBACK_INPUT_COST_PER_MILLION = 1;
 const FALLBACK_OUTPUT_COST_PER_MILLION = 4;
+const CJK_CHAR_REGEX = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
 
 type UsagePayload = {
 	promptTokens?: number;
@@ -50,10 +51,20 @@ function normalizeUsagePayload(usage: Record<string, unknown>): UsagePayload {
 
 function estimateTokensFromText(text: string): number {
 	if (!text) return 0;
-	// More accurate estimation: 1 token ≈ 0.75 words for English
-	// For mixed/non-English content, this is still rough but better than char/4
-	const wordCount = text.split(/\s+/).filter(Boolean).length;
-	return Math.max(1, Math.ceil(wordCount * 1.33));
+	const normalized = text.trim();
+	if (!normalized) return 0;
+
+	const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+	const charCount = normalized.replace(/\s+/g, "").length;
+
+	if (CJK_CHAR_REGEX.test(normalized)) {
+		return Math.max(1, charCount);
+	}
+
+	const wordEstimate = wordCount > 0 ? Math.ceil(wordCount * 1.33) : 0;
+	const charEstimate = Math.ceil(charCount / 4);
+	const estimate = Math.max(wordEstimate, charEstimate);
+	return Math.max(1, estimate);
 }
 
 function estimatePromptTokens(messages: Array<{ role: string; content: string }>): number {
@@ -72,7 +83,9 @@ function calculateUsageCents(
 	outputText: string,
 ): number | null {
 	if (usage?.totalCostUsd !== undefined) {
-		return roundCents(usage.totalCostUsd * 100);
+		if (Number.isFinite(usage.totalCostUsd) && usage.totalCostUsd > 0) {
+			return roundCents(usage.totalCostUsd * 100);
+		}
 	}
 
 	const promptTokens = usage?.promptTokens ?? estimatePromptTokens(messages);
@@ -494,12 +507,6 @@ export const executeStream = internalAction({
 				}
 			}
 
-			await ctx.runMutation(internal.backgroundStream.completeStream, {
-				jobId: args.jobId,
-				content: fullContent,
-				reasoning: fullReasoning || undefined,
-			});
-
 			if (job.provider === "osschat") {
 				const usageCents = calculateUsageCents(
 					usageSummary,
@@ -507,12 +514,30 @@ export const executeStream = internalAction({
 					fullContent,
 				);
 				if (usageCents && usageCents > 0) {
-					await ctx.runMutation(internal.users.incrementAiUsage, {
-						userId: job.userId,
-						usageCents,
-					});
+					try {
+						await ctx.runMutation(internal.users.incrementAiUsage, {
+							userId: job.userId,
+							usageCents,
+						});
+					} catch (error) {
+						console.warn("[BackgroundStream] Failed to record usage, retrying:", error);
+						try {
+							await ctx.runMutation(internal.users.incrementAiUsage, {
+								userId: job.userId,
+								usageCents,
+							});
+						} catch (retryError) {
+							console.error("[BackgroundStream] Usage retry failed:", retryError);
+						}
+					}
 				}
 			}
+
+			await ctx.runMutation(internal.backgroundStream.completeStream, {
+				jobId: args.jobId,
+				content: fullContent,
+				reasoning: fullReasoning || undefined,
+			});
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";

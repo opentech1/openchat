@@ -128,8 +128,7 @@ function UsageSyncProvider({ children }: { children: React.ReactNode }) {
       serverDate === today ? (convexUser.aiUsageCents ?? 0) : 0;
     syncUsage(serverUsage, today);
   }, [
-    convexUser?.aiUsageCents,
-    convexUser?.aiUsageDate,
+    convexUser,
     isAuthenticated,
     resetDailyUsage,
     syncUsage,
