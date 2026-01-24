@@ -308,6 +308,37 @@ const TITLE_STYLE_PROMPTS: Record<"short" | "standard" | "long", string> = {
 	long: "Use 7-10 words. Prefer numerals (e.g., 4-day) when present.",
 };
 
+const TITLE_WORD_LIMITS: Record<"short" | "standard" | "long", number> = {
+	short: 4,
+	standard: 6,
+	long: 10,
+};
+
+function normalizeTitleTokens(text: string): Array<string> {
+	return text
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim()
+		.split(/\s+/)
+		.filter((token) => token.length > 2);
+}
+
+function hasSeedOverlap(seedText: string, title: string): boolean {
+	const seedTokens = new Set(normalizeTitleTokens(seedText));
+	if (seedTokens.size === 0) return true;
+	return normalizeTitleTokens(title).some((token) => seedTokens.has(token));
+}
+
+function buildFallbackTitle(
+	seedText: string,
+	length: "short" | "standard" | "long",
+): string {
+	const normalized = seedText.replace(/[\n\r\t]+/g, " ").replace(/\s+/g, " ").trim();
+	const words = normalized.split(" ").filter(Boolean);
+	const clipped = words.slice(0, TITLE_WORD_LIMITS[length]).join(" ");
+	return sanitizeTitle(clipped, TITLE_MAX_LENGTH);
+}
+
 export const generateTitle = action({
 	args: {
 		userId: v.id("users"),
@@ -377,7 +408,14 @@ export const generateTitle = action({
 			}
 
 			const sanitizedTitle = sanitizeTitle(title, TITLE_MAX_LENGTH);
-			return sanitizedTitle || null;
+			if (!sanitizedTitle) return null;
+
+			if (!hasSeedOverlap(seedText, sanitizedTitle)) {
+				const fallbackTitle = buildFallbackTitle(seedText, args.length);
+				return fallbackTitle || null;
+			}
+
+			return sanitizedTitle;
 		} catch (error) {
 			console.warn("[Chat Title] Failed to generate title:", error);
 			return null;

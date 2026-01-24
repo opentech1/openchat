@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import type { GenericCtx } from "@convex-dev/better-auth";
 import type { DataModel } from "./_generated/dataModel";
@@ -21,6 +21,8 @@ const userWithProfileDoc = v.object({
 	avatarUrl: v.optional(v.string()),
 	encryptedOpenRouterKey: v.optional(v.string()),
 	fileUploadCount: v.number(),
+	aiUsageCents: v.optional(v.number()),
+	aiUsageDate: v.optional(v.string()),
 	// Ban fields
 	banned: v.optional(v.boolean()),
 	bannedAt: v.optional(v.number()),
@@ -31,6 +33,12 @@ const userWithProfileDoc = v.object({
 	// Flag to indicate if profile exists (useful for debugging migration)
 	hasProfile: v.boolean(),
 });
+
+const DAILY_AI_LIMIT_CENTS = 10;
+
+function getCurrentDateKey(): string {
+	return new Date().toISOString().split("T")[0];
+}
 
 export const ensure = mutation({
 	args: {
@@ -198,6 +206,8 @@ export const getByExternalId = query({
 			encryptedOpenRouterKey:
 				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 			fileUploadCount: profile?.fileUploadCount ?? user.fileUploadCount ?? 0,
+			aiUsageCents: user.aiUsageCents,
+			aiUsageDate: user.aiUsageDate,
 			// Ban fields (always from user)
 			banned: user.banned,
 			bannedAt: user.bannedAt,
@@ -234,6 +244,8 @@ export const getById = query({
 			encryptedOpenRouterKey:
 				profile?.encryptedOpenRouterKey ?? user.encryptedOpenRouterKey,
 			fileUploadCount: profile?.fileUploadCount ?? user.fileUploadCount ?? 0,
+			aiUsageCents: user.aiUsageCents,
+			aiUsageDate: user.aiUsageDate,
 			// Ban fields (always from user)
 			banned: user.banned,
 			bannedAt: user.bannedAt,
@@ -242,6 +254,49 @@ export const getById = query({
 			createdAt: user.createdAt,
 			updatedAt: user.updatedAt,
 			hasProfile: profile !== null,
+		};
+	},
+});
+
+export const incrementAiUsage = internalMutation({
+	args: {
+		userId: v.id("users"),
+		usageCents: v.number(),
+	},
+	returns: v.object({
+		usedCents: v.number(),
+		remainingCents: v.number(),
+	}),
+	handler: async (ctx, args) => {
+		if (args.usageCents <= 0) {
+			return {
+				usedCents: 0,
+				remainingCents: DAILY_AI_LIMIT_CENTS,
+			};
+		}
+
+		const user = await ctx.db.get(args.userId);
+		if (!user) {
+			return {
+				usedCents: 0,
+				remainingCents: DAILY_AI_LIMIT_CENTS,
+			};
+		}
+
+		const currentDate = getCurrentDateKey();
+		const previousCents =
+			user.aiUsageDate === currentDate ? (user.aiUsageCents ?? 0) : 0;
+		const nextCents = Math.max(0, previousCents + args.usageCents);
+
+		await ctx.db.patch(args.userId, {
+			aiUsageCents: nextCents,
+			aiUsageDate: currentDate,
+			updatedAt: Date.now(),
+		});
+
+		return {
+			usedCents: nextCents,
+			remainingCents: Math.max(0, DAILY_AI_LIMIT_CENTS - nextCents),
 		};
 	},
 });
