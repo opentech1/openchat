@@ -2,6 +2,90 @@ import { v } from "convex/values";
 import { mutation, query, internalMutation, internalAction, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 
+const DAILY_AI_LIMIT_CENTS = 10;
+const FALLBACK_INPUT_COST_PER_MILLION = 1;
+const FALLBACK_OUTPUT_COST_PER_MILLION = 4;
+
+type UsagePayload = {
+	promptTokens?: number;
+	completionTokens?: number;
+	totalTokens?: number;
+	totalCostUsd?: number;
+};
+
+function getCurrentDateKey(): string {
+	return new Date().toISOString().split("T")[0];
+}
+
+function normalizeUsagePayload(usage: Record<string, unknown>): UsagePayload {
+	const promptTokens =
+		typeof usage.prompt_tokens === "number"
+			? usage.prompt_tokens
+			: typeof usage.promptTokens === "number"
+				? usage.promptTokens
+				: undefined;
+	const completionTokens =
+		typeof usage.completion_tokens === "number"
+			? usage.completion_tokens
+			: typeof usage.completionTokens === "number"
+				? usage.completionTokens
+				: undefined;
+	const totalTokens =
+		typeof usage.total_tokens === "number"
+			? usage.total_tokens
+			: typeof usage.totalTokens === "number"
+				? usage.totalTokens
+				: undefined;
+	const totalCostUsd =
+		typeof usage.total_cost === "number"
+			? usage.total_cost
+			: typeof usage.totalCost === "number"
+				? usage.totalCost
+				: typeof usage.cost === "number"
+					? usage.cost
+					: undefined;
+
+	return { promptTokens, completionTokens, totalTokens, totalCostUsd };
+}
+
+function estimateTokensFromText(text: string): number {
+	if (!text) return 0;
+	return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function estimatePromptTokens(messages: Array<{ role: string; content: string }>): number {
+	const combined = messages.map((m) => m.content).join(" ");
+	return estimateTokensFromText(combined);
+}
+
+function roundCents(cents: number): number {
+	if (!Number.isFinite(cents)) return 0;
+	return Math.max(0, Math.round(cents * 10000) / 10000);
+}
+
+function calculateUsageCents(
+	usage: UsagePayload | null,
+	messages: Array<{ role: string; content: string }>,
+	outputText: string,
+): number | null {
+	if (usage?.totalCostUsd !== undefined) {
+		return roundCents(usage.totalCostUsd * 100);
+	}
+
+	const promptTokens = usage?.promptTokens ?? estimatePromptTokens(messages);
+	const completionTokens = usage?.completionTokens ?? estimateTokensFromText(outputText);
+
+	if (promptTokens <= 0 && completionTokens <= 0) {
+		return null;
+	}
+
+	const totalUsd =
+		(promptTokens / 1_000_000) * FALLBACK_INPUT_COST_PER_MILLION +
+		(completionTokens / 1_000_000) * FALLBACK_OUTPUT_COST_PER_MILLION;
+
+	return roundCents(totalUsd * 100);
+}
+
 export const startStream = mutation({
 	args: {
 		chatId: v.id("chats"),
@@ -25,6 +109,20 @@ export const startStream = mutation({
 		const chat = await ctx.db.get(args.chatId);
 		if (!chat || chat.userId !== args.userId) {
 			throw new Error("Chat not found or unauthorized");
+		}
+
+		if (args.provider === "osschat") {
+			const user = await ctx.db.get(args.userId);
+			if (!user) {
+				throw new Error("User not found");
+			}
+
+			const currentDate = getCurrentDateKey();
+			const usedCents =
+				user.aiUsageDate === currentDate ? (user.aiUsageCents ?? 0) : 0;
+			if (usedCents >= DAILY_AI_LIMIT_CENTS) {
+				throw new Error("Daily usage limit reached. Connect your OpenRouter account to continue.");
+			}
 		}
 
 		const existingActiveStream = await ctx.db
@@ -348,6 +446,7 @@ export const executeStream = internalAction({
 			let buffer = "";
 			let updateCounter = 0;
 			const UPDATE_INTERVAL = 5;
+			let usageSummary: UsagePayload | null = null;
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -365,6 +464,9 @@ export const executeStream = internalAction({
 					try {
 						const parsed = JSON.parse(data);
 						const delta = parsed.choices?.[0]?.delta;
+						if (parsed.usage && typeof parsed.usage === "object") {
+							usageSummary = normalizeUsagePayload(parsed.usage as Record<string, unknown>);
+						}
 						
 						if (delta?.content) {
 							fullContent += delta.content;
@@ -394,6 +496,20 @@ export const executeStream = internalAction({
 				content: fullContent,
 				reasoning: fullReasoning || undefined,
 			});
+
+			if (job.provider === "osschat") {
+				const usageCents = calculateUsageCents(
+					usageSummary,
+					job.messages,
+					fullContent,
+				);
+				if (usageCents && usageCents > 0) {
+					await ctx.runMutation(internal.users.incrementAiUsage, {
+						userId: job.userId,
+						usageCents,
+					});
+				}
+			}
 
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
