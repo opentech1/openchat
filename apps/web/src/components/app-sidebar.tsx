@@ -502,8 +502,8 @@ export function AppSidebar() {
         exitSelectionMode();
       } catch (error) {
         console.warn("[Chat] Failed to bulk delete chats:", error);
-        if (error instanceof Error && error.message.includes("Rate limit")) {
-          toast.error("Too many deletions. Please wait a moment and try again.");
+        if (error instanceof Error && error.name === "RateLimitError") {
+          toast.error(error.message);
         } else {
           toast.error("Failed to delete chats");
         }

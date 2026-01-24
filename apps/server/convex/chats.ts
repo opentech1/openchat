@@ -231,7 +231,8 @@ export const removeBulk = mutation({
 		let failed = 0;
 		let totalMessages = 0;
 
-		// Process each chat
+		// First pass: validate all chats and collect valid ones
+		const validChats: Array<{ chatId: Id<"chats"> }> = [];
 		for (const chatId of args.chatIds) {
 			const chat = await ctx.db.get(chatId);
 
@@ -241,14 +242,25 @@ export const removeBulk = mutation({
 				continue;
 			}
 
-			// Get and soft-delete all messages for this chat
-			const messages = await ctx.db
-				.query("messages")
-				.withIndex("by_chat_not_deleted", (q) =>
-					q.eq("chatId", chatId).eq("deletedAt", undefined)
-				)
-				.collect();
+			validChats.push({ chatId });
+		}
 
+		// Second pass: fetch all messages for valid chats in parallel
+		const messagesByChat = await Promise.all(
+			validChats.map(async ({ chatId }) => {
+				const messages = await ctx.db
+					.query("messages")
+					.withIndex("by_chat_not_deleted", (q) =>
+						q.eq("chatId", chatId).eq("deletedAt", undefined)
+					)
+					.collect();
+				return { chatId, messages };
+			})
+		);
+
+		// Third pass: soft-delete all messages and chats
+		for (const { chatId, messages } of messagesByChat) {
+			// Soft-delete all messages for this chat
 			await Promise.all(
 				messages.map((message) =>
 					ctx.db.patch(message._id, {
