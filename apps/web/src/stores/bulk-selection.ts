@@ -20,9 +20,9 @@ interface BulkSelectionState {
 	toggleChatSelection: (chatId: Id<"chats">) => void;
 	selectChat: (chatId: Id<"chats">) => void;
 	deselectChat: (chatId: Id<"chats">) => void;
-	selectAll: (chatIds: Id<"chats">[]) => void;
+	selectAll: (chatIds: Array<Id<"chats">>) => void;
 	deselectAll: () => void;
-	getSelectedChatIds: () => Id<"chats">[];
+	getSelectedChatIds: () => Array<Id<"chats">>;
 }
 
 export const useBulkSelectionStore = create<BulkSelectionState>()(
@@ -95,7 +95,7 @@ export const useBulkSelectionStore = create<BulkSelectionState>()(
 			deselectAll: () =>
 				set({ selectedChatIds: new Set<string>() }, false, "bulkSelection/deselectAll"),
 
-			getSelectedChatIds: () => Array.from(get().selectedChatIds) as Id<"chats">[],
+			getSelectedChatIds: () => Array.from(get().selectedChatIds) as Array<Id<"chats">>,
 		}),
 		{ name: "bulk-selection-store" }
 	)
