@@ -50,7 +50,10 @@ function normalizeUsagePayload(usage: Record<string, unknown>): UsagePayload {
 
 function estimateTokensFromText(text: string): number {
 	if (!text) return 0;
-	return Math.max(1, Math.ceil(text.length / 4));
+	// More accurate estimation: 1 token ≈ 0.75 words for English
+	// For mixed/non-English content, this is still rough but better than char/4
+	const wordCount = text.split(/\s+/).filter(Boolean).length;
+	return Math.max(1, Math.ceil(wordCount * 1.33));
 }
 
 function estimatePromptTokens(messages: Array<{ role: string; content: string }>): number {
