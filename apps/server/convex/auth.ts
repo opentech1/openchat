@@ -98,17 +98,17 @@ export const createAuth = (
 					}
 				: {}),
 		},
-		// Trust origins including wildcard patterns for previews
+		// Trust origins - explicit list for security (no wildcards for third-party services)
 		trustedOrigins: [
 			PRODUCTION_CONVEX_SITE_URL,
 			convexSiteUrl,
 			siteUrl,
 			"https://osschat.dev",
 			"https://beta.osschat.dev",
-			// Wildcard patterns for preview environments
+			// Controlled subdomain wildcard (we own this domain)
 			"https://*.osschat.dev",
-			"https://*.up.railway.app",
-			"https://*.convex.site",
+			// Explicit preview origins for Railway (PR-1 to PR-50)
+			...Array.from({ length: 50 }, (_, i) => `https://pr-${i + 1}.up.railway.app`),
 		],
 		plugins,
 	});
