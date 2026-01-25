@@ -105,10 +105,12 @@ export const createAuth = (
 			siteUrl,
 			"https://osschat.dev",
 			"https://beta.osschat.dev",
-			// Controlled subdomain wildcard (we own this domain)
-			"https://*.osschat.dev",
-			// Explicit preview origins for Railway (PR-1 to PR-50)
-			...Array.from({ length: 50 }, (_, i) => `https://pr-${i + 1}.up.railway.app`),
+		// Controlled subdomain wildcard (we own this domain)
+		"https://*.osschat.dev",
+		// Convex dev cloud deployments need wildcard access for auth
+		"https://*.convex.site",
+		// Explicit preview origins for Railway (PR-1 to PR-200)
+		...Array.from({ length: 200 }, (_, i) => `https://pr-${i + 1}.up.railway.app`),
 		],
 		plugins,
 	});
