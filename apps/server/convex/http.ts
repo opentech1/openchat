@@ -35,24 +35,23 @@ authComponent.registerRoutes(http, createAuth, {
 });
 
 http.route({
-  path: "/health",
-  method: "GET",
-  handler: httpAction(async () => {
-    return new Response(
-      JSON.stringify({ 
-        ok: true, 
-        ts: new Date().toISOString(),
-        convexSiteUrl: process.env.CONVEX_SITE_URL,
-        siteUrl: process.env.SITE_URL,
-      }),
-      {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      },
-    );
-  }),
+	path: "/health",
+	method: "GET",
+	handler: httpAction(async () => {
+		// SECURITY: Only return minimal health status - no environment info
+		return new Response(
+			JSON.stringify({ 
+				ok: true, 
+				ts: new Date().toISOString(),
+			}),
+			{
+				status: 200,
+				headers: {
+					"content-type": "application/json",
+				},
+			},
+		);
+	}),
 });
 
 // LLM streaming endpoint - runs on Convex infrastructure for persistence
